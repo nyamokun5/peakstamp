@@ -80,6 +80,34 @@
         <p id="copyStatus" class="copy-status" role="status" aria-live="polite"></p>
       </div>
     </section>
+
+    <section class="panel montage-panel" id="montagePanel" hidden>
+      <div class="panel-label"><span class="number">04</span><h2>ハイライト動画を作成</h2></div>
+      <p class="list-help">上でチェックしたシーンを時系列で自動結合。冒頭に5秒のタイトルを入れます。元の試合音声はそのまま残します。</p>
+
+      <label class="montage-label" for="montageTitle">冒頭5秒のタイトル</label>
+      <div class="montage-presets" role="group" aria-label="タイトルのテンプレート">
+        <button type="button" class="active" data-montage-title="GOALS!">GOALS!</button>
+        <button type="button" data-montage-title="HIGHLIGHTS!">HIGHLIGHTS!</button>
+        <button type="button" data-montage-title="BEST PLAYS!">BEST PLAYS!</button>
+      </div>
+      <input class="montage-title-input" id="montageTitle" maxlength="32" value="GOALS!" aria-label="冒頭に表示する文字" />
+      <div class="montage-title-preview" aria-hidden="true"><strong>GOALS!</strong></div>
+      <label class="montage-label montage-length-control" for="clipDuration">各シーンの長さ <strong id="clipDurationValue">16秒</strong></label>
+      <input class="montage-slider" id="clipDuration" type="range" min="8" max="30" step="1" value="16" />
+      <div class="montage-summary"><span id="montageSelected">0シーンを結合</span><span id="montageLength">完成：約00:05</span></div>
+
+      <button class="main-button montage-export" type="button" id="montageExport" disabled>▶ ハイライト動画を作成する</button>
+      <button class="cancel-button" type="button" id="montageCancel" hidden>書き出しを中止</button>
+      <div class="progress-area" id="montageProgress" hidden aria-live="polite">
+        <div class="progress-label"><span id="montageStatus"></span><span id="montagePercent">0%</span></div>
+        <div class="progress-track"><div id="montageBar"></div></div>
+      </div>
+      <p id="montageError" class="error" role="alert" hidden></p>
+      <video id="montagePreview" controls playsinline hidden aria-label="完成したハイライト動画"></video>
+      <a id="montageDownload" class="main-button montage-download" hidden download="PeakStamp.mp4">↓ MP4動画を保存</a>
+      <p class="fine-print">動画・音声はiPhone内で処理します。初回は短い1080p以下の動画で試してください。iPhoneのOS・動画形式によってはMP4の書き出しに対応しない場合があります。長時間の処理中はSafariを閉じないでください。</p>
+    </section>
     <footer><strong>PEAKSTAMP</strong><span>Enjoy the game. Capture the moment.</span><p>解析対象の動画は端末外に送信されません。初回アクセス時に解析ライブラリのダウンロードが必要です。</p></footer>
   </main>
   <script type="module" src="app.mjs"></script>
