@@ -319,7 +319,8 @@ function rebuild() {
     }).map(item => {
       const old=earlier.get(item.id);
       return { ...item, sourceId: source.id,
-        enabled: old?.enabled ?? false, title: old?.title || item.title };
+        enabled: old?.enabled ?? false, title: old?.title || item.title,
+        time: old?.time ?? item.time, manualEnd: old?.manualEnd ?? null };
     });
   }
   syncSources();
@@ -440,7 +441,7 @@ function row(item, index) {
       refreshComment();
     }
   });
-  timeRow.append(number, time, badge);
+  timeRow.append(number, badge);
   const score = make('span','score', 'ピーク ' + Math.round(item.peakSeconds) + '秒 / ' + item.db + 'dBFS');
   const title = make('input','title-input');
   title.type = 'text';
@@ -504,7 +505,7 @@ function row(item, index) {
     refreshComment();
   });
   endControls.append(resetEnd);
-  startBox.append(startControls);
+  startBox.append(time,startControls);
   endBox.append(endInput,endControls);
   rangeInputs.append(startBox,endBox);
   rangeEditor.append(rangeHeading,markerLegend,track,rangeInputs);
@@ -671,6 +672,10 @@ $('waveCanvas').addEventListener('click', e => {
     !best || Math.abs(item.time - localTime) < Math.abs(best.time - localTime) ? item : best, null);
   if (!closest) return;
   const idx = source.candidates.indexOf(closest);
+  if(reviewTab==='kept'){
+    reviewTab='all';
+    drawResults();
+  }
   const entries = [...$('highlightList').querySelectorAll('.highlight-entry')];
   const allSources = state.sources.filter(s => s.bins);
   const preceding = allSources.slice(0,allSources.indexOf(source))
