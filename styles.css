@@ -105,3 +105,28 @@ footer{text-align:center;color:#7995a8;display:flex;align-items:center;flex-dire
 .save-fallback{display:block;text-align:center;color:var(--mint);padding:13px 5px;font-size:12px;text-underline-offset:3px}
 .save-help{font-size:12px;line-height:1.75;background:#16384b;border:1px solid #37586d;border-radius:10px;padding:12px;margin:12px 0}
 .save-status{min-height:18px;color:#c2e3d8;font-size:12px;line-height:1.5}
+
+/* Multi-video source management */
+.source-board{margin:12px 0;padding:13px;border-radius:13px;border:1px solid #3a5b6d;background:#0c2234}
+.source-board-header{display:flex;justify-content:space-between;align-items:center;gap:9px;margin-bottom:11px}
+.source-board-header strong{font-size:13px;color:#c6f5e6}
+.source-board-header small{font-size:10px;color:#b2c5ce;text-align:right}
+.source-list{display:flex;flex-direction:column;gap:8px}
+.source-item{display:flex;align-items:center;gap:10px;padding:10px 8px;background:#163248;border:1px solid #355167;border-radius:10px}
+.source-order{display:grid;place-items:center;width:28px;height:28px;flex:none;border-radius:50%;background:#245c59;color:#d9fcf1;font-size:12px;font-weight:850}
+.source-info{display:flex;min-width:0;flex:1;flex-direction:column;gap:5px}
+.source-info strong{font-size:12px;overflow-wrap:anywhere}
+.source-info small{font-size:10px;color:#bacbd3;overflow-wrap:anywhere}
+.source-controls{display:flex;gap:3px;flex:none}
+.source-control{border:1px solid #49697e;background:#203b4e;color:#ddf7f4;border-radius:7px;min-width:27px;min-height:32px;padding:4px;font-size:15px}
+.source-control:disabled{opacity:.25}
+.source-remove{color:#ffc1a5;border-color:#865d55}
+.source-scenes-header{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:12px 0 2px;border-bottom:1px solid #40647a;padding:12px 2px 9px}
+.source-scenes-header strong{font-size:12px;overflow-wrap:anywhere;min-width:0}
+.source-scenes-header small{color:var(--muted);font-size:10px;white-space:nowrap}
+#changeFile,#addFiles{white-space:nowrap}
+@media(max-width:390px){
+ .source-item{gap:6px;padding:9px 5px}
+ .source-control{min-width:24px}
+ .file-details{gap:6px}
+}
