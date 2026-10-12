@@ -4,23 +4,37 @@ import { formatTime } from './detector.mjs';
 const $ = id => document.getElementById(id);
 let lastFile = null;
 let lastUrl = null;
+let lastBlob = null;
+let lastName = '';
 let working = false;
 let cancelRequested = false;
 let activeState = null;
 
+function displayError(message) {
+  $('montageError').textContent = message;
+  $('montageError').hidden = !message;
+}
 function revokeOutput() {
+  const media = $('montagePreview');
+  media.pause();
+  media.removeAttribute('src');
+  media.load();
   if (lastUrl) URL.revokeObjectURL(lastUrl);
   lastUrl = null;
+  lastBlob = null;
+  lastName = '';
+  $('montageShare').hidden = true;
   $('montageDownload').hidden = true;
+  $('montageOpen').hidden = true;
+  $('montageSaveHelp').hidden = true;
   $('montagePreview').hidden = true;
-  $('montagePreview').removeAttribute('src');
-  $('montagePreview').load();
+  $('montageSaveStatus').textContent = '';
 }
 function notify(message, percent) {
   $('montageStatus').textContent = message;
   $('montageProgress').hidden = false;
-  $('montageBar').style.width = Math.max(0, Math.min(100, percent)) + '%';
-  $('montagePercent').textContent = Math.round(percent) + '%';
+  $('montageBar').style.width = Math.max(0, Math.min(100, Number(percent) || 0)) + '%';
+  $('montagePercent').textContent = Math.round(Number(percent) || 0) + '%';
 }
 function setWorking(value) {
   working = value;
@@ -52,6 +66,10 @@ export function updateMontageEditor(state) {
   $('montageExport').disabled = working || !plan.length;
   if (!working) revokeOutput();
 }
+function makeShareFile() {
+  if (!lastBlob || !lastName || typeof File !== 'function') return null;
+  return new File([lastBlob], lastName, { type: 'video/mp4', lastModified: Date.now() });
+}
 export function initMontageEditor(state) {
   activeState = state;
   $('clipDuration').addEventListener('input', () => {
@@ -62,57 +80,100 @@ export function initMontageEditor(state) {
   for (const button of document.querySelectorAll('[data-montage-title]')) {
     button.addEventListener('click', () => setTitle(button.dataset.montageTitle));
   }
+  for (const radio of document.querySelectorAll('input[name="exportQuality"]')) {
+    radio.addEventListener('change', () => {
+      if (!working) revokeOutput();
+    });
+  }
   $('montageCancel').addEventListener('click', () => {
     cancelRequested = true;
     $('montageStatus').textContent = '中止しています…';
+  });
+  $('montageShare').addEventListener('click', async () => {
+    if (!lastBlob) {
+      $('montageSaveStatus').textContent = 'まずMP4の書き出しを完了してください。';
+      return;
+    }
+    const file = makeShareFile();
+    if (!file || !navigator.share) {
+      $('montageSaveStatus').textContent = '共有に非対応です。下の「MP4をダウンロード」をお試しください。';
+      return;
+    }
+    try {
+      if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+        $('montageSaveStatus').textContent = 'このサイズの動画は共有できないようです。「MP4をダウンロード」または別タブから保存をお試しください。';
+        return;
+      }
+      await navigator.share({ files: [file], title: lastName });
+      $('montageSaveStatus').textContent = '共有メニューから保存先を選択してください。';
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        $('montageSaveStatus').textContent = '共有を閉じました。もう一度「iPhoneに保存・共有」を押せます。';
+      } else {
+        $('montageSaveStatus').textContent = '共有できませんでした：' + (err?.message || String(err)) + '。下のダウンロードリンクをお試しください。';
+      }
+    }
+  });
+  $('montageDownload').addEventListener('click', () => {
+    $('montageSaveStatus').textContent = 'Safariで保存されない場合は「iPhoneに保存・共有」から「ファイルに保存」を選択してください。';
   });
   $('montageExport').addEventListener('click', async () => {
     if (working || !activeState?.file) return;
     const plan = buildClipPlan(activeState.candidates, activeState.duration,
       Number($('clipDuration').value));
     if (!plan.length) {
-      $('montageError').textContent = 'まずシーンにチェックを入れてください。';
+      displayError('まずシーンにチェックを入れてください。');
       return;
     }
     if (montageSeconds(plan) > 185) {
-      $('montageError').textContent = 'スマホのメモリ負荷を抑えるため、最初は3分以内にしてください。秒数や候補件数を減らせます。';
+      displayError('スマホのメモリ負荷を抑えるため、最初は3分以内にしてください。秒数や候補件数を減らせます。');
       return;
     }
+    const quality = document.querySelector('input[name="exportQuality"]:checked')?.value || 'high';
     revokeOutput();
     const file = activeState.file;
     cancelRequested = false;
-    $('montageError').textContent = '';
+    displayError('');
     setWorking(true);
     notify('動画の準備中…', 0);
     try {
       const blob = await exportMontage({
-        file,
-        plan,
+        file, plan, quality,
         title: $('montageTitle').value || 'GOALS!',
         isCancelled: () => cancelRequested,
         onProgress: notify,
       });
       if (cancelRequested) throw new Error('書き出しを中止しました。');
+      if (!blob || blob.size < 1024) throw new Error('MP4の生成結果が空です。');
+      lastBlob = blob;
+      lastName = 'PeakStamp_' + new Date().toISOString().slice(0, 10) + '.mp4';
       lastUrl = URL.createObjectURL(blob);
       $('montagePreview').src = lastUrl;
       $('montagePreview').hidden = false;
       $('montageDownload').href = lastUrl;
-      $('montageDownload').download = 'PeakStamp_' + new Date().toISOString().slice(0,10) + '.mp4';
+      $('montageDownload').download = lastName;
       $('montageDownload').hidden = false;
-      $('montageStatus').textContent = '完成！ 再生して確認し、MP4を保存してください。';
+      $('montageOpen').href = lastUrl;
+      $('montageOpen').hidden = false;
+      $('montageSaveHelp').hidden = false;
+      const fileForShare = makeShareFile();
+      $('montageShare').hidden = !(fileForShare && navigator.share
+        && (!navigator.canShare || navigator.canShare({ files: [fileForShare] })));
+      $('montageStatus').textContent = 'MP4作成完了（' + (blob.size / 1048576).toFixed(1) + ' MB）';
+      $('montageSaveStatus').textContent = $('montageShare').hidden
+        ? '下の「MP4をダウンロード」で保存してください。'
+        : '「iPhoneに保存・共有」をタップして保存先を選んでください。';
+      $('montageDownload').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
       $('montageProgress').hidden = true;
-      $('montageError').textContent = '書き出せませんでした：' + (err?.message || String(err))
-        + ' 対応コーデックや端末のメモリが原因の場合は、短い動画で試してください。';
+      displayError('書き出せませんでした：' + (err?.message || String(err))
+        + '。最初は標準720p・30秒程度の動画でお試しください。');
     } finally {
       setWorking(false);
-      updateMontageEditorAfterExport();
+      const planAfter = buildClipPlan(activeState?.candidates || [], activeState?.duration,
+        Number($('clipDuration').value));
+      $('montageExport').disabled = !planAfter.length;
     }
   });
   updateMontageEditor(state);
-}
-function updateMontageEditorAfterExport() {
-  const plan = buildClipPlan(activeState?.candidates || [], activeState?.duration,
-    Number($('clipDuration').value));
-  $('montageExport').disabled = !plan.length;
 }
