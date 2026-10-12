@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { buildMultiClipPlan, montageChapters } from '../multi-plan.mjs';
+
+const file = (id, name, duration, candidates, analyzed = true) =>
+  ({id, file:{name}, bins: analyzed ? [{time:0,rms:0.1}] : null,
+    duration, candidates});
+test('multiple files create plan in chosen file order, with file-local timestamps', () => {
+  const clips=buildMultiClipPlan([
+    file('B','match-b.mov',60,[{time:20,enabled:true}]),
+    file('A','match-a.mov',60,[{time:10,enabled:true},{time:25,enabled:false}])
+  ],12);
+  assert.deepEqual(clips,[
+    {sourceId:'B',sourceName:'match-b.mov',start:20,end:32},
+    {sourceId:'A',sourceName:'match-a.mov',start:10,end:22}
+  ]);
+});
+test('reordering sources changes final playback order', () => {
+  const sources=[
+    file('A','A.mov',50,[{time:8,enabled:true}]),
+    file('B','B.mov',50,[{time:16,enabled:true}]),
+  ];
+  assert.deepEqual(buildMultiClipPlan([...sources].reverse(),8)
+    .map(c=>c.sourceId), ['B','A']);
+});
+test('each file has independent overlap merging and duration cap', () => {
+  const plan=buildMultiClipPlan([
+    file('A','A.mov',25,[{time:10},{time:14}]),
+    file('B','B.mov',12,[{time:9}]),
+  ],8);
+  assert.deepEqual(plan,[
+    {sourceId:'A',sourceName:'A.mov',start:10,end:22},
+    {sourceId:'B',sourceName:'B.mov',start:9,end:12}
+  ]);
+});
+test('unselected, unanalyzed and non-video files are skipped', () => {
+  assert.deepEqual(buildMultiClipPlan([
+    file('x','x.mov',20,[{time:10}],false),
+    file('y','y.mov',20,[{time:2,enabled:false}]),
+  ]),[]);
+});
+test('generated video chapters account for 5-second title and selected clips', () => {
+  const plan=buildMultiClipPlan([
+    file('A','A.mov',30,[{time:4,enabled:true}]),
+    file('B','B.mov',30,[{time:10,enabled:true}]),
+  ],8);
+  assert.equal(montageChapters(plan,'GOALS!'),
+    '0:00 GOALS!\n00:05 Highlight 1 — A.mov\n00:13 Highlight 2 — B.mov');
+});
+test('empty selection returns empty chapter text',()=>{
+  assert.equal(montageChapters([], 'GOALS!'),'');
+});
