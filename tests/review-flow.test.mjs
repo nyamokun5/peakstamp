@@ -14,7 +14,7 @@ const scene=(id, enabled=false, rejected=false)=>({
 test('default play label and dropdown options preserve exact requested Japanese text',()=>{
   assert.equal(DEFAULT_PLAY_LABEL,'ナイスプレイ！');
   assert.deepEqual(PLAY_LABELS, [
-    'ナイスプレイ！','ゴール','ナイスキーパー','N惜しい！','ナイスディフェンス！'
+    'ナイスプレイ！','ゴール','ナイスキーパー','惜しい！','ナイスディフェンス！'
   ]);
 });
 test('keep marks a clip selected and advances to the next untouched clip',()=>{

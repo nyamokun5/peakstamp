@@ -1,5 +1,5 @@
-import { montageSeconds, exportMontage } from './exporter.mjs?v=rapid5';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=rapid5';
+import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=storage8';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=storage8';
 import { formatTime } from './detector.mjs';
 
 const $ = id => document.getElementById(id);
@@ -103,7 +103,11 @@ export function updateMontageEditor(state) {
   if (!working && lastEditSignature !== null && lastEditSignature !== signature) revokeOutput();
   lastEditSignature = signature;
   $('montageSelected').textContent = plan.length + 'シーンを結合';
-  $('montageLength').textContent = '完成：約' + formatTime(Math.ceil(montageSeconds(plan)));
+  const seconds = montageSeconds(plan);
+  $('montageLength').textContent = '完成：約' + formatTime(Math.ceil(seconds));
+  const quality = document.querySelector('input[name="exportQuality"]:checked')?.value || 'high';
+  $('montageSizeEstimate').textContent = plan.length
+    ? '約' + estimateMontageMB(seconds,quality).toFixed(1) + ' MB' : '—';
   $('montageExport').disabled = working || !plan.length;
 }
 function makeShareFile() {
@@ -136,7 +140,10 @@ export function initMontageEditor(state) {
   }
   for (const radio of document.querySelectorAll('input[name="exportQuality"]')) {
     radio.addEventListener('change', () => {
-      if (!working) revokeOutput();
+      if (!working) {
+        revokeOutput();
+        updateMontageEditor(activeState);
+      }
     });
   }
   $('montageCancel').addEventListener('click', () => {
@@ -220,8 +227,12 @@ export function initMontageEditor(state) {
       $('montageDownload').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
       $('montageProgress').hidden = true;
-      displayError('書き出せませんでした：' + (err?.message || String(err))
-        + '。最初は標準720p・30秒程度の動画でお試しください。');
+      const detail = err?.message || String(err);
+      const storageOrMemory = /quota|out.of.memory|insufficient|not.enough.space|memory|storage|容量|空き領域/i
+        .test(String(err?.name || '') + ' ' + detail);
+      displayError('書き出せませんでした：' + detail + (storageOrMemory
+        ? '。容量または処理用メモリの不足が疑われます。省容量540pで短く作り直し、iPhoneストレージの空きを確認してください。'
+        : '。まず省容量540p・30秒程度の動画でお試しください。'));
     } finally {
       setWorking(false);
       const planAfter = buildMultiClipPlan(activeState?.sources || [], clipOptions());

@@ -299,3 +299,15 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
   .highlight-entry .review-decision-actions button{font-size:12px;padding:8px 2px}
   .highlight-entry .review-decision-actions .play-btn{font-size:12px}
 }
+
+
+/* Storage-aware export estimate and iPhone guidance */
+.storage-estimate{border:1px solid #3b726e;background:#143b3e;border-radius:11px;padding:12px 13px;margin:12px 0 9px}
+.storage-estimate>div{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.storage-estimate strong{font-size:13px;color:#d6fff0}
+#montageSizeEstimate{white-space:nowrap;color:#96f5c9;font-size:17px;font-variant-numeric:tabular-nums}
+.storage-estimate p{font-size:11px;line-height:1.5;color:#bfd5d4;margin:6px 0 0}
+.storage-tips{border:1px solid #435f72;background:#132d41;border-radius:10px;margin-bottom:16px;padding:11px 13px}
+.storage-tips summary{font-size:12px;font-weight:850;color:#c7e9f2;cursor:pointer;min-height:24px}
+.storage-tips p{font-size:11px;line-height:1.7;color:#b8d3dc;margin:12px 0 4px}
+.quality-picker label:has(input[value="compact"]:checked){border-color:#f8cc85;background:#4a4438}

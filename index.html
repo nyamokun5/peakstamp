@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="動画の盛り上がりを音声から検出し、YouTube用タイムスタンプを作成。端末内で処理します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=review6" />
+  <link rel="stylesheet" href="styles.css?v=storage8" />
 </head>
 <body>
   <header class="topbar">
@@ -135,8 +135,19 @@
       <fieldset class="quality-picker">
         <legend>出力画質</legend>
         <label><input type="radio" name="exportQuality" value="high" checked /><span><strong>高画質 1080p / 30fps</strong><small>おすすめ・高ビットレート（書き出しに時間がかかります）</small></span></label>
-        <label><input type="radio" name="exportQuality" value="standard" /><span><strong>標準 720p / 30fps</strong><small>iPhoneの負担を減らしたい場合</small></span></label>
+        <label><input type="radio" name="exportQuality" value="standard" /><span><strong>標準 720p / 30fps</strong><small>画質と容量のバランスを重視</small></span></label>
+        <label><input type="radio" name="exportQuality" value="compact" /><span><strong>省容量 540p / 30fps</strong><small>容量不足時におすすめ・画質は低下します</small></span></label>
       </fieldset>
+      <div class="storage-estimate" aria-live="polite">
+        <div><strong>完成動画の推定サイズ</strong><strong id="montageSizeEstimate">—</strong></div>
+        <p>動画の推定ファイルサイズです。Safariの作業用メモリや端末の実際の空き容量は含みません。</p>
+      </div>
+      <details class="storage-tips">
+        <summary>iPhoneの容量が足りないときは？</summary>
+        <p>まず「省容量 540p」を選び、シーン数や切り取り時間を減らしてください。元動画は削除されません。十分な空き容量を確保できない場合は、PCなど空き容量の多い端末での編集をおすすめします。</p>
+        <p>iPhoneの空き容量は「設定 → 一般 → iPhoneストレージ」で確認できます。ファイルに保存する前に完成動画を確認し、不要な古い動画を整理する場合もバックアップを確認してください。</p>
+        <p>MP4保存が難しい場合でも、動画ごとのYouTubeタイムスタンプはコピーできます。クラウドを保存先に選んでも、一時的に端末内の空き容量が必要になることがあります。</p>
+      </details>
       <button class="main-button montage-export" type="button" id="montageExport" disabled>▶ ハイライト動画を作成する</button>
       <button class="cancel-button" type="button" id="montageCancel" hidden>書き出しを中止</button>
       <div class="progress-area" id="montageProgress" hidden aria-live="polite">
@@ -150,7 +161,7 @@
       <a id="montageOpen" class="save-fallback" target="_blank" rel="noopener" hidden>動画を別タブで開く（保存できない場合）</a>
       <p id="montageSaveHelp" class="save-help" hidden>iPhoneでは「iPhoneに保存・共有」から共有メニューを開き、「ビデオを保存」または「ファイルに保存」を選択してください。うまくいかない場合は「動画を別タブで開く」を試してください。</p>
       <p id="montageSaveStatus" class="save-status" role="status" aria-live="polite"></p>
-      <p class="fine-print">動画・音声はiPhone内で処理します。最初は30秒ほどの素材で試してください。iPhoneのOS・動画形式によってはMP4の書き出しに対応しない場合があります。長時間の処理中はSafariを閉じないでください。</p>
+      <p class="fine-print">動画・音声は端末内で処理し、PeakStampのサーバーには送信しません。最初は30秒ほどの素材で試してください。iPhoneのOS・動画形式によってはMP4の書き出しに対応しない場合があります。長時間の処理中はSafariを閉じないでください。</p>
     </section>
     <footer><strong>PEAKSTAMP</strong><span>Enjoy the game. Capture the moment.</span><p>解析対象の動画は端末外に送信されません。初回アクセス時に解析ライブラリのダウンロードが必要です。</p></footer>
   </main>
@@ -170,6 +181,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=keep7"></script>
+  <script type="module" src="app.mjs?v=storage8"></script>
 </body>
 </html>

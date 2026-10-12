@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildClipPlan, montageSeconds, drawIntro, getExportSettings, FRAME_RATE, INTRO_SECONDS } from '../exporter.mjs';
+import { buildClipPlan, montageSeconds, drawIntro, getExportSettings, estimateMontageMB, EXPORT_PROFILES, FRAME_RATE, INTRO_SECONDS } from '../exporter.mjs';
 
 test('only selected highlights are included and sorted chronologically', () => {
   const plan = buildClipPlan([{time:50,enabled:true}, {time:20,enabled:false},
@@ -65,4 +65,29 @@ test('small files are not upscaled and portrait stays portrait', () => {
 test('invalid source dimensions are rejected', () => {
   assert.throws(() => getExportSettings(0, 1080));
   assert.throws(() => getExportSettings(NaN, 1080));
+});
+
+test('compact low-storage output is 540p at 30fps', () => {
+  assert.deepEqual(getExportSettings(3840, 2160, 'compact'), {
+    width: 960, height: 540, frameRate: 30, bitrate: 2000000
+  });
+});
+test('compact export preserves portrait orientation and does not upscale', () => {
+  const portrait=getExportSettings(1080,1920,'compact');
+  assert.equal(portrait.width < portrait.height,true);
+  assert.equal(portrait.height,540);
+  const tiny=getExportSettings(480,270,'compact');
+  assert.equal(tiny.width,480);
+  assert.equal(tiny.height,270);
+});
+test('file size estimates are nonzero for positive durations and ordered by bitrate', () => {
+  const duration=120;
+  const compact=estimateMontageMB(duration,'compact');
+  const standard=estimateMontageMB(duration,'standard');
+  const high=estimateMontageMB(duration,'high');
+  assert.ok(compact < standard && standard < high);
+  assert.ok(compact > 20 && compact < 45);
+  assert.equal(estimateMontageMB(0,'compact'),0);
+  assert.equal(estimateMontageMB(NaN,'high'),0);
+  assert.equal(EXPORT_PROFILES.compact.bitrate,2000000);
 });

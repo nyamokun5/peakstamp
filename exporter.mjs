@@ -11,16 +11,28 @@ export function getExportSettings(sourceWidth, sourceHeight, preset = 'high') {
   if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 0 || sourceHeight <= 0) {
     throw new Error('映像サイズを取得できません。');
   }
-  const high = preset !== 'standard';
-  const boundWidth = high ? 1920 : 1280;
-  const boundHeight = high ? 1080 : 720;
-  const ratio = Math.min(1, boundWidth / sourceWidth, boundHeight / sourceHeight);
+  const profile = EXPORT_PROFILES[preset] || EXPORT_PROFILES.high;
+  const ratio = Math.min(1, profile.maxWidth / sourceWidth, profile.maxHeight / sourceHeight);
   return {
     width: Math.max(2, Math.floor(sourceWidth * ratio / 2) * 2),
     height: Math.max(2, Math.floor(sourceHeight * ratio / 2) * 2),
     frameRate: FRAME_RATE,
-    bitrate: high ? 10000000 : 4500000,
+    bitrate: profile.bitrate,
   };
+}
+
+/** Output bitrates are approximate; the final file size varies by encoder. */
+export const EXPORT_PROFILES = Object.freeze({
+  high: Object.freeze({ maxWidth:1920, maxHeight:1080, bitrate:10000000 }),
+  standard: Object.freeze({ maxWidth:1280, maxHeight:720, bitrate:4500000 }),
+  compact: Object.freeze({ maxWidth:960, maxHeight:540, bitrate:2000000 }),
+});
+export function estimateMontageMB(seconds, preset='high') {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+  const bitrate = (EXPORT_PROFILES[preset] || EXPORT_PROFILES.high).bitrate;
+  const audioBitrate = 128000;
+  // Approximate 6% container overhead; this is NOT a free-storage estimate.
+  return Math.round((seconds * (bitrate + audioBitrate) / 8 * 1.06) / 1e6 * 10) / 10;
 }
 
 
