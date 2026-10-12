@@ -1,5 +1,6 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=20261012-fix1';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=multi2';
+import { buildMultiClipPlan, montageChapters } from './multi-plan.mjs?v=multi2';
 
 const $ = id => document.getElementById(id);
 const make = (tag, cls, text) => {
@@ -9,7 +10,7 @@ const make = (tag, cls, text) => {
   return e;
 };
 const state = {
-  file: null, objectUrl: null, duration: 0, bins: null, candidates: [],
+  file: null, objectUrl: null, duration: 0, bins: null, candidates: [], sources: [],
   sensitivity: 'normal', leadSeconds: 7, maxResults: 8,
   working: false, cancelled: false
 };
@@ -27,46 +28,146 @@ function progress(message, value) {
   $('progressPercent').textContent = percentage + '%';
   $('progressBar').style.width = percentage + '%';
 }
+let nextSourceId = 0;
+let appendOnPick = false;
 function busy(value) {
   state.working = value;
   $('fileInput').disabled = value;
   $('changeFile').disabled = value;
-  $('analyzeButton').disabled = value || !state.file;
+  $('addFiles').disabled = value;
+  $('analyzeButton').disabled = value || !state.sources.length;
   $('analyzeButton').textContent = value ? '音声を解析中…' : '⌁　音声を解析する　→';
   $('cancelButton').hidden = !value;
 }
-function chooseFile(file) {
-  if (!file || state.working) return;
+function syncSources() {
   closeInlinePreview();
-  state.cancelled = true;
-  const video = $('preview');
-  video.pause();
-  video.removeAttribute('src');
-  video.load();
-  if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
-  state.file = file;
-  state.objectUrl = URL.createObjectURL(file);
-  state.duration = 0;
-  state.bins = null;
-  state.candidates = [];
-  $('fileName').textContent = file.name;
-  $('fileSize').textContent = (file.size / 1048576).toFixed(1) + ' MB · ' + (file.type || '動画 / 音声');
-  $('fileDetails').hidden = false;
-  $('uploadZone').hidden = true;
-  video.src = state.objectUrl;
-  $('videoWrapper').hidden = false;
-  $('resultsPanel').hidden = true;
-  updateMontageEditor(state);
-  $('progressArea').hidden = true;
-  error('analysisError', '');
-  error('loadError', '');
-  $('analyzeButton').disabled = false;
-  video.onloadedmetadata = () => {
-    if (Number.isFinite(video.duration)) state.duration = video.duration;
-  };
+  // Existing single-video controls still point to the first file.
+  const first = state.sources[0] || null;
+  state.file = first?.file || null;
+  state.objectUrl = first?.objectUrl || null;
+  let offset = 0;
+  const bins = [];
+  const candidates = [];
+  for (const source of state.sources) {
+    source.offset = offset;
+    if (!source.bins) continue;
+    bins.push(...source.bins);
+    candidates.push(...source.candidates);
+    offset += source.duration;
+  }
+  state.duration = offset;
+  state.bins = bins.length ? bins : null;
+  state.candidates = candidates;
+  $('resultsPanel').hidden = !state.bins;
+  $('multiWaveNotice').hidden = state.sources.length <= 1;
+  $('commentHelp').hidden = state.sources.length <= 1;
+  $('commentHeading').textContent = state.sources.length <= 1
+    ? 'YouTubeコメント用' : '完成した結合動画のチャプター用';
+  if (state.bins) drawResults();
+  else updateMontageEditor(state);
+  renderSourceList();
 }
-$('fileInput').addEventListener('change', e => chooseFile(e.target.files && e.target.files[0]));
-$('changeFile').addEventListener('click', () => $('fileInput').click());
+function renderSourceList() {
+  const sources = state.sources;
+  $('fileDetails').hidden = sources.length === 0;
+  $('sourceBoard').hidden = sources.length === 0;
+  $('uploadZone').hidden = sources.length > 0;
+  $('sourceCount').textContent = String(sources.length);
+  $('fileName').textContent = sources.length + '本の動画を選択中';
+  const megabytes = sources.reduce((n,s) => n + s.file.size,0)/1048576;
+  $('fileSize').textContent = megabytes.toFixed(1) + ' MB 合計';
+  $('analyzeButton').disabled = !sources.length || state.working;
+  const preview = $('preview');
+  const first = sources[0];
+  if (first) {
+    if (preview.src !== first.objectUrl) {
+      preview.pause();
+      preview.src = first.objectUrl;
+      preview.load();
+    }
+    $('videoWrapper').hidden = false;
+  } else {
+    preview.pause();
+    preview.removeAttribute('src');
+    preview.load();
+    $('videoWrapper').hidden = true;
+  }
+  const list = $('sourceList');
+  list.replaceChildren(...sources.map((source, i) => {
+    const card = make('div','source-item');
+    const num = make('span','source-order',String(i + 1));
+    const info = make('div','source-info');
+    const filename = make('strong','',source.file.name);
+    const status = source.error ? '解析失敗：' + source.error
+      : source.bins ? '解析済み・候補 ' + source.candidates.length + '件'
+      : '未解析';
+    info.append(filename,make('small','',status));
+    const controls = make('div','source-controls');
+    const move = (label,diff) => {
+      const button = make('button','source-control',label);
+      button.type = 'button';
+      button.disabled = state.working || i + diff < 0 || i + diff >= sources.length;
+      button.addEventListener('click', () => {
+        const other = i + diff;
+        [sources[i],sources[other]]=[sources[other],sources[i]];
+        syncSources();
+      });
+      controls.append(button);
+    };
+    move('↑',-1); move('↓',1);
+    const del = make('button','source-control source-remove','×');
+    del.type = 'button';
+    del.disabled = state.working;
+    del.setAttribute('aria-label',source.file.name+' を削除');
+    del.addEventListener('click', () => {
+      sources.splice(i,1);
+      URL.revokeObjectURL(source.objectUrl);
+      syncSources();
+    });
+    controls.append(del);
+    card.append(num,info,controls);
+    return card;
+  }));
+}
+function chooseFiles(files, append = false) {
+  if (state.working || !files?.length) return;
+  const incoming = Array.from(files).filter(file => /\.(mp4|mov|m4v)$/i.test(file.name) ||
+    /^video\//.test(file.type));
+  if (!incoming.length) {
+    error('loadError','動画ファイル（MOV / MP4）を選んでください。');
+    return;
+  }
+  closeInlinePreview();
+  if (!append) {
+    state.sources.forEach(source => URL.revokeObjectURL(source.objectUrl));
+    state.sources = [];
+  }
+  const seen = new Set(state.sources.map(s =>
+    s.file.name + ':' + s.file.size + ':' + s.file.lastModified));
+  let added = 0;
+  for (const file of incoming) {
+    const key = file.name + ':' + file.size + ':' + file.lastModified;
+    if (seen.has(key)) continue;
+    if (state.sources.length >= 12) break; // Keep memory manageable on iPhone.
+    state.sources.push({ id: 'video-' + (++nextSourceId), file,
+      objectUrl: URL.createObjectURL(file), duration: 0,
+      bins: null, candidates: [], error: '' });
+    seen.add(key);
+    added++;
+  }
+  error('loadError',state.sources.length === 12 && incoming.length > added
+    ? '一度に選べる動画は最大12本です。' : '');
+  $('progressArea').hidden = true;
+  error('analysisError','');
+  syncSources();
+}
+$('fileInput').addEventListener('change', e => {
+  chooseFiles(e.target.files,appendOnPick);
+  e.target.value = '';
+  appendOnPick = false;
+});
+$('changeFile').addEventListener('click', () => { appendOnPick = false; $('fileInput').click(); });
+$('addFiles').addEventListener('click', () => { appendOnPick = true; $('fileInput').click(); });
 
 async function decodeStreaming(file, update, check) {
   const { Input, BlobSource, ALL_FORMATS, AudioSampleSink } = await import(
