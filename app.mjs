@@ -1,4 +1,5 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs';
 
 const $ = id => document.getElementById(id);
 const make = (tag, cls, text) => {
@@ -52,6 +53,7 @@ function chooseFile(file) {
   video.src = state.objectUrl;
   $('videoWrapper').hidden = false;
   $('resultsPanel').hidden = true;
+  updateMontageEditor(state);
   $('progressArea').hidden = true;
   error('analysisError', '');
   error('loadError', '');
@@ -270,7 +272,7 @@ function row(item) {
   wrap.append(enabled, play, fields, remove);
   return wrap;
 }
-function refreshComment() { $('commentText').value = makeComment(state.candidates); }
+function refreshComment() { $('commentText').value = makeComment(state.candidates); updateMontageEditor(state); }
 function drawResults() {
   $('highlightList').replaceChildren(...state.candidates.map(row));
   $('resultCount').textContent = String(state.candidates.length);
@@ -340,3 +342,5 @@ $('copyButton').addEventListener('click', async () => {
     $('copyStatus').textContent = 'テキストを選択しました。コピーしてください。';
   }
 });
+
+initMontageEditor(state);
