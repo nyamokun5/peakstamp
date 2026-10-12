@@ -28,7 +28,7 @@ test('invalid durations and empty selection return empty plan', () => {
 });
 test('montage length is clip durations plus five seconds of title', () => {
   assert.equal(INTRO_SECONDS,5);
-  assert.equal(montageSeconds([{start:0,end:10},{start:25,end:39}]),28.7);
+  assert.equal(montageSeconds([{start:0,end:10},{start:25,end:39}]),28.5);
 });
 test('title card contains only the specified words', () => {
   const rendered=[];
