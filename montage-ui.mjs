@@ -1,5 +1,5 @@
-import { montageSeconds, exportMontage } from './exporter.mjs?v=edit3';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=edit3';
+import { montageSeconds, exportMontage } from './exporter.mjs?v=dissolve05';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=dissolve05';
 import { formatTime } from './detector.mjs';
 
 const $ = id => document.getElementById(id);
