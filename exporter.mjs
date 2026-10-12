@@ -186,7 +186,7 @@ export async function exportMontage({
       const clipFrames = Math.ceil((clip.end - clip.start) * settings.frameRate);
       const nextClip = clips[section + 1];
       const nextFrames = nextClip ? Math.ceil((nextClip.end - nextClip.start) * settings.frameRate) : 0;
-      // Cross-dissolve exactly 9 video frames at 30fps between adjacent clips.
+      // Cross-dissolve 15 video frames (0.5 seconds at 30fps) between adjacent clips.
       // With very short clips, bound the overlap to prevent negative durations.
       const outgoingFrames = nextClip ? Math.min(dissolveFrames(settings.frameRate),
         Math.floor(clipFrames / 3), Math.floor(nextFrames / 3)) : 0;
