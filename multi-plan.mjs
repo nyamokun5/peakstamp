@@ -1,5 +1,5 @@
-import { INTRO_SECONDS } from './exporter.mjs?v=review4';
-import { getCandidateEnd, dissolveOverlap } from './editing-rules.mjs?v=review4';
+import { INTRO_SECONDS } from './exporter.mjs?v=rapid5';
+import { getCandidateEnd, dissolveOverlap } from './editing-rules.mjs?v=rapid5';
 
 /**
  * Produce non-overlapping clips, in user-controlled file order.
@@ -43,7 +43,7 @@ export function sourceTimestampComments(sources){
       name:source.file.name,
       count:list.length,
       text:list.length ? '⚽ '+source.file.name+' — Highlights\n'
-        +list.map(c=>formatLocalTime(c.time)+' '+(c.title?.trim()||'🔥 盛り上がり')).join('\n')
+        +list.map(c=>formatLocalTime(c.time)+' '+(c.title?.trim()||'ナイスプレイ！')).join('\n')
         : ''
     };
   });

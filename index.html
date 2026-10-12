@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="動画の盛り上がりを音声から検出し、YouTube用タイムスタンプを作成。端末内で処理します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=review4" />
+  <link rel="stylesheet" href="styles.css?v=rapid5" />
 </head>
 <body>
   <header class="topbar">
@@ -78,7 +78,7 @@
       <p id="multiWaveNotice" class="fine-print" hidden>波形は全動画をつなげた表示です。オレンジ線は各動画の検出位置を示します。</p>
       <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
       <div id="emptyResults" class="empty-results" hidden>指定した感度では見どころを検出できませんでした。「多めに拾う」に切り替えて再解析するか、音声が入っているかご確認ください。</div>
-      <p class="list-help">各シーン内の「▶ 確認」でその場再生。「＋ キープする」を押した場面だけを動画に使用します。</p>
+      <p class="list-help">各シーンの「▶ リプレイ」で切り取り範囲を繰り返し再生。プレイ内容を選び、「キープ」か「不採用」で判定すると次の未判断シーンへ移動します。</p>
       <div class="selected-overview">
         <strong>採用するシーン：<span id="selectedCount">0</span>件</strong>
         <div id="selectedSummary" class="selected-summary" hidden></div>
@@ -87,6 +87,7 @@
         <button id="tabAll" type="button" class="review-tab active" data-review-tab="all" aria-pressed="true">すべての候補 <span id="tabAllCount">0</span></button>
         <button id="tabKept" type="button" class="review-tab" data-review-tab="kept" aria-pressed="false">キープ済み <span id="tabKeptCount">0</span></button>
       </div>
+      <p id="reviewProgress" class="review-progress" role="status" aria-live="polite"></p>
       <p id="reviewEmpty" class="empty-results" hidden>キープしたシーンはまだありません。「すべての候補」から選んでください。</p>
       <div id="highlightList" class="highlight-list"></div>
       <div class="comment-section">
@@ -153,6 +154,10 @@
     </section>
     <footer><strong>PEAKSTAMP</strong><span>Enjoy the game. Capture the moment.</span><p>解析対象の動画は端末外に送信されません。初回アクセス時に解析ライブラリのダウンロードが必要です。</p></footer>
   </main>
+  <aside id="undoReview" class="review-undo-toast" hidden aria-live="polite">
+    <span id="undoReviewText">シーンを不採用にしました</span>
+    <button id="undoReviewButton" type="button">元に戻す</button>
+  </aside>
   <aside id="stickyBar" class="sticky-review-bar" aria-label="動画作成の確認" hidden>
     <div class="sticky-review-inner">
       <div class="sticky-review-summary">
@@ -165,6 +170,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=review4"></script>
+  <script type="module" src="app.mjs?v=rapid5"></script>
 </body>
 </html>

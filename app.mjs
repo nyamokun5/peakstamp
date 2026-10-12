@@ -1,8 +1,9 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=review4';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=review4';
-import { getCandidateEnd, clipMarkerPositions } from './editing-rules.mjs?v=review4';
-import { montageSeconds } from './exporter.mjs?v=review4';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=rapid5';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=rapid5';
+import { getCandidateEnd, clipMarkerPositions } from './editing-rules.mjs?v=rapid5';
+import { montageSeconds } from './exporter.mjs?v=rapid5';
+import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=rapid5';
 
 const $ = id => document.getElementById(id);
 const make = (tag, cls, text) => {
@@ -19,6 +20,7 @@ const state = {
 const STEP = .25;
 let activeInlineClose = null;
 let reviewTab = 'all';
+let lastRejected = null;
 function currentClipOptions(){return {mode:document.querySelector('input[name="cutMode"]:checked')?.value || 'quiet',fixedSeconds:Number($('clipDuration').value)||16,tailSeconds:Number($('tailSeconds').value)||3};}
 function closeInlinePreview() { if (activeInlineClose) { const fn = activeInlineClose; activeInlineClose = null; fn(); } }
 function error(id, message) {
@@ -62,6 +64,7 @@ function syncSources() {
   state.duration = offset;
   state.bins = bins.length ? bins : null;
   state.candidates = candidates;
+  if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
   $('stickyBar').hidden = !state.bins;
   $('resultsPanel').hidden = !state.bins;
   $('multiWaveNotice').hidden = state.sources.length <= 1;
@@ -319,7 +322,8 @@ function rebuild() {
     }).map(item => {
       const old=earlier.get(item.id);
       return { ...item, sourceId: source.id,
-        enabled: old?.enabled ?? false, title: old?.title || item.title,
+        enabled: old?.enabled ?? false, rejected: old?.rejected ?? false,
+        title: old?.title || item.title,
         time: old?.time ?? item.time, manualEnd: old?.manualEnd ?? null };
     });
   }
@@ -353,76 +357,131 @@ function parseTime(value) {
       parts.slice(1).some(n => n > 59)) return null;
   return parts.reduce((s,n) => s * 60 + n, 0);
 }
+function clearUndoReview() {
+  lastRejected=null;
+  $('undoReview').hidden=true;
+}
+function nextSceneAfter(current) {
+  const next=nextUndecided(state.sources,current);
+  if (reviewTab === 'kept') reviewTab='all';
+  drawResults();
+  if (!next) {
+    $('reviewProgress').textContent='未判断のシーンはありません。キープ済みを確認できます。';
+    return;
+  }
+  $('reviewProgress').textContent='次の未判断シーンへ移動しました。';
+  requestAnimationFrame(()=>{
+    const items=[...$('highlightList').querySelectorAll('.highlight-entry')];
+    const element=items.find(entry=>entry.dataset.sourceId===next.source.id && entry.dataset.sceneId===next.item.id);
+    element?.scrollIntoView({behavior:'smooth',block:'start'});
+    element?.classList.add('review-next');
+    // Open the next replay automatically so the user can review continuously.
+    // iPhone Safari may require a tap to begin playback; the video remains visible.
+    element?.querySelector('.play-btn')?.click();
+  });
+}
+function decideReview(source,item,decision) {
+  const previous=judgeScene(item,decision);
+  if(decision==='rejected') {
+    lastRejected={item,source,previous};
+    $('undoReviewText').textContent='「'+(item.title||'シーン')+'」を不採用にしました';
+    $('undoReview').hidden=false;
+  }
+  nextSceneAfter(item);
+}
+$('undoReviewButton').addEventListener('click',()=>{
+  if(!lastRejected) return;
+  const {item,source,previous}=lastRejected;
+  restoreJudgment(item,previous);
+  clearUndoReview();
+  if(reviewTab==='kept')reviewTab='all';
+  drawResults();
+  requestAnimationFrame(()=>{
+    const match=[...$('highlightList').querySelectorAll('.highlight-entry')]
+      .find(entry=>entry.dataset.sourceId===source.id && entry.dataset.sceneId===item.id);
+    match?.scrollIntoView({behavior:'smooth',block:'start'});
+  });
+});
+
 function row(item, index) {
   const source = state.sources.find(s => s.id === item.sourceId);
   if (!source) return make('div','', '動画が見つかりません');
   const entry = make('div', 'highlight-entry');
+  entry.dataset.sourceId=source.id;
+  entry.dataset.sceneId=item.id;
   const wrap = make('div','highlight-item');
   const inline = make('div', 'inline-preview');
   inline.hidden = true;
-  const badge = make('span', 'selection-label', item.enabled ? 'キープ済み' : '未選択');
+  const badge = make('span', 'selection-label',
+    item.enabled ? 'キープ済み' : item.rejected ? '不採用' : '未判断');
   const number = make('span', 'scene-number', String(index + 1).padStart(2, '0'));
   const applySelection = () => {
     entry.classList.toggle('is-selected', !!item.enabled);
     entry.classList.toggle('is-excluded', !item.enabled);
-    badge.textContent = item.enabled ? 'キープ済み' : '未選択';
+    badge.textContent = item.enabled ? 'キープ済み' : item.rejected ? '不採用' : '未判断';
     badge.classList.toggle('excluded', !item.enabled);
   };
-  const enabled = make('button','keep-btn');
-  enabled.type='button';
-  const updateKeep=()=>{
-    enabled.textContent=item.enabled ? '✓ キープ済み' : '＋ キープする';
-    enabled.classList.toggle('kept',!!item.enabled);
-    enabled.setAttribute('aria-pressed',String(!!item.enabled));
-  };
-  updateKeep();
-  enabled.addEventListener('click', () => {
-    item.enabled = !item.enabled;
-    updateKeep();
-    applySelection();
-    if (reviewTab === 'kept' && !item.enabled) drawResults();
-    else refreshComment();
-  });
-  const play = make('button','play-btn','▶ 確認');
+  const play = make('button','play-btn','▶ リプレイ');
   play.type = 'button';
-  play.title = 'この場面を下に表示して再生';
-  const close = () => {
-    const media = inline.querySelector('video');
-    if (media) {
-      media.pause();
-      media.removeAttribute('src');
-      media.load();
+  play.title = '切り取り範囲をもう一度再生';
+  let replayVideo=null;
+  const close=()=>{
+    if(replayVideo){
+      replayVideo.pause();
+      replayVideo.removeAttribute('src');
+      replayVideo.load();
+      replayVideo=null;
     }
     inline.replaceChildren();
-    inline.hidden = true;
-    play.textContent = '▶ 確認';
+    inline.hidden=true;
     entry.classList.remove('preview-active');
   };
-  play.addEventListener('click', () => {
-    if (activeInlineClose === close) {
-      closeInlinePreview();
+  const clampAndStop=()=>{
+    if(!replayVideo || !Number.isFinite(replayVideo.duration))return;
+    const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
+    if(replayVideo.currentTime<bounds.start-.06){
+      replayVideo.currentTime=bounds.start;
+      return;
+    }
+    if(replayVideo.currentTime >= bounds.end-.06){
+      replayVideo.pause();
+      if(Math.abs(replayVideo.currentTime-bounds.end)>.08)replayVideo.currentTime=bounds.end;
+    }
+  };
+  const restartReplay=()=>{
+    if(!replayVideo)return;
+    const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
+    if(bounds.end<=bounds.start)return;
+    replayVideo.pause();
+    replayVideo.currentTime=bounds.start;
+    replayVideo.play().catch(()=>{});
+  };
+  play.addEventListener('click',()=>{
+    if(activeInlineClose===close && replayVideo){
+      restartReplay();
       return;
     }
     closeInlinePreview();
     $('preview').pause();
-    const video = document.createElement('video');
-    video.className = 'inline-player';
-    video.controls = true;
-    video.playsInline = true;
-    video.preload = 'metadata';
-    video.src = source.objectUrl;
-    const label = make('p', 'inline-caption', source.file.name + ' — シーン ' + (index + 1) + '｜' + formatTime(item.time) + ' から再生（終わったら下の一覧で次を選べます）');
-    inline.replaceChildren(label, video);
-    inline.hidden = false;
+    const video=document.createElement('video');
+    replayVideo=video;
+    video.className='inline-player';
+    video.controls=true;
+    video.playsInline=true;
+    video.preload='metadata';
+    video.src=source.objectUrl;
+    const label=make('p','inline-caption',
+      source.file.name+' — '+formatTime(item.time)+' 〜 '+
+      formatTime(getCandidateEnd(source,item,currentClipOptions()))+' をリプレイ');
+    inline.replaceChildren(label,video);
+    inline.hidden=false;
     entry.classList.add('preview-active');
-    play.textContent = '× 閉じる';
-    activeInlineClose = close;
-    video.addEventListener('loadedmetadata', () => {
-      video.currentTime = Math.max(0, Math.min(item.time, video.duration || item.time));
-      video.play().catch(() => { /* Safari may require a second tap */ });
-    }, { once: true });
+    activeInlineClose=close;
+    video.addEventListener('loadedmetadata',restartReplay,{once:true});
+    video.addEventListener('timeupdate',clampAndStop);
+    video.addEventListener('seeked',clampAndStop);
     video.load();
-    inline.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    inline.scrollIntoView({behavior:'smooth',block:'nearest'});
   });
   const fields = make('div','item-fields');
   const timeRow = make('div','time-row');
@@ -443,12 +502,42 @@ function row(item, index) {
   });
   timeRow.append(number, badge);
   const score = make('span','score', 'ピーク ' + Math.round(item.peakSeconds) + '秒 / ' + item.db + 'dBFS');
-  const title = make('input','title-input');
-  title.type = 'text';
-  title.value = item.title;
-  title.maxLength = 100;
-  title.setAttribute('aria-label','シーンの説明');
-  title.addEventListener('input', () => { item.title = title.value; refreshComment(); });
+  const titleGroup=make('div','play-label-group');
+  const titleLabel=make('label','play-label-caption','プレイ内容');
+  const titleSelect=make('select','play-label-select');
+  titleSelect.setAttribute('aria-label','プレイ内容を選択');
+  for(const value of PLAY_LABELS){
+    const opt=make('option','',value);
+    opt.value=value;
+    titleSelect.append(opt);
+  }
+  const customOption=make('option','','その他（自由入力）');
+  customOption.value='__custom__';
+  titleSelect.append(customOption);
+  const title=make('input','title-input');
+  title.type='text';
+  title.maxLength=100;
+  title.setAttribute('aria-label','プレイ内容の自由入力');
+  const labelIsPreset=PLAY_LABELS.includes(item.title);
+  titleSelect.value=labelIsPreset ? item.title : '__custom__';
+  title.value=item.title || DEFAULT_PLAY_LABEL;
+  title.hidden=labelIsPreset;
+  titleSelect.addEventListener('change',()=>{
+    if(titleSelect.value==='__custom__'){
+      title.hidden=false;
+      title.focus();
+    } else {
+      title.hidden=true;
+      item.title=titleSelect.value;
+      title.value=item.title;
+      refreshComment();
+    }
+  });
+  title.addEventListener('input',()=>{
+    item.title=title.value;
+    refreshComment();
+  });
+  titleGroup.append(titleLabel,titleSelect,title);
 
   const rangeEditor = make('div','range-editor');
   const rangeHeading = make('div','range-title','切り取り範囲');
@@ -509,7 +598,7 @@ function row(item, index) {
   endBox.append(endInput,endControls);
   rangeInputs.append(startBox,endBox);
   rangeEditor.append(rangeHeading,markerLegend,track,rangeInputs);
-  fields.append(timeRow, title, score);
+  fields.append(timeRow, titleGroup, score);
   const renderRange=()=>{
     const end=getCandidateEnd(source,item,currentClipOptions());
     const p=clipMarkerPositions(item.time,item.peakSeconds,end,source.duration);
@@ -545,8 +634,18 @@ function row(item, index) {
     source.candidates = source.candidates.filter(x => x !== item);
     syncSources();
   });
-  wrap.append(play, fields, remove);
-  entry.append(wrap, enabled, rangeEditor, inline);
+  const actions=make('div','review-decision-actions');
+  const keep=make('button','review-keep','✓ キープ');
+  keep.type='button';
+  const reject=make('button','review-reject','✕ 不採用');
+  reject.type='button';
+  keep.addEventListener('click',()=>decideReview(source,item,'kept'));
+  reject.addEventListener('click',()=>decideReview(source,item,'rejected'));
+  actions.append(keep,reject);
+  timeRow.append(remove);
+  wrap.append(fields,play);
+  // Replay -> media -> cut-range -> decision buttons, in that order.
+  entry.append(wrap,inline,rangeEditor,actions);
   applySelection();
   return entry;
 }
@@ -602,7 +701,7 @@ function drawResults() {
       try { await navigator.clipboard.writeText(current.text); copy.textContent='✓ コピーしました'; }
       catch { $('commentText').value=current.text; $('commentText').focus();$('commentText').select();copy.textContent='下のテキストをコピー'; }
     });
-    const visible=source.candidates.filter(candidate=>reviewTab==='all' || candidate.enabled);
+    const visible=source.candidates.filter(candidate=>candidate.rejected!==true && (reviewTab==='all' || candidate.enabled===true));
     if (visible.length === 0) { pos += source.candidates.length; continue; }
     headTitle.querySelector('small').textContent=visible.length+'件を表示';
     heading.append(headTitle,copy);
@@ -611,16 +710,20 @@ function drawResults() {
   }
   $('highlightList').replaceChildren(...elements);
   const keptCount=state.candidates.filter(x=>x.enabled).length;
-  $('tabAllCount').textContent=String(state.candidates.length);
+  const acceptedCount=state.candidates.filter(x=>x.rejected!==true).length;
+  $('tabAllCount').textContent=String(acceptedCount);
   $('tabKeptCount').textContent=String(keptCount);
   $('reviewEmpty').hidden=reviewTab!=='kept' || keptCount>0;
+  if(reviewTab==='all' && acceptedCount===0 && state.candidates.length>0){
+    $('reviewProgress').textContent='候補はすべて不採用です。「元に戻す」で直前の候補を復活できます。';
+  }
   document.querySelectorAll('[data-review-tab]').forEach(button=>{
     const selected=button.dataset.reviewTab===reviewTab;
     button.classList.toggle('active',selected);
     button.setAttribute('aria-pressed',String(selected));
   });
   $('resultCount').textContent = String(state.candidates.length);
-  $('emptyResults').hidden = state.candidates.length > 0;
+  $('emptyResults').hidden = state.candidates.length > 0 || state.candidates.some(x=>x.rejected===true);
   $('waveEnd').textContent = formatTime(state.duration);
   refreshComment();
   requestAnimationFrame(drawWave);
@@ -671,16 +774,13 @@ $('waveCanvas').addEventListener('click', e => {
   const closest = source.candidates.reduce((best,item) =>
     !best || Math.abs(item.time - localTime) < Math.abs(best.time - localTime) ? item : best, null);
   if (!closest) return;
-  const idx = source.candidates.indexOf(closest);
   if(reviewTab==='kept'){
     reviewTab='all';
     drawResults();
   }
-  const entries = [...$('highlightList').querySelectorAll('.highlight-entry')];
-  const allSources = state.sources.filter(s => s.bins);
-  const preceding = allSources.slice(0,allSources.indexOf(source))
-    .reduce((n,s)=>n+s.candidates.length,0);
-  entries[preceding + idx]?.querySelector('.play-btn')?.click();
+  const target=[...$('highlightList').querySelectorAll('.highlight-entry')]
+    .find(entry=>entry.dataset.sourceId===source.id && entry.dataset.sceneId===closest.id);
+  target?.querySelector('.play-btn')?.click();
 });
 window.addEventListener('montage-settings-changed', () => {
   if (state.bins) drawResults();
