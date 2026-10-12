@@ -1,0 +1,74 @@
+/** PeakStamp pure editing rules — no media file operations here. */
+export const DISSOLVE_SECONDS = 0.3;
+export const END_PADDING_SECONDS = 3;
+export const QUIET_CONFIRM_SECONDS = 1.5;
+export const FONT_CHOICES = Object.freeze({
+  impact: { label: 'インパクト', family: 'Impact, "Arial Black", sans-serif', weight: '900' },
+  modern: { label: 'モダン', family: '"Helvetica Neue", Arial, sans-serif', weight: '800' },
+  serif: { label: 'セリフ', family: 'Georgia, "Times New Roman", serif', weight: 'bold' },
+  mono: { label: 'モノスペース', family: '"Courier New", monospace', weight: 'bold' },
+});
+export function normalizeFont(font) {
+  return FONT_CHOICES[font] ? font : 'impact';
+}
+export function normalizeSize(size) {
+  const n=Number(size);
+  return Number.isFinite(n) ? Math.min(150,Math.max(60,Math.round(n))) : 100;
+}
+/** Find an extended quiet stretch after a cheer, relative to the local peak.
+ * The whole detection uses audio levels already measured on the device.
+ * No low-volume section -> fall back to the fixed clip length.
+ */
+export function quietClipEnd({
+  bins, peakSeconds, startSeconds, duration,
+  fallbackSeconds = 16, tailSeconds = END_PADDING_SECONDS, maxSeconds = 40,
+  binSeconds = 0.25, quietSeconds = QUIET_CONFIRM_SECONDS,
+} = {}) {
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  const start = Math.max(0,Math.min(duration,Number(startSeconds)||0));
+  const peak = Math.max(start,Math.min(duration,Number(peakSeconds)||start));
+  const fallback = Math.min(duration,start + Math.max(6,Number(fallbackSeconds)||16));
+  if (!Array.isArray(bins) || !bins.length) return fallback;
+  const window = Math.max(1,Math.round(quietSeconds/binSeconds));
+  const max = Math.min(duration,start+Math.max(10,Number(maxSeconds)||40));
+  const peakAt=Math.max(0,Math.min(bins.length-1,Math.round(peak/binSeconds)));
+  const radius=Math.max(1,Math.ceil(1/binSeconds));
+  let peakRms=0;
+  for(let i=Math.max(0,peakAt-radius);i<=Math.min(bins.length-1,peakAt+radius);i++){
+    peakRms=Math.max(peakRms,Number(bins[i].rms)||0);
+  }
+  if(peakRms < .008) return fallback;
+  // Based on the noise floor observed before the cheer. The level must drop
+  // to roughly 35% of the cheer but cannot go below a small noise-floor margin.
+  const startBaseline=Math.max(0,Math.round((peak-9)/binSeconds));
+  const endBaseline=Math.max(startBaseline+1,Math.round((peak-2)/binSeconds));
+  const baseline=(bins.slice(startBaseline,endBaseline).reduce((n,b)=>n+Number(b.rms||0),0)/
+    Math.max(1,endBaseline-startBaseline));
+  const quietThreshold=Math.min(peakRms*.42,Math.max(.008,baseline*1.35));
+  const begin=Math.max(peak + 2.5,start + 5);
+  const beginIndex=Math.max(0,Math.ceil(begin/binSeconds));
+  const stopIndex=Math.min(bins.length-window,Math.floor(max/binSeconds)-window);
+  for(let i=beginIndex;i<=stopIndex;i++){
+    let quiet=true;
+    for(let j=0;j<window;j++){
+      if((Number(bins[i+j]?.rms)||0)>quietThreshold){quiet=false;break;}
+    }
+    if(quiet){
+      const finish=(i+window)*binSeconds + Math.max(0,Number(tailSeconds)||0);
+      return Math.min(duration,Math.max(start+6,Math.min(max,finish)));
+    }
+  }
+  return fallback;
+}
+export function dissolveFrames(frameRate = 30) {
+  return Math.max(1,Math.round(DISSOLVE_SECONDS*frameRate));
+}
+export function dissolveOverlap(plan, fps = 30) {
+  const frames=dissolveFrames(fps);
+  return (plan||[]).slice(1).reduce((sum,item,i)=>{
+    const a=plan[i],b=item;
+    const aFrames=Math.ceil((a.end-a.start)*fps);
+    const bFrames=Math.ceil((b.end-b.start)*fps);
+    return sum+(Math.min(frames,Math.floor(aFrames/3),Math.floor(bFrames/3))/fps);
+  },0);
+}
