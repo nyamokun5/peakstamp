@@ -1,5 +1,5 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=20261012-fix1';
 
 const $ = id => document.getElementById(id);
 const make = (tag, cls, text) => {
