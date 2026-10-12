@@ -395,7 +395,7 @@ function nextSceneAfter(current) {
       autoOpeningNextReplay = false;
     }
     requestAnimationFrame(()=>{
-      element.scrollIntoView({behavior:'smooth',block:'start'});
+      element.scrollIntoView({behavior:'auto',block:'start'});
     });
   });
 }
