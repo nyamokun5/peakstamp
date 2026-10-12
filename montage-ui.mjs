@@ -42,6 +42,7 @@ function setWorking(value) {
   $('montageExport').disabled = value;
   $('montageExport').textContent = value ? 'MP4を書き出しています…' : '▶ ハイライト動画を作成する';
   $('montageCancel').hidden = !value;
+  window.dispatchEvent(new CustomEvent('montage-export-state',{detail:{working:value}}));
 }
 function setTitle(value) {
   $('montageTitle').value = value;
