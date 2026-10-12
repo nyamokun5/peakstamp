@@ -75,126 +75,176 @@ const FRAME_SOURCE = 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.3/dist/bundle
  * Re-encode up to 1080p MP4 (AVC/AAC) entirely within the browser.
  * iPhone support is codec/OS dependent; failure is reported, not hidden.
  */
-export async function exportMontage({ file, plan, title = 'GOALS!', quality = 'high', onProgress = () => {}, isCancelled = () => false }) {
-  if (!file || !plan?.length) throw new Error('動画と切り抜く場面を選んでください。');
+export async function exportMontage({
+  file, sources, plan, title = 'GOALS!', quality = 'high',
+  onProgress = () => {}, isCancelled = () => false,
+}) {
+  if (!plan?.length) throw new Error('切り抜く場面を選んでください。');
   if (!globalThis.VideoEncoder || !globalThis.VideoDecoder) {
     throw new Error('このブラウザは動画の書き出しに必要なWebCodecsに対応していません。');
   }
+  // Backwards compatible with the original single-file editor.
+  const items = sources?.length
+    ? sources.map(s => ({ id: s.id, file: s.file }))
+    : file ? [{ id: '__single__', file }] : [];
+  const fileMap = new Map(items.map(s => [s.id, s.file]));
+  const clips = plan.map(c => ({
+    ...c, sourceId: c.sourceId ?? '__single__',
+  }));
+  if (!items.length || clips.some(c => !fileMap.has(c.sourceId))) {
+    throw new Error('選択された動画が見つかりません。ファイルを選び直してください。');
+  }
   const { Input, BlobSource, ALL_FORMATS, Output, Mp4OutputFormat, BufferTarget,
     CanvasSource, AudioSampleSource, VideoSampleSink, AudioSampleSink } = await import(FRAME_SOURCE);
-  let input = null, output = null, finalized = false;
-  const check = () => { if (isCancelled()) throw new Error('書き出しを中止しました。'); };
-  try {
+  const check = () => {
+    if (isCancelled()) throw new Error('書き出しを中止しました。');
+  };
+  const openSource = async (sourceId) => {
     check();
-    input = new Input({ formats: ALL_FORMATS,
-      source: new BlobSource(file, { maxCacheSize: 4 * 1024 * 1024 }) });
-    const videoTrack = await input.getPrimaryVideoTrack();
-    if (!videoTrack) throw new Error('このファイルには映像トラックがありません。');
-    if (!(await videoTrack.canDecode())) throw new Error('この端末は動画の映像形式を読み込めません。');
-    const audioTrack = await input.getPrimaryAudioTrack();
-    if (audioTrack && !(await audioTrack.canDecode())) throw new Error('この端末は動画の音声形式を読み込めません。');
+    const entry = items.find(x => x.id === sourceId);
+    const input = new Input({
+      formats: ALL_FORMATS,
+      source: new BlobSource(entry.file, { maxCacheSize: 4 * 1024 * 1024 }),
+    });
+    try {
+      const videoTrack = await input.getPrimaryVideoTrack();
+      if (!videoTrack || !(await videoTrack.canDecode())) {
+        throw new Error('「' + entry.file.name + '」の映像を読み込めません。');
+      }
+      const audioTrack = await input.getPrimaryAudioTrack();
+      if (!audioTrack || !(await audioTrack.canDecode())) {
+        throw new Error('「' + entry.file.name + '」の音声を読み込めません。音声付きのMOV/MP4を選んでください。');
+      }
+      return { input, videoTrack, audioTrack, name: entry.file.name };
+    } catch (error) {
+      input.dispose();
+      throw error;
+    }
+  };
 
-    const sourceWidth = await videoTrack.getDisplayWidth();
-    const sourceHeight = await videoTrack.getDisplayHeight();
-    if (!(sourceWidth > 0 && sourceHeight > 0)) throw new Error('映像サイズを取得できません。');
+  let output = null, finalized = false, opened = null;
+  try {
+    // Use the first clip to select output aspect ratio; other ratios get letterboxed.
+    opened = await openSource(clips[0].sourceId);
+    const sourceWidth = await opened.videoTrack.getDisplayWidth();
+    const sourceHeight = await opened.videoTrack.getDisplayHeight();
     const settings = getExportSettings(sourceWidth, sourceHeight, quality);
     const { width, height } = settings;
-    onProgress('出力設定：' + width + '×' + height + '・' + settings.frameRate + 'fps', 1);
     const canvas = document.createElement('canvas');
-    canvas.width = width; canvas.height = height;
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext('2d', { alpha: false });
-    if (!context) throw new Error('画像の描画機能を開始できません。');
+    if (!context) throw new Error('動画描画を開始できません。');
 
     const target = new BufferTarget();
     output = new Output({ format: new Mp4OutputFormat(), target });
-    const videoSource = new CanvasSource(canvas,
-      { codec: 'avc', bitrate: settings.bitrate, keyFrameInterval: 2 });
+    const videoSource = new CanvasSource(canvas, {
+      codec: 'avc', bitrate: settings.bitrate, keyFrameInterval: 2,
+    });
     output.addVideoTrack(videoSource, { frameRate: settings.frameRate });
-    const audioSource = audioTrack ? new AudioSampleSource({ codec: 'aac', bitrate: 128000 }) : null;
-    if (audioSource) output.addAudioTrack(audioSource);
+    const audioSource = new AudioSampleSource({ codec: 'aac', bitrate: 128000 });
+    output.addAudioTrack(audioSource);
     await output.start();
-
-    onProgress('タイトル（5秒）を作成しています', 2);
+    onProgress('冒頭5秒のタイトルを作成中', 2);
     drawIntro(context, width, height, title);
     await videoSource.add(0, INTRO_SECONDS, { keyFrame: true });
 
-    const videoSink = new VideoSampleSink(videoTrack);
-    const audioSink = audioTrack ? new AudioSampleSink(audioTrack) : null;
-    const totalFrames = plan.reduce((n, c) => n + Math.ceil((c.end - c.start) * FRAME_RATE), 0);
-    let processed = 0;
+    const totalFrames = clips.reduce((n, c) => n +
+      Math.ceil((c.end - c.start) * settings.frameRate), 0);
+    let done = 0;
     let timeline = INTRO_SECONDS;
+    let loadedSourceId = clips[0].sourceId;
+    let videoSink = new VideoSampleSink(opened.videoTrack);
+    let audioSink = new AudioSampleSink(opened.audioTrack);
 
-    for (let section = 0; section < plan.length; section++) {
+    for (let section = 0; section < clips.length; section++) {
       check();
-      const clip = plan[section];
-      const frames = Math.ceil((clip.end - clip.start) * FRAME_RATE);
-      const stamps = Array.from({ length: frames }, (_, i) =>
-        Math.min(clip.end - 0.001, clip.start + i / FRAME_RATE));
-      let idx = 0;
+      const clip = clips[section];
+      if (loadedSourceId !== clip.sourceId) {
+        opened.input.dispose();
+        opened = null;
+        loadedSourceId = clip.sourceId;
+        opened = await openSource(loadedSourceId);
+        videoSink = new VideoSampleSink(opened.videoTrack);
+        audioSink = new AudioSampleSink(opened.audioTrack);
+      }
+      const clipFrames = Math.ceil((clip.end - clip.start) * settings.frameRate);
+      const clipStart = timeline;
+      const stamps = Array.from({ length: clipFrames }, (_, i) =>
+        Math.min(clip.end - 0.001, clip.start + i / settings.frameRate));
+      const vWidth = await opened.videoTrack.getDisplayWidth();
+      const vHeight = await opened.videoTrack.getDisplayHeight();
+      const fit = Math.min(width / vWidth, height / vHeight);
+      const dw = Math.round(vWidth * fit);
+      const dh = Math.round(vHeight * fit);
+      const dx = Math.round((width - dw) / 2);
+      const dy = Math.round((height - dh) / 2);
+      let frame = 0;
       for await (const sample of videoSink.samplesAtTimestamps(stamps)) {
         check();
-        if (!sample) throw new Error('動画から一部のフレームを取り出せませんでした。');
+        if (!sample) throw new Error('「' + opened.name + '」の映像フレームを読み込めませんでした。');
         try {
-          context.fillStyle = '#000';
+          context.fillStyle = '#000000';
           context.fillRect(0, 0, width, height);
-          sample.draw(context, 0, 0, width, height);
-          await videoSource.add(timeline + idx / FRAME_RATE, 1 / FRAME_RATE,
-            { keyFrame: idx === 0 });
+          sample.draw(context, dx, dy, dw, dh);
+          await videoSource.add(clipStart + frame / settings.frameRate,
+            1 / settings.frameRate, { keyFrame: frame === 0 });
         } finally { sample.close(); }
-        idx++; processed++;
-        if (idx % 12 === 0) {
-          onProgress('映像を書き出しています（' + (section + 1) + '/' + plan.length + '）',
-            Math.min(96, 3 + processed / Math.max(1, totalFrames) * 91));
+        frame++;
+        done++;
+        if (frame % 15 === 0) {
+          onProgress('結合中 ' + (section + 1) + '/' + clips.length + '：' + opened.name,
+            Math.min(96, 3 + 91 * done / Math.max(1, totalFrames)));
           await new Promise(resolve => setTimeout(resolve, 0));
         }
       }
+      if (frame !== clipFrames) throw new Error('映像フレーム数が不足しています。');
 
-      // Keep original field sound. Preserve the audio offset within each clip,
-      // crop boundary samples, and rebase timestamps to their montage positions.
-      if (audioSink && audioSource) {
-        const first = await audioSink.getSample(clip.start);
-        const samples = (async function* () {
-          if (first && first.timestamp < clip.start && first.timestamp + first.duration > clip.start) {
-            yield first;
-          } else if (first) {
-            first.close();
-          }
-          for await (const sample of audioSink.samples(clip.start, clip.end)) yield sample;
-        })();
-        for await (const sample of samples) {
-          check();
-          let cut = null;
-          try {
-            const rate = sample.sampleRate;
-            const from = Math.max(0, Math.min(sample.numberOfFrames,
-              Math.ceil((clip.start - sample.timestamp) * rate)));
-            const to = Math.max(from, Math.min(sample.numberOfFrames,
-              Math.floor((clip.end - sample.timestamp) * rate)));
-            if (to <= from) continue;
-            cut = sample.trim(from, to);
-            cut.setTimestamp(timeline + Math.max(0, cut.timestamp - clip.start));
-            await audioSource.add(cut);
-          } finally { cut?.close(); sample.close(); }
+      // Trim each clip's audio to its local interval and shift into montage time.
+      // A new sink is used whenever the source changes; this avoids cross-file offsets.
+      const first = await audioSink.getSample(clip.start);
+      const samples = (async function* () {
+        if (first && first.timestamp < clip.start &&
+            first.timestamp + first.duration > clip.start) {
+          yield first;
+        } else if (first) {
+          first.close();
         }
+        for await (const sample of audioSink.samples(clip.start, clip.end)) yield sample;
+      })();
+      for await (const sample of samples) {
+        check();
+        let cut = null;
+        try {
+          const rate = sample.sampleRate;
+          const from = Math.max(0, Math.min(sample.numberOfFrames,
+            Math.ceil((clip.start - sample.timestamp) * rate)));
+          const to = Math.max(from, Math.min(sample.numberOfFrames,
+            Math.floor((clip.end - sample.timestamp) * rate)));
+          if (to <= from) continue;
+          cut = sample.trim(from, to);
+          cut.setTimestamp(clipStart + Math.max(0, cut.timestamp - clip.start));
+          await audioSource.add(cut);
+        } finally { cut?.close(); sample.close(); }
       }
-      timeline += frames / FRAME_RATE;
+      timeline += clipFrames / settings.frameRate;
     }
 
     check();
     videoSource.close();
-    audioSource?.close();
+    audioSource.close();
     onProgress('MP4を仕上げています', 98);
     await output.finalize();
     finalized = true;
-    if (!target.buffer) throw new Error('書き出したMP4を取得できません。');
+    if (!target.buffer) throw new Error('MP4ファイルを生成できませんでした。');
     onProgress('完了', 100);
     return new Blob([target.buffer], { type: 'video/mp4' });
-  } catch (err) {
+  } catch (error) {
     if (output && !finalized) {
       try { await output.cancel(); } catch {}
     }
-    throw err;
+    throw error;
   } finally {
-    input?.dispose();
+    opened?.input.dispose();
   }
 }
