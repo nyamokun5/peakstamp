@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="動画の盛り上がりを音声から検出し、YouTube用タイムスタンプを作成。端末内で処理します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=20261012-fix1" />
+  <link rel="stylesheet" href="styles.css?v=multi2" />
 </head>
 <body>
   <header class="topbar">
@@ -23,16 +23,22 @@
     <section class="panel choose-panel">
       <div class="panel-label"><span class="number">01</span><h2>動画を選ぶ</h2></div>
       <label class="upload" id="uploadZone">
-        <input id="fileInput" type="file" accept="video/*,audio/*,.mov,.mp4,.m4v,.m4a,.wav,.mp3" />
+        <input id="fileInput" type="file" multiple accept="video/*,.mov,.mp4,.m4v" />
         <span class="upload-icon" aria-hidden="true">＋</span>
-        <strong>iPhoneの動画を選択</strong>
-        <span>写真ライブラリ / ファイル / MP4・MOV</span>
+        <strong>複数の動画をまとめて選択</strong>
+        <span>写真ライブラリ / ファイル / MP4・MOV（複数可）</span>
         <small>動画そのものはアップロードしません</small>
       </label>
       <div class="file-details" id="fileDetails" hidden>
         <div class="file-logo">▶</div>
         <div class="file-info"><strong id="fileName"></strong><span id="fileSize"></span></div>
         <button id="changeFile" class="plain-link" type="button">変更</button>
+        <button id="addFiles" class="plain-link" type="button">＋追加</button>
+      </div>
+      <div class="source-board" id="sourceBoard" hidden>
+        <div class="source-board-header"><strong>動画の結合順 <span id="sourceCount">0</span>本</strong><small>↑↓で並び替え・×で削除</small></div>
+        <div id="sourceList" class="source-list"></div>
+        <p class="fine-print">ファイルごとに音声解析し、ここに並んだ順番でハイライトを結合します。</p>
       </div>
       <div id="videoWrapper" hidden>
         <video id="preview" controls playsinline preload="metadata"></video>
@@ -69,6 +75,7 @@
     <section class="panel results-panel" id="resultsPanel" hidden>
       <div class="panel-label"><span class="number">03</span><h2>確認してコピー</h2></div>
       <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
+      <p id="multiWaveNotice" class="fine-print" hidden>波形は全動画をつなげた表示です。オレンジ線は各動画の検出位置を示します。</p>
       <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
       <div id="emptyResults" class="empty-results" hidden>指定した感度では見どころを検出できませんでした。「多めに拾う」に切り替えて再解析するか、音声が入っているかご確認ください。</div>
       <p class="list-help">各シーン内の「▶ 確認」でその場再生。チェックされたシーンは緑色で表示されます。</p>
@@ -78,7 +85,8 @@
       </div>
       <div id="highlightList" class="highlight-list"></div>
       <div class="comment-section">
-        <div class="comment-heading"><strong>YouTubeコメント用</strong><span>そのまま貼り付け</span></div>
+        <div class="comment-heading"><strong id="commentHeading">YouTubeコメント用</strong><span>そのまま貼り付け</span></div>
+        <p id="commentHelp" class="fine-print" hidden>複数動画の場合は、元の動画ではなく「完成した結合動画」用のチャプター時刻になります。</p>
         <textarea id="commentText" rows="7" spellcheck="false" aria-label="YouTubeコメント用テキスト"></textarea>
         <button class="main-button copy-button" id="copyButton" type="button">▢　コメントをコピー <span aria-hidden="true">↗</span></button>
         <p id="copyStatus" class="copy-status" role="status" aria-live="polite"></p>
@@ -123,6 +131,6 @@
     </section>
     <footer><strong>PEAKSTAMP</strong><span>Enjoy the game. Capture the moment.</span><p>解析対象の動画は端末外に送信されません。初回アクセス時に解析ライブラリのダウンロードが必要です。</p></footer>
   </main>
-  <script type="module" src="app.mjs?v=20261012-fix1"></script>
+  <script type="module" src="app.mjs?v=multi2"></script>
 </body>
 </html>
