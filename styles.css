@@ -193,3 +193,5 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  .range-jog,.range-reset{padding:6px 5px}
  .sticky-review-summary strong,.sticky-review-summary span{font-size:11px}
 }
+
+.range-inputs .time-input{width:100%;min-width:0}
