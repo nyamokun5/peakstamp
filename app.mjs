@@ -509,7 +509,6 @@ function row(item, index) {
   rangeInputs.append(startBox,endBox);
   rangeEditor.append(rangeHeading,markerLegend,track,rangeInputs);
   fields.append(timeRow, title, score);
-  entry.append(rangeEditor);
   const renderRange=()=>{
     const end=getCandidateEnd(source,item,currentClipOptions());
     const p=clipMarkerPositions(item.time,item.peakSeconds,end,source.duration);
@@ -546,8 +545,7 @@ function row(item, index) {
     syncSources();
   });
   wrap.append(play, fields, remove);
-  entry.prepend(wrap);
-  entry.append(enabled, inline);
+  entry.append(wrap, enabled, rangeEditor, inline);
   applySelection();
   return entry;
 }
@@ -566,6 +564,22 @@ function refreshComment() {
   }));
   summary.hidden = selected.length === 0;
   updateMontageEditor(state);
+  updateStickyBar();
+}
+function updateStickyBar() {
+  const visible=Boolean(state.bins);
+  $('stickyBar').hidden=!visible;
+  if(!visible) return;
+  const count=state.candidates.filter(item=>item.enabled).length;
+  const plan=buildMultiClipPlan(state.sources,currentClipOptions());
+  const estimate=montageSeconds(plan);
+  const blocked=estimate>185;
+  $('stickyCount').textContent=String(count);
+  $('stickyDuration').textContent=blocked
+    ? '3分超：シーンを減らしてください'
+    : '完成予想 '+formatTime(Math.ceil(estimate));
+  $('stickyExport').disabled = !plan.length || blocked || state.working || state.exporting;
+  $('stickyExport').textContent=state.exporting?'書き出し中…':'動画を作成する →';
 }
 function drawResults() {
   closeInlinePreview();
@@ -587,11 +601,23 @@ function drawResults() {
       try { await navigator.clipboard.writeText(current.text); copy.textContent='✓ コピーしました'; }
       catch { $('commentText').value=current.text; $('commentText').focus();$('commentText').select();copy.textContent='下のテキストをコピー'; }
     });
+    const visible=source.candidates.filter(candidate=>reviewTab==='all' || candidate.enabled);
+    if (visible.length === 0) { pos += source.candidates.length; continue; }
+    headTitle.querySelector('small').textContent=visible.length+'件を表示';
     heading.append(headTitle,copy);
     elements.push(heading);
-    for (const candidate of source.candidates) elements.push(row(candidate, pos++));
+    for (const candidate of visible) elements.push(row(candidate, pos++));
   }
   $('highlightList').replaceChildren(...elements);
+  const keptCount=state.candidates.filter(x=>x.enabled).length;
+  $('tabAllCount').textContent=String(state.candidates.length);
+  $('tabKeptCount').textContent=String(keptCount);
+  $('reviewEmpty').hidden=reviewTab!=='kept' || keptCount>0;
+  document.querySelectorAll('[data-review-tab]').forEach(button=>{
+    const selected=button.dataset.reviewTab===reviewTab;
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
   $('resultCount').textContent = String(state.candidates.length);
   $('emptyResults').hidden = state.candidates.length > 0;
   $('waveEnd').textContent = formatTime(state.duration);
@@ -652,7 +678,21 @@ $('waveCanvas').addEventListener('click', e => {
   entries[preceding + idx]?.querySelector('.play-btn')?.click();
 });
 window.addEventListener('montage-settings-changed', () => {
-  if (state.bins) refreshComment();
+  if (state.bins) drawResults();
+});
+document.querySelectorAll('[data-review-tab]').forEach(button=>{
+  button.addEventListener('click',()=>{
+    reviewTab=button.dataset.reviewTab==='kept'?'kept':'all';
+    if(state.bins)drawResults();
+  });
+});
+$('stickySettings').addEventListener('click',()=>{
+  $('montagePanel').scrollIntoView({behavior:'smooth',block:'start'});
+});
+$('stickyExport').addEventListener('click',()=>{
+  if($('stickyExport').disabled || $('montageExport').disabled)return;
+  $('montagePanel').scrollIntoView({behavior:'smooth',block:'start'});
+  $('montageExport').click();
 });
 $('copyButton').addEventListener('click', async () => {
   const comment = $('commentText').value;
@@ -684,6 +724,7 @@ window.addEventListener('montage-export-state', event => {
   $('addFiles').disabled = state.exporting || state.working;
   $('analyzeButton').disabled = state.exporting || state.working || !state.sources.length;
   renderSourceList();
+  updateStickyBar();
 });
 
 initMontageEditor(state);
