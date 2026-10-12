@@ -74,3 +74,34 @@ footer{text-align:center;color:#7995a8;display:flex;align-items:center;flex-dire
 #montagePreview{width:100%;max-height:360px;object-fit:contain;background:#000;border-radius:12px;margin:18px 0 10px}
 .montage-download{margin:12px 0;text-decoration:none;justify-content:center}
 #montageError{margin-top:12px}
+
+
+/* UX fixes 2026-10 */
+.selected-overview{padding:13px 12px;border:1px solid #36625e;background:#0e292d;border-radius:12px;margin:14px 0 12px}
+.selected-overview strong{font-size:13px;color:var(--mint)}
+.selected-summary{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.selected-chip{display:inline-flex;max-width:100%;padding:6px 9px;border-radius:7px;background:#214b48;color:#e8fff7;font-size:11px;overflow-wrap:anywhere}
+.highlight-entry{border-radius:13px;background:#0c2335;border:1px solid #365367;overflow:hidden}
+.highlight-entry.is-selected{border-color:#52a591;box-shadow:inset 4px 0 0 #7de3c8}
+.highlight-entry.is-excluded{opacity:.68}
+.highlight-entry.preview-active{border-color:#ffb773;box-shadow:inset 4px 0 0 #ffb773}
+.highlight-entry .highlight-item{border:0;background:transparent;padding:10px 11px;gap:8px;border-radius:0}
+.highlight-entry .play-btn{width:auto;min-width:58px;max-width:65px;min-height:37px;height:auto;padding:5px 7px;line-height:1.3;font-size:10px;white-space:normal;font-weight:700}
+.scene-number{font-weight:800;font-size:10px;color:#99b6c7}
+.selection-label{font-size:10px;font-weight:800;color:#83eacb;background:#174b42;border-radius:5px;padding:4px 6px}
+.selection-label.excluded{background:#30404a;color:#a2b0b9}
+.inline-preview{padding:4px 12px 12px}
+.inline-caption{font-size:11px;line-height:1.5;margin:0 0 8px;color:#ffce9c}
+.inline-player{display:block;width:100%;max-height:360px;object-fit:contain;background:#000;border-radius:10px}
+.quality-picker{border:1px solid #365568;border-radius:12px;padding:11px;margin:16px 0}
+.quality-picker legend{font-size:13px;font-weight:800;padding:0 6px}
+.quality-picker label{display:flex;align-items:center;gap:10px;background:#11283e;border:1px solid #31516a;border-radius:10px;margin:8px 0;padding:11px;font-size:12px}
+.quality-picker label:has(input:checked){border-color:var(--mint);background:#214d4c}
+.quality-picker input{accent-color:var(--mint);flex:none}
+.quality-picker span{display:flex;flex-direction:column;gap:4px}
+.quality-picker small{font-size:10px;color:#aec1cf;line-height:1.4}
+.montage-share{margin:10px 0}
+.montage-download{margin:10px 0}
+.save-fallback{display:block;text-align:center;color:var(--mint);padding:13px 5px;font-size:12px;text-underline-offset:3px}
+.save-help{font-size:12px;line-height:1.75;background:#16384b;border:1px solid #37586d;border-radius:10px;padding:12px;margin:12px 0}
+.save-status{min-height:18px;color:#c2e3d8;font-size:12px;line-height:1.5}
