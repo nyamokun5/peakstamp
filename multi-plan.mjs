@@ -1,5 +1,5 @@
-import { buildClipPlan, INTRO_SECONDS } from './exporter.mjs';
-import { quietClipEnd, dissolveOverlap } from './editing-rules.mjs';
+import { buildClipPlan, INTRO_SECONDS } from './exporter.mjs?v=dissolve05';
+import { quietClipEnd, dissolveOverlap } from './editing-rules.mjs?v=dissolve05';
 
 /**
  * Produce non-overlapping clips, in user-controlled file order.
