@@ -71,7 +71,11 @@
       <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
       <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
       <div id="emptyResults" class="empty-results" hidden>指定した感度では見どころを検出できませんでした。「多めに拾う」に切り替えて再解析するか、音声が入っているかご確認ください。</div>
-      <p class="list-help">▶ をタップしてシーンを確認。時刻・説明を修正できます。</p>
+      <p class="list-help">各シーン内の「▶ 確認」でその場再生。チェックされたシーンは緑色で表示されます。</p>
+      <div class="selected-overview">
+        <strong>採用するシーン：<span id="selectedCount">0</span>件</strong>
+        <div id="selectedSummary" class="selected-summary" hidden></div>
+      </div>
       <div id="highlightList" class="highlight-list"></div>
       <div class="comment-section">
         <div class="comment-heading"><strong>YouTubeコメント用</strong><span>そのまま貼り付け</span></div>
@@ -97,6 +101,11 @@
       <input class="montage-slider" id="clipDuration" type="range" min="8" max="30" step="1" value="16" />
       <div class="montage-summary"><span id="montageSelected">0シーンを結合</span><span id="montageLength">完成：約00:05</span></div>
 
+      <fieldset class="quality-picker">
+        <legend>出力画質</legend>
+        <label><input type="radio" name="exportQuality" value="high" checked /><span><strong>高画質 1080p / 30fps</strong><small>おすすめ・高ビットレート（書き出しに時間がかかります）</small></span></label>
+        <label><input type="radio" name="exportQuality" value="standard" /><span><strong>標準 720p / 30fps</strong><small>iPhoneの負担を減らしたい場合</small></span></label>
+      </fieldset>
       <button class="main-button montage-export" type="button" id="montageExport" disabled>▶ ハイライト動画を作成する</button>
       <button class="cancel-button" type="button" id="montageCancel" hidden>書き出しを中止</button>
       <div class="progress-area" id="montageProgress" hidden aria-live="polite">
@@ -105,8 +114,12 @@
       </div>
       <p id="montageError" class="error" role="alert" hidden></p>
       <video id="montagePreview" controls playsinline hidden aria-label="完成したハイライト動画"></video>
-      <a id="montageDownload" class="main-button montage-download" hidden download="PeakStamp.mp4">↓ MP4動画を保存</a>
-      <p class="fine-print">動画・音声はiPhone内で処理します。初回は短い1080p以下の動画で試してください。iPhoneのOS・動画形式によってはMP4の書き出しに対応しない場合があります。長時間の処理中はSafariを閉じないでください。</p>
+      <button id="montageShare" class="main-button montage-share" type="button" hidden>↑ iPhoneに保存・共有</button>
+      <a id="montageDownload" class="main-button montage-download" hidden download="PeakStamp.mp4">↓ MP4をダウンロード</a>
+      <a id="montageOpen" class="save-fallback" target="_blank" rel="noopener" hidden>動画を別タブで開く（保存できない場合）</a>
+      <p id="montageSaveHelp" class="save-help" hidden>iPhoneでは「iPhoneに保存・共有」から共有メニューを開き、「ビデオを保存」または「ファイルに保存」を選択してください。うまくいかない場合は「動画を別タブで開く」を試してください。</p>
+      <p id="montageSaveStatus" class="save-status" role="status" aria-live="polite"></p>
+      <p class="fine-print">動画・音声はiPhone内で処理します。最初は30秒ほどの素材で試してください。iPhoneのOS・動画形式によってはMP4の書き出しに対応しない場合があります。長時間の処理中はSafariを閉じないでください。</p>
     </section>
     <footer><strong>PEAKSTAMP</strong><span>Enjoy the game. Capture the moment.</span><p>解析対象の動画は端末外に送信されません。初回アクセス時に解析ライブラリのダウンロードが必要です。</p></footer>
   </main>
