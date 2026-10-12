@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#091728" />
+  <meta name="description" content="シュートサンデーの試合動画から、音声の盛り上がりを検出してYouTube用タイムスタンプを作成。端末内で処理します。" />
+  <title>PeakStamp | Audio Highlights</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brandmark">SS<span>•</span></div>
+    <div class="brandtext"><strong>SHOOT SUNDAY</strong><span>AUDIO HIGHLIGHTS</span></div>
+    <div class="local-pill"><span class="green-dot"></span>端末内処理</div>
+  </header>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">MATCH HIGHLIGHT FINDER <span>01 / 03</span></div>
+      <h1>あの瞬間を、<br/><em>音で見つける。</em></h1>
+      <p>試合動画から歓声や盛り上がりの候補を検出。YouTubeコメントに貼れるタイムスタンプを自動で作ります。</p>
+    </section>
+    <section class="panel choose-panel">
+      <div class="panel-label"><span class="number">01</span><h2>動画を選ぶ</h2></div>
+      <label class="upload" id="uploadZone">
+        <input id="fileInput" type="file" accept="video/*,audio/*,.mov,.mp4,.m4v,.m4a,.wav,.mp3" />
+        <span class="upload-icon" aria-hidden="true">＋</span>
+        <strong>iPhoneの動画を選択</strong>
+        <span>写真ライブラリ / ファイル / MP4・MOV</span>
+        <small>動画そのものはアップロードしません</small>
+      </label>
+      <div class="file-details" id="fileDetails" hidden>
+        <div class="file-logo">▶</div>
+        <div class="file-info"><strong id="fileName"></strong><span id="fileSize"></span></div>
+        <button id="changeFile" class="plain-link" type="button">変更</button>
+      </div>
+      <div id="videoWrapper" hidden>
+        <video id="preview" controls playsinline preload="metadata"></video>
+      </div>
+      <p id="loadError" class="error" role="alert" hidden></p>
+    </section>
+
+    <section class="panel settings-panel" id="settingsPanel">
+      <div class="panel-label"><span class="number">02</span><h2>盛り上がりを検出</h2></div>
+      <div class="setting-head"><span>検出感度</span><span class="sub-label">音量変化のしきい値</span></div>
+      <div class="segmented" role="group" aria-label="検出感度">
+        <button data-sensitivity="sensitive" type="button">多めに拾う</button>
+        <button class="active" data-sensitivity="normal" type="button" aria-pressed="true">標準</button>
+        <button data-sensitivity="strict" type="button">厳選</button>
+      </div>
+      <div class="controls">
+        <label>歓声の何秒前から？ <strong><output id="leadValue">7秒</output></strong>
+          <input id="leadInput" type="range" min="0" max="15" step="1" value="7" />
+        </label>
+        <label>最大検出件数 <strong><output id="maxValue">8件</output></strong>
+          <input id="maxInput" type="range" min="3" max="15" step="1" value="8" />
+        </label>
+      </div>
+      <button class="main-button" id="analyzeButton" disabled type="button"><span class="icon-wave">⌁</span> 音声を解析する <span aria-hidden="true">→</span></button>
+      <button class="cancel-button" id="cancelButton" hidden type="button">解析を中止</button>
+      <div class="progress-area" id="progressArea" hidden aria-live="polite">
+        <div class="progress-label"><span id="progressLabel">解析準備中…</span><span id="progressPercent">0%</span></div>
+        <div class="progress-track"><div id="progressBar"></div></div>
+      </div>
+      <p id="analysisError" class="error" role="alert" hidden></p>
+      <p class="fine-print">AI・サーバー・ログイン不要。音量の変化に基づく候補検出です。ゴールかどうかの判断はしません。</p>
+    </section>
+
+    <section class="panel results-panel" id="resultsPanel" hidden>
+      <div class="panel-label"><span class="number">03</span><h2>確認してコピー</h2></div>
+      <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
+      <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
+      <div id="emptyResults" class="empty-results" hidden>指定した感度では見どころを検出できませんでした。「多めに拾う」に切り替えて再解析するか、音声が入っているかご確認ください。</div>
+      <p class="list-help">▶ をタップしてシーンを確認。時刻・説明を修正できます。</p>
+      <div id="highlightList" class="highlight-list"></div>
+      <div class="comment-section">
+        <div class="comment-heading"><strong>YouTubeコメント用</strong><span>そのまま貼り付け</span></div>
+        <textarea id="commentText" rows="7" spellcheck="false" aria-label="YouTubeコメント用テキスト"></textarea>
+        <button class="main-button copy-button" id="copyButton" type="button">▢　コメントをコピー <span aria-hidden="true">↗</span></button>
+        <p id="copyStatus" class="copy-status" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+    <footer><strong>SHOOT SUNDAY</strong><span>Enjoy the game. Capture the moment.</span><p>解析対象の動画は端末外に送信されません。初回アクセス時に解析ライブラリのダウンロードが必要です。</p></footer>
+  </main>
+  <script type="module" src="app.mjs"></script>
+</body>
+</html>
