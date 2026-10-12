@@ -138,6 +138,13 @@ export async function exportMontage({
     canvas.height = height;
     const context = canvas.getContext('2d', { alpha: false });
     if (!context) throw new Error('動画描画を開始できません。');
+    // Full-frame compositing ensures letterboxing also dissolves to black
+    // instead of retaining parts of the outgoing frame.
+    const incomingCanvas = document.createElement('canvas');
+    incomingCanvas.width = width;
+    incomingCanvas.height = height;
+    const incomingContext = incomingCanvas.getContext('2d', { alpha: false });
+    if (!incomingContext) throw new Error('ディゾルブ描画を開始できません。');
 
     const target = new BufferTarget();
     output = new Output({ format: new Mp4OutputFormat(), target });
@@ -205,8 +212,11 @@ export async function exportMontage({
           context.fillRect(0, 0, width, height);
           if (frame < incomingFrames) {
             context.drawImage(previousTail[frame], 0, 0, width, height);
+            incomingContext.fillStyle = '#000000';
+            incomingContext.fillRect(0, 0, width, height);
+            sample.draw(incomingContext, dx, dy, dw, dh);
             context.globalAlpha = (frame + 1) / (incomingFrames + 1);
-            sample.draw(context, dx, dy, dw, dh);
+            context.drawImage(incomingCanvas, 0, 0, width, height);
             context.globalAlpha = 1;
             previousTail[frame].close();
             previousTail[frame] = null;
