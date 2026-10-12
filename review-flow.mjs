@@ -4,7 +4,7 @@ export const PLAY_LABELS = Object.freeze([
   'ナイスプレイ！',
   'ゴール',
   'ナイスキーパー',
-  'N惜しい！',
+  '惜しい！',
   'ナイスディフェンス！',
 ]);
 
