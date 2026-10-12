@@ -21,6 +21,8 @@ const STEP = .25;
 let activeInlineClose = null;
 let reviewTab = 'all';
 let lastRejected = null;
+let undoTimer = null;
+const UNDO_VISIBLE_MS = 5000;
 function currentClipOptions(){return {mode:document.querySelector('input[name="cutMode"]:checked')?.value || 'quiet',fixedSeconds:Number($('clipDuration').value)||16,tailSeconds:Number($('tailSeconds').value)||3};}
 function closeInlinePreview() { if (activeInlineClose) { const fn = activeInlineClose; activeInlineClose = null; fn(); } }
 function error(id, message) {
@@ -358,8 +360,16 @@ function parseTime(value) {
   return parts.reduce((s,n) => s * 60 + n, 0);
 }
 function clearUndoReview() {
-  lastRejected=null;
-  $('undoReview').hidden=true;
+  if (undoTimer !== null) clearTimeout(undoTimer);
+  undoTimer = null;
+  lastRejected = null;
+  $('undoReview').hidden = true;
+}
+function showUndoReview(message) {
+  if (undoTimer !== null) clearTimeout(undoTimer);
+  $('undoReviewText').textContent = message;
+  $('undoReview').hidden = false;
+  undoTimer = setTimeout(clearUndoReview, UNDO_VISIBLE_MS);
 }
 function nextSceneAfter(current) {
   const next=nextUndecided(state.sources,current);
@@ -384,8 +394,7 @@ function decideReview(source,item,decision) {
   const previous=judgeScene(item,decision);
   if(decision==='rejected') {
     lastRejected={item,source,previous};
-    $('undoReviewText').textContent='「'+(item.title||'シーン')+'」を不採用にしました';
-    $('undoReview').hidden=false;
+    showUndoReview('「'+(item.title||'シーン')+'」を不採用にしました');
   }
   nextSceneAfter(item);
 }
@@ -466,8 +475,13 @@ function row(item, index) {
     const video=document.createElement('video');
     replayVideo=video;
     video.className='inline-player';
-    video.controls=true;
+    // The Replay button is the playback control. Suppress iPhone's large
+    // native pause overlay and keep playback inline within the clip card.
+    video.controls=false;
     video.playsInline=true;
+    video.setAttribute('playsinline','');
+    video.setAttribute('webkit-playsinline','');
+    video.disablePictureInPicture=true;
     video.preload='metadata';
     video.src=source.objectUrl;
     const label=make('p','inline-caption',
@@ -641,11 +655,11 @@ function row(item, index) {
   reject.type='button';
   keep.addEventListener('click',()=>decideReview(source,item,'kept'));
   reject.addEventListener('click',()=>decideReview(source,item,'rejected'));
-  actions.append(keep,reject);
+  actions.append(play,keep,reject);
   timeRow.append(remove);
-  wrap.append(fields,play);
-  // Replay -> media -> cut-range -> decision buttons, in that order.
-  entry.append(wrap,inline,rangeEditor,actions);
+  wrap.append(fields,actions);
+  // Three review actions share one row immediately above the inline video.
+  entry.append(wrap,inline,rangeEditor);
   applySelection();
   return entry;
 }
