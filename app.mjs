@@ -771,16 +771,13 @@ $('waveCanvas').addEventListener('click', e => {
   const closest = source.candidates.reduce((best,item) =>
     !best || Math.abs(item.time - localTime) < Math.abs(best.time - localTime) ? item : best, null);
   if (!closest) return;
-  const idx = source.candidates.indexOf(closest);
   if(reviewTab==='kept'){
     reviewTab='all';
     drawResults();
   }
-  const entries = [...$('highlightList').querySelectorAll('.highlight-entry')];
-  const allSources = state.sources.filter(s => s.bins);
-  const preceding = allSources.slice(0,allSources.indexOf(source))
-    .reduce((n,s)=>n+s.candidates.length,0);
-  entries[preceding + idx]?.querySelector('.play-btn')?.click();
+  const target=[...$('highlightList').querySelectorAll('.highlight-entry')]
+    .find(entry=>entry.dataset.sourceId===source.id && entry.dataset.sceneId===closest.id);
+  target?.querySelector('.play-btn')?.click();
 });
 window.addEventListener('montage-settings-changed', () => {
   if (state.bins) drawResults();
