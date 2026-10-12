@@ -1,4 +1,4 @@
-import { buildClipPlan, montageSeconds, exportMontage } from './exporter.mjs';
+import { buildClipPlan, montageSeconds, exportMontage } from './exporter.mjs?v=20261012-fix1';
 import { formatTime } from './detector.mjs';
 
 const $ = id => document.getElementById(id);
