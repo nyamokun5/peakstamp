@@ -639,7 +639,8 @@ function row(item, index) {
   keep.addEventListener('click',()=>decideReview(source,item,'kept'));
   reject.addEventListener('click',()=>decideReview(source,item,'rejected'));
   actions.append(keep,reject);
-  wrap.append(play,fields,remove);
+  timeRow.append(remove);
+  wrap.append(fields,play);
   // Replay -> media -> cut-range -> decision buttons, in that order.
   entry.append(wrap,inline,rangeEditor,actions);
   applySelection();
