@@ -1,8 +1,9 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=review4';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=review4';
-import { getCandidateEnd, clipMarkerPositions } from './editing-rules.mjs?v=review4';
-import { montageSeconds } from './exporter.mjs?v=review4';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=rapid5';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=rapid5';
+import { getCandidateEnd, clipMarkerPositions } from './editing-rules.mjs?v=rapid5';
+import { montageSeconds } from './exporter.mjs?v=rapid5';
+import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=rapid5';
 
 const $ = id => document.getElementById(id);
 const make = (tag, cls, text) => {
@@ -19,6 +20,7 @@ const state = {
 const STEP = .25;
 let activeInlineClose = null;
 let reviewTab = 'all';
+let lastRejected = null;
 function currentClipOptions(){return {mode:document.querySelector('input[name="cutMode"]:checked')?.value || 'quiet',fixedSeconds:Number($('clipDuration').value)||16,tailSeconds:Number($('tailSeconds').value)||3};}
 function closeInlinePreview() { if (activeInlineClose) { const fn = activeInlineClose; activeInlineClose = null; fn(); } }
 function error(id, message) {
@@ -62,6 +64,7 @@ function syncSources() {
   state.duration = offset;
   state.bins = bins.length ? bins : null;
   state.candidates = candidates;
+  if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
   $('stickyBar').hidden = !state.bins;
   $('resultsPanel').hidden = !state.bins;
   $('multiWaveNotice').hidden = state.sources.length <= 1;
@@ -319,7 +322,8 @@ function rebuild() {
     }).map(item => {
       const old=earlier.get(item.id);
       return { ...item, sourceId: source.id,
-        enabled: old?.enabled ?? false, title: old?.title || item.title,
+        enabled: old?.enabled ?? false, rejected: old?.rejected ?? false,
+        title: old?.title || item.title,
         time: old?.time ?? item.time, manualEnd: old?.manualEnd ?? null };
     });
   }
@@ -353,6 +357,49 @@ function parseTime(value) {
       parts.slice(1).some(n => n > 59)) return null;
   return parts.reduce((s,n) => s * 60 + n, 0);
 }
+function clearUndoReview() {
+  lastRejected=null;
+  $('undoReview').hidden=true;
+}
+function nextSceneAfter(current) {
+  const next=nextUndecided(state.sources,current);
+  if (reviewTab === 'kept') reviewTab='all';
+  drawResults();
+  if (!next) {
+    $('reviewProgress').textContent='未判断のシーンはありません。キープ済みを確認できます。';
+    return;
+  }
+  $('reviewProgress').textContent='次の未判断シーンへ移動しました。';
+  requestAnimationFrame(()=>{
+    const items=[...$('highlightList').querySelectorAll('.highlight-entry')];
+    const element=items.find(entry=>entry.dataset.sourceId===next.source.id && entry.dataset.sceneId===next.item.id);
+    element?.scrollIntoView({behavior:'smooth',block:'start'});
+    element?.classList.add('review-next');
+  });
+}
+function decideReview(source,item,decision) {
+  const previous=judgeScene(item,decision);
+  if(decision==='rejected') {
+    lastRejected={item,source,previous};
+    $('undoReviewText').textContent='「'+(item.title||'シーン')+'」を不採用にしました';
+    $('undoReview').hidden=false;
+  }
+  nextSceneAfter(item);
+}
+$('undoReviewButton').addEventListener('click',()=>{
+  if(!lastRejected) return;
+  const {item,source,previous}=lastRejected;
+  restoreJudgment(item,previous);
+  clearUndoReview();
+  if(reviewTab==='kept')reviewTab='all';
+  drawResults();
+  requestAnimationFrame(()=>{
+    const match=[...$('highlightList').querySelectorAll('.highlight-entry')]
+      .find(entry=>entry.dataset.sourceId===source.id && entry.dataset.sceneId===item.id);
+    match?.scrollIntoView({behavior:'smooth',block:'start'});
+  });
+});
+
 function row(item, index) {
   const source = state.sources.find(s => s.id === item.sourceId);
   if (!source) return make('div','', '動画が見つかりません');
