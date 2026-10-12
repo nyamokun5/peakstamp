@@ -1,6 +1,8 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=dissolve05';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=dissolve05';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=review4';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=review4';
+import { getCandidateEnd, clipMarkerPositions } from './editing-rules.mjs?v=review4';
+import { montageSeconds } from './exporter.mjs?v=review4';
 
 const $ = id => document.getElementById(id);
 const make = (tag, cls, text) => {
@@ -16,6 +18,8 @@ const state = {
 };
 const STEP = .25;
 let activeInlineClose = null;
+let reviewTab = 'all';
+function currentClipOptions(){return {mode:document.querySelector('input[name="cutMode"]:checked')?.value || 'quiet',fixedSeconds:Number($('clipDuration').value)||16,tailSeconds:Number($('tailSeconds').value)||3};}
 function closeInlinePreview() { if (activeInlineClose) { const fn = activeInlineClose; activeInlineClose = null; fn(); } }
 function error(id, message) {
   $(id).textContent = message;
@@ -58,6 +62,7 @@ function syncSources() {
   state.duration = offset;
   state.bins = bins.length ? bins : null;
   state.candidates = candidates;
+  $('stickyBar').hidden = !state.bins;
   $('resultsPanel').hidden = !state.bins;
   $('multiWaveNotice').hidden = state.sources.length <= 1;
   $('commentHelp').hidden = state.sources.length <= 1;
@@ -374,7 +379,8 @@ function row(item, index) {
     item.enabled = !item.enabled;
     updateKeep();
     applySelection();
-    refreshComment();
+    if (reviewTab === 'kept' && !item.enabled) drawResults();
+    else refreshComment();
   });
   const play = make('button','play-btn','▶ 確認');
   play.type = 'button';
@@ -425,10 +431,12 @@ function row(item, index) {
   time.setAttribute('aria-label','タイムスタンプ');
   time.addEventListener('change', () => {
     const seconds = parseTime(time.value);
-    if (seconds === null || seconds > source.duration) {
+    if (seconds === null || seconds >= source.duration ||
+      (Number.isFinite(item.manualEnd) && seconds >= item.manualEnd - .24)) {
       time.value = formatTime(item.time);
     } else {
       item.time = seconds;
+      renderRange();
       refreshComment();
     }
   });
@@ -440,7 +448,95 @@ function row(item, index) {
   title.maxLength = 100;
   title.setAttribute('aria-label','シーンの説明');
   title.addEventListener('input', () => { item.title = title.value; refreshComment(); });
+
+  const rangeEditor = make('div','range-editor');
+  const rangeHeading = make('div','range-title','切り取り範囲');
+  const markerLegend=make('div','range-legend');
+  const legendStart=make('span','range-start-label');
+  const legendPeak=make('span','range-peak-label');
+  const legendEnd=make('span','range-end-label');
+  markerLegend.append(legendStart,legendPeak,legendEnd);
+  const track=make('div','range-track');
+  const fill=make('div','range-fill');
+  const startDot=make('span','range-dot range-start');
+  const peakDot=make('span','range-dot range-peak');
+  const endDot=make('span','range-dot range-end');
+  track.append(fill,startDot,peakDot,endDot);
+  const rangeInputs=make('div','range-inputs');
+  const startBox=make('div','range-field');
+  startBox.append(make('label','', '開始'));
+  const startControls=make('div','range-adjust');
+  const endBox=make('div','range-field');
+  const endLabel=make('label','range-auto-label','終了（自動）');
+  const endInput=make('input','range-time');
+  endInput.type='text';
+  endInput.inputMode='text';
+  endInput.setAttribute('aria-label','切り取り終了時刻');
+  endBox.append(endLabel);
+  const endControls=make('div','range-adjust');
+  const makeJog=(target,step)=>{
+    const jog=make('button','range-jog',step>0?'+1秒':'−1秒');
+    jog.type='button';
+    jog.addEventListener('click',()=>{
+      const current=target==='start' ? item.time : getCandidateEnd(source,item,currentClipOptions());
+      const next=Math.round(current)+step;
+      if (target==='start') {
+        const clipEnd=getCandidateEnd(source,item,currentClipOptions());
+        if(next<0 || next>=source.duration || next>=clipEnd-.24) return;
+        item.time=next;
+        time.value=formatTime(item.time);
+      } else {
+        if(next<=item.time+.24 || next>source.duration) return;
+        item.manualEnd=next;
+      }
+      renderRange();
+      refreshComment();
+    });
+    return jog;
+  };
+  startControls.append(makeJog('start',-1),makeJog('start',1));
+  endControls.append(makeJog('end',-1),makeJog('end',1));
+  const resetEnd=make('button','range-reset','自動に戻す');
+  resetEnd.type='button';
+  resetEnd.addEventListener('click',()=> {
+    item.manualEnd=null;
+    renderRange();
+    refreshComment();
+  });
+  endControls.append(resetEnd);
+  startBox.append(startControls);
+  endBox.append(endInput,endControls);
+  rangeInputs.append(startBox,endBox);
+  rangeEditor.append(rangeHeading,markerLegend,track,rangeInputs);
   fields.append(timeRow, title, score);
+  entry.append(rangeEditor);
+  const renderRange=()=>{
+    const end=getCandidateEnd(source,item,currentClipOptions());
+    const p=clipMarkerPositions(item.time,item.peakSeconds,end,source.duration);
+    fill.style.left=p.start+'%';
+    fill.style.width=Math.max(0,p.end-p.start)+'%';
+    startDot.style.left=p.start+'%';
+    peakDot.style.left=p.peak+'%';
+    endDot.style.left=p.end+'%';
+    legendStart.textContent='開始 '+formatTime(item.time);
+    legendPeak.textContent='ピーク '+formatTime(item.peakSeconds);
+    legendEnd.textContent='終了 '+formatTime(end);
+    endInput.value=formatTime(end);
+    endLabel.textContent=Number.isFinite(item.manualEnd)?'終了（手動）':'終了（自動）';
+    resetEnd.hidden=!Number.isFinite(item.manualEnd);
+  };
+  endInput.addEventListener('change',()=>{
+    const seconds=parseTime(endInput.value);
+    if(seconds===null || seconds<=item.time+.24 || seconds>source.duration){
+      renderRange();
+      return;
+    }
+    item.manualEnd=seconds;
+    renderRange();
+    refreshComment();
+  });
+  renderRange();
+
   const remove = make('button','delete-btn','×');
   remove.type = 'button';
   remove.title = '候補を削除';
@@ -450,8 +546,8 @@ function row(item, index) {
     syncSources();
   });
   wrap.append(play, fields, remove);
-  entry.append(wrap, enabled);
-  entry.append(inline);
+  entry.prepend(wrap);
+  entry.append(enabled, inline);
   applySelection();
   return entry;
 }
