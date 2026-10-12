@@ -72,3 +72,34 @@ export function dissolveOverlap(plan, fps = 30) {
     return sum+(Math.min(frames,Math.floor(aFrames/3),Math.floor(bFrames/3))/fps);
   },0);
 }
+
+
+/** Return the effective clip endpoint, honoring a user-set value. */
+export function getCandidateEnd(source, item, options = {}) {
+  const duration = Number(source?.duration) || 0;
+  if (duration <= 0) return 0;
+  const start = Math.max(0, Math.min(duration, Number(item?.time) || 0));
+  if (Number.isFinite(item?.manualEnd)) {
+    return Math.min(duration, Math.max(start + 0.25, Number(item.manualEnd)));
+  }
+  const seconds = Number(options.fixedSeconds) || 16;
+  if (options.mode === 'fixed') return Math.min(duration, start + Math.max(6, Math.min(40,seconds)));
+  return quietClipEnd({
+    bins: source?.bins, peakSeconds: item?.peakSeconds,
+    startSeconds: start, duration,
+    fallbackSeconds: seconds, tailSeconds: Number(options.tailSeconds) || 3,
+  });
+}
+
+/** Percent marker positions in a small view window around the action. */
+export function clipMarkerPositions(start, peak, end, duration) {
+  const maxDuration = Math.max(0, Number(duration) || 0);
+  const a = Math.max(0, Math.min(maxDuration, Number(start)||0));
+  const p = Math.max(0, Math.min(maxDuration, Number(peak)||a));
+  const e = Math.max(a, Math.min(maxDuration, Number(end)||a));
+  const left = Math.max(0, a - 3);
+  const right = Math.min(maxDuration, Math.max(e,p,a+1)+3);
+  const span = Math.max(1, right-left);
+  const pc=t=>Math.max(0,Math.min(100,(t-left)/span*100));
+  return { start:pc(a), peak:pc(p), end:pc(e), left, right };
+}
