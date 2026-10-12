@@ -253,50 +253,67 @@ async function decodeSmallAudio(file, update, check) {
 
 $('cancelButton').addEventListener('click', () => { state.cancelled = true; });
 $('analyzeButton').addEventListener('click', async () => {
-  if (!state.file || state.working) return;
+  if (!state.sources.length || state.working) return;
   state.cancelled = false;
   busy(true);
   error('analysisError', '');
-  $('resultsPanel').hidden = true;
-  const abort = () => {
-    if (state.cancelled) throw Error('解析を中止しました');
-  };
+  const abort = () => { if (state.cancelled) throw Error('解析を中止しました'); };
+  const failures = [];
   try {
-    progress('音声ライブラリを準備中', 1);
-    let result;
-    try {
-      result = await decodeStreaming(state.file, progress, abort);
-    } catch (e) {
-      if (state.cancelled) throw e;
-      const name = state.file.name || '';
-      const audio = /^audio\//.test(state.file.type) || /\.(wav|mp3|aac|m4a)$/i.test(name);
-      if (!audio || state.file.size > 30 * 1048576) throw e;
-      progress('音声ファイルを読み込み中', 5);
-      result = await decodeSmallAudio(state.file, progress, abort);
+    const files = [...state.sources];
+    for (let i = 0; i < files.length; i++) {
+      abort();
+      const source = files[i];
+      // Keep already edited results when adding more videos; re-run only unprocessed.
+      if (source.bins) continue;
+      const segmentProgress = (label, percent) => progress(
+        '動画 ' + (i + 1) + '/' + files.length + '：' + source.file.name + ' — ' + label,
+        (i + Math.min(100, percent) / 100) / files.length * 100);
+      try {
+        segmentProgress('解析準備中',0);
+        const result = await decodeStreaming(source.file, segmentProgress, abort);
+        abort();
+        source.duration = result.duration;
+        source.bins = result.bins;
+        source.candidates = detectHighlights(source.bins, {
+          sensitivity: state.sensitivity, leadSeconds: state.leadSeconds,
+          maxResults: state.maxResults, binSeconds: STEP,
+        }).map(item => ({ ...item, sourceId: source.id }));
+        source.error = '';
+        syncSources();
+      } catch (e) {
+        if (state.cancelled) throw e;
+        source.error = e?.message || String(e);
+        failures.push(source.file.name + '：' + source.error);
+        renderSourceList();
+      }
     }
-    abort();
-    state.duration = result.duration;
-    state.bins = result.bins;
-    progress('ハイライト候補を抽出中', 100);
-    rebuild();
+    syncSources();
+    if (!state.bins) throw Error('すべての動画で解析に失敗しました。');
+    if (failures.length) {
+      error('analysisError', '一部の動画は解析できませんでした：' + failures.join(' / '));
+    }
     $('resultsPanel').hidden = false;
     $('resultsPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
-    const message = e && e.message ? e.message : String(e);
-    error('analysisError', message === '解析を中止しました' ? message :
-      '解析できませんでした: ' + message + '。AAC音声付きのMP4/MOVでお試しください。');
+    const message = e?.message || String(e);
+    error('analysisError', message);
   } finally {
     busy(false);
     $('progressArea').hidden = true;
+    renderSourceList();
   }
 });
 function rebuild() {
-  if (!state.bins) return;
-  state.candidates = detectHighlights(state.bins, {
-    sensitivity: state.sensitivity, leadSeconds: state.leadSeconds,
-    maxResults: state.maxResults, binSeconds: STEP
-  });
-  drawResults();
+  if (!state.sources.some(s => s.bins)) return;
+  for (const source of state.sources) {
+    if (!source.bins) continue;
+    source.candidates = detectHighlights(source.bins, {
+      sensitivity: state.sensitivity, leadSeconds: state.leadSeconds,
+      maxResults: state.maxResults, binSeconds: STEP
+    }).map(item => ({ ...item, sourceId: source.id }));
+  }
+  syncSources();
 }
 document.querySelectorAll('[data-sensitivity]').forEach(button => {
   button.addEventListener('click', () => {
