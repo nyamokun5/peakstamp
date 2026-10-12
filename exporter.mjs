@@ -142,7 +142,10 @@ export async function exportMontage({
       codec: 'avc', bitrate: settings.bitrate, keyFrameInterval: 2,
     });
     output.addVideoTrack(videoSource, { frameRate: settings.frameRate });
-    const audioSource = new AudioSampleSource({ codec: 'aac', bitrate: 128000 });
+    const audioSource = new AudioSampleSource({
+      codec: 'aac', bitrate: 128000,
+      transform: { sampleRate: 48000, numberOfChannels: 2 },
+    });
     output.addAudioTrack(audioSource);
     await output.start();
     onProgress('冒頭5秒のタイトルを作成中', 2);
