@@ -20,6 +20,7 @@ const state = {
 const STEP = .25;
 let activeInlineClose = null;
 let reviewTab = 'all';
+let autoOpeningNextReplay = false;
 let lastRejected = null;
 let undoTimer = null;
 const UNDO_VISIBLE_MS = 5000;
@@ -383,11 +384,19 @@ function nextSceneAfter(current) {
   requestAnimationFrame(()=>{
     const items=[...$('highlightList').querySelectorAll('.highlight-entry')];
     const element=items.find(entry=>entry.dataset.sourceId===next.source.id && entry.dataset.sceneId===next.item.id);
-    element?.scrollIntoView({behavior:'smooth',block:'start'});
-    element?.classList.add('review-next');
-    // Open the next replay automatically so the user can review continuously.
-    // iPhone Safari may require a tap to begin playback; the video remains visible.
-    element?.querySelector('.play-btn')?.click();
+    if (!element) return;
+    element.classList.add('review-next');
+    // Open the video first, then scroll after layout expands. This ensures
+    // Keep and Reject follow the same motion on mobile Safari.
+    autoOpeningNextReplay = true;
+    try {
+      element.querySelector('.play-btn')?.click();
+    } finally {
+      autoOpeningNextReplay = false;
+    }
+    requestAnimationFrame(()=>{
+      element.scrollIntoView({behavior:'smooth',block:'start'});
+    });
   });
 }
 function decideReview(source,item,decision) {
@@ -495,7 +504,9 @@ function row(item, index) {
     video.addEventListener('timeupdate',clampAndStop);
     video.addEventListener('seeked',clampAndStop);
     video.load();
-    inline.scrollIntoView({behavior:'smooth',block:'nearest'});
+    if (!autoOpeningNextReplay) {
+      inline.scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
   });
   const fields = make('div','item-fields');
   const timeRow = make('div','time-row');
@@ -715,7 +726,11 @@ function drawResults() {
       try { await navigator.clipboard.writeText(current.text); copy.textContent='✓ コピーしました'; }
       catch { $('commentText').value=current.text; $('commentText').focus();$('commentText').select();copy.textContent='下のテキストをコピー'; }
     });
-    const visible=source.candidates.filter(candidate=>candidate.rejected!==true && (reviewTab==='all' || candidate.enabled===true));
+    // Keep and Reject both remove a scene from the undecided queue.
+    // Kept scenes remain available in the dedicated Keep tab.
+    const visible=source.candidates.filter(candidate=>reviewTab==='kept'
+      ? candidate.enabled===true
+      : candidate.enabled!==true && candidate.rejected!==true);
     if (visible.length === 0) { pos += source.candidates.length; continue; }
     headTitle.querySelector('small').textContent=visible.length+'件を表示';
     heading.append(headTitle,copy);
@@ -724,12 +739,12 @@ function drawResults() {
   }
   $('highlightList').replaceChildren(...elements);
   const keptCount=state.candidates.filter(x=>x.enabled).length;
-  const acceptedCount=state.candidates.filter(x=>x.rejected!==true).length;
-  $('tabAllCount').textContent=String(acceptedCount);
+  const remainingCount=state.candidates.filter(x=>x.enabled!==true && x.rejected!==true).length;
+  $('tabAllCount').textContent=String(remainingCount);
   $('tabKeptCount').textContent=String(keptCount);
   $('reviewEmpty').hidden=reviewTab!=='kept' || keptCount>0;
-  if(reviewTab==='all' && acceptedCount===0 && state.candidates.length>0){
-    $('reviewProgress').textContent='候補はすべて不採用です。「元に戻す」で直前の候補を復活できます。';
+  if(reviewTab==='all' && remainingCount===0 && state.candidates.length>0){
+    $('reviewProgress').textContent='すべて確認しました。キープ済みタブで選んだシーンを確認できます。';
   }
   document.querySelectorAll('[data-review-tab]').forEach(button=>{
     const selected=button.dataset.reviewTab===reviewTab;
