@@ -30,6 +30,8 @@ function setWorking(value) {
 }
 function setTitle(value) {
   $('montageTitle').value = value;
+  const preview = document.querySelector('.montage-title-preview strong');
+  if (preview) preview.textContent = value || 'GOALS!';
   for (const button of document.querySelectorAll('[data-montage-title]')) {
     button.classList.toggle('active', button.dataset.montageTitle === value);
   }
