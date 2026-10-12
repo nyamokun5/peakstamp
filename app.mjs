@@ -404,72 +404,81 @@ function row(item, index) {
   const source = state.sources.find(s => s.id === item.sourceId);
   if (!source) return make('div','', '動画が見つかりません');
   const entry = make('div', 'highlight-entry');
+  entry.dataset.sourceId=source.id;
+  entry.dataset.sceneId=item.id;
   const wrap = make('div','highlight-item');
   const inline = make('div', 'inline-preview');
   inline.hidden = true;
-  const badge = make('span', 'selection-label', item.enabled ? 'キープ済み' : '未選択');
+  const badge = make('span', 'selection-label',
+    item.enabled ? 'キープ済み' : item.rejected ? '不採用' : '未判断');
   const number = make('span', 'scene-number', String(index + 1).padStart(2, '0'));
   const applySelection = () => {
     entry.classList.toggle('is-selected', !!item.enabled);
     entry.classList.toggle('is-excluded', !item.enabled);
-    badge.textContent = item.enabled ? 'キープ済み' : '未選択';
+    badge.textContent = item.enabled ? 'キープ済み' : item.rejected ? '不採用' : '未判断';
     badge.classList.toggle('excluded', !item.enabled);
   };
-  const enabled = make('button','keep-btn');
-  enabled.type='button';
-  const updateKeep=()=>{
-    enabled.textContent=item.enabled ? '✓ キープ済み' : '＋ キープする';
-    enabled.classList.toggle('kept',!!item.enabled);
-    enabled.setAttribute('aria-pressed',String(!!item.enabled));
-  };
-  updateKeep();
-  enabled.addEventListener('click', () => {
-    item.enabled = !item.enabled;
-    updateKeep();
-    applySelection();
-    if (reviewTab === 'kept' && !item.enabled) drawResults();
-    else refreshComment();
-  });
-  const play = make('button','play-btn','▶ 確認');
+  const play = make('button','play-btn','▶ リプレイ');
   play.type = 'button';
-  play.title = 'この場面を下に表示して再生';
-  const close = () => {
-    const media = inline.querySelector('video');
-    if (media) {
-      media.pause();
-      media.removeAttribute('src');
-      media.load();
+  play.title = '切り取り範囲をもう一度再生';
+  let replayVideo=null;
+  const close=()=>{
+    if(replayVideo){
+      replayVideo.pause();
+      replayVideo.removeAttribute('src');
+      replayVideo.load();
+      replayVideo=null;
     }
     inline.replaceChildren();
-    inline.hidden = true;
-    play.textContent = '▶ 確認';
+    inline.hidden=true;
     entry.classList.remove('preview-active');
   };
-  play.addEventListener('click', () => {
-    if (activeInlineClose === close) {
-      closeInlinePreview();
+  const clampAndStop=()=>{
+    if(!replayVideo || !Number.isFinite(replayVideo.duration))return;
+    const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
+    if(replayVideo.currentTime<bounds.start-.06){
+      replayVideo.currentTime=bounds.start;
+      return;
+    }
+    if(replayVideo.currentTime >= bounds.end-.06){
+      replayVideo.pause();
+      if(Math.abs(replayVideo.currentTime-bounds.end)>.08)replayVideo.currentTime=bounds.end;
+    }
+  };
+  const restartReplay=()=>{
+    if(!replayVideo)return;
+    const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
+    if(bounds.end<=bounds.start)return;
+    replayVideo.pause();
+    replayVideo.currentTime=bounds.start;
+    replayVideo.play().catch(()=>{});
+  };
+  play.addEventListener('click',()=>{
+    if(activeInlineClose===close && replayVideo){
+      restartReplay();
       return;
     }
     closeInlinePreview();
     $('preview').pause();
-    const video = document.createElement('video');
-    video.className = 'inline-player';
-    video.controls = true;
-    video.playsInline = true;
-    video.preload = 'metadata';
-    video.src = source.objectUrl;
-    const label = make('p', 'inline-caption', source.file.name + ' — シーン ' + (index + 1) + '｜' + formatTime(item.time) + ' から再生（終わったら下の一覧で次を選べます）');
-    inline.replaceChildren(label, video);
-    inline.hidden = false;
+    const video=document.createElement('video');
+    replayVideo=video;
+    video.className='inline-player';
+    video.controls=true;
+    video.playsInline=true;
+    video.preload='metadata';
+    video.src=source.objectUrl;
+    const label=make('p','inline-caption',
+      source.file.name+' — '+formatTime(item.time)+' 〜 '+
+      formatTime(getCandidateEnd(source,item,currentClipOptions()))+' をリプレイ');
+    inline.replaceChildren(label,video);
+    inline.hidden=false;
     entry.classList.add('preview-active');
-    play.textContent = '× 閉じる';
-    activeInlineClose = close;
-    video.addEventListener('loadedmetadata', () => {
-      video.currentTime = Math.max(0, Math.min(item.time, video.duration || item.time));
-      video.play().catch(() => { /* Safari may require a second tap */ });
-    }, { once: true });
+    activeInlineClose=close;
+    video.addEventListener('loadedmetadata',restartReplay,{once:true});
+    video.addEventListener('timeupdate',clampAndStop);
+    video.addEventListener('seeked',clampAndStop);
     video.load();
-    inline.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    inline.scrollIntoView({behavior:'smooth',block:'nearest'});
   });
   const fields = make('div','item-fields');
   const timeRow = make('div','time-row');
