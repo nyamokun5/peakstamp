@@ -1,6 +1,6 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=edit3';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=edit3';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=dissolve05';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=dissolve05';
 
 const $ = id => document.getElementById(id);
 const make = (tag, cls, text) => {
