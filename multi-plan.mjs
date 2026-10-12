@@ -1,5 +1,5 @@
-import { INTRO_SECONDS } from './exporter.mjs?v=review4';
-import { getCandidateEnd, dissolveOverlap } from './editing-rules.mjs?v=review4';
+import { INTRO_SECONDS } from './exporter.mjs?v=rapid5';
+import { getCandidateEnd, dissolveOverlap } from './editing-rules.mjs?v=rapid5';
 
 /**
  * Produce non-overlapping clips, in user-controlled file order.
