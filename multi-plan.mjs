@@ -43,7 +43,7 @@ export function sourceTimestampComments(sources){
       name:source.file.name,
       count:list.length,
       text:list.length ? '⚽ '+source.file.name+' — Highlights\n'
-        +list.map(c=>formatLocalTime(c.time)+' '+(c.title?.trim()||'🔥 盛り上がり')).join('\n')
+        +list.map(c=>formatLocalTime(c.time)+' '+(c.title?.trim()||'ナイスプレイ！')).join('\n')
         : ''
     };
   });
