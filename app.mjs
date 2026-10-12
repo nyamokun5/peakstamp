@@ -375,6 +375,9 @@ function nextSceneAfter(current) {
     const element=items.find(entry=>entry.dataset.sourceId===next.source.id && entry.dataset.sceneId===next.item.id);
     element?.scrollIntoView({behavior:'smooth',block:'start'});
     element?.classList.add('review-next');
+    // Open the next replay automatically so the user can review continuously.
+    // iPhone Safari may require a tap to begin playback; the video remains visible.
+    element?.querySelector('.play-btn')?.click();
   });
 }
 function decideReview(source,item,decision) {
