@@ -499,12 +499,42 @@ function row(item, index) {
   });
   timeRow.append(number, badge);
   const score = make('span','score', 'ピーク ' + Math.round(item.peakSeconds) + '秒 / ' + item.db + 'dBFS');
-  const title = make('input','title-input');
-  title.type = 'text';
-  title.value = item.title;
-  title.maxLength = 100;
-  title.setAttribute('aria-label','シーンの説明');
-  title.addEventListener('input', () => { item.title = title.value; refreshComment(); });
+  const titleGroup=make('div','play-label-group');
+  const titleLabel=make('label','play-label-caption','プレイ内容');
+  const titleSelect=make('select','play-label-select');
+  titleSelect.setAttribute('aria-label','プレイ内容を選択');
+  for(const value of PLAY_LABELS){
+    const opt=make('option','',value);
+    opt.value=value;
+    titleSelect.append(opt);
+  }
+  const customOption=make('option','','その他（自由入力）');
+  customOption.value='__custom__';
+  titleSelect.append(customOption);
+  const title=make('input','title-input');
+  title.type='text';
+  title.maxLength=100;
+  title.setAttribute('aria-label','プレイ内容の自由入力');
+  const labelIsPreset=PLAY_LABELS.includes(item.title);
+  titleSelect.value=labelIsPreset ? item.title : '__custom__';
+  title.value=item.title || DEFAULT_PLAY_LABEL;
+  title.hidden=labelIsPreset;
+  titleSelect.addEventListener('change',()=>{
+    if(titleSelect.value==='__custom__'){
+      title.hidden=false;
+      title.focus();
+    } else {
+      title.hidden=true;
+      item.title=titleSelect.value;
+      title.value=item.title;
+      refreshComment();
+    }
+  });
+  title.addEventListener('input',()=>{
+    item.title=title.value;
+    refreshComment();
+  });
+  titleGroup.append(titleLabel,titleSelect,title);
 
   const rangeEditor = make('div','range-editor');
   const rangeHeading = make('div','range-title','切り取り範囲');
@@ -565,7 +595,7 @@ function row(item, index) {
   endBox.append(endInput,endControls);
   rangeInputs.append(startBox,endBox);
   rangeEditor.append(rangeHeading,markerLegend,track,rangeInputs);
-  fields.append(timeRow, title, score);
+  fields.append(timeRow, titleGroup, score);
   const renderRange=()=>{
     const end=getCandidateEnd(source,item,currentClipOptions());
     const p=clipMarkerPositions(item.time,item.peakSeconds,end,source.duration);
@@ -601,8 +631,17 @@ function row(item, index) {
     source.candidates = source.candidates.filter(x => x !== item);
     syncSources();
   });
-  wrap.append(play, fields, remove);
-  entry.append(wrap, enabled, rangeEditor, inline);
+  const actions=make('div','review-decision-actions');
+  const keep=make('button','review-keep','✓ キープ');
+  keep.type='button';
+  const reject=make('button','review-reject','✕ 不採用');
+  reject.type='button';
+  keep.addEventListener('click',()=>decideReview(source,item,'kept'));
+  reject.addEventListener('click',()=>decideReview(source,item,'rejected'));
+  actions.append(keep,reject);
+  wrap.append(play,fields,remove);
+  // Replay -> media -> cut-range -> decision buttons, in that order.
+  entry.append(wrap,inline,rangeEditor,actions);
   applySelection();
   return entry;
 }
