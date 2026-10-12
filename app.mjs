@@ -12,7 +12,7 @@ const make = (tag, cls, text) => {
 const state = {
   file: null, objectUrl: null, duration: 0, bins: null, candidates: [], sources: [],
   sensitivity: 'normal', leadSeconds: 7, maxResults: 8,
-  working: false, cancelled: false
+  working: false, cancelled: false, exporting: false
 };
 const STEP = .25;
 let activeInlineClose = null;
@@ -32,9 +32,9 @@ let nextSourceId = 0;
 let appendOnPick = false;
 function busy(value) {
   state.working = value;
-  $('fileInput').disabled = value;
-  $('changeFile').disabled = value;
-  $('addFiles').disabled = value;
+  $('fileInput').disabled = value || state.exporting;
+  $('changeFile').disabled = value || state.exporting;
+  $('addFiles').disabled = value || state.exporting;
   $('analyzeButton').disabled = value || !state.sources.length;
   $('analyzeButton').textContent = value ? '音声を解析中…' : '⌁　音声を解析する　→';
   $('cancelButton').hidden = !value;
@@ -76,7 +76,7 @@ function renderSourceList() {
   $('fileName').textContent = sources.length + '本の動画を選択中';
   const megabytes = sources.reduce((n,s) => n + s.file.size,0)/1048576;
   $('fileSize').textContent = megabytes.toFixed(1) + ' MB 合計';
-  $('analyzeButton').disabled = !sources.length || state.working;
+  $('analyzeButton').disabled = !sources.length || state.working || state.exporting;
   const preview = $('preview');
   const first = sources[0];
   if (first) {
@@ -106,7 +106,7 @@ function renderSourceList() {
     const move = (label,diff) => {
       const button = make('button','source-control',label);
       button.type = 'button';
-      button.disabled = state.working || i + diff < 0 || i + diff >= sources.length;
+      button.disabled = state.working || state.exporting || i + diff < 0 || i + diff >= sources.length;
       button.addEventListener('click', () => {
         const other = i + diff;
         [sources[i],sources[other]]=[sources[other],sources[i]];
@@ -117,7 +117,7 @@ function renderSourceList() {
     move('↑',-1); move('↓',1);
     const del = make('button','source-control source-remove','×');
     del.type = 'button';
-    del.disabled = state.working;
+    del.disabled = state.working || state.exporting;
     del.setAttribute('aria-label',source.file.name+' を削除');
     del.addEventListener('click', () => {
       sources.splice(i,1);
@@ -130,7 +130,7 @@ function renderSourceList() {
   }));
 }
 function chooseFiles(files, append = false) {
-  if (state.working || !files?.length) return;
+  if (state.working || state.exporting || !files?.length) return;
   const incoming = Array.from(files).filter(file => /\.(mp4|mov|m4v)$/i.test(file.name) ||
     /^video\//.test(file.type));
   if (!incoming.length) {
@@ -253,7 +253,7 @@ async function decodeSmallAudio(file, update, check) {
 
 $('cancelButton').addEventListener('click', () => { state.cancelled = true; });
 $('analyzeButton').addEventListener('click', async () => {
-  if (!state.sources.length || state.working) return;
+  if (!state.sources.length || state.working || state.exporting) return;
   state.cancelled = false;
   busy(true);
   error('analysisError', '');
@@ -560,6 +560,16 @@ $('copyButton').addEventListener('click', async () => {
     $('commentText').select();
     $('copyStatus').textContent = 'テキストを選択しました。コピーしてください。';
   }
+});
+
+
+window.addEventListener('montage-export-state', event => {
+  state.exporting = !!event.detail?.working;
+  $('fileInput').disabled = state.exporting || state.working;
+  $('changeFile').disabled = state.exporting || state.working;
+  $('addFiles').disabled = state.exporting || state.working;
+  $('analyzeButton').disabled = state.exporting || state.working || !state.sources.length;
+  renderSourceList();
 });
 
 initMontageEditor(state);
