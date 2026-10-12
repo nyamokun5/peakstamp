@@ -1,4 +1,4 @@
-import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES } from './editing-rules.mjs?v=dissolve05';
+import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES } from './editing-rules.mjs?v=review4';
 /**
  * PeakStamp: automatic highlight montage with a 5-second title card.
  * Only processes an explicitly selected local file, never uploads it.

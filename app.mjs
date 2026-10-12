@@ -1,6 +1,8 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=dissolve05';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=dissolve05';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=review4';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=review4';
+import { getCandidateEnd, clipMarkerPositions } from './editing-rules.mjs?v=review4';
+import { montageSeconds } from './exporter.mjs?v=review4';
 
 const $ = id => document.getElementById(id);
 const make = (tag, cls, text) => {
@@ -16,6 +18,8 @@ const state = {
 };
 const STEP = .25;
 let activeInlineClose = null;
+let reviewTab = 'all';
+function currentClipOptions(){return {mode:document.querySelector('input[name="cutMode"]:checked')?.value || 'quiet',fixedSeconds:Number($('clipDuration').value)||16,tailSeconds:Number($('tailSeconds').value)||3};}
 function closeInlinePreview() { if (activeInlineClose) { const fn = activeInlineClose; activeInlineClose = null; fn(); } }
 function error(id, message) {
   $(id).textContent = message;
@@ -58,6 +62,7 @@ function syncSources() {
   state.duration = offset;
   state.bins = bins.length ? bins : null;
   state.candidates = candidates;
+  $('stickyBar').hidden = !state.bins;
   $('resultsPanel').hidden = !state.bins;
   $('multiWaveNotice').hidden = state.sources.length <= 1;
   $('commentHelp').hidden = state.sources.length <= 1;
@@ -314,7 +319,8 @@ function rebuild() {
     }).map(item => {
       const old=earlier.get(item.id);
       return { ...item, sourceId: source.id,
-        enabled: old?.enabled ?? false, title: old?.title || item.title };
+        enabled: old?.enabled ?? false, title: old?.title || item.title,
+        time: old?.time ?? item.time, manualEnd: old?.manualEnd ?? null };
     });
   }
   syncSources();
@@ -374,7 +380,8 @@ function row(item, index) {
     item.enabled = !item.enabled;
     updateKeep();
     applySelection();
-    refreshComment();
+    if (reviewTab === 'kept' && !item.enabled) drawResults();
+    else refreshComment();
   });
   const play = make('button','play-btn','▶ 確認');
   play.type = 'button';
@@ -425,14 +432,16 @@ function row(item, index) {
   time.setAttribute('aria-label','タイムスタンプ');
   time.addEventListener('change', () => {
     const seconds = parseTime(time.value);
-    if (seconds === null || seconds > source.duration) {
+    if (seconds === null || seconds >= source.duration ||
+      (Number.isFinite(item.manualEnd) && seconds >= item.manualEnd - .24)) {
       time.value = formatTime(item.time);
     } else {
       item.time = seconds;
+      renderRange();
       refreshComment();
     }
   });
-  timeRow.append(number, time, badge);
+  timeRow.append(number, badge);
   const score = make('span','score', 'ピーク ' + Math.round(item.peakSeconds) + '秒 / ' + item.db + 'dBFS');
   const title = make('input','title-input');
   title.type = 'text';
@@ -440,7 +449,94 @@ function row(item, index) {
   title.maxLength = 100;
   title.setAttribute('aria-label','シーンの説明');
   title.addEventListener('input', () => { item.title = title.value; refreshComment(); });
+
+  const rangeEditor = make('div','range-editor');
+  const rangeHeading = make('div','range-title','切り取り範囲');
+  const markerLegend=make('div','range-legend');
+  const legendStart=make('span','range-start-label');
+  const legendPeak=make('span','range-peak-label');
+  const legendEnd=make('span','range-end-label');
+  markerLegend.append(legendStart,legendPeak,legendEnd);
+  const track=make('div','range-track');
+  const fill=make('div','range-fill');
+  const startDot=make('span','range-dot range-start');
+  const peakDot=make('span','range-dot range-peak');
+  const endDot=make('span','range-dot range-end');
+  track.append(fill,startDot,peakDot,endDot);
+  const rangeInputs=make('div','range-inputs');
+  const startBox=make('div','range-field');
+  startBox.append(make('label','', '開始'));
+  const startControls=make('div','range-adjust');
+  const endBox=make('div','range-field');
+  const endLabel=make('label','range-auto-label','終了（自動）');
+  const endInput=make('input','range-time');
+  endInput.type='text';
+  endInput.inputMode='text';
+  endInput.setAttribute('aria-label','切り取り終了時刻');
+  endBox.append(endLabel);
+  const endControls=make('div','range-adjust');
+  const makeJog=(target,step)=>{
+    const jog=make('button','range-jog',step>0?'+1秒':'−1秒');
+    jog.type='button';
+    jog.addEventListener('click',()=>{
+      const current=target==='start' ? item.time : getCandidateEnd(source,item,currentClipOptions());
+      const next=Math.round(current)+step;
+      if (target==='start') {
+        const clipEnd=getCandidateEnd(source,item,currentClipOptions());
+        if(next<0 || next>=source.duration || next>=clipEnd-.24) return;
+        item.time=next;
+        time.value=formatTime(item.time);
+      } else {
+        if(next<=item.time+.24 || next>source.duration) return;
+        item.manualEnd=next;
+      }
+      renderRange();
+      refreshComment();
+    });
+    return jog;
+  };
+  startControls.append(makeJog('start',-1),makeJog('start',1));
+  endControls.append(makeJog('end',-1),makeJog('end',1));
+  const resetEnd=make('button','range-reset','自動に戻す');
+  resetEnd.type='button';
+  resetEnd.addEventListener('click',()=> {
+    item.manualEnd=null;
+    renderRange();
+    refreshComment();
+  });
+  endControls.append(resetEnd);
+  startBox.append(time,startControls);
+  endBox.append(endInput,endControls);
+  rangeInputs.append(startBox,endBox);
+  rangeEditor.append(rangeHeading,markerLegend,track,rangeInputs);
   fields.append(timeRow, title, score);
+  const renderRange=()=>{
+    const end=getCandidateEnd(source,item,currentClipOptions());
+    const p=clipMarkerPositions(item.time,item.peakSeconds,end,source.duration);
+    fill.style.left=p.start+'%';
+    fill.style.width=Math.max(0,p.end-p.start)+'%';
+    startDot.style.left=p.start+'%';
+    peakDot.style.left=p.peak+'%';
+    endDot.style.left=p.end+'%';
+    legendStart.textContent='開始 '+formatTime(item.time);
+    legendPeak.textContent='ピーク '+formatTime(item.peakSeconds);
+    legendEnd.textContent='終了 '+formatTime(end);
+    endInput.value=formatTime(end);
+    endLabel.textContent=Number.isFinite(item.manualEnd)?'終了（手動）':'終了（自動）';
+    resetEnd.hidden=!Number.isFinite(item.manualEnd);
+  };
+  endInput.addEventListener('change',()=>{
+    const seconds=parseTime(endInput.value);
+    if(seconds===null || seconds<=item.time+.24 || seconds>source.duration){
+      renderRange();
+      return;
+    }
+    item.manualEnd=seconds;
+    renderRange();
+    refreshComment();
+  });
+  renderRange();
+
   const remove = make('button','delete-btn','×');
   remove.type = 'button';
   remove.title = '候補を削除';
@@ -450,8 +546,7 @@ function row(item, index) {
     syncSources();
   });
   wrap.append(play, fields, remove);
-  entry.append(wrap, enabled);
-  entry.append(inline);
+  entry.append(wrap, enabled, rangeEditor, inline);
   applySelection();
   return entry;
 }
@@ -470,6 +565,22 @@ function refreshComment() {
   }));
   summary.hidden = selected.length === 0;
   updateMontageEditor(state);
+  updateStickyBar();
+}
+function updateStickyBar() {
+  const visible=Boolean(state.bins);
+  $('stickyBar').hidden=!visible;
+  if(!visible) return;
+  const count=state.candidates.filter(item=>item.enabled).length;
+  const plan=buildMultiClipPlan(state.sources,currentClipOptions());
+  const estimate=montageSeconds(plan);
+  const blocked=estimate>185;
+  $('stickyCount').textContent=String(count);
+  $('stickyDuration').textContent=blocked
+    ? '3分超：シーンを減らしてください'
+    : '完成予想 '+formatTime(Math.ceil(estimate));
+  $('stickyExport').disabled = !plan.length || blocked || state.working || state.exporting;
+  $('stickyExport').textContent=state.exporting?'書き出し中…':'動画を作成する →';
 }
 function drawResults() {
   closeInlinePreview();
@@ -491,11 +602,23 @@ function drawResults() {
       try { await navigator.clipboard.writeText(current.text); copy.textContent='✓ コピーしました'; }
       catch { $('commentText').value=current.text; $('commentText').focus();$('commentText').select();copy.textContent='下のテキストをコピー'; }
     });
+    const visible=source.candidates.filter(candidate=>reviewTab==='all' || candidate.enabled);
+    if (visible.length === 0) { pos += source.candidates.length; continue; }
+    headTitle.querySelector('small').textContent=visible.length+'件を表示';
     heading.append(headTitle,copy);
     elements.push(heading);
-    for (const candidate of source.candidates) elements.push(row(candidate, pos++));
+    for (const candidate of visible) elements.push(row(candidate, pos++));
   }
   $('highlightList').replaceChildren(...elements);
+  const keptCount=state.candidates.filter(x=>x.enabled).length;
+  $('tabAllCount').textContent=String(state.candidates.length);
+  $('tabKeptCount').textContent=String(keptCount);
+  $('reviewEmpty').hidden=reviewTab!=='kept' || keptCount>0;
+  document.querySelectorAll('[data-review-tab]').forEach(button=>{
+    const selected=button.dataset.reviewTab===reviewTab;
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
   $('resultCount').textContent = String(state.candidates.length);
   $('emptyResults').hidden = state.candidates.length > 0;
   $('waveEnd').textContent = formatTime(state.duration);
@@ -549,6 +672,10 @@ $('waveCanvas').addEventListener('click', e => {
     !best || Math.abs(item.time - localTime) < Math.abs(best.time - localTime) ? item : best, null);
   if (!closest) return;
   const idx = source.candidates.indexOf(closest);
+  if(reviewTab==='kept'){
+    reviewTab='all';
+    drawResults();
+  }
   const entries = [...$('highlightList').querySelectorAll('.highlight-entry')];
   const allSources = state.sources.filter(s => s.bins);
   const preceding = allSources.slice(0,allSources.indexOf(source))
@@ -556,7 +683,21 @@ $('waveCanvas').addEventListener('click', e => {
   entries[preceding + idx]?.querySelector('.play-btn')?.click();
 });
 window.addEventListener('montage-settings-changed', () => {
-  if (state.bins) refreshComment();
+  if (state.bins) drawResults();
+});
+document.querySelectorAll('[data-review-tab]').forEach(button=>{
+  button.addEventListener('click',()=>{
+    reviewTab=button.dataset.reviewTab==='kept'?'kept':'all';
+    if(state.bins)drawResults();
+  });
+});
+$('stickySettings').addEventListener('click',()=>{
+  $('montagePanel').scrollIntoView({behavior:'smooth',block:'start'});
+});
+$('stickyExport').addEventListener('click',()=>{
+  if($('stickyExport').disabled || $('montageExport').disabled)return;
+  $('montagePanel').scrollIntoView({behavior:'smooth',block:'start'});
+  $('montageExport').click();
 });
 $('copyButton').addEventListener('click', async () => {
   const comment = $('commentText').value;
@@ -588,6 +729,7 @@ window.addEventListener('montage-export-state', event => {
   $('addFiles').disabled = state.exporting || state.working;
   $('analyzeButton').disabled = state.exporting || state.working || !state.sources.length;
   renderSourceList();
+  updateStickyBar();
 });
 
 initMontageEditor(state);

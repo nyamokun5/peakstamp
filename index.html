@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="動画の盛り上がりを音声から検出し、YouTube用タイムスタンプを作成。端末内で処理します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=dissolve05" />
+  <link rel="stylesheet" href="styles.css?v=review4" />
 </head>
 <body>
   <header class="topbar">
@@ -18,7 +18,7 @@
     <section class="hero">
       <div class="eyebrow">MATCH HIGHLIGHT FINDER <span>01 / 03</span></div>
       <h1>あの瞬間を、<br/><em>音で見つける。</em></h1>
-      <p>試合動画から歓声や盛り上がりの候補を検出。YouTubeコメントに貼れるタイムスタンプを自動で作ります。</p>
+      <p>複数の試合動画から盛り上がりを自動検出。好きなシーンをキープすれば、静かになったところで切り出して1本のハイライト動画に結合できます。冒頭タイトルの編集や、動画ごとのタイムスタンプ作成にも対応。</p>
     </section>
     <section class="panel choose-panel">
       <div class="panel-label"><span class="number">01</span><h2>動画を選ぶ</h2></div>
@@ -73,7 +73,7 @@
     </section>
 
     <section class="panel results-panel" id="resultsPanel" hidden>
-      <div class="panel-label"><span class="number">03</span><h2>確認してコピー</h2></div>
+      <div class="panel-label"><span class="number">03</span><h2>確認してキープ</h2></div>
       <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
       <p id="multiWaveNotice" class="fine-print" hidden>波形は全動画をつなげた表示です。オレンジ線は各動画の検出位置を示します。</p>
       <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
@@ -83,6 +83,11 @@
         <strong>採用するシーン：<span id="selectedCount">0</span>件</strong>
         <div id="selectedSummary" class="selected-summary" hidden></div>
       </div>
+      <div class="review-tabs" role="group" aria-label="シーンの表示切り替え">
+        <button id="tabAll" type="button" class="review-tab active" data-review-tab="all" aria-pressed="true">すべての候補 <span id="tabAllCount">0</span></button>
+        <button id="tabKept" type="button" class="review-tab" data-review-tab="kept" aria-pressed="false">キープ済み <span id="tabKeptCount">0</span></button>
+      </div>
+      <p id="reviewEmpty" class="empty-results" hidden>キープしたシーンはまだありません。「すべての候補」から選んでください。</p>
       <div id="highlightList" class="highlight-list"></div>
       <div class="comment-section">
         <div class="comment-heading"><strong id="commentHeading">YouTubeコメント用</strong><span>そのまま貼り付け</span></div>
@@ -148,6 +153,18 @@
     </section>
     <footer><strong>PEAKSTAMP</strong><span>Enjoy the game. Capture the moment.</span><p>解析対象の動画は端末外に送信されません。初回アクセス時に解析ライブラリのダウンロードが必要です。</p></footer>
   </main>
-  <script type="module" src="app.mjs?v=dissolve05"></script>
+  <aside id="stickyBar" class="sticky-review-bar" aria-label="動画作成の確認" hidden>
+    <div class="sticky-review-inner">
+      <div class="sticky-review-summary">
+        <strong><span id="stickyCount">0</span>シーンをキープ</strong>
+        <span id="stickyDuration">完成予想 00:05</span>
+      </div>
+      <div class="sticky-review-actions">
+        <button id="stickySettings" type="button" class="sticky-settings">設定</button>
+        <button id="stickyExport" type="button" class="sticky-export" disabled>動画を作成する <span aria-hidden="true">→</span></button>
+      </div>
+    </div>
+  </aside>
+  <script type="module" src="app.mjs?v=review4"></script>
 </body>
 </html>

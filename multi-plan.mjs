@@ -1,5 +1,5 @@
-import { buildClipPlan, INTRO_SECONDS } from './exporter.mjs?v=dissolve05';
-import { quietClipEnd, dissolveOverlap } from './editing-rules.mjs?v=dissolve05';
+import { INTRO_SECONDS } from './exporter.mjs?v=review4';
+import { getCandidateEnd, dissolveOverlap } from './editing-rules.mjs?v=review4';
 
 /**
  * Produce non-overlapping clips, in user-controlled file order.
@@ -14,14 +14,10 @@ export function buildMultiClipPlan(sources, options = 16) {
   for(const source of sources||[]){
     if(!source?.file || !source?.bins || !Number.isFinite(source.duration))continue;
     const selected=(source.candidates||[]).filter(c=>c.enabled===true);
-    const spans=cfg.mode==='fixed'
-      ? buildClipPlan(selected,source.duration,cfg.fixedSeconds)
-      : mergeAdaptive(selected.map(c=>({
-          start:Math.max(0,Math.min(source.duration,c.time)),
-          end:quietClipEnd({bins:source.bins, peakSeconds:c.peakSeconds,
-            startSeconds:c.time,duration:source.duration,
-            fallbackSeconds:cfg.fixedSeconds,tailSeconds:cfg.tailSeconds})
-        })),source.duration);
+    const spans = mergeAdaptive(selected.map(candidate => ({
+      start: Math.max(0, Math.min(source.duration, Number(candidate.time) || 0)),
+      end: getCandidateEnd(source, candidate, cfg),
+    })), source.duration);
     for(const span of spans) plan.push({
       sourceId:source.id,sourceName:source.file.name,start:span.start,end:span.end
     });

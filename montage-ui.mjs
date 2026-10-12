@@ -1,5 +1,5 @@
-import { montageSeconds, exportMontage } from './exporter.mjs?v=dissolve05';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=dissolve05';
+import { montageSeconds, exportMontage } from './exporter.mjs?v=review4';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=review4';
 import { formatTime } from './detector.mjs';
 
 const $ = id => document.getElementById(id);
@@ -31,6 +31,17 @@ function settingChanged() {
 }
 
 let lastFile = null;
+let lastEditSignature = null;
+function editSignature(state, plan) {
+  return JSON.stringify({
+    sources:(state?.sources||[]).map(s=>[s.id,s.file?.name,s.file?.size,s.file?.lastModified]),
+    clips:plan.map(c=>[c.sourceId,c.start,c.end]),
+    title:$('montageTitle').value,
+    font:$('titleFont').value,
+    titleSize:$('titleSize').value,
+    quality:document.querySelector('input[name="exportQuality"]:checked')?.value || 'high',
+  });
+}
 let lastUrl = null;
 let lastBlob = null;
 let lastName = '';
@@ -88,10 +99,12 @@ export function updateMontageEditor(state) {
   lastFile = state?.file || null;
   if (!visible) return;
   const plan = buildMultiClipPlan(state.sources, clipOptions());
+  const signature = editSignature(state,plan);
+  if (!working && lastEditSignature !== null && lastEditSignature !== signature) revokeOutput();
+  lastEditSignature = signature;
   $('montageSelected').textContent = plan.length + 'シーンを結合';
   $('montageLength').textContent = '完成：約' + formatTime(Math.ceil(montageSeconds(plan)));
   $('montageExport').disabled = working || !plan.length;
-  if (!working) revokeOutput();
 }
 function makeShareFile() {
   if (!lastBlob || !lastName || typeof File !== 'function') return null;
