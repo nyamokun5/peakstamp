@@ -29,14 +29,14 @@ test('clip end remains within source duration',()=>{
   assert.ok(quietClipEnd({bins:envelope(30,22,27),peakSeconds:23,
     startSeconds:20,duration:30})<=30);
 });
-test('0.3s dissolve is nine frames at 30fps',()=>{
-  assert.equal(DISSOLVE_SECONDS,.3);
-  assert.equal(dissolveFrames(30),9);
-  assert.equal(dissolveOverlap([{start:0,end:10},{start:3,end:13}],30),.3);
+test('0.5s dissolve is fifteen frames at 30fps',()=>{
+  assert.equal(DISSOLVE_SECONDS,.5);
+  assert.equal(dissolveFrames(30),15);
+  assert.equal(dissolveOverlap([{start:0,end:10},{start:3,end:13}],30),.5);
 });
 test('short clips cap dissolve to safe overlap',()=>{
   const n=dissolveOverlap([{start:0,end:.3},{start:2,end:2.3}],30);
-  assert.ok(n>=0 && n<.3);
+  assert.ok(n>=0 && n<.5);
 });
 test('safe title font and size presets',()=>{
   assert.equal(normalizeFont('serif'),'serif');
