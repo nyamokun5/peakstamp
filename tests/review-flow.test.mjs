@@ -32,7 +32,7 @@ test('reject hides a candidate immediately in All and Keep lists',()=>{
   judgeScene(a,'rejected');
   assert.equal(a.enabled,false);
   assert.equal(a.rejected,true);
-  assert.deepEqual(visibleScenes(sources,'all').map(x=>x.item.id),['b','c']);
+  assert.deepEqual(visibleScenes(sources,'all').map(x=>x.item.id),['c']);
   assert.deepEqual(visibleScenes(sources,'kept').map(x=>x.item.id),['b']);
   assert.equal(nextUndecided(sources,a).item,c);
 });
@@ -68,4 +68,13 @@ test('replay endpoint honors source duration and zero',()=>{
 });
 test('invalid judging action is rejected',()=>{
   assert.throws(()=>judgeScene(scene('a'),'ignore'));
+});
+
+test('kept scene disappears from undecided list but remains in kept tab',()=>{
+ const a=scene('a'),b=scene('b');
+ const sources=[source('one',[a,b])];
+ judgeScene(a,'kept');
+ assert.deepEqual(visibleScenes(sources,'all').map(x=>x.item.id),['b']);
+ assert.deepEqual(visibleScenes(sources,'kept').map(x=>x.item.id),['a']);
+ assert.equal(nextUndecided(sources,a).item,b);
 });
