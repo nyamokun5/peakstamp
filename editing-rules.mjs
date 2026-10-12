@@ -1,5 +1,5 @@
 /** PeakStamp pure editing rules — no media file operations here. */
-export const DISSOLVE_SECONDS = 0.3;
+export const DISSOLVE_SECONDS = 0.5;
 export const END_PADDING_SECONDS = 3;
 export const QUIET_CONFIRM_SECONDS = 1.5;
 export const FONT_CHOICES = Object.freeze({
