@@ -27,7 +27,7 @@ export function nextUndecided(sources, current) {
   const scenes = orderedScenes(sources);
   const at = scenes.findIndex(x => x.item === current);
   if (!scenes.length) return null;
-  for (let i = 1; i <= scenes.length; i++) {
+  for (let i = 1; i < scenes.length; i++) {
     const candidate = scenes[(at + i + scenes.length) % scenes.length];
     if (undecided(candidate.item)) return candidate;
   }
