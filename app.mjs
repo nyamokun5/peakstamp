@@ -344,6 +344,8 @@ function parseTime(value) {
   return parts.reduce((s,n) => s * 60 + n, 0);
 }
 function row(item, index) {
+  const source = state.sources.find(s => s.id === item.sourceId);
+  if (!source) return make('div','', '動画が見つかりません');
   const entry = make('div', 'highlight-entry');
   const wrap = make('div','highlight-item');
   const inline = make('div', 'inline-preview');
@@ -392,8 +394,8 @@ function row(item, index) {
     video.controls = true;
     video.playsInline = true;
     video.preload = 'metadata';
-    video.src = state.objectUrl;
-    const label = make('p', 'inline-caption', 'シーン ' + (index + 1) + '｜' + formatTime(item.time) + ' から再生（終わったら下の一覧で次を選べます）');
+    video.src = source.objectUrl;
+    const label = make('p', 'inline-caption', source.file.name + ' — シーン ' + (index + 1) + '｜' + formatTime(item.time) + ' から再生（終わったら下の一覧で次を選べます）');
     inline.replaceChildren(label, video);
     inline.hidden = false;
     entry.classList.add('preview-active');
@@ -414,7 +416,7 @@ function row(item, index) {
   time.setAttribute('aria-label','タイムスタンプ');
   time.addEventListener('change', () => {
     const seconds = parseTime(time.value);
-    if (seconds === null || seconds > state.duration) {
+    if (seconds === null || seconds > source.duration) {
       time.value = formatTime(item.time);
     } else {
       item.time = seconds;
@@ -435,8 +437,8 @@ function row(item, index) {
   remove.title = '候補を削除';
   remove.addEventListener('click', () => {
     if (activeInlineClose === close) closeInlinePreview();
-    state.candidates = state.candidates.filter(x => x !== item);
-    drawResults();
+    source.candidates = source.candidates.filter(x => x !== item);
+    syncSources();
   });
   wrap.append(enabled, play, fields, remove);
   entry.append(wrap, inline);
@@ -444,18 +446,38 @@ function row(item, index) {
   return entry;
 }
 function refreshComment() {
-  $('commentText').value = makeComment(state.candidates);
   const selected = state.candidates.filter(item => item.enabled);
+  const isMulti = state.sources.length > 1;
+  const clipPlan = buildMultiClipPlan(state.sources, Number($('clipDuration').value));
+  $('commentText').value = isMulti
+    ? montageChapters(clipPlan, $('montageTitle').value)
+    : makeComment(state.candidates);
   $('selectedCount').textContent = String(selected.length);
   const summary = $('selectedSummary');
-  summary.replaceChildren(...selected.map((item, i) => make('span', 'selected-chip',
-    String(i + 1) + '. ' + formatTime(item.time) + ' ' + (item.title || 'Highlight'))));
+  summary.replaceChildren(...selected.map((item,i)=>{
+    const src = state.sources.find(s => s.id === item.sourceId);
+    return make('span','selected-chip', String(i+1) + '. ' +
+      (isMulti ? src?.file.name + ' · ' : '') +
+      formatTime(item.time) + ' ' + (item.title || 'Highlight'));
+  }));
   summary.hidden = selected.length === 0;
   updateMontageEditor(state);
 }
 function drawResults() {
   closeInlinePreview();
-  $('highlightList').replaceChildren(...state.candidates.map(row));
+  const elements = [];
+  let pos = 0;
+  for (const source of state.sources) {
+    if (!source.bins) continue;
+    const heading = make('div','source-scenes-header');
+    heading.append(
+      make('strong','',source.file.name),
+      make('small','',source.candidates.length + '件の候補')
+    );
+    elements.push(heading);
+    for (const candidate of source.candidates) elements.push(row(candidate, pos++));
+  }
+  $('highlightList').replaceChildren(...elements);
   $('resultCount').textContent = String(state.candidates.length);
   $('emptyResults').hidden = state.candidates.length > 0;
   $('waveEnd').textContent = formatTime(state.duration);
@@ -488,7 +510,8 @@ function drawWave() {
     context.lineTo(x,height/2+h); context.stroke();
   }
   for (const item of state.candidates) {
-    const x = item.peakSeconds / Math.max(1,state.duration) * width;
+    const source = state.sources.find(s => s.id === item.sourceId);
+    const x = ((source?.offset || 0) + item.peakSeconds) / Math.max(1,state.duration) * width;
     context.strokeStyle = '#ffb773';
     context.lineWidth = 2;
     context.beginPath(); context.moveTo(x,7); context.lineTo(x,height-7); context.stroke();
@@ -498,9 +521,24 @@ window.addEventListener('resize', () => { if (state.bins) requestAnimationFrame(
 $('waveCanvas').addEventListener('click', e => {
   if (!state.bins) return;
   const r = $('waveCanvas').getBoundingClientRect();
-  $('preview').currentTime = Math.max(0, Math.min(state.duration,
+  const offsetSeconds = Math.max(0, Math.min(state.duration,
     (e.clientX - r.left) / r.width * state.duration));
-  $('preview').scrollIntoView({ behavior: 'smooth', block:'center' });
+  const source = [...state.sources].reverse().find(s =>
+    s.bins && s.offset <= offsetSeconds);
+  if (!source) return;
+  const localTime = Math.min(source.duration, Math.max(0, offsetSeconds - source.offset));
+  const closest = source.candidates.reduce((best,item) =>
+    !best || Math.abs(item.time - localTime) < Math.abs(best.time - localTime) ? item : best, null);
+  if (!closest) return;
+  const idx = source.candidates.indexOf(closest);
+  const entries = [...$('highlightList').querySelectorAll('.highlight-entry')];
+  const allSources = state.sources.filter(s => s.bins);
+  const preceding = allSources.slice(0,allSources.indexOf(source))
+    .reduce((n,s)=>n+s.candidates.length,0);
+  entries[preceding + idx]?.querySelector('.play-btn')?.click();
+});
+window.addEventListener('montage-settings-changed', () => {
+  if (state.bins) refreshComment();
 });
 $('copyButton').addEventListener('click', async () => {
   const comment = $('commentText').value;
