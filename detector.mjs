@@ -63,7 +63,7 @@ export function detectHighlights(bins, options = {}) {
       ...event,
       time: Math.max(0, Math.floor(event.peakSeconds - leadSeconds)),
       id: 'peak-' + Math.round(event.peakSeconds * 1000),
-      enabled: true,
+      enabled: false,
       title: '🔥 盛り上がりシーン',
     });
   }
