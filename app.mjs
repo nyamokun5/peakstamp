@@ -1,6 +1,6 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=multi2';
-import { buildMultiClipPlan, montageChapters } from './multi-plan.mjs?v=multi2';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=edit3';
 
 const $ = id => document.getElementById(id);
 const make = (tag, cls, text) => {
@@ -61,8 +61,7 @@ function syncSources() {
   $('resultsPanel').hidden = !state.bins;
   $('multiWaveNotice').hidden = state.sources.length <= 1;
   $('commentHelp').hidden = state.sources.length <= 1;
-  $('commentHeading').textContent = state.sources.length <= 1
-    ? 'YouTubeコメント用' : '完成した結合動画のチャプター用';
+  $('commentHeading').textContent = '動画ごとのYouTubeタイムスタンプ';
   if (state.bins) drawResults();
   else updateMontageEditor(state);
   renderSourceList();
@@ -308,10 +307,15 @@ function rebuild() {
   if (!state.sources.some(s => s.bins)) return;
   for (const source of state.sources) {
     if (!source.bins) continue;
+    const earlier=new Map(source.candidates.map(c=>[c.id,c]));
     source.candidates = detectHighlights(source.bins, {
       sensitivity: state.sensitivity, leadSeconds: state.leadSeconds,
       maxResults: state.maxResults, binSeconds: STEP
-    }).map(item => ({ ...item, sourceId: source.id }));
+    }).map(item => {
+      const old=earlier.get(item.id);
+      return { ...item, sourceId: source.id,
+        enabled: old?.enabled ?? false, title: old?.title || item.title };
+    });
   }
   syncSources();
 }
@@ -350,20 +354,25 @@ function row(item, index) {
   const wrap = make('div','highlight-item');
   const inline = make('div', 'inline-preview');
   inline.hidden = true;
-  const badge = make('span', 'selection-label', item.enabled ? '採用' : '除外');
+  const badge = make('span', 'selection-label', item.enabled ? 'キープ済み' : '未選択');
   const number = make('span', 'scene-number', String(index + 1).padStart(2, '0'));
   const applySelection = () => {
     entry.classList.toggle('is-selected', !!item.enabled);
     entry.classList.toggle('is-excluded', !item.enabled);
-    badge.textContent = item.enabled ? '採用' : '除外';
+    badge.textContent = item.enabled ? 'キープ済み' : '未選択';
     badge.classList.toggle('excluded', !item.enabled);
   };
-  const enabled = make('input','highlight-checkbox');
-  enabled.type = 'checkbox';
-  enabled.checked = item.enabled;
-  enabled.setAttribute('aria-label', 'シーン ' + (index + 1) + ' を採用');
-  enabled.addEventListener('change', () => {
-    item.enabled = enabled.checked;
+  const enabled = make('button','keep-btn');
+  enabled.type='button';
+  const updateKeep=()=>{
+    enabled.textContent=item.enabled ? '✓ キープ済み' : '＋ キープする';
+    enabled.classList.toggle('kept',!!item.enabled);
+    enabled.setAttribute('aria-pressed',String(!!item.enabled));
+  };
+  updateKeep();
+  enabled.addEventListener('click', () => {
+    item.enabled = !item.enabled;
+    updateKeep();
     applySelection();
     refreshComment();
   });
@@ -440,18 +449,17 @@ function row(item, index) {
     source.candidates = source.candidates.filter(x => x !== item);
     syncSources();
   });
-  wrap.append(enabled, play, fields, remove);
-  entry.append(wrap, inline);
+  wrap.append(play, fields, remove);
+  entry.append(wrap, enabled);
+  entry.append(inline);
   applySelection();
   return entry;
 }
 function refreshComment() {
   const selected = state.candidates.filter(item => item.enabled);
   const isMulti = state.sources.length > 1;
-  const clipPlan = buildMultiClipPlan(state.sources, Number($('clipDuration').value));
-  $('commentText').value = isMulti
-    ? montageChapters(clipPlan, $('montageTitle').value)
-    : makeComment(state.candidates);
+  const perSource=sourceTimestampComments(state.sources);
+  $('commentText').value = perSource.filter(x=>x.text).map(x=>x.text).join('\n\n');
   $('selectedCount').textContent = String(selected.length);
   const summary = $('selectedSummary');
   summary.replaceChildren(...selected.map((item,i)=>{
@@ -470,10 +478,20 @@ function drawResults() {
   for (const source of state.sources) {
     if (!source.bins) continue;
     const heading = make('div','source-scenes-header');
-    heading.append(
-      make('strong','',source.file.name),
-      make('small','',source.candidates.length + '件の候補')
-    );
+    const headTitle=make('div','source-scenes-name');
+    headTitle.append(make('strong','',source.file.name),
+      make('small','',source.candidates.length+'件の候補'));
+    const copy=make('button','source-copy','この動画の時刻をコピー');
+    copy.type='button';
+    copy.addEventListener('click', async()=>{
+      const current=sourceTimestampComments([source])[0];
+      if(!current?.text){
+        copy.textContent='キープした候補がありません'; return;
+      }
+      try { await navigator.clipboard.writeText(current.text); copy.textContent='✓ コピーしました'; }
+      catch { $('commentText').value=current.text; $('commentText').focus();$('commentText').select();copy.textContent='下のテキストをコピー'; }
+    });
+    heading.append(headTitle,copy);
     elements.push(heading);
     for (const candidate of source.candidates) elements.push(row(candidate, pos++));
   }
