@@ -1,8 +1,35 @@
-import { montageSeconds, exportMontage } from './exporter.mjs?v=multi2';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=multi2';
+import { montageSeconds, exportMontage } from './exporter.mjs?v=edit3';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=edit3';
 import { formatTime } from './detector.mjs';
 
 const $ = id => document.getElementById(id);
+function clipOptions() {
+  return {
+    mode: document.querySelector('input[name="cutMode"]:checked')?.value || 'quiet',
+    fixedSeconds: Number($('clipDuration').value),
+    tailSeconds: Number($('tailSeconds').value),
+  };
+}
+function updateTitlePreview() {
+  const label = document.querySelector('.montage-title-preview strong');
+  if (!label) return;
+  label.textContent = $('montageTitle').value || 'GOALS!';
+  const fonts = {
+    impact: 'Impact, "Arial Black", sans-serif',
+    modern: '"Helvetica Neue", Arial, sans-serif',
+    serif: 'Georgia, "Times New Roman", serif',
+    mono: '"Courier New", monospace',
+  };
+  label.style.fontFamily = fonts[$('titleFont').value] || fonts.impact;
+  label.style.fontSize = 'clamp(16px, ' + (Number($('titleSize').value) * .06) + 'vw, ' +
+    (Number($('titleSize').value) * .43) + 'px)';
+}
+function settingChanged() {
+  if (!working) revokeOutput();
+  updateMontageEditor(activeState);
+  window.dispatchEvent(new Event('montage-settings-changed'));
+}
+
 let lastFile = null;
 let lastUrl = null;
 let lastBlob = null;
@@ -46,13 +73,11 @@ function setWorking(value) {
 }
 function setTitle(value) {
   $('montageTitle').value = value;
-  const preview = document.querySelector('.montage-title-preview strong');
-  if (preview) preview.textContent = value || 'GOALS!';
+  updateTitlePreview();
   for (const button of document.querySelectorAll('[data-montage-title]')) {
     button.classList.toggle('active', button.dataset.montageTitle === value);
   }
-  if (!working) revokeOutput();
-  window.dispatchEvent(new Event('montage-settings-changed'));
+  settingChanged();
 }
 
 export function updateMontageEditor(state) {
@@ -62,7 +87,7 @@ export function updateMontageEditor(state) {
   if (lastFile && state.file !== lastFile) revokeOutput();
   lastFile = state?.file || null;
   if (!visible) return;
-  const plan = buildMultiClipPlan(state.sources, Number($('clipDuration').value));
+  const plan = buildMultiClipPlan(state.sources, clipOptions());
   $('montageSelected').textContent = plan.length + 'シーンを結合';
   $('montageLength').textContent = '完成：約' + formatTime(Math.ceil(montageSeconds(plan)));
   $('montageExport').disabled = working || !plan.length;
@@ -76,8 +101,21 @@ export function initMontageEditor(state) {
   activeState = state;
   $('clipDuration').addEventListener('input', () => {
     $('clipDurationValue').textContent = $('clipDuration').value + '秒';
-    updateMontageEditor(activeState);
-    window.dispatchEvent(new Event('montage-settings-changed'));
+    settingChanged();
+  });
+  $('tailSeconds').addEventListener('input', () => {
+    $('tailSecondsValue').textContent = $('tailSeconds').value + '秒';
+    settingChanged();
+  });
+  $('titleSize').addEventListener('input', () => {
+    $('titleSizeValue').textContent = $('titleSize').value + '%';
+    updateTitlePreview(); settingChanged();
+  });
+  $('titleFont').addEventListener('change', () => {
+    updateTitlePreview(); settingChanged();
+  });
+  document.querySelectorAll('input[name="cutMode"]').forEach(radio => {
+    radio.addEventListener('change', settingChanged);
   });
   $('montageTitle').addEventListener('input', () => setTitle($('montageTitle').value));
   for (const button of document.querySelectorAll('[data-montage-title]')) {
@@ -122,7 +160,7 @@ export function initMontageEditor(state) {
   });
   $('montageExport').addEventListener('click', async () => {
     if (working || !activeState?.file) return;
-    const plan = buildMultiClipPlan(activeState.sources, Number($('clipDuration').value));
+    const plan = buildMultiClipPlan(activeState.sources, clipOptions());
     if (!plan.length) {
       displayError('まずシーンにチェックを入れてください。');
       return;
@@ -142,6 +180,7 @@ export function initMontageEditor(state) {
       const blob = await exportMontage({
         file, sources: activeState.sources, plan, quality,
         title: $('montageTitle').value || 'GOALS!',
+        font: $('titleFont').value, titleSize: Number($('titleSize').value),
         isCancelled: () => cancelRequested,
         onProgress: notify,
       });
@@ -172,9 +211,10 @@ export function initMontageEditor(state) {
         + '。最初は標準720p・30秒程度の動画でお試しください。');
     } finally {
       setWorking(false);
-      const planAfter = buildMultiClipPlan(activeState?.sources || [], Number($('clipDuration').value));
+      const planAfter = buildMultiClipPlan(activeState?.sources || [], clipOptions());
       $('montageExport').disabled = !planAfter.length;
     }
   });
+  updateTitlePreview();
   updateMontageEditor(state);
 }
