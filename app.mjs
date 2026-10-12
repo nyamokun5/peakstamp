@@ -697,7 +697,7 @@ function drawResults() {
       try { await navigator.clipboard.writeText(current.text); copy.textContent='✓ コピーしました'; }
       catch { $('commentText').value=current.text; $('commentText').focus();$('commentText').select();copy.textContent='下のテキストをコピー'; }
     });
-    const visible=source.candidates.filter(candidate=>reviewTab==='all' || candidate.enabled);
+    const visible=source.candidates.filter(candidate=>candidate.rejected!==true && (reviewTab==='all' || candidate.enabled===true));
     if (visible.length === 0) { pos += source.candidates.length; continue; }
     headTitle.querySelector('small').textContent=visible.length+'件を表示';
     heading.append(headTitle,copy);
@@ -706,16 +706,20 @@ function drawResults() {
   }
   $('highlightList').replaceChildren(...elements);
   const keptCount=state.candidates.filter(x=>x.enabled).length;
-  $('tabAllCount').textContent=String(state.candidates.length);
+  const acceptedCount=state.candidates.filter(x=>x.rejected!==true).length;
+  $('tabAllCount').textContent=String(acceptedCount);
   $('tabKeptCount').textContent=String(keptCount);
   $('reviewEmpty').hidden=reviewTab!=='kept' || keptCount>0;
+  if(reviewTab==='all' && acceptedCount===0 && state.candidates.length>0){
+    $('reviewProgress').textContent='候補はすべて不採用です。「元に戻す」で直前の候補を復活できます。';
+  }
   document.querySelectorAll('[data-review-tab]').forEach(button=>{
     const selected=button.dataset.reviewTab===reviewTab;
     button.classList.toggle('active',selected);
     button.setAttribute('aria-pressed',String(selected));
   });
   $('resultCount').textContent = String(state.candidates.length);
-  $('emptyResults').hidden = state.candidates.length > 0;
+  $('emptyResults').hidden = state.candidates.length > 0 || state.candidates.some(x=>x.rejected===true);
   $('waveEnd').textContent = formatTime(state.duration);
   refreshComment();
   requestAnimationFrame(drawWave);
