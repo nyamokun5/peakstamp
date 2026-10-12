@@ -130,3 +130,23 @@ footer{text-align:center;color:#7995a8;display:flex;align-items:center;flex-dire
  .source-control{min-width:24px}
  .file-details{gap:6px}
 }
+
+
+/* PeakStamp edit 3 — explicit keep, typography and audio-aware trims */
+.highlight-entry{padding-bottom:9px}
+.keep-btn{display:flex;align-items:center;justify-content:center;width:calc(100% - 22px);margin:0 11px 8px;padding:10px;border:1px solid #637586;border-radius:9px;background:#213344;color:#d1e0e7;font-size:12px;font-weight:800}
+.keep-btn.kept{background:#215d4d;border:1px solid #87f0bb;color:#e6ffed}
+.highlight-entry.is-selected{border-color:#7df0b9;box-shadow:inset 4px 0 0 #52d99a}
+.highlight-entry.is-excluded{opacity:1;box-shadow:none;border-color:#365367}
+.highlight-entry.is-excluded .selection-label{background:#33414c;color:#b2c2cc}
+.source-scenes-name{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+.source-scenes-name strong{overflow-wrap:anywhere}
+.source-copy{background:#1e5654;color:#a9f7e8;border:1px solid #52948b;border-radius:8px;padding:9px 7px;font-size:11px;max-width:170px}
+.montage-typography{margin-top:16px;border:1px solid #486275;border-radius:12px;padding:10px 12px 15px}
+.montage-typography select{background:#143249;color:#fff;border:1px solid #618296;padding:11px;width:100%;border-radius:9px;font-size:13px}
+.montage-typography input[type=range]{width:100%;accent-color:var(--mint);margin:15px 0 1px}
+.montage-cut-mode{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px}
+.montage-cut-mode label{display:flex;align-items:center;gap:6px;border-radius:9px;border:1px solid #4c6a7d;background:#152f44;padding:10px 8px;font-size:11px;font-weight:750}
+.montage-cut-mode label:has(input:checked){border-color:#7de3c8;background:#24514e}
+.montage-cut-mode input{accent-color:var(--mint)}
+.montage-title-preview strong{white-space:normal;overflow-wrap:anywhere;text-align:center;max-width:96%;font-family:Impact, "Arial Black",sans-serif}
