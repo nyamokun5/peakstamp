@@ -84,11 +84,11 @@
         <div id="selectedSummary" class="selected-summary" hidden></div>
       </div>
       <div class="review-tabs" role="group" aria-label="シーンの表示切り替え">
-        <button id="tabAll" type="button" class="review-tab active" data-review-tab="all" aria-pressed="true">すべての候補 <span id="tabAllCount">0</span></button>
+        <button id="tabAll" type="button" class="review-tab active" data-review-tab="all" aria-pressed="true">未判断 <span id="tabAllCount">0</span></button>
         <button id="tabKept" type="button" class="review-tab" data-review-tab="kept" aria-pressed="false">キープ済み <span id="tabKeptCount">0</span></button>
       </div>
       <p id="reviewProgress" class="review-progress" role="status" aria-live="polite"></p>
-      <p id="reviewEmpty" class="empty-results" hidden>キープしたシーンはまだありません。「すべての候補」から選んでください。</p>
+      <p id="reviewEmpty" class="empty-results" hidden>キープしたシーンはまだありません。「未判断」タブから選んでください。</p>
       <div id="highlightList" class="highlight-list"></div>
       <div class="comment-section">
         <div class="comment-heading"><strong id="commentHeading">YouTubeコメント用</strong><span>そのまま貼り付け</span></div>
@@ -170,6 +170,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=review6"></script>
+  <script type="module" src="app.mjs?v=keep7"></script>
 </body>
 </html>
