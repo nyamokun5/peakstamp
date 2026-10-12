@@ -1,3 +1,4 @@
+import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES } from './editing-rules.mjs';
 /**
  * PeakStamp: automatic highlight montage with a 5-second title card.
  * Only processes an explicitly selected local file, never uploads it.
@@ -46,23 +47,25 @@ export function buildClipPlan(candidates, duration, seconds = 16) {
 }
 
 export function montageSeconds(plan) {
-  return INTRO_SECONDS + plan.reduce((n, clip) => n + (clip.end - clip.start), 0);
+  return Math.max(INTRO_SECONDS,INTRO_SECONDS + plan.reduce((n, clip) => n + (clip.end - clip.start), 0) - dissolveOverlap(plan,FRAME_RATE));
 }
 
 /** Make the only intro content a word/title: GOALS!, HIGHLIGHTS!, etc. */
-export function drawIntro(context, width, height, title) {
+export function drawIntro(context, width, height, title, options = {}) {
   const gradient = context.createLinearGradient(0, 0, width, height);
   gradient.addColorStop(0, '#081526');
   gradient.addColorStop(1, '#193b57');
   context.fillStyle = gradient;
   context.fillRect(0, 0, width, height);
   const label = String(title || 'GOALS!').trim().slice(0, 32) || 'GOALS!';
-  let font = Math.floor(Math.min(height * 0.23, width * 0.135));
+  const family = FONT_CHOICES[normalizeFont(options.font)];
+  let font = Math.floor(Math.min(height * .23, width * .135) *
+    normalizeSize(options.size) / 100);
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   do {
-    context.font = '900 ' + font + 'px Arial, Helvetica, sans-serif';
-    if (context.measureText(label).width <= width * 0.9 || font <= 18) break;
+    context.font = family.weight + ' ' + font + 'px ' + family.family;
+    if (context.measureText(label).width <= width * .9 || font <= 18) break;
     font -= 3;
   } while (font > 18);
   context.fillStyle = '#ffffff';
@@ -76,7 +79,7 @@ const FRAME_SOURCE = 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.3/dist/bundle
  * iPhone support is codec/OS dependent; failure is reported, not hidden.
  */
 export async function exportMontage({
-  file, sources, plan, title = 'GOALS!', quality = 'high',
+  file, sources, plan, title = 'GOALS!', quality = 'high', font = 'impact', titleSize = 100,
   onProgress = () => {}, isCancelled = () => false,
 }) {
   if (!plan?.length) throw new Error('切り抜く場面を選んでください。');
@@ -149,7 +152,7 @@ export async function exportMontage({
     output.addAudioTrack(audioSource);
     await output.start();
     onProgress('冒頭5秒のタイトルを作成中', 2);
-    drawIntro(context, width, height, title);
+    drawIntro(context, width, height, title, { font, size: titleSize });
     await videoSource.add(0, INTRO_SECONDS, { keyFrame: true });
 
     const totalFrames = clips.reduce((n, c) => n +
@@ -157,6 +160,7 @@ export async function exportMontage({
     let done = 0;
     let timeline = INTRO_SECONDS;
     let loadedSourceId = clips[0].sourceId;
+    let pendingTail = [];
     let videoSink = new VideoSampleSink(opened.videoTrack);
     let audioSink = new AudioSampleSink(opened.audioTrack);
 
@@ -172,6 +176,15 @@ export async function exportMontage({
         audioSink = new AudioSampleSink(opened.audioTrack);
       }
       const clipFrames = Math.ceil((clip.end - clip.start) * settings.frameRate);
+      const nextClip = clips[section + 1];
+      const nextFrames = nextClip ? Math.ceil((nextClip.end - nextClip.start) * settings.frameRate) : 0;
+      // Cross-dissolve exactly 9 video frames at 30fps between adjacent clips.
+      // With very short clips, bound the overlap to prevent negative durations.
+      const outgoingFrames = nextClip ? Math.min(dissolveFrames(settings.frameRate),
+        Math.floor(clipFrames / 3), Math.floor(nextFrames / 3)) : 0;
+      const incomingFrames = pendingTail.length;
+      const previousTail = pendingTail;
+      const nextTail = [];
       const clipStart = timeline;
       const stamps = Array.from({ length: clipFrames }, (_, i) =>
         Math.min(clip.end - 0.001, clip.start + i / settings.frameRate));
@@ -187,12 +200,31 @@ export async function exportMontage({
         check();
         if (!sample) throw new Error('「' + opened.name + '」の映像フレームを読み込めませんでした。');
         try {
+          context.globalAlpha = 1;
           context.fillStyle = '#000000';
           context.fillRect(0, 0, width, height);
-          sample.draw(context, dx, dy, dw, dh);
-          await videoSource.add(clipStart + frame / settings.frameRate,
-            1 / settings.frameRate, { keyFrame: frame === 0 });
-        } finally { sample.close(); }
+          if (frame < incomingFrames) {
+            context.drawImage(previousTail[frame], 0, 0, width, height);
+            context.globalAlpha = (frame + 1) / (incomingFrames + 1);
+            sample.draw(context, dx, dy, dw, dh);
+            context.globalAlpha = 1;
+            previousTail[frame].close();
+            previousTail[frame] = null;
+          } else {
+            sample.draw(context, dx, dy, dw, dh);
+          }
+          if (frame >= clipFrames - outgoingFrames) {
+            // Retain last few source frames to blend with the next clip.
+            // No output is written yet; the next clip will emit the mixed frames.
+            nextTail.push(await createImageBitmap(canvas));
+          } else {
+            await videoSource.add(clipStart + frame / settings.frameRate,
+              1 / settings.frameRate, { keyFrame: frame === 0 });
+          }
+        } finally {
+          sample.close();
+          context.globalAlpha = 1;
+        }
         frame++;
         done++;
         if (frame % 15 === 0) {
@@ -201,11 +233,14 @@ export async function exportMontage({
           await new Promise(resolve => setTimeout(resolve, 0));
         }
       }
+      for (const image of previousTail) image?.close();
       if (frame !== clipFrames) throw new Error('映像フレーム数が不足しています。');
+      pendingTail = nextTail;
 
       // Trim each clip's audio to its local interval and shift into montage time.
       // A new sink is used whenever the source changes; this avoids cross-file offsets.
       const first = await audioSink.getSample(clip.start);
+      const audioEnd = Math.min(clip.end,clip.start + (clipFrames - outgoingFrames) / settings.frameRate);
       const samples = (async function* () {
         if (first && first.timestamp < clip.start &&
             first.timestamp + first.duration > clip.start) {
@@ -213,7 +248,7 @@ export async function exportMontage({
         } else if (first) {
           first.close();
         }
-        for await (const sample of audioSink.samples(clip.start, clip.end)) yield sample;
+        for await (const sample of audioSink.samples(clip.start, audioEnd)) yield sample;
       })();
       for await (const sample of samples) {
         check();
@@ -223,16 +258,17 @@ export async function exportMontage({
           const from = Math.max(0, Math.min(sample.numberOfFrames,
             Math.ceil((clip.start - sample.timestamp) * rate)));
           const to = Math.max(from, Math.min(sample.numberOfFrames,
-            Math.floor((clip.end - sample.timestamp) * rate)));
+            Math.floor((audioEnd - sample.timestamp) * rate)));
           if (to <= from) continue;
           cut = sample.trim(from, to);
           cut.setTimestamp(clipStart + Math.max(0, cut.timestamp - clip.start));
           await audioSource.add(cut);
         } finally { cut?.close(); sample.close(); }
       }
-      timeline += clipFrames / settings.frameRate;
+      timeline += (clipFrames - outgoingFrames) / settings.frameRate;
     }
 
+    for (const image of pendingTail) image?.close();
     check();
     videoSource.close();
     audioSource.close();
