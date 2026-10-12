@@ -126,6 +126,7 @@ export async function exportMontage({
   };
 
   let output = null, finalized = false, opened = null;
+  const liveBitmaps = new Set();
   try {
     // Use the first clip to select output aspect ratio; other ratios get letterboxed.
     opened = await openSource(clips[0].sourceId);
@@ -219,6 +220,7 @@ export async function exportMontage({
             context.drawImage(incomingCanvas, 0, 0, width, height);
             context.globalAlpha = 1;
             previousTail[frame].close();
+            liveBitmaps.delete(previousTail[frame]);
             previousTail[frame] = null;
           } else {
             sample.draw(context, dx, dy, dw, dh);
@@ -226,7 +228,9 @@ export async function exportMontage({
           if (frame >= clipFrames - outgoingFrames) {
             // Retain last few source frames to blend with the next clip.
             // No output is written yet; the next clip will emit the mixed frames.
-            nextTail.push(await createImageBitmap(canvas));
+            const frameBitmap = await createImageBitmap(canvas);
+            liveBitmaps.add(frameBitmap);
+            nextTail.push(frameBitmap);
           } else {
             await videoSource.add(clipStart + frame / settings.frameRate,
               1 / settings.frameRate, { keyFrame: frame === 0 });
@@ -243,7 +247,9 @@ export async function exportMontage({
           await new Promise(resolve => setTimeout(resolve, 0));
         }
       }
-      for (const image of previousTail) image?.close();
+      for (const image of previousTail) {
+        if (image) { image.close(); liveBitmaps.delete(image); }
+      }
       if (frame !== clipFrames) throw new Error('映像フレーム数が不足しています。');
       pendingTail = nextTail;
 
@@ -278,7 +284,9 @@ export async function exportMontage({
       timeline += (clipFrames - outgoingFrames) / settings.frameRate;
     }
 
-    for (const image of pendingTail) image?.close();
+    for (const image of pendingTail) {
+      if (image) { image.close(); liveBitmaps.delete(image); }
+    }
     check();
     videoSource.close();
     audioSource.close();
@@ -294,6 +302,8 @@ export async function exportMontage({
     }
     throw error;
   } finally {
+    for (const image of liveBitmaps) image.close();
+    liveBitmaps.clear();
     opened?.input.dispose();
   }
 }
