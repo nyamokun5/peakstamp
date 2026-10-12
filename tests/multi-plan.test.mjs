@@ -25,8 +25,8 @@ test('reordering sources changes final playback order', () => {
 });
 test('each file has independent overlap merging and duration cap', () => {
   const plan=buildMultiClipPlan([
-    file('A','A.mov',25,[{time:10},{time:14}]),
-    file('B','B.mov',12,[{time:9}]),
+    file('A','A.mov',25,[{time:10,enabled:true},{time:14,enabled:true}]),
+    file('B','B.mov',12,[{time:9,enabled:true}]),
   ],8);
   assert.deepEqual(plan,[
     {sourceId:'A',sourceName:'A.mov',start:10,end:22},
@@ -45,7 +45,7 @@ test('generated video chapters account for 5-second title and selected clips', (
     file('B','B.mov',30,[{time:10,enabled:true}]),
   ],8);
   assert.equal(montageChapters(plan,'GOALS!'),
-    '0:00 GOALS!\n00:05 Highlight 1 — A.mov\n00:13 Highlight 2 — B.mov');
+    '0:00 GOALS!\n00:05 Highlight 1 — A.mov\n00:12 Highlight 2 — B.mov');
 });
 test('empty selection returns empty chapter text',()=>{
   assert.equal(montageChapters([], 'GOALS!'),'');
