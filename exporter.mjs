@@ -3,7 +3,25 @@
  * Only processes an explicitly selected local file, never uploads it.
  */
 export const INTRO_SECONDS = 5;
-export const FRAME_RATE = 15;
+export const FRAME_RATE = 30;
+
+/** Preserve the source aspect ratio and never upscale low-resolution video. */
+export function getExportSettings(sourceWidth, sourceHeight, preset = 'high') {
+  if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 0 || sourceHeight <= 0) {
+    throw new Error('映像サイズを取得できません。');
+  }
+  const high = preset !== 'standard';
+  const boundWidth = high ? 1920 : 1280;
+  const boundHeight = high ? 1080 : 720;
+  const ratio = Math.min(1, boundWidth / sourceWidth, boundHeight / sourceHeight);
+  return {
+    width: Math.max(2, Math.floor(sourceWidth * ratio / 2) * 2),
+    height: Math.max(2, Math.floor(sourceHeight * ratio / 2) * 2),
+    frameRate: FRAME_RATE,
+    bitrate: high ? 10000000 : 4500000,
+  };
+}
+
 
 /** Return sorted, nonoverlapping intervals from the candidates the user checked. */
 export function buildClipPlan(candidates, duration, seconds = 16) {
@@ -54,10 +72,10 @@ export function drawIntro(context, width, height, title) {
 const FRAME_SOURCE = 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.3/dist/bundles/mediabunny.min.mjs';
 
 /**
- * Re-encode 720p-or-smaller MP4 (AVC/AAC) entirely within the browser.
+ * Re-encode up to 1080p MP4 (AVC/AAC) entirely within the browser.
  * iPhone support is codec/OS dependent; failure is reported, not hidden.
  */
-export async function exportMontage({ file, plan, title = 'GOALS!', onProgress = () => {}, isCancelled = () => false }) {
+export async function exportMontage({ file, plan, title = 'GOALS!', quality = 'high', onProgress = () => {}, isCancelled = () => false }) {
   if (!file || !plan?.length) throw new Error('動画と切り抜く場面を選んでください。');
   if (!globalThis.VideoEncoder || !globalThis.VideoDecoder) {
     throw new Error('このブラウザは動画の書き出しに必要なWebCodecsに対応していません。');
@@ -79,9 +97,9 @@ export async function exportMontage({ file, plan, title = 'GOALS!', onProgress =
     const sourceWidth = await videoTrack.getDisplayWidth();
     const sourceHeight = await videoTrack.getDisplayHeight();
     if (!(sourceWidth > 0 && sourceHeight > 0)) throw new Error('映像サイズを取得できません。');
-    const ratio = Math.min(1, 960 / sourceWidth, 540 / sourceHeight);
-    const width = Math.max(2, Math.round(sourceWidth * ratio / 2) * 2);
-    const height = Math.max(2, Math.round(sourceHeight * ratio / 2) * 2);
+    const settings = getExportSettings(sourceWidth, sourceHeight, quality);
+    const { width, height } = settings;
+    onProgress('出力設定：' + width + '×' + height + '・' + settings.frameRate + 'fps', 1);
     const canvas = document.createElement('canvas');
     canvas.width = width; canvas.height = height;
     const context = canvas.getContext('2d', { alpha: false });
@@ -90,8 +108,8 @@ export async function exportMontage({ file, plan, title = 'GOALS!', onProgress =
     const target = new BufferTarget();
     output = new Output({ format: new Mp4OutputFormat(), target });
     const videoSource = new CanvasSource(canvas,
-      { codec: 'avc', bitrate: 2400000, keyFrameInterval: 2 });
-    output.addVideoTrack(videoSource, { frameRate: FRAME_RATE });
+      { codec: 'avc', bitrate: settings.bitrate, keyFrameInterval: 2 });
+    output.addVideoTrack(videoSource, { frameRate: settings.frameRate });
     const audioSource = audioTrack ? new AudioSampleSource({ codec: 'aac', bitrate: 128000 }) : null;
     if (audioSource) output.addAudioTrack(audioSource);
     await output.start();
