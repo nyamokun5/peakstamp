@@ -14,6 +14,8 @@ const state = {
   working: false, cancelled: false
 };
 const STEP = .25;
+let activeInlineClose = null;
+function closeInlinePreview() { if (activeInlineClose) { const fn = activeInlineClose; activeInlineClose = null; fn(); } }
 function error(id, message) {
   $(id).textContent = message;
   $(id).hidden = !message;
@@ -35,6 +37,7 @@ function busy(value) {
 }
 function chooseFile(file) {
   if (!file || state.working) return;
+  closeInlinePreview();
   state.cancelled = true;
   const video = $('preview');
   video.pause();
@@ -222,31 +225,75 @@ function parseTime(value) {
       parts.slice(1).some(n => n > 59)) return null;
   return parts.reduce((s,n) => s * 60 + n, 0);
 }
-function row(item) {
+function row(item, index) {
+  const entry = make('div', 'highlight-entry');
   const wrap = make('div','highlight-item');
-  if (!item.enabled) wrap.classList.add('disabled');
+  const inline = make('div', 'inline-preview');
+  inline.hidden = true;
+  const badge = make('span', 'selection-label', item.enabled ? '採用' : '除外');
+  const number = make('span', 'scene-number', String(index + 1).padStart(2, '0'));
+  const applySelection = () => {
+    entry.classList.toggle('is-selected', !!item.enabled);
+    entry.classList.toggle('is-excluded', !item.enabled);
+    badge.textContent = item.enabled ? '採用' : '除外';
+    badge.classList.toggle('excluded', !item.enabled);
+  };
   const enabled = make('input','highlight-checkbox');
   enabled.type = 'checkbox';
   enabled.checked = item.enabled;
-  enabled.setAttribute('aria-label', formatTime(item.time) + ' を含める');
+  enabled.setAttribute('aria-label', 'シーン ' + (index + 1) + ' を採用');
   enabled.addEventListener('change', () => {
     item.enabled = enabled.checked;
-    wrap.classList.toggle('disabled', !item.enabled);
+    applySelection();
     refreshComment();
   });
-  const play = make('button','play-btn','▶');
-  play.type = 'button'; play.title = 'ここから再生';
+  const play = make('button','play-btn','▶ 確認');
+  play.type = 'button';
+  play.title = 'この場面を下に表示して再生';
+  const close = () => {
+    const media = inline.querySelector('video');
+    if (media) {
+      media.pause();
+      media.removeAttribute('src');
+      media.load();
+    }
+    inline.replaceChildren();
+    inline.hidden = true;
+    play.textContent = '▶ 確認';
+    entry.classList.remove('preview-active');
+  };
   play.addEventListener('click', () => {
-    const video = $('preview');
-    video.currentTime = item.time;
-    video.play().catch(() => {});
-    video.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (activeInlineClose === close) {
+      closeInlinePreview();
+      return;
+    }
+    closeInlinePreview();
+    $('preview').pause();
+    const video = document.createElement('video');
+    video.className = 'inline-player';
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.src = state.objectUrl;
+    const label = make('p', 'inline-caption', 'シーン ' + (index + 1) + '｜' + formatTime(item.time) + ' から再生（終わったら下の一覧で次を選べます）');
+    inline.replaceChildren(label, video);
+    inline.hidden = false;
+    entry.classList.add('preview-active');
+    play.textContent = '× 閉じる';
+    activeInlineClose = close;
+    video.addEventListener('loadedmetadata', () => {
+      video.currentTime = Math.max(0, Math.min(item.time, video.duration || item.time));
+      video.play().catch(() => { /* Safari may require a second tap */ });
+    }, { once: true });
+    video.load();
+    inline.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
   const fields = make('div','item-fields');
   const timeRow = make('div','time-row');
   const time = make('input','time-input');
-  time.type = 'text'; time.value = formatTime(item.time);
-  time.setAttribute('aria-label', 'タイムスタンプ');
+  time.type = 'text';
+  time.value = formatTime(item.time);
+  time.setAttribute('aria-label','タイムスタンプ');
   time.addEventListener('change', () => {
     const seconds = parseTime(time.value);
     if (seconds === null || seconds > state.duration) {
@@ -256,24 +303,40 @@ function row(item) {
       refreshComment();
     }
   });
-  timeRow.append(time, make('span','score',
-    'ピーク ' + Math.round(item.peakSeconds) + '秒 / ' + item.db + 'dBFS'));
+  timeRow.append(number, time, badge);
+  const score = make('span','score', 'ピーク ' + Math.round(item.peakSeconds) + '秒 / ' + item.db + 'dBFS');
   const title = make('input','title-input');
-  title.type = 'text'; title.value = item.title; title.maxLength = 100;
+  title.type = 'text';
+  title.value = item.title;
+  title.maxLength = 100;
   title.setAttribute('aria-label','シーンの説明');
   title.addEventListener('input', () => { item.title = title.value; refreshComment(); });
-  fields.append(timeRow, title);
+  fields.append(timeRow, title, score);
   const remove = make('button','delete-btn','×');
-  remove.type = 'button'; remove.title = '候補を削除';
+  remove.type = 'button';
+  remove.title = '候補を削除';
   remove.addEventListener('click', () => {
+    if (activeInlineClose === close) closeInlinePreview();
     state.candidates = state.candidates.filter(x => x !== item);
     drawResults();
   });
   wrap.append(enabled, play, fields, remove);
-  return wrap;
+  entry.append(wrap, inline);
+  applySelection();
+  return entry;
 }
-function refreshComment() { $('commentText').value = makeComment(state.candidates); updateMontageEditor(state); }
+function refreshComment() {
+  $('commentText').value = makeComment(state.candidates);
+  const selected = state.candidates.filter(item => item.enabled);
+  $('selectedCount').textContent = String(selected.length);
+  const summary = $('selectedSummary');
+  summary.replaceChildren(...selected.map((item, i) => make('span', 'selected-chip',
+    String(i + 1) + '. ' + formatTime(item.time) + ' ' + (item.title || 'Highlight'))));
+  summary.hidden = selected.length === 0;
+  updateMontageEditor(state);
+}
 function drawResults() {
+  closeInlinePreview();
   $('highlightList').replaceChildren(...state.candidates.map(row));
   $('resultCount').textContent = String(state.candidates.length);
   $('emptyResults').hidden = state.candidates.length > 0;
