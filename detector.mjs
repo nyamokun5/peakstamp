@@ -64,7 +64,7 @@ export function detectHighlights(bins, options = {}) {
       time: Math.max(0, Math.floor(event.peakSeconds - leadSeconds)),
       id: 'peak-' + Math.round(event.peakSeconds * 1000),
       enabled: false,
-      title: '🔥 盛り上がりシーン',
+      title: 'ナイスプレイ！',
     });
   }
   return selected.sort((a,b)=>a.time-b.time);
@@ -80,6 +80,6 @@ export function formatTime(seconds) {
 
 export function makeComment(items, heading = '⚽ Shoot Sunday Highlights') {
   const lines = items.filter(item => item.enabled).sort((a,b)=>a.time-b.time)
-    .map(item => formatTime(item.time) + ' ' + (item.title.trim() || '🔥 盛り上がりシーン'));
+    .map(item => formatTime(item.time) + ' ' + (item.title.trim() || 'ナイスプレイ！'));
   return lines.length ? heading + '\n' + lines.join('\n') : '';
 }
