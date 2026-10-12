@@ -19,7 +19,7 @@ export function orderedScenes(sources) {
 
 export function visibleScenes(sources, tab = 'all') {
   return orderedScenes(sources).filter(({ item }) =>
-    item.rejected !== true && (tab !== 'kept' || item.enabled === true));
+    tab === 'kept' ? item.enabled === true : undecided(item));
 }
 
 /** Go forward to the next untouched candidate, wrapping back if needed. */
