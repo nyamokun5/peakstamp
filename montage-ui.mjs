@@ -1,4 +1,5 @@
-import { buildClipPlan, montageSeconds, exportMontage } from './exporter.mjs?v=20261012-fix1';
+import { montageSeconds, exportMontage } from './exporter.mjs?v=multi2';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=multi2';
 import { formatTime } from './detector.mjs';
 
 const $ = id => document.getElementById(id);
@@ -50,6 +51,7 @@ function setTitle(value) {
     button.classList.toggle('active', button.dataset.montageTitle === value);
   }
   if (!working) revokeOutput();
+  window.dispatchEvent(new Event('montage-settings-changed'));
 }
 
 export function updateMontageEditor(state) {
@@ -59,8 +61,7 @@ export function updateMontageEditor(state) {
   if (lastFile && state.file !== lastFile) revokeOutput();
   lastFile = state?.file || null;
   if (!visible) return;
-  const plan = buildClipPlan(state.candidates, state.duration,
-    Number($('clipDuration').value));
+  const plan = buildMultiClipPlan(state.sources, Number($('clipDuration').value));
   $('montageSelected').textContent = plan.length + 'シーンを結合';
   $('montageLength').textContent = '完成：約' + formatTime(Math.ceil(montageSeconds(plan)));
   $('montageExport').disabled = working || !plan.length;
@@ -75,6 +76,7 @@ export function initMontageEditor(state) {
   $('clipDuration').addEventListener('input', () => {
     $('clipDurationValue').textContent = $('clipDuration').value + '秒';
     updateMontageEditor(activeState);
+    window.dispatchEvent(new Event('montage-settings-changed'));
   });
   $('montageTitle').addEventListener('input', () => setTitle($('montageTitle').value));
   for (const button of document.querySelectorAll('[data-montage-title]')) {
@@ -119,8 +121,7 @@ export function initMontageEditor(state) {
   });
   $('montageExport').addEventListener('click', async () => {
     if (working || !activeState?.file) return;
-    const plan = buildClipPlan(activeState.candidates, activeState.duration,
-      Number($('clipDuration').value));
+    const plan = buildMultiClipPlan(activeState.sources, Number($('clipDuration').value));
     if (!plan.length) {
       displayError('まずシーンにチェックを入れてください。');
       return;
@@ -138,7 +139,7 @@ export function initMontageEditor(state) {
     notify('動画の準備中…', 0);
     try {
       const blob = await exportMontage({
-        file, plan, quality,
+        file, sources: activeState.sources, plan, quality,
         title: $('montageTitle').value || 'GOALS!',
         isCancelled: () => cancelRequested,
         onProgress: notify,
@@ -170,8 +171,7 @@ export function initMontageEditor(state) {
         + '。最初は標準720p・30秒程度の動画でお試しください。');
     } finally {
       setWorking(false);
-      const planAfter = buildClipPlan(activeState?.candidates || [], activeState?.duration,
-        Number($('clipDuration').value));
+      const planAfter = buildMultiClipPlan(activeState?.sources || [], Number($('clipDuration').value));
       $('montageExport').disabled = !planAfter.length;
     }
   });
