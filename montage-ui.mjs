@@ -1,5 +1,5 @@
-import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=storage8';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=storage8';
+import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=zoom10';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=zoom10';
 import { formatTime } from './detector.mjs';
 
 const $ = id => document.getElementById(id);
@@ -35,7 +35,7 @@ let lastEditSignature = null;
 function editSignature(state, plan) {
   return JSON.stringify({
     sources:(state?.sources||[]).map(s=>[s.id,s.file?.name,s.file?.size,s.file?.lastModified]),
-    clips:plan.map(c=>[c.sourceId,c.start,c.end]),
+    clips:plan.map(c=>[c.sourceId,c.start,c.end,c.zoom || 1]),
     title:$('montageTitle').value,
     font:$('titleFont').value,
     titleSize:$('titleSize').value,

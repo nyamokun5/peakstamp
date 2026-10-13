@@ -1,8 +1,8 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=storage8';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=storage8';
-import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge } from './editing-rules.mjs?v=timeline9';
-import { montageSeconds } from './exporter.mjs?v=storage8';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=zoom10';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=zoom10';
+import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom } from './editing-rules.mjs?v=zoom10';
+import { montageSeconds } from './exporter.mjs?v=zoom10';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
 
 const $ = id => document.getElementById(id);
@@ -327,7 +327,8 @@ function rebuild() {
       return { ...item, sourceId: source.id,
         enabled: old?.enabled ?? false, rejected: old?.rejected ?? false,
         title: old?.title || item.title,
-        time: old?.time ?? item.time, manualEnd: old?.manualEnd ?? null };
+        time: old?.time ?? item.time, manualEnd: old?.manualEnd ?? null,
+        zoom: normalizeSceneZoom(old?.zoom) };
     });
   }
   syncSources();
@@ -514,7 +515,26 @@ function row(item, index) {
     const label=make('p','inline-caption',
       source.file.name+' — '+formatTimelineTime(item.time)+' 〜 '+
       formatTimelineTime(getCandidateEnd(source,item,currentClipOptions()))+' をリプレイ');
-    inline.replaceChildren(label,video);
+    const viewport=make('div','zoom-video-viewport');
+    viewport.append(video);
+    video.style.transform='scale('+normalizeSceneZoom(item.zoom)+')';
+    const zoomRow=make('div','scene-zoom-control');
+    const zoomText=make('span','scene-zoom-label','映像を拡大（中央）');
+    const zoomSelect=make('select','scene-zoom-select');
+    zoomSelect.setAttribute('aria-label','このシーンの映像拡大率');
+    for(const [value,text] of [['1','1倍（通常）'],['1.5','1.5倍'],['2','2倍']]){
+      const option=make('option','',text);
+      option.value=value;
+      zoomSelect.append(option);
+    }
+    zoomSelect.value=String(normalizeSceneZoom(item.zoom));
+    zoomSelect.addEventListener('change',()=>{
+      item.zoom=normalizeSceneZoom(zoomSelect.value);
+      video.style.transform='scale('+item.zoom+')';
+      refreshComment();
+    });
+    zoomRow.append(zoomText,zoomSelect);
+    inline.replaceChildren(label,viewport,zoomRow);
     inline.hidden=false;
     entry.classList.add('preview-active');
     activeInlineClose=close;

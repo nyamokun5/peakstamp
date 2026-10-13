@@ -132,3 +132,23 @@ export function clampTimelineEdge(edge, seconds, start, end, duration) {
   if (edge === 'end') return Math.max(Math.min(length, start + 0.3), at);
   throw new Error('Invalid timeline handle');
 }
+
+/** Per-scene digital center zoom. Raw footage and timestamps are unchanged. */
+export const SCENE_ZOOM_OPTIONS=Object.freeze([1,1.5,2]);
+export function normalizeSceneZoom(value) {
+  const n=Number(value);
+  return SCENE_ZOOM_OPTIONS.includes(n)?n:1;
+}
+/** Scale the aspect-fitted video around the output canvas center, cropping overflow. */
+export function zoomDrawRect(videoWidth,videoHeight,canvasWidth,canvasHeight,zoom=1) {
+  if(![videoWidth,videoHeight,canvasWidth,canvasHeight].every(n=>Number.isFinite(n)&&n>0)){
+    throw new Error('無効な映像サイズです');
+  }
+  const ratio=Math.min(canvasWidth/videoWidth,canvasHeight/videoHeight);
+  const z=normalizeSceneZoom(zoom);
+  const width=videoWidth*ratio*z;
+  const height=videoHeight*ratio*z;
+  return {
+    dx:(canvasWidth-width)/2,dy:(canvasHeight-height)/2,dw:width,dh:height
+  };
+}
