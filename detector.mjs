@@ -105,6 +105,15 @@ export function detectHighlights(bins, options = {}) {
     // Minimum acoustic persistence is the only hard filter; a 'sensitive'
     // scan can still surface short shouts/brief audio events.
     if(activeSeconds<profile.minActive)continue;
+    if(sensitivity!=='sensitive'){
+      // A highly low-frequency event is usually rumble/engine/construction.
+      // Separated rhythmic short bursts are often talk or repeated tool strikes.
+      // Relax both rules in "多めに拾う" to recover potentially missed plays.
+      const lowLimit=sensitivity==='strict'?.72:.79;
+      const burstLimit=sensitivity==='strict'?2.0:1.65;
+      if(lowShare!==null && lowShare>lowLimit && activeSeconds<5)continue;
+      if(bursts>=3 && activeSeconds<=burstLimit && after<.85)continue;
+    }
     if(score<profile.threshold)continue;
     candidates.push({
       peakSeconds:Math.max(0,Number(bins[i]?.time)||i*binSeconds),
