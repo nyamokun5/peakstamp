@@ -69,7 +69,7 @@
         <div class="progress-track"><div id="progressBar"></div></div>
       </div>
       <p id="analysisError" class="error" role="alert" hidden></p>
-      <p class="fine-print">AI・サーバー・ログイン不要。音量の変化に基づく候補検出です。ゴールかどうかの判断はしません。</p>
+      <p class="fine-print">AI・サーバー・ログイン不要。音量変化に加え、音の持続性・音域・背景ノイズの特徴で候補を選定します。会話や工事音が混じる場合は「厳選」、見どころを見逃した場合は「多めに拾う」を試してください。音の意味やゴールそのものは認識しません。</p>
     </section>
 
     <section class="panel results-panel" id="resultsPanel" hidden>
@@ -181,6 +181,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=zoom11"></script>
+  <script type="module" src="app.mjs?v=audio12"></script>
 </body>
 </html>
