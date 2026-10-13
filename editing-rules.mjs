@@ -123,7 +123,7 @@ export function timelineTimeAt(clientX, rect, left, right, step = 0.25) {
   const ratio = Math.max(0, Math.min(1, (Number(clientX) - (Number(rect?.left) || 0)) / width));
   const t = left + (right-left) * ratio;
   const snap = Math.max(0.01, Number(step) || 0.25);
-  return Math.max(0, Math.round(t / snap) * snap);
+  return Math.max(0, Math.round(Math.round(t / snap) * snap * 100) / 100);
 }
 export function clampTimelineEdge(edge, seconds, start, end, duration) {
   const length = Math.max(0, Number(duration) || 0);
