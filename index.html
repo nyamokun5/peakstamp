@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="動画の盛り上がりを音声から検出し、YouTube用タイムスタンプを作成。端末内で処理します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=storage8" />
+  <link rel="stylesheet" href="styles.css?v=timeline9" />
 </head>
 <body>
   <header class="topbar">
@@ -78,7 +78,7 @@
       <p id="multiWaveNotice" class="fine-print" hidden>波形は全動画をつなげた表示です。オレンジ線は各動画の検出位置を示します。</p>
       <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
       <div id="emptyResults" class="empty-results" hidden>指定した感度では見どころを検出できませんでした。「多めに拾う」に切り替えて再解析するか、音声が入っているかご確認ください。</div>
-      <p class="list-help">各シーンの「▶ リプレイ」で切り取り範囲を繰り返し再生。プレイ内容を選び、「キープ」か「不採用」で判定すると次の未判断シーンへ移動します。</p>
+      <p class="list-help">各シーンの「▶ リプレイ」で再生。動画下のバーは白線が再生位置、両端の丸をドラッグして切り取り範囲を変更できます。長押しで0.1秒単位の微調整。「キープ」「不採用」で次へ移動します。</p>
       <div class="selected-overview">
         <strong>採用するシーン：<span id="selectedCount">0</span>件</strong>
         <div id="selectedSummary" class="selected-summary" hidden></div>
@@ -181,6 +181,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=storage8"></script>
+  <script type="module" src="app.mjs?v=timeline9"></script>
 </body>
 </html>

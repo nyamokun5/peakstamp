@@ -311,3 +311,62 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .storage-tips summary{font-size:12px;font-weight:850;color:#c7e9f2;cursor:pointer;min-height:24px}
 .storage-tips p{font-size:11px;line-height:1.7;color:#b8d3dc;margin:12px 0 4px}
 .quality-picker label:has(input[value="compact"]:checked){border-color:#f8cc85;background:#4a4438}
+
+
+/* Timeline v9 — touch-friendly handles, live playback cursor and fine scrub */
+.range-editor .range-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
+.range-editor .range-title{margin:0;font-size:13px}
+.range-editor .range-current{white-space:nowrap;font-size:12px;font-weight:800;color:#eafefa;font-variant-numeric:tabular-nums}
+.range-editor .range-track.interactive-range{
+  position:relative;height:46px;margin:7px 13px 8px;
+  border:1px solid #557f90;background:#27445d;
+  touch-action:none;user-select:none;-webkit-user-select:none;
+  border-radius:9px;overflow:visible;
+}
+.range-editor .interactive-range .range-fill{
+  top:15px;height:14px;background:#48bc9b9c;
+  border:1px solid #a1f1cd80;pointer-events:none;
+}
+.range-editor .interactive-range .range-dot.range-peak{
+  top:12px;width:8px;height:20px;pointer-events:none;opacity:.88;z-index:2;
+}
+.range-editor .interactive-range .range-handle{
+  position:absolute;top:7px;height:30px;width:28px;z-index:5;
+  border:2px solid #e6ffff;border-radius:10px;
+  transform:translateX(-50%);box-shadow:0 0 0 2px #09263877;
+  cursor:ew-resize;touch-action:none;-webkit-touch-callout:none;
+  user-select:none;-webkit-user-select:none;
+}
+.range-editor .interactive-range .range-handle.range-start{background:#65d5ab}
+.range-editor .interactive-range .range-handle.range-end{background:#acbbff}
+.range-editor .interactive-range .range-handle.dragging,
+.range-editor .interactive-range.is-fine .range-handle.dragging{
+  height:36px;top:4px;outline:3px solid #fff7;
+  box-shadow:0 0 18px #c8fff1aa;
+}
+.range-editor .interactive-range .range-playhead{
+  position:absolute;z-index:7;top:-5px;height:54px;width:3px;
+  background:#fff;box-shadow:0 0 0 1px #183d4f,0 0 9px #b7e7ff;
+  transform:translateX(-50%);pointer-events:none;
+}
+.range-editor .interactive-range .range-playhead::before{
+  content:'';position:absolute;left:-5px;top:-6px;width:13px;height:13px;
+  border-radius:50%;background:#f4ffff;border:2px solid #2d6173;
+}
+.range-editor .interactive-range .range-playhead[hidden]{display:none!important}
+.range-editor .range-hint{
+  margin:4px 0 12px;font-size:11px;color:#b1cfda;
+  min-height:16px;line-height:1.5;text-align:center;
+}
+.range-editor .interactive-range.is-fine{border-color:#f5d08a;background:#345166}
+.range-editor .interactive-range.is-fine ~ .range-hint{color:#ffdf99}
+.range-editor .range-inputs{gap:10px}
+.range-editor .range-field input{min-height:41px;font-size:15px;font-variant-numeric:tabular-nums}
+.range-editor .range-reset{align-self:flex-start;padding:8px 12px;min-height:36px;font-size:12px}
+.range-editor .range-legend{font-variant-numeric:tabular-nums;font-size:10px;gap:4px;white-space:nowrap}
+@media(max-width:390px){
+  .range-editor .range-track.interactive-range{margin-inline:12px}
+  .range-editor .range-legend{font-size:9px}
+  .range-editor .range-current{font-size:11px}
+  .range-editor .range-hint{font-size:10px}
+}

@@ -103,3 +103,32 @@ export function clipMarkerPositions(start, peak, end, duration) {
   const pc=t=>Math.max(0,Math.min(100,(t-left)/span*100));
   return { start:pc(a), peak:pc(p), end:pc(e), left, right };
 }
+
+/** Positive source-relative timestamps with tenths, including during fine scrubbing. */
+export function formatTimelineTime(seconds) {
+  const ticks = Math.round(Math.max(0, Number(seconds) || 0) * 10);
+  const whole = Math.floor(ticks / 10);
+  const tenth = ticks % 10;
+  const hh = Math.floor(whole / 3600);
+  const mm = Math.floor(whole / 60) % 60;
+  const ss = whole % 60;
+  const base = hh
+    ? hh + ':' + String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0')
+    : String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+  return base + '.' + tenth;
+}
+/** Position-to-timestamp map for the currently visible (zoomed) scene timeline. */
+export function timelineTimeAt(clientX, rect, left, right, step = 0.25) {
+  const width = Math.max(1, Number(rect?.width) || 1);
+  const ratio = Math.max(0, Math.min(1, (Number(clientX) - (Number(rect?.left) || 0)) / width));
+  const t = left + (right-left) * ratio;
+  const snap = Math.max(0.01, Number(step) || 0.25);
+  return Math.max(0, Math.round(Math.round(t / snap) * snap * 100) / 100);
+}
+export function clampTimelineEdge(edge, seconds, start, end, duration) {
+  const length = Math.max(0, Number(duration) || 0);
+  const at = Math.max(0, Math.min(length, Number(seconds) || 0));
+  if (edge === 'start') return Math.min(Math.max(0, end - 0.3), at);
+  if (edge === 'end') return Math.max(Math.min(length, start + 0.3), at);
+  throw new Error('Invalid timeline handle');
+}

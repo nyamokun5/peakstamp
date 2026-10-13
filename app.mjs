@@ -1,7 +1,7 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=storage8';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=storage8';
-import { getCandidateEnd, clipMarkerPositions } from './editing-rules.mjs?v=rapid5';
+import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge } from './editing-rules.mjs?v=timeline9';
 import { montageSeconds } from './exporter.mjs?v=storage8';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
 
@@ -354,11 +354,11 @@ for (const [slider, display, key, suffix] of [
   });
 }
 function parseTime(value) {
-  const parts = value.trim().split(':').map(Number);
-  if (parts.length < 2 || parts.length > 3 ||
-      parts.some(n => !Number.isInteger(n) || n < 0) ||
-      parts.slice(1).some(n => n > 59)) return null;
-  return parts.reduce((s,n) => s * 60 + n, 0);
+  const parts = String(value).trim().split(':').map(Number);
+  if (parts.length < 2 || parts.length > 3 || parts.some(n => !Number.isFinite(n) || n < 0)) return null;
+  if (parts.slice(0,-1).some(n => !Number.isInteger(n))) return null;
+  if (parts.slice(1).some(n => n >= 60)) return null;
+  return Math.round(parts.reduce((s,n) => s * 60 + n, 0) * 10) / 10;
 }
 function clearUndoReview() {
   if (undoTimer !== null) clearTimeout(undoTimer);
@@ -443,8 +443,13 @@ function row(item, index) {
   play.type = 'button';
   play.title = '切り取り範囲をもう一度再生';
   let replayVideo=null;
+  let frameWatchId=null;
   const close=()=>{
     if(replayVideo){
+      if(frameWatchId!==null && replayVideo.cancelVideoFrameCallback){
+        replayVideo.cancelVideoFrameCallback(frameWatchId);
+      }
+      frameWatchId=null;
       replayVideo.pause();
       replayVideo.removeAttribute('src');
       replayVideo.load();
@@ -459,12 +464,24 @@ function row(item, index) {
     const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
     if(replayVideo.currentTime<bounds.start-.06){
       replayVideo.currentTime=bounds.start;
-      return;
-    }
-    if(replayVideo.currentTime >= bounds.end-.06){
+    } else if(replayVideo.currentTime >= bounds.end-.06){
       replayVideo.pause();
       if(Math.abs(replayVideo.currentTime-bounds.end)>.08)replayVideo.currentTime=bounds.end;
     }
+    updatePlayhead();
+  };
+  // Safari and Chrome can update the cursor on each decoded video frame.
+  // Older browsers still get updates through the standard timeupdate event.
+  const watchVideoFrames=()=>{
+    const video=replayVideo;
+    if(!video || !video.requestVideoFrameCallback || frameWatchId!==null)return;
+    const tick=()=>{
+      frameWatchId=null;
+      if(video!==replayVideo)return;
+      clampAndStop();
+      if(!video.paused)frameWatchId=video.requestVideoFrameCallback(tick);
+    };
+    frameWatchId=video.requestVideoFrameCallback(tick);
   };
   const restartReplay=()=>{
     if(!replayVideo)return;
@@ -472,6 +489,7 @@ function row(item, index) {
     if(bounds.end<=bounds.start)return;
     replayVideo.pause();
     replayVideo.currentTime=bounds.start;
+    updatePlayhead();
     replayVideo.play().catch(()=>{});
   };
   play.addEventListener('click',()=>{
@@ -494,8 +512,8 @@ function row(item, index) {
     video.preload='metadata';
     video.src=source.objectUrl;
     const label=make('p','inline-caption',
-      source.file.name+' — '+formatTime(item.time)+' 〜 '+
-      formatTime(getCandidateEnd(source,item,currentClipOptions()))+' をリプレイ');
+      source.file.name+' — '+formatTimelineTime(item.time)+' 〜 '+
+      formatTimelineTime(getCandidateEnd(source,item,currentClipOptions()))+' をリプレイ');
     inline.replaceChildren(label,video);
     inline.hidden=false;
     entry.classList.add('preview-active');
@@ -503,6 +521,8 @@ function row(item, index) {
     video.addEventListener('loadedmetadata',restartReplay,{once:true});
     video.addEventListener('timeupdate',clampAndStop);
     video.addEventListener('seeked',clampAndStop);
+    video.addEventListener('play',()=>{updatePlayhead();watchVideoFrames();});
+    video.addEventListener('pause',updatePlayhead);
     video.load();
     if (!autoOpeningNextReplay) {
       inline.scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -512,13 +532,13 @@ function row(item, index) {
   const timeRow = make('div','time-row');
   const time = make('input','time-input');
   time.type = 'text';
-  time.value = formatTime(item.time);
+  time.value = formatTimelineTime(item.time);
   time.setAttribute('aria-label','タイムスタンプ');
   time.addEventListener('change', () => {
     const seconds = parseTime(time.value);
     if (seconds === null || seconds >= source.duration ||
       (Number.isFinite(item.manualEnd) && seconds >= item.manualEnd - .24)) {
-      time.value = formatTime(item.time);
+      time.value = formatTimelineTime(item.time);
     } else {
       item.time = seconds;
       renderRange();
@@ -564,23 +584,37 @@ function row(item, index) {
   });
   titleGroup.append(titleLabel,titleSelect,title);
 
-  const rangeEditor = make('div','range-editor');
-  const rangeHeading = make('div','range-title','切り取り範囲');
+  const rangeEditor=make('div','range-editor');
+  const rangeHeading=make('div','range-heading');
+  const rangeTitle=make('strong','range-title','切り取り範囲');
+  const currentReadout=make('span','range-current','再生位置 —');
+  rangeHeading.append(rangeTitle,currentReadout);
   const markerLegend=make('div','range-legend');
   const legendStart=make('span','range-start-label');
   const legendPeak=make('span','range-peak-label');
   const legendEnd=make('span','range-end-label');
   markerLegend.append(legendStart,legendPeak,legendEnd);
-  const track=make('div','range-track');
+  const track=make('div','range-track interactive-range');
+  track.setAttribute('aria-label','タイムライン：端をドラッグして開始・終了を調整');
   const fill=make('div','range-fill');
-  const startDot=make('span','range-dot range-start');
+  const startDot=make('button','range-dot range-start range-handle');
   const peakDot=make('span','range-dot range-peak');
-  const endDot=make('span','range-dot range-end');
-  track.append(fill,startDot,peakDot,endDot);
+  const endDot=make('button','range-dot range-end range-handle');
+  const playhead=make('span','range-playhead');
+  startDot.type='button';
+  endDot.type='button';
+  playhead.hidden=true;
+  startDot.setAttribute('aria-label','切り取り開始位置を調整');
+  endDot.setAttribute('aria-label','切り取り終了位置を調整');
+  startDot.setAttribute('role','slider');
+  endDot.setAttribute('role','slider');
+  startDot.setAttribute('aria-orientation','horizontal');
+  endDot.setAttribute('aria-orientation','horizontal');
+  track.append(fill,startDot,peakDot,endDot,playhead);
+  const rangeHint=make('p','range-hint','端の丸を左右に移動 ／ 長押しで0.1秒単位の微調整');
   const rangeInputs=make('div','range-inputs');
   const startBox=make('div','range-field');
   startBox.append(make('label','', '開始'));
-  const startControls=make('div','range-adjust');
   const endBox=make('div','range-field');
   const endLabel=make('label','range-auto-label','終了（自動）');
   const endInput=make('input','range-time');
@@ -588,60 +622,156 @@ function row(item, index) {
   endInput.inputMode='text';
   endInput.setAttribute('aria-label','切り取り終了時刻');
   endBox.append(endLabel);
-  const endControls=make('div','range-adjust');
-  const makeJog=(target,step)=>{
-    const jog=make('button','range-jog',step>0?'+1秒':'−1秒');
-    jog.type='button';
-    jog.addEventListener('click',()=>{
-      const current=target==='start' ? item.time : getCandidateEnd(source,item,currentClipOptions());
-      const next=Math.round(current)+step;
-      if (target==='start') {
-        const clipEnd=getCandidateEnd(source,item,currentClipOptions());
-        if(next<0 || next>=source.duration || next>=clipEnd-.24) return;
-        item.time=next;
-        time.value=formatTime(item.time);
-      } else {
-        if(next<=item.time+.24 || next>source.duration) return;
-        item.manualEnd=next;
-      }
-      renderRange();
-      refreshComment();
-    });
-    return jog;
-  };
-  startControls.append(makeJog('start',-1),makeJog('start',1));
-  endControls.append(makeJog('end',-1),makeJog('end',1));
   const resetEnd=make('button','range-reset','自動に戻す');
   resetEnd.type='button';
-  resetEnd.addEventListener('click',()=> {
+  resetEnd.addEventListener('click',()=>{
     item.manualEnd=null;
     renderRange();
     refreshComment();
   });
-  endControls.append(resetEnd);
-  startBox.append(time,startControls);
-  endBox.append(endInput,endControls);
+  startBox.append(time);
+  endBox.append(endInput,resetEnd);
   rangeInputs.append(startBox,endBox);
-  rangeEditor.append(rangeHeading,markerLegend,track,rangeInputs);
+  rangeEditor.append(rangeHeading,markerLegend,track,rangeHint,rangeInputs);
+  let dragging=null;
+  let fineTimer=null;
+  const clearFineTimer=()=>{
+    if(fineTimer!==null) clearTimeout(fineTimer);
+    fineTimer=null;
+  };
+  const applyBoundary=(edge,value)=>{
+    const end=getCandidateEnd(source,item,currentClipOptions());
+    const adjusted=clampTimelineEdge(edge,value,item.time,end,source.duration);
+    if(edge==='start'){
+      item.time=adjusted;
+      time.value=formatTimelineTime(adjusted);
+    }else{
+      item.manualEnd=adjusted;
+      endInput.value=formatTimelineTime(adjusted);
+    }
+    renderRange();
+  };
+  const startDrag=(edge,handle,event)=>{
+    if(event.button!==undefined && event.button!==0)return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearFineTimer();
+    const end=getCandidateEnd(source,item,currentClipOptions());
+    const window=clipMarkerPositions(item.time,item.peakSeconds,end,source.duration);
+    const origin=edge==='start'?item.time:end;
+    dragging={edge,pointerId:event.pointerId,initialX:event.clientX,lastX:event.clientX,
+      origin,window,moved:false,fine:false,fineAnchorX:event.clientX,fineAnchorTime:origin};
+    try{handle.setPointerCapture?.(event.pointerId);}catch{}
+    handle.classList.add('dragging');
+    fineTimer=setTimeout(()=>{
+      if(!dragging || dragging.pointerId!==event.pointerId || dragging.moved)return;
+      dragging.fine=true;
+      dragging.fineAnchorX=dragging.lastX;
+      dragging.fineAnchorTime=dragging.edge==='start'
+        ? item.time:getCandidateEnd(source,item,currentClipOptions());
+      rangeHint.textContent='微調整中：0.1秒単位で動かせます';
+      track.classList.add('is-fine');
+    },450);
+  };
+  const moveDrag=(event)=>{
+    if(!dragging || dragging.pointerId!==event.pointerId)return;
+    event.preventDefault();
+    const rect=track.getBoundingClientRect();
+    dragging.lastX=event.clientX;
+    if(Math.abs(event.clientX-dragging.initialX)>7 && !dragging.fine){
+      dragging.moved=true;
+      clearFineTimer();
+    }
+    const seconds=dragging.fine
+      ? Math.round((dragging.fineAnchorTime+
+          (event.clientX-dragging.fineAnchorX)/Math.max(1,rect.width)*4)*10)/10
+      : timelineTimeAt(event.clientX,rect,dragging.window.left,dragging.window.right,0.25);
+    applyBoundary(dragging.edge,seconds);
+  };
+  const finishDrag=(event)=>{
+    if(!dragging || dragging.pointerId!==event.pointerId)return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearFineTimer();
+    const handle=dragging.edge==='start'?startDot:endDot;
+    try{handle.releasePointerCapture?.(event.pointerId);}catch{}
+    handle.classList.remove('dragging');
+    dragging=null;
+    track.classList.remove('is-fine');
+    rangeHint.textContent='端の丸を左右に移動 ／ 長押しで0.1秒単位の微調整';
+    renderRange();
+    refreshComment();
+  };
+  for(const [edge,handle] of [['start',startDot],['end',endDot]]){
+    handle.addEventListener('pointerdown',event=>startDrag(edge,handle,event));
+    handle.addEventListener('pointermove',moveDrag);
+    handle.addEventListener('pointerup',finishDrag);
+    handle.addEventListener('pointercancel',finishDrag);
+    handle.addEventListener('keydown',event=>{
+      if(!['ArrowLeft','ArrowRight'].includes(event.key))return;
+      event.preventDefault();
+      const diff=(event.key==='ArrowRight'?1:-1)*(event.shiftKey?0.1:0.25);
+      const current=edge==='start'?item.time:getCandidateEnd(source,item,currentClipOptions());
+      applyBoundary(edge,Math.round((current+diff)*100)/100);
+      refreshComment();
+    });
+  }
+  track.addEventListener('click',event=>{
+    if(!replayVideo || event.target===startDot || event.target===endDot ||
+      event.target===peakDot || dragging)return;
+    const p=clipMarkerPositions(item.time,item.peakSeconds,
+      getCandidateEnd(source,item,currentClipOptions()),source.duration);
+    const selected=timelineTimeAt(event.clientX,track.getBoundingClientRect(),p.left,p.right,0.1);
+    const end=getCandidateEnd(source,item,currentClipOptions());
+    replayVideo.pause();
+    replayVideo.currentTime=Math.max(item.time,Math.min(end,selected));
+    updatePlayhead();
+  });
   fields.append(timeRow, titleGroup, score);
+  const updatePlayhead=()=>{
+    const current=replayVideo&&Number.isFinite(replayVideo.currentTime)
+      ? replayVideo.currentTime:item.time;
+    currentReadout.textContent=replayVideo
+      ? '再生位置 '+formatTimelineTime(current) : '再生位置 —';
+    playhead.hidden=!replayVideo;
+    const end=getCandidateEnd(source,item,currentClipOptions());
+    const window=dragging?.window || clipMarkerPositions(item.time,item.peakSeconds,end,source.duration);
+    const percent=Math.max(0,Math.min(100,(current-window.left)/
+      Math.max(0.001,window.right-window.left)*100));
+    playhead.style.left=percent+'%';
+    playhead.classList.toggle('is-playing',Boolean(replayVideo && !replayVideo.paused));
+  };
   const renderRange=()=>{
     const end=getCandidateEnd(source,item,currentClipOptions());
-    const p=clipMarkerPositions(item.time,item.peakSeconds,end,source.duration);
-    fill.style.left=p.start+'%';
-    fill.style.width=Math.max(0,p.end-p.start)+'%';
-    startDot.style.left=p.start+'%';
-    peakDot.style.left=p.peak+'%';
-    endDot.style.left=p.end+'%';
-    legendStart.textContent='開始 '+formatTime(item.time);
-    legendPeak.textContent='ピーク '+formatTime(item.peakSeconds);
-    legendEnd.textContent='終了 '+formatTime(end);
-    endInput.value=formatTime(end);
+    const p=dragging?.window || clipMarkerPositions(item.time,item.peakSeconds,end,source.duration);
+    const pc=x=>Math.max(0,Math.min(100,(x-p.left)/Math.max(0.001,p.right-p.left)*100));
+    const a=pc(item.time),b=pc(end);
+    fill.style.left=a+'%';
+    fill.style.width=Math.max(0,b-a)+'%';
+    startDot.style.left=a+'%';
+    peakDot.style.left=pc(item.peakSeconds)+'%';
+    endDot.style.left=b+'%';
+    legendStart.textContent='開始 '+formatTimelineTime(item.time);
+    legendPeak.textContent='ピーク '+formatTimelineTime(item.peakSeconds);
+    legendEnd.textContent='終了 '+formatTimelineTime(end);
+    time.value=formatTimelineTime(item.time);
+    endInput.value=formatTimelineTime(end);
     endLabel.textContent=Number.isFinite(item.manualEnd)?'終了（手動）':'終了（自動）';
     resetEnd.hidden=!Number.isFinite(item.manualEnd);
+    for(const [handle,now,min,max] of [
+      [startDot,item.time,0,Math.max(0,end-.3)],
+      [endDot,end,item.time+.3,source.duration]
+    ]){
+      handle.setAttribute('aria-valuemin',String(Math.max(0,min)));
+      handle.setAttribute('aria-valuemax',String(Math.max(0,max)));
+      handle.setAttribute('aria-valuenow',String(Math.round(now*10)/10));
+      handle.setAttribute('aria-valuetext',formatTimelineTime(now));
+    }
+    updatePlayhead();
   };
   endInput.addEventListener('change',()=>{
     const seconds=parseTime(endInput.value);
-    if(seconds===null || seconds<=item.time+.24 || seconds>source.duration){
+    if(seconds===null || seconds<=item.time+.29 || seconds>source.duration){
       renderRange();
       return;
     }
