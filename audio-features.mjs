@@ -15,7 +15,7 @@ export function createAudioBinCollector(binSeconds = 0.25) {
     const power=Number.isFinite(rmsSquared) ? Math.max(0,rmsSquared) : 0;
     energy[index]=(energy[index]||0)+power;
     counts[index]=(counts[index]||0)+1;
-    peak[index]=Math.max(peak[index]||0,Math.sqrt(power));
+    peak[index]=Math.max(peak[index]||0,power);
 
     // Use every second RMS sample for low-cost broad spectral descriptors.
     if (sampleCounter++%2!==0 || !Number.isFinite(sampleValue)) return;
@@ -50,7 +50,7 @@ export function createAudioBinCollector(binSeconds = 0.25) {
           lowRatio:(lowEnergy[index]||0)/total,
           highRatio:(highEnergy[index]||0)/total,
         } : {}),
-        crest:rms>1e-8 ? Math.min(12,(peak[index]||0)/rms) : 0,
+        crest:rms>1e-8 ? Math.min(12,Math.sqrt(peak[index]||0)/rms) : 0,
       };
     });
   }
