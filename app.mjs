@@ -1,4 +1,5 @@
-import { detectHighlights, formatTime, makeComment } from './detector.mjs';
+import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audio12';
+import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=zoom11';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=zoom11';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom } from './editing-rules.mjs?v=zoom11';
@@ -195,8 +196,7 @@ async function decodeStreaming(file, update, check) {
     const duration = await input.computeDuration();
     if (!Number.isFinite(duration) || duration <= 0) throw Error('動画の長さを取得できません');
     check();
-    const energy = [];
-    const count = [];
+    const collector=createAudioBinCollector(STEP);
     const sink = new AudioSampleSink(track);
     let lastDraw = 0;
     for await (const sample of sink.samples()) {
@@ -215,8 +215,7 @@ async function decodeStreaming(file, update, check) {
             const v = floats[f * channels + ch] || 0;
             p += v * v;
           }
-          energy[i] = (energy[i] || 0) + p / channels;
-          count[i] = (count[i] || 0) + 1;
+          collector.push(seconds,p/channels,floats[f*channels]||0,rate,4);
         }
         if (performance.now() - lastDraw > 180) {
           update('音声のピークを解析中', Math.min(99, 100 * (sample.timestamp + sample.duration) / duration));
@@ -228,9 +227,7 @@ async function decodeStreaming(file, update, check) {
     check();
     return {
       duration,
-      bins: Array.from({ length: Math.ceil(duration / STEP) }, (_, i) => ({
-        time: i * STEP, rms: Math.sqrt((energy[i] || 0) / Math.max(1, count[i] || 0))
-      }))
+      bins: collector.finish(duration)
     };
   } finally { input.dispose(); }
 }
