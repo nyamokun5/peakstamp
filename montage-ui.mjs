@@ -1,5 +1,5 @@
-import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=zoom10';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=zoom10';
+import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=zoom11';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=zoom11';
 import { formatTime } from './detector.mjs';
 
 const $ = id => document.getElementById(id);
