@@ -141,9 +141,7 @@ export function normalizeSceneZoom(value) {
   const n=Number(value);
   if (!Number.isFinite(n)) return SCENE_ZOOM_MIN;
   const clamped=Math.max(SCENE_ZOOM_MIN,Math.min(SCENE_ZOOM_MAX,n));
-  return Math.round(clamped / SCENE_ZOOM_STEP) * SCENE_ZOOM_STEP < SCENE_ZOOM_MIN
-    ? SCENE_ZOOM_MIN
-    : Number((Math.round(clamped / SCENE_ZOOM_STEP) * SCENE_ZOOM_STEP).toFixed(1));
+  return Number((Math.round(clamped / SCENE_ZOOM_STEP) * SCENE_ZOOM_STEP).toFixed(1));
 }
 /** Scale the aspect-fitted video around the output canvas center, cropping overflow. */
 export function zoomDrawRect(videoWidth,videoHeight,canvasWidth,canvasHeight,zoom=1) {
