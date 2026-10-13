@@ -112,7 +112,8 @@ export function detectHighlights(bins, options = {}) {
       const lowLimit=sensitivity==='strict'?.72:.79;
       const burstLimit=sensitivity==='strict'?2.0:1.65;
       if(lowShare!==null && lowShare>lowLimit && activeSeconds<5)continue;
-      if(bursts>=3 && activeSeconds<=burstLimit && after<.85)continue;
+      if(bursts>=3 && activeSeconds<=burstLimit &&
+        (after<.85 || (lowShare!==null && lowShare>.54)))continue;
     }
     if(score<profile.threshold)continue;
     candidates.push({
