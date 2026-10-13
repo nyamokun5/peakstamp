@@ -134,10 +134,16 @@ export function clampTimelineEdge(edge, seconds, start, end, duration) {
 }
 
 /** Per-scene digital center zoom. Raw footage and timestamps are unchanged. */
-export const SCENE_ZOOM_OPTIONS=Object.freeze([1,1.5,2]);
+export const SCENE_ZOOM_MIN=1;
+export const SCENE_ZOOM_MAX=3;
+export const SCENE_ZOOM_STEP=0.1;
 export function normalizeSceneZoom(value) {
   const n=Number(value);
-  return SCENE_ZOOM_OPTIONS.includes(n)?n:1;
+  if (!Number.isFinite(n)) return SCENE_ZOOM_MIN;
+  const clamped=Math.max(SCENE_ZOOM_MIN,Math.min(SCENE_ZOOM_MAX,n));
+  return Math.round(clamped/SCENE_ZOOM_STEP)*SCENE_ZOOM_STEP < SCENE_ZOOM_MIN
+    ? SCENE_ZOOM_MIN
+    : Math.round(Math.round(clamped/SCENE_ZOOM_STEP)*SCENE_ZOOM_STEP*10)/10;
 }
 /** Scale the aspect-fitted video around the output canvas center, cropping overflow. */
 export function zoomDrawRect(videoWidth,videoHeight,canvasWidth,canvasHeight,zoom=1) {
