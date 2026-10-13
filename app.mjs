@@ -209,7 +209,6 @@ async function decodeStreaming(file, update, check) {
         for (let f = 0; f < sample.numberOfFrames; f += 4) {
           const seconds = sample.timestamp + f / rate;
           if (seconds < 0 || seconds >= duration + 1) continue;
-          const i = Math.floor(seconds / STEP);
           let p = 0;
           for (let ch = 0; ch < channels; ch++) {
             const v = floats[f * channels + ch] || 0;
