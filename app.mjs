@@ -519,21 +519,28 @@ function row(item, index) {
     viewport.append(video);
     video.style.transform='scale('+normalizeSceneZoom(item.zoom)+')';
     const zoomRow=make('div','scene-zoom-control');
+    const zoomHeading=make('div','scene-zoom-heading');
     const zoomText=make('span','scene-zoom-label','映像を拡大（中央）');
-    const zoomSelect=make('select','scene-zoom-select');
-    zoomSelect.setAttribute('aria-label','このシーンの映像拡大率');
-    for(const [value,text] of [['1','1倍（通常）'],['1.5','1.5倍'],['2','2倍']]){
-      const option=make('option','',text);
-      option.value=value;
-      zoomSelect.append(option);
-    }
-    zoomSelect.value=String(normalizeSceneZoom(item.zoom));
-    zoomSelect.addEventListener('change',()=>{
-      item.zoom=normalizeSceneZoom(zoomSelect.value);
+    const zoomValue=make('output','scene-zoom-value');
+    const zoomSlider=make('input','scene-zoom-slider');
+    zoomSlider.type='range';
+    zoomSlider.min='1';
+    zoomSlider.max='3';
+    zoomSlider.step='0.1';
+    zoomSlider.value=String(normalizeSceneZoom(item.zoom));
+    zoomSlider.setAttribute('aria-label','このシーンの映像拡大倍率（1.0倍から3.0倍）');
+    zoomValue.textContent=Number(zoomSlider.value).toFixed(1)+'倍';
+    zoomSlider.addEventListener('input',()=>{
+      item.zoom=normalizeSceneZoom(zoomSlider.value);
+      zoomSlider.value=String(item.zoom);
+      zoomValue.textContent=item.zoom.toFixed(1)+'倍';
       video.style.transform='scale('+item.zoom+')';
       refreshComment();
     });
-    zoomRow.append(zoomText,zoomSelect);
+    const zoomEnds=make('div','scene-zoom-ends');
+    zoomEnds.append(make('span','','1.0倍'),make('span','','3.0倍'));
+    zoomHeading.append(zoomText,zoomValue);
+    zoomRow.append(zoomHeading,zoomSlider,zoomEnds);
     inline.replaceChildren(label,viewport,zoomRow);
     inline.hidden=false;
     entry.classList.add('preview-active');
