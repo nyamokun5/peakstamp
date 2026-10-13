@@ -10,7 +10,13 @@ test('zoom defaults to unchanged original',()=>{
  assert.equal(normalizeSceneZoom('1'),1);
  assert.equal(normalizeSceneZoom('1.5'),1.5);
  assert.equal(normalizeSceneZoom('2'),2);
- assert.equal(normalizeSceneZoom(17),1);
+ assert.equal(normalizeSceneZoom(17),3);
+ assert.equal(normalizeSceneZoom(2.3),2.3);
+ assert.equal(normalizeSceneZoom('1.76'),1.8);
+ assert.equal(normalizeSceneZoom(2.94),2.9);
+ assert.equal(normalizeSceneZoom(3.2),3);
+ assert.equal(normalizeSceneZoom(NaN),1);
+ assert.equal(normalizeSceneZoom(Infinity),1);
  assert.equal(normalizeSceneZoom(-1),1);
 });
 test('1x geometry fits centered source with no cropping',()=>{
@@ -57,5 +63,29 @@ test('different zoom highlights split at boundary and avoid repeated overlap',()
  assert.deepEqual(buildMultiClipPlan([source(clips)],{mode:'quiet'}),[
   {sourceId:'v1',sourceName:'game.mov',start:10,end:20,zoom:2},
   {sourceId:'v1',sourceName:'game.mov',start:20,end:35}
+ ]);
+});
+
+test('custom fractional zoom draws centered 2.3x crop for montage',()=>{
+ const g=zoomDrawRect(1920,1080,1280,720,2.3);
+ assert.ok(Math.abs(g.dw-2944)<.0001);
+ assert.ok(Math.abs(g.dh-1656)<.0001);
+ assert.ok(Math.abs(g.dx+832)<.0001);
+ assert.ok(Math.abs(g.dy+468)<.0001);
+});
+test('arbitrary 1.7x zoom travels through to actual export plan',()=>{
+ const input=source([{time:11.4,peakSeconds:17.3,manualEnd:22.6,enabled:true,zoom:1.7}]);
+ assert.deepEqual(buildMultiClipPlan([input],{mode:'quiet'}),[
+   {sourceId:'v1',sourceName:'game.mov',start:11.4,end:22.6,zoom:1.7}
+ ]);
+});
+test('overlapping highlights of differing fractional zoom keep distinct crops',()=>{
+ const input=source([
+   {time:10,peakSeconds:15,manualEnd:24,enabled:true,zoom:1.7},
+   {time:20,peakSeconds:27,manualEnd:36,enabled:true,zoom:2.4},
+ ]);
+ assert.deepEqual(buildMultiClipPlan([input],{mode:'quiet'}),[
+  {sourceId:'v1',sourceName:'game.mov',start:10,end:20,zoom:1.7},
+  {sourceId:'v1',sourceName:'game.mov',start:20,end:36,zoom:2.4}
  ]);
 });
