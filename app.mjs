@@ -1,7 +1,7 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=storage8';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=storage8';
-import { getCandidateEnd, clipMarkerPositions } from './editing-rules.mjs?v=rapid5';
+import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge } from './editing-rules.mjs?v=timeline9';
 import { montageSeconds } from './exporter.mjs?v=storage8';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
 
@@ -354,11 +354,11 @@ for (const [slider, display, key, suffix] of [
   });
 }
 function parseTime(value) {
-  const parts = value.trim().split(':').map(Number);
-  if (parts.length < 2 || parts.length > 3 ||
-      parts.some(n => !Number.isInteger(n) || n < 0) ||
-      parts.slice(1).some(n => n > 59)) return null;
-  return parts.reduce((s,n) => s * 60 + n, 0);
+  const parts = String(value).trim().split(':').map(Number);
+  if (parts.length < 2 || parts.length > 3 || parts.some(n => !Number.isFinite(n) || n < 0)) return null;
+  if (parts.slice(0,-1).some(n => !Number.isInteger(n))) return null;
+  if (parts.slice(1).some(n => n >= 60)) return null;
+  return Math.round(parts.reduce((s,n) => s * 60 + n, 0) * 10) / 10;
 }
 function clearUndoReview() {
   if (undoTimer !== null) clearTimeout(undoTimer);
@@ -459,12 +459,11 @@ function row(item, index) {
     const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
     if(replayVideo.currentTime<bounds.start-.06){
       replayVideo.currentTime=bounds.start;
-      return;
-    }
-    if(replayVideo.currentTime >= bounds.end-.06){
+    } else if(replayVideo.currentTime >= bounds.end-.06){
       replayVideo.pause();
       if(Math.abs(replayVideo.currentTime-bounds.end)>.08)replayVideo.currentTime=bounds.end;
     }
+    updatePlayhead();
   };
   const restartReplay=()=>{
     if(!replayVideo)return;
@@ -472,6 +471,7 @@ function row(item, index) {
     if(bounds.end<=bounds.start)return;
     replayVideo.pause();
     replayVideo.currentTime=bounds.start;
+    updatePlayhead();
     replayVideo.play().catch(()=>{});
   };
   play.addEventListener('click',()=>{
@@ -494,8 +494,8 @@ function row(item, index) {
     video.preload='metadata';
     video.src=source.objectUrl;
     const label=make('p','inline-caption',
-      source.file.name+' — '+formatTime(item.time)+' 〜 '+
-      formatTime(getCandidateEnd(source,item,currentClipOptions()))+' をリプレイ');
+      source.file.name+' — '+formatTimelineTime(item.time)+' 〜 '+
+      formatTimelineTime(getCandidateEnd(source,item,currentClipOptions()))+' をリプレイ');
     inline.replaceChildren(label,video);
     inline.hidden=false;
     entry.classList.add('preview-active');
@@ -503,6 +503,8 @@ function row(item, index) {
     video.addEventListener('loadedmetadata',restartReplay,{once:true});
     video.addEventListener('timeupdate',clampAndStop);
     video.addEventListener('seeked',clampAndStop);
+    video.addEventListener('play',updatePlayhead);
+    video.addEventListener('pause',updatePlayhead);
     video.load();
     if (!autoOpeningNextReplay) {
       inline.scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -512,13 +514,13 @@ function row(item, index) {
   const timeRow = make('div','time-row');
   const time = make('input','time-input');
   time.type = 'text';
-  time.value = formatTime(item.time);
+  time.value = formatTimelineTime(item.time);
   time.setAttribute('aria-label','タイムスタンプ');
   time.addEventListener('change', () => {
     const seconds = parseTime(time.value);
     if (seconds === null || seconds >= source.duration ||
       (Number.isFinite(item.manualEnd) && seconds >= item.manualEnd - .24)) {
-      time.value = formatTime(item.time);
+      time.value = formatTimelineTime(item.time);
     } else {
       item.time = seconds;
       renderRange();
