@@ -619,7 +619,7 @@ function row(item, index) {
   const endLabel=make('label','range-auto-label','終了（自動）');
   const endInput=make('input','range-time');
   endInput.type='text';
-  endInput.inputMode='decimal';
+  endInput.inputMode='text';
   endInput.setAttribute('aria-label','切り取り終了時刻');
   endBox.append(endLabel);
   const resetEnd=make('button','range-reset','自動に戻す');
