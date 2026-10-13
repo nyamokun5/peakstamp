@@ -1,4 +1,4 @@
-import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES, zoomDrawRect } from './editing-rules.mjs?v=zoom10';
+import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES, zoomDrawRect } from './editing-rules.mjs?v=zoom11';
 /**
  * PeakStamp: automatic highlight montage with a 5-second title card.
  * Only processes an explicitly selected local file, never uploads it.

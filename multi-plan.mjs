@@ -1,5 +1,5 @@
-import { INTRO_SECONDS } from './exporter.mjs?v=zoom10';
-import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom } from './editing-rules.mjs?v=zoom10';
+import { INTRO_SECONDS } from './exporter.mjs?v=zoom11';
+import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom } from './editing-rules.mjs?v=zoom11';
 
 /**
  * Produce non-overlapping clips, in user-controlled file order.
