@@ -443,8 +443,13 @@ function row(item, index) {
   play.type = 'button';
   play.title = '切り取り範囲をもう一度再生';
   let replayVideo=null;
+  let frameWatchId=null;
   const close=()=>{
     if(replayVideo){
+      if(frameWatchId!==null && replayVideo.cancelVideoFrameCallback){
+        replayVideo.cancelVideoFrameCallback(frameWatchId);
+      }
+      frameWatchId=null;
       replayVideo.pause();
       replayVideo.removeAttribute('src');
       replayVideo.load();
@@ -464,6 +469,19 @@ function row(item, index) {
       if(Math.abs(replayVideo.currentTime-bounds.end)>.08)replayVideo.currentTime=bounds.end;
     }
     updatePlayhead();
+  };
+  // Safari and Chrome can update the cursor on each decoded video frame.
+  // Older browsers still get updates through the standard timeupdate event.
+  const watchVideoFrames=()=>{
+    const video=replayVideo;
+    if(!video || !video.requestVideoFrameCallback || frameWatchId!==null)return;
+    const tick=()=>{
+      frameWatchId=null;
+      if(video!==replayVideo)return;
+      clampAndStop();
+      if(!video.paused)frameWatchId=video.requestVideoFrameCallback(tick);
+    };
+    frameWatchId=video.requestVideoFrameCallback(tick);
   };
   const restartReplay=()=>{
     if(!replayVideo)return;
@@ -503,7 +521,7 @@ function row(item, index) {
     video.addEventListener('loadedmetadata',restartReplay,{once:true});
     video.addEventListener('timeupdate',clampAndStop);
     video.addEventListener('seeked',clampAndStop);
-    video.addEventListener('play',updatePlayhead);
+    video.addEventListener('play',()=>{updatePlayhead();watchVideoFrames();});
     video.addEventListener('pause',updatePlayhead);
     video.load();
     if (!autoOpeningNextReplay) {
