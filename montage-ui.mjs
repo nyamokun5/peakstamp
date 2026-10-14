@@ -1,6 +1,7 @@
 import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=zoom11';
 import { buildMultiClipPlan } from './multi-plan.mjs?v=zoom11';
 import { formatTime } from './detector.mjs';
+import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=intro13';
 
 const $ = id => document.getElementById(id);
 function clipOptions() {
@@ -14,6 +15,7 @@ function updateTitlePreview() {
   const label = document.querySelector('.montage-title-preview strong');
   if (!label) return;
   label.textContent = $('montageTitle').value || 'GOALS!';
+  renderIntroPreview();
   const fonts = {
     impact: 'Impact, "Arial Black", sans-serif',
     modern: '"Helvetica Neue", Arial, sans-serif',
@@ -40,6 +42,7 @@ function editSignature(state, plan) {
     font:$('titleFont').value,
     titleSize:$('titleSize').value,
     quality:document.querySelector('input[name="exportQuality"]:checked')?.value || 'high',
+    intro:getIntroSignature(),
   });
 }
 let lastUrl = null;
@@ -80,6 +83,7 @@ function setWorking(value) {
   $('montageExport').disabled = value;
   $('montageExport').textContent = value ? 'MP4を書き出しています…' : '▶ ハイライト動画を作成する';
   $('montageCancel').hidden = !value;
+  setIntroWorking(value);
   window.dispatchEvent(new CustomEvent('montage-export-state',{detail:{working:value}}));
 }
 function setTitle(value) {
@@ -99,6 +103,7 @@ export function updateMontageEditor(state) {
   lastFile = state?.file || null;
   if (!visible) return;
   const plan = buildMultiClipPlan(state.sources, clipOptions());
+  refreshIntroAspect(state,plan);
   const signature = editSignature(state,plan);
   if (!working && lastEditSignature !== null && lastEditSignature !== signature) revokeOutput();
   lastEditSignature = signature;
@@ -201,6 +206,7 @@ export function initMontageEditor(state) {
         file, sources: activeState.sources, plan, quality,
         title: $('montageTitle').value || 'GOALS!',
         font: $('titleFont').value, titleSize: Number($('titleSize').value),
+        intro:getIntroConfiguration(),
         isCancelled: () => cancelRequested,
         onProgress: notify,
       });
@@ -239,6 +245,7 @@ export function initMontageEditor(state) {
       $('montageExport').disabled = !planAfter.length;
     }
   });
+  initIntroEditor(settingChanged,()=>working);
   updateTitlePreview();
   updateMontageEditor(state);
 }
