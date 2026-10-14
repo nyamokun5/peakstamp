@@ -4,7 +4,7 @@ import {
   INTRO_ANCHORS,INTRO_SECONDS,normalizeIntroPoint,introPreset,
   coverRect,overlayRect,imageDimensions,drawCover,drawIntroOverlay
 } from '../intro-layout.mjs';
-import { drawIntro } from '../exporter.mjs';
+import { drawIntro, introTitleRect } from '../exporter.mjs';
 
 test('nine presets cover all three columns and rows with center default',()=>{
   assert.equal(INTRO_ANCHORS.length,9);
@@ -80,4 +80,69 @@ test('legacy default intro still renders gradient and word only',()=>{
   };
   drawIntro(ctx,1280,720,'GOALS!');
   assert.deepEqual(commands,['background','GOALS!']);
+});
+
+test('legacy default text stays centered if position was never specified',()=>{
+  const places=[];
+  const ctx={
+    createLinearGradient:()=>({addColorStop:()=>{}}),
+    fillRect:()=>{},
+    measureText:s=>({width:s.length*50}),
+    fillText:(text,x,y)=>places.push({text,x,y})
+  };
+  drawIntro(ctx,1280,720,'GOALS!');
+  assert.deepEqual(places,[{text:'GOALS!',x:640,y:360}]);
+});
+test('default text title uses nine-place presets even without uploaded PNG',()=>{
+  for(let i=0;i<9;i++){
+    const places=[];
+    const ctx={
+      measureText:s=>({width:s.length*25}),
+      fillText:(text,x,y)=>places.push({text,x,y})
+    };
+    const pos=introPreset(i);
+    drawIntro(ctx,1280,720,'GOALS!',{skipBackground:true,position:pos});
+    const rect=introTitleRect(ctx,1280,720,'GOALS!',{position:pos});
+    assert.deepEqual(places,[{text:'GOALS!',x:rect.x,y:rect.y}]);
+    assert.ok(rect.left>=0 && rect.top>=0);
+    assert.ok(rect.left+rect.width<=1280 && rect.top+rect.height<=720);
+  }
+});
+test('free-position title uses the same geometry with image or video backgrounds',()=>{
+  const calls=[];
+  const ctx={
+    drawImage:()=>calls.push('image'),measureText:s=>({width:s.length*32}),
+    fillText:(_s,x,y)=>calls.push([x,y])
+  };
+  const pos={x:.31,y:.78},bg={naturalWidth:1280,naturalHeight:720};
+  drawIntro(ctx,640,360,'MATCH DAY',{backgroundImage:bg,position:pos});
+  const textRect=introTitleRect(ctx,640,360,'MATCH DAY',{position:pos});
+  assert.deepEqual(calls,['image',[textRect.x,textRect.y]]);
+  const onlyText=[];
+  const videoCtx={measureText:s=>({width:s.length*32}),fillText:(_s,x,y)=>onlyText.push([x,y])};
+  drawIntro(videoCtx,640,360,'MATCH DAY',{skipBackground:true,position:pos});
+  assert.deepEqual(onlyText,[[textRect.x,textRect.y]]);
+});
+test('title bounding box reacts to font-size and clamps to portrait canvas',()=>{
+  const ctx={measureText:s=>({width:s.length*18})};
+  const normal=introTitleRect(ctx,360,640,'GOALS!',{size:100,position:{x:.95,y:.97}});
+  const big=introTitleRect(ctx,360,640,'GOALS!',{size:150,position:{x:1,y:1}});
+  assert.ok(big.font>normal.font);
+  assert.ok(big.width>=normal.width);
+  for(const box of [normal,big]){
+    assert.ok(box.left>=0 && box.top>=0);
+    assert.ok(box.left+box.width<=360 && box.top+box.height<=640);
+  }
+});
+test('drag hit bounds correspond to exactly the rendered centered text',()=>{
+  const ctx={measureText:s=>({width:s.length*24})};
+  const place={x:.6,y:.23};
+  const rect=introTitleRect(ctx,960,540,'HIGHLIGHTS!',{size:90,position:place});
+  const coordinates=[];
+  const drawCtx={measureText:ctx.measureText,fillText:(_s,x,y)=>coordinates.push([x,y])};
+  drawIntro(drawCtx,960,540,'HIGHLIGHTS!',{
+    skipBackground:true,size:90,position:place
+  });
+  assert.deepEqual(coordinates,[[rect.x,rect.y]]);
+  assert.ok(rect.width>0 && rect.height>0);
 });
