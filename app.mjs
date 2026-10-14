@@ -1,9 +1,9 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audio12';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=zoom11';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=zoom11';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=intro13';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=intro13';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom } from './editing-rules.mjs?v=zoom11';
-import { montageSeconds } from './exporter.mjs?v=zoom11';
+import { montageSeconds } from './exporter.mjs?v=intro13';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
 
 const $ = id => document.getElementById(id);
