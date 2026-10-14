@@ -103,6 +103,25 @@
       <div class="panel-label"><span class="number">04</span><h2>ハイライト動画を作成</h2></div>
       <p class="list-help">「キープ済み」のシーンだけを自動結合。静かになったあと3秒程度で切り、場面間は0.5秒ディゾルブ。冒頭は5秒のタイトルです。</p>
 
+      <label class="montage-label" for="montageTitle">冒頭5秒のタイトル</label>
+      <div class="montage-presets" role="group" aria-label="タイトルのテンプレート">
+        <button type="button" class="active" data-montage-title="GOALS!">GOALS!</button>
+        <button type="button" data-montage-title="HIGHLIGHTS!">HIGHLIGHTS!</button>
+        <button type="button" data-montage-title="BEST PLAYS!">BEST PLAYS!</button>
+      </div>
+      <input class="montage-title-input" id="montageTitle" maxlength="32" value="GOALS!" aria-label="冒頭に表示する文字" />
+      <div class="montage-typography">
+        <label class="montage-label" for="titleFont">タイトルのフォント</label>
+        <select id="titleFont">
+          <option value="impact">インパクト（太字）</option>
+          <option value="modern">モダン（ゴシック）</option>
+          <option value="serif">セリフ体（クラシック）</option>
+          <option value="mono">モノスペース</option>
+        </select>
+        <label class="montage-label" for="titleSize">文字サイズ <strong id="titleSizeValue">100%</strong></label>
+        <input id="titleSize" type="range" min="60" max="150" value="100" step="5" />
+      </div>
+
       <section class="intro-customizer" aria-label="イントロ素材を編集">
         <div class="intro-section-heading"><strong>イントロをカスタマイズ</strong><span>冒頭5秒</span></div>
         <fieldset class="intro-background-modes">
@@ -155,25 +174,6 @@
         <p class="intro-help">PNGがある場合はPNGがタイトルの代わりに表示されます。PNGを外すと従来の文字タイトルに戻ります。</p>
       </section>
 
-      <label class="montage-label" for="montageTitle">冒頭5秒のタイトル</label>
-      <div class="montage-presets" role="group" aria-label="タイトルのテンプレート">
-        <button type="button" class="active" data-montage-title="GOALS!">GOALS!</button>
-        <button type="button" data-montage-title="HIGHLIGHTS!">HIGHLIGHTS!</button>
-        <button type="button" data-montage-title="BEST PLAYS!">BEST PLAYS!</button>
-      </div>
-      <input class="montage-title-input" id="montageTitle" maxlength="32" value="GOALS!" aria-label="冒頭に表示する文字" />
-      <div class="montage-title-preview" aria-hidden="true"><strong>GOALS!</strong></div>
-      <div class="montage-typography">
-        <label class="montage-label" for="titleFont">タイトルのフォント</label>
-        <select id="titleFont">
-          <option value="impact">インパクト（太字）</option>
-          <option value="modern">モダン（ゴシック）</option>
-          <option value="serif">セリフ体（クラシック）</option>
-          <option value="mono">モノスペース</option>
-        </select>
-        <label class="montage-label" for="titleSize">文字サイズ <strong id="titleSizeValue">100%</strong></label>
-        <input id="titleSize" type="range" min="60" max="150" value="100" step="5" />
-      </div>
       <div class="montage-cut-mode" role="group" aria-label="シーン終了の決め方">
         <label><input type="radio" name="cutMode" value="quiet" checked /> 静かになってから切る</label>
         <label><input type="radio" name="cutMode" value="fixed" /> 固定秒数で切る</label>
