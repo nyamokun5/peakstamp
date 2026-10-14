@@ -79,7 +79,7 @@ export function introTitleRect(context, width, height, title, options = {}) {
     if (context.measureText(label).width <= width * .9 || font <= 18) break;
     font -= 3;
   } while (font > 18);
-  const textWidth = Math.min(width, context.measureText(label).width);
+  const textWidth = Math.min(width * .9, context.measureText(label).width);
   const textHeight = Math.min(height, font * 1.12);
   const pos = normalizeIntroPoint(options.position);
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
@@ -105,7 +105,7 @@ export function drawIntro(context, width, height, title, options = {}) {
   }
   const placed = introTitleRect(context, width, height, title, options);
   context.fillStyle = '#ffffff';
-  context.fillText(placed.label, placed.x, placed.y);
+  context.fillText(placed.label, placed.x, placed.y, width * .9);
 }
 
 const FRAME_SOURCE = 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.3/dist/bundles/mediabunny.min.mjs';
