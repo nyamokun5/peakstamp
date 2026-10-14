@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="動画の盛り上がりを音声から検出し、YouTube用タイムスタンプを作成。端末内で処理します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=intro13" />
+  <link rel="stylesheet" href="styles.css?v=title14" />
 </head>
 <body>
   <header class="topbar">
@@ -129,14 +129,14 @@
           <button type="button" id="introPlay" class="intro-small-button">▶ 5秒再生</button>
         </div>
         <div class="intro-preview-frame" id="introPreviewFrame">
-          <canvas id="introCanvas" width="640" height="360" aria-label="背景と透過PNGの配置プレビュー"></canvas>
+          <canvas id="introCanvas" width="640" height="360" aria-label="背景と文字タイトルまたは透過PNGの配置プレビュー"></canvas>
           <video id="introVideoPreview" muted playsinline preload="metadata" hidden></video>
         </div>
-        <p class="intro-help">PNGをドラッグして移動できます。背景動画は音声なしで書き出します。</p>
+        <p class="intro-help">文字タイトル・透過PNGはプレビューでドラッグして移動できます。背景動画は音声なしで書き出します。</p>
         <p class="intro-error" id="introError" role="alert" hidden></p>
-        <div id="introOverlayControls" hidden>
-          <p class="montage-label">PNGの位置（9か所・または指で自由に移動）</p>
-          <div class="intro-position-grid" id="introPositionGrid" role="group" aria-label="PNGの配置位置">
+        <div id="introPlacementControls">
+          <p class="montage-label" id="introPositionLabel">タイトルの位置（9か所・または指で自由に移動）</p>
+          <div class="intro-position-grid" id="introPositionGrid" role="group" aria-label="タイトルまたはPNGの配置位置">
             <button type="button" data-intro-position="0">左上</button>
             <button type="button" data-intro-position="1">上中央</button>
             <button type="button" data-intro-position="2">右上</button>
@@ -147,6 +147,8 @@
             <button type="button" data-intro-position="7">下中央</button>
             <button type="button" data-intro-position="8">右下</button>
           </div>
+        </div>
+        <div id="introOverlayControls" hidden>
           <label class="montage-label" for="introOverlayScale">PNGのサイズ <strong id="introScaleValue">60%</strong></label>
           <input class="montage-slider" id="introOverlayScale" type="range" min="20" max="100" step="5" value="60" />
         </div>
@@ -231,6 +233,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=intro13"></script>
+  <script type="module" src="app.mjs?v=title14"></script>
 </body>
 </html>
