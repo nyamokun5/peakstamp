@@ -1,4 +1,4 @@
-import { INTRO_SECONDS } from './exporter.mjs?v=intro13';
+import { INTRO_SECONDS } from './exporter.mjs?v=title14';
 import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom } from './editing-rules.mjs?v=zoom11';
 
 /**
