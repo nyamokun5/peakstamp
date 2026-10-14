@@ -9,7 +9,7 @@ const state={
   imageUrl:null,videoUrl:null,overlayUrl:null,revision:0,
 };
 let onChange=()=>{},isBusy=()=>false,loadedAspectUrl=null,aspectVideo=null;
-let playing=false,rafId=null,drag=null;
+let playing=false,rafId=null,drag=null,previewStartedAt=0;
 function showError(message){
   $('introError').textContent=message;
   $('introError').hidden=!message;
@@ -102,7 +102,10 @@ async function loadImage(file){
   image.src=url;
   try{
     await new Promise((resolve,reject)=>{
-      if(image.complete&&image.naturalWidth){resolve();return;}
+      if(image.complete){
+        if(image.naturalWidth){resolve();return;}
+        reject(new Error('画像を開けません。別の画像を選択してください'));return;
+      }
       image.onload=resolve;image.onerror=()=>reject(new Error('画像を開けません。別の画像を選択してください'));
     });
     const dim=imageDimensions(image);
@@ -209,7 +212,7 @@ function wireDrag(){
 function tickPreview(){
   if(!playing)return;
   const video=$('introVideoPreview');
-  if(video.currentTime>=5 || video.ended){
+  if(performance.now()-previewStartedAt>=5000){
     stopPreview();renderIntroPreview();return;
   }
   // Background video is layered behind the transparent canvas. It plays
@@ -230,7 +233,7 @@ export function initIntroEditor(callback,busy){
   const video=$('introVideoPreview');
   video.muted=true;video.playsInline=true;
   video.addEventListener('timeupdate',()=>{
-    if(playing&&video.currentTime>=4.97){stopPreview();renderIntroPreview();}
+    if(playing&&video.currentTime>=4.97){video.pause();}
   });
   for(const radio of document.querySelectorAll('input[name="introBackgroundMode"]')){
     radio.addEventListener('change',()=>{
@@ -262,7 +265,7 @@ export function initIntroEditor(callback,busy){
     if(state.mode!=='video'||!state.videoFile||isBusy())return;
     stopPreview();
     video.currentTime=0;
-    try{await video.play();playing=true;$('introPlay').textContent='再生中…';tickPreview();}
+    try{await video.play();previewStartedAt=performance.now();playing=true;$('introPlay').textContent='再生中…';tickPreview();}
     catch(err){showError('イントロ動画を再生できません：'+(err?.message||String(err)));}
   });
   window.addEventListener('pagehide',()=>{
