@@ -1,6 +1,6 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audio12';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=intro13';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title14';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=intro13';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom } from './editing-rules.mjs?v=zoom11';
 import { montageSeconds } from './exporter.mjs?v=intro13';
