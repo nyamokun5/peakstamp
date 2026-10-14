@@ -1,9 +1,10 @@
 import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES, zoomDrawRect } from './editing-rules.mjs?v=zoom11';
+import { coverRect, drawCover, drawIntroOverlay, INTRO_SECONDS as INTRO_LENGTH } from './intro-layout.mjs?v=intro13';
 /**
  * PeakStamp: automatic highlight montage with a 5-second title card.
  * Only processes an explicitly selected local file, never uploads it.
  */
-export const INTRO_SECONDS = 5;
+export const INTRO_SECONDS = INTRO_LENGTH;
 export const FRAME_RATE = 30;
 
 /** Preserve the source aspect ratio and never upscale low-resolution video. */
@@ -64,11 +65,19 @@ export function montageSeconds(plan) {
 
 /** Make the only intro content a word/title: GOALS!, HIGHLIGHTS!, etc. */
 export function drawIntro(context, width, height, title, options = {}) {
-  const gradient = context.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, '#081526');
-  gradient.addColorStop(1, '#193b57');
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, width, height);
+  if (options.backgroundImage) {
+    drawCover(context,options.backgroundImage,width,height);
+  } else if (!options.skipBackground) {
+    const gradient = context.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, '#081526');
+    gradient.addColorStop(1, '#193b57');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, width, height);
+  }
+  if (options.overlayImage) {
+    drawIntroOverlay(context,options.overlayImage,width,height,options.position,options.overlayScale);
+    return;
+  }
   const label = String(title || 'GOALS!').trim().slice(0, 32) || 'GOALS!';
   const family = FONT_CHOICES[normalizeFont(options.font)];
   let font = Math.floor(Math.min(height * .23, width * .135) *
@@ -92,7 +101,7 @@ const FRAME_SOURCE = 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.3/dist/bundle
  */
 export async function exportMontage({
   file, sources, plan, title = 'GOALS!', quality = 'high', font = 'impact', titleSize = 100,
-  onProgress = () => {}, isCancelled = () => false,
+  intro = null, onProgress = () => {}, isCancelled = () => false,
 }) {
   if (!plan?.length) throw new Error('切り抜く場面を選んでください。');
   if (!globalThis.VideoEncoder || !globalThis.VideoDecoder) {
@@ -171,9 +180,61 @@ export async function exportMontage({
     });
     output.addAudioTrack(audioSource);
     await output.start();
-    onProgress('冒頭5秒のタイトルを作成中', 2);
-    drawIntro(context, width, height, title, { font, size: titleSize });
-    await videoSource.add(0, INTRO_SECONDS, { keyFrame: true });
+    onProgress('冒頭5秒のイントロを作成中', 2);
+    const mode=intro?.mode||'default';
+    const options={font,size:titleSize,overlayImage:intro?.overlayImage||null,
+      position:intro?.position||{x:.5,y:.5},overlayScale:intro?.overlayScale??.6};
+    if(mode==='image'){
+      if(!intro?.backgroundImage)throw new Error('イントロの背景画像が選択されていません');
+      drawIntro(context,width,height,title,{...options,backgroundImage:intro.backgroundImage});
+      await videoSource.add(0,INTRO_SECONDS,{keyFrame:true});
+    }else if(mode==='video'){
+      if(!intro?.backgroundFile)throw new Error('イントロの背景動画が選択されていません');
+      const bgInput=new Input({
+        formats:ALL_FORMATS,
+        source:new BlobSource(intro.backgroundFile,{maxCacheSize:4*1024*1024}),
+      });
+      try{
+        const bgTrack=await bgInput.getPrimaryVideoTrack();
+        if(!bgTrack||!await bgTrack.canDecode())
+          throw new Error('イントロ動画の映像形式を読み込めません');
+        const bgDuration=await bgInput.computeDuration();
+        if(!Number.isFinite(bgDuration)||bgDuration<=0)
+          throw new Error('イントロ動画の長さを読み取れません');
+        const srcW=await bgTrack.getDisplayWidth();
+        const srcH=await bgTrack.getDisplayHeight();
+        const box=coverRect(srcW,srcH,width,height);
+        const sink=new VideoSampleSink(bgTrack);
+        const frameCount=Math.round(INTRO_SECONDS*settings.frameRate);
+        // Seek no later than the actual end. Repeating the last timestamp
+        // freezes a sub-five-second background until exactly five seconds.
+        const lastTime=Math.max(0,bgDuration-1/settings.frameRate);
+        const stamps=Array.from({length:frameCount},(_,i)=>
+          Math.min(lastTime,i/settings.frameRate));
+        let frame=0;
+        for await(const sample of sink.samplesAtTimestamps(stamps)){
+          check();
+          if(!sample)throw new Error('イントロ動画のフレームを読み込めません');
+          try{
+            context.fillStyle='#000000';
+            context.fillRect(0,0,width,height);
+            sample.draw(context,box.x,box.y,box.width,box.height);
+            drawIntro(context,width,height,title,{...options,skipBackground:true});
+            await videoSource.add(frame/settings.frameRate,1/settings.frameRate,
+              {keyFrame:frame===0});
+          }finally{sample.close();}
+          frame++;
+          if(frame%15===0){
+            onProgress('イントロ動画を処理中',2+frame/frameCount);
+            await new Promise(resolve=>setTimeout(resolve,0));
+          }
+        }
+        if(frame!==frameCount)throw new Error('イントロ動画のフレームが不足しています');
+      }finally{bgInput.dispose();}
+    }else{
+      drawIntro(context,width,height,title,options);
+      await videoSource.add(0,INTRO_SECONDS,{keyFrame:true});
+    }
 
     const totalFrames = clips.reduce((n, c) => n +
       Math.ceil((c.end - c.start) * settings.frameRate), 0);
