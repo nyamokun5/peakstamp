@@ -1,7 +1,7 @@
-import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=intro13';
+import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=title14';
 import { buildMultiClipPlan } from './multi-plan.mjs?v=intro13';
 import { formatTime } from './detector.mjs';
-import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=intro13';
+import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=title14';
 
 const $ = id => document.getElementById(id);
 function clipOptions() {
@@ -12,20 +12,11 @@ function clipOptions() {
   };
 }
 function updateTitlePreview() {
-  const label = document.querySelector('.montage-title-preview strong');
-  if (!label) return;
-  label.textContent = $('montageTitle').value || 'GOALS!';
+  // The interactive intro canvas is the only preview. Its font, size,
+  // location and background match the MP4 composition code.
   renderIntroPreview();
-  const fonts = {
-    impact: 'Impact, "Arial Black", sans-serif',
-    modern: '"Helvetica Neue", Arial, sans-serif',
-    serif: 'Georgia, "Times New Roman", serif',
-    mono: '"Courier New", monospace',
-  };
-  label.style.fontFamily = fonts[$('titleFont').value] || fonts.impact;
-  label.style.fontSize = 'clamp(16px, ' + (Number($('titleSize').value) * .06) + 'vw, ' +
-    (Number($('titleSize').value) * .43) + 'px)';
 }
+
 function settingChanged() {
   if (!working) revokeOutput();
   updateMontageEditor(activeState);

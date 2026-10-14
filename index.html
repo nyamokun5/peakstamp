@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="動画の盛り上がりを音声から検出し、YouTube用タイムスタンプを作成。端末内で処理します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=intro13" />
+  <link rel="stylesheet" href="styles.css?v=title14" />
 </head>
 <body>
   <header class="topbar">
@@ -103,6 +103,25 @@
       <div class="panel-label"><span class="number">04</span><h2>ハイライト動画を作成</h2></div>
       <p class="list-help">「キープ済み」のシーンだけを自動結合。静かになったあと3秒程度で切り、場面間は0.5秒ディゾルブ。冒頭は5秒のタイトルです。</p>
 
+      <label class="montage-label" for="montageTitle">冒頭5秒のタイトル</label>
+      <div class="montage-presets" role="group" aria-label="タイトルのテンプレート">
+        <button type="button" class="active" data-montage-title="GOALS!">GOALS!</button>
+        <button type="button" data-montage-title="HIGHLIGHTS!">HIGHLIGHTS!</button>
+        <button type="button" data-montage-title="BEST PLAYS!">BEST PLAYS!</button>
+      </div>
+      <input class="montage-title-input" id="montageTitle" maxlength="32" value="GOALS!" aria-label="冒頭に表示する文字" />
+      <div class="montage-typography">
+        <label class="montage-label" for="titleFont">タイトルのフォント</label>
+        <select id="titleFont">
+          <option value="impact">インパクト（太字）</option>
+          <option value="modern">モダン（ゴシック）</option>
+          <option value="serif">セリフ体（クラシック）</option>
+          <option value="mono">モノスペース</option>
+        </select>
+        <label class="montage-label" for="titleSize">文字サイズ <strong id="titleSizeValue">100%</strong></label>
+        <input id="titleSize" type="range" min="60" max="150" value="100" step="5" />
+      </div>
+
       <section class="intro-customizer" aria-label="イントロ素材を編集">
         <div class="intro-section-heading"><strong>イントロをカスタマイズ</strong><span>冒頭5秒</span></div>
         <fieldset class="intro-background-modes">
@@ -129,14 +148,14 @@
           <button type="button" id="introPlay" class="intro-small-button">▶ 5秒再生</button>
         </div>
         <div class="intro-preview-frame" id="introPreviewFrame">
-          <canvas id="introCanvas" width="640" height="360" aria-label="背景と透過PNGの配置プレビュー"></canvas>
+          <canvas id="introCanvas" width="640" height="360" aria-label="背景と文字タイトルまたは透過PNGの配置プレビュー"></canvas>
           <video id="introVideoPreview" muted playsinline preload="metadata" hidden></video>
         </div>
-        <p class="intro-help">PNGをドラッグして移動できます。背景動画は音声なしで書き出します。</p>
+        <p class="intro-help">文字タイトル・透過PNGはプレビューでドラッグして移動できます。背景動画は音声なしで書き出します。</p>
         <p class="intro-error" id="introError" role="alert" hidden></p>
-        <div id="introOverlayControls" hidden>
-          <p class="montage-label">PNGの位置（9か所・または指で自由に移動）</p>
-          <div class="intro-position-grid" id="introPositionGrid" role="group" aria-label="PNGの配置位置">
+        <div id="introPlacementControls">
+          <p class="montage-label" id="introPositionLabel">タイトルの位置（9か所・または指で自由に移動）</p>
+          <div class="intro-position-grid" id="introPositionGrid" role="group" aria-label="タイトルまたはPNGの配置位置">
             <button type="button" data-intro-position="0">左上</button>
             <button type="button" data-intro-position="1">上中央</button>
             <button type="button" data-intro-position="2">右上</button>
@@ -147,31 +166,14 @@
             <button type="button" data-intro-position="7">下中央</button>
             <button type="button" data-intro-position="8">右下</button>
           </div>
+        </div>
+        <div id="introOverlayControls" hidden>
           <label class="montage-label" for="introOverlayScale">PNGのサイズ <strong id="introScaleValue">60%</strong></label>
           <input class="montage-slider" id="introOverlayScale" type="range" min="20" max="100" step="5" value="60" />
         </div>
         <p class="intro-help">PNGがある場合はPNGがタイトルの代わりに表示されます。PNGを外すと従来の文字タイトルに戻ります。</p>
       </section>
 
-      <label class="montage-label" for="montageTitle">冒頭5秒のタイトル</label>
-      <div class="montage-presets" role="group" aria-label="タイトルのテンプレート">
-        <button type="button" class="active" data-montage-title="GOALS!">GOALS!</button>
-        <button type="button" data-montage-title="HIGHLIGHTS!">HIGHLIGHTS!</button>
-        <button type="button" data-montage-title="BEST PLAYS!">BEST PLAYS!</button>
-      </div>
-      <input class="montage-title-input" id="montageTitle" maxlength="32" value="GOALS!" aria-label="冒頭に表示する文字" />
-      <div class="montage-title-preview" aria-hidden="true"><strong>GOALS!</strong></div>
-      <div class="montage-typography">
-        <label class="montage-label" for="titleFont">タイトルのフォント</label>
-        <select id="titleFont">
-          <option value="impact">インパクト（太字）</option>
-          <option value="modern">モダン（ゴシック）</option>
-          <option value="serif">セリフ体（クラシック）</option>
-          <option value="mono">モノスペース</option>
-        </select>
-        <label class="montage-label" for="titleSize">文字サイズ <strong id="titleSizeValue">100%</strong></label>
-        <input id="titleSize" type="range" min="60" max="150" value="100" step="5" />
-      </div>
       <div class="montage-cut-mode" role="group" aria-label="シーン終了の決め方">
         <label><input type="radio" name="cutMode" value="quiet" checked /> 静かになってから切る</label>
         <label><input type="radio" name="cutMode" value="fixed" /> 固定秒数で切る</label>
@@ -231,6 +233,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=intro13"></script>
+  <script type="module" src="app.mjs?v=title14"></script>
 </body>
 </html>

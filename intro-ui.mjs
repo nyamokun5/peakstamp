@@ -1,4 +1,4 @@
-import { drawIntro } from './exporter.mjs?v=intro13';
+import { drawIntro, introTitleRect } from './exporter.mjs?v=title14';
 import { introPreset, overlayRect, normalizeIntroPoint, imageDimensions } from './intro-layout.mjs?v=intro13';
 
 const $=id=>document.getElementById(id);
@@ -21,10 +21,13 @@ function info(){
   $('introOverlayName').textContent=state.overlayFile?.name||'未設定：下のタイトル文字を使用';
   $('introOverlayClear').hidden=!state.overlayFile;
   $('introOverlayControls').hidden=!state.overlayImage;
+  $('introPositionLabel').textContent=state.overlayImage
+    ? 'PNGの位置（9か所・または指で自由に移動）'
+    : 'タイトルの位置（9か所・または指で自由に移動）';
   $('introImagePicker').hidden=state.mode!=='image';
   $('introVideoPicker').hidden=state.mode!=='video';
   $('introPlay').hidden=state.mode!=='video';
-  $('introCanvas').classList.toggle('is-draggable',!!state.overlayImage);
+  $('introCanvas').classList.toggle('is-draggable',true);
   for(const radio of document.querySelectorAll('input[name="introBackgroundMode"]'))
     radio.checked=radio.value===state.mode;
 }
@@ -185,11 +188,26 @@ function pointerPosition(e,canvas){
 function wireDrag(){
   const canvas=$('introCanvas');
   canvas.addEventListener('pointerdown',e=>{
-    if(!state.overlayImage||isBusy())return;
-    const p=pointerPosition(e,canvas),dim=imageDimensions(state.overlayImage);
-    const r=overlayRect(dim.width,dim.height,canvas.width,canvas.height,state.position,state.overlayScale);
-    if(p.x*canvas.width<r.x||p.x*canvas.width>r.x+r.width||
-       p.y*canvas.height<r.y||p.y*canvas.height>r.y+r.height)return;
+    if(isBusy())return;
+    const p=pointerPosition(e,canvas);
+    let hit;
+    if(state.overlayImage){
+      const dim=imageDimensions(state.overlayImage);
+      const r=overlayRect(dim.width,dim.height,canvas.width,canvas.height,state.position,state.overlayScale);
+      hit={left:r.x,top:r.y,width:r.width,height:r.height};
+    }else{
+      const ctx=canvas.getContext('2d');
+      if(!ctx)return;
+      hit=introTitleRect(ctx,canvas.width,canvas.height,
+        $('montageTitle').value||'GOALS!',{
+          font:$('titleFont').value,size:Number($('titleSize').value)||100,
+          position:state.position
+        });
+    }
+    // Generous hit target for small text on a touch screen.
+    const pad=12;
+    if(p.x*canvas.width<hit.left-pad||p.x*canvas.width>hit.left+hit.width+pad||
+       p.y*canvas.height<hit.top-pad||p.y*canvas.height>hit.top+hit.height+pad)return;
     drag={id:e.pointerId,start:p,position:{...state.position}};
     canvas.setPointerCapture?.(e.pointerId);
     e.preventDefault();
