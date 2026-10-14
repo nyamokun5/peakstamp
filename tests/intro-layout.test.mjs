@@ -146,3 +146,15 @@ test('drag hit bounds correspond to exactly the rendered centered text',()=>{
   assert.deepEqual(coordinates,[[rect.x,rect.y]]);
   assert.ok(rect.width>0 && rect.height>0);
 });
+
+test('very long movable titles remain within 90 percent canvas width',()=>{
+  const context={measureText:()=>({width:1000}),fillText(...args){this.call=args}};
+  drawIntro(context,320,180,'SUPER LONG SHOOT SUNDAY HIGHLIGHT',{
+    skipBackground:true,position:{x:1,y:1}
+  });
+  const bounds=introTitleRect(context,320,180,'SUPER LONG SHOOT SUNDAY HIGHLIGHT',{
+    position:{x:1,y:1}
+  });
+  assert.ok(bounds.width<=288 && bounds.left>=0 && bounds.left+bounds.width<=320);
+  assert.equal(context.call[3],288);
+});
