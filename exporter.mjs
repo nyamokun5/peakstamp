@@ -1,5 +1,5 @@
 import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES, zoomDrawRect } from './editing-rules.mjs?v=zoom11';
-import { coverRect, drawCover, drawIntroOverlay, INTRO_SECONDS as INTRO_LENGTH } from './intro-layout.mjs?v=intro13';
+import { coverRect, drawCover, drawIntroOverlay, normalizeIntroPoint, INTRO_SECONDS as INTRO_LENGTH } from './intro-layout.mjs?v=title14';
 /**
  * PeakStamp: automatic highlight montage with a 5-second title card.
  * Only processes an explicitly selected local file, never uploads it.
@@ -63,7 +63,32 @@ export function montageSeconds(plan) {
   return Math.max(INTRO_SECONDS,INTRO_SECONDS + plan.reduce((n, clip) => n + (clip.end - clip.start), 0) - dissolveOverlap(plan,FRAME_RATE));
 }
 
-/** Make the only intro content a word/title: GOALS!, HIGHLIGHTS!, etc. */
+/**
+ * Shared title geometry for both MP4 export and the touchscreen drag hit area.
+ * Use exactly the existing font sizing/shrink rules; keep title inside frame.
+ */
+export function introTitleRect(context, width, height, title, options = {}) {
+  const label = String(title || 'GOALS!').trim().slice(0, 32) || 'GOALS!';
+  const family = FONT_CHOICES[normalizeFont(options.font)];
+  let font = Math.floor(Math.min(height * .23, width * .135) *
+    normalizeSize(options.size) / 100);
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  do {
+    context.font = family.weight + ' ' + font + 'px ' + family.family;
+    if (context.measureText(label).width <= width * .9 || font <= 18) break;
+    font -= 3;
+  } while (font > 18);
+  const textWidth = Math.min(width, context.measureText(label).width);
+  const textHeight = Math.min(height, font * 1.12);
+  const pos = normalizeIntroPoint(options.position);
+  const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+  const x = clamp(pos.x * width, textWidth / 2, width - textWidth / 2);
+  const y = clamp(pos.y * height, textHeight / 2, height - textHeight / 2);
+  return { label, x, y, width:textWidth, height:textHeight,
+    left:x-textWidth/2, top:y-textHeight/2, font };
+}
+/** Make a legacy title or custom PNG above the selected intro background. */
 export function drawIntro(context, width, height, title, options = {}) {
   if (options.backgroundImage) {
     drawCover(context,options.backgroundImage,width,height);
@@ -78,19 +103,9 @@ export function drawIntro(context, width, height, title, options = {}) {
     drawIntroOverlay(context,options.overlayImage,width,height,options.position,options.overlayScale);
     return;
   }
-  const label = String(title || 'GOALS!').trim().slice(0, 32) || 'GOALS!';
-  const family = FONT_CHOICES[normalizeFont(options.font)];
-  let font = Math.floor(Math.min(height * .23, width * .135) *
-    normalizeSize(options.size) / 100);
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  do {
-    context.font = family.weight + ' ' + font + 'px ' + family.family;
-    if (context.measureText(label).width <= width * .9 || font <= 18) break;
-    font -= 3;
-  } while (font > 18);
+  const placed = introTitleRect(context, width, height, title, options);
   context.fillStyle = '#ffffff';
-  context.fillText(label, width / 2, height / 2);
+  context.fillText(placed.label, placed.x, placed.y);
 }
 
 const FRAME_SOURCE = 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.3/dist/bundles/mediabunny.min.mjs';
