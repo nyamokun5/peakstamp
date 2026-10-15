@@ -432,3 +432,12 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .intro-presentation-picker strong{font-size:13px;color:#f2fffc}
 .intro-presentation-picker small{font-size:11px;line-height:1.45;color:#bacfd7}
 .intro-preview-frame video#introFirstScenePreview{object-fit:contain;background:#081523}
+
+
+/* v16: unused metadata and YouTube timestamp output remain in code for
+   backward compatibility, but are intentionally not shown in the UI. */
+.play-label-group,
+.comment-section,
+.source-copy {
+  display: none !important;
+}
