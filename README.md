@@ -218,3 +218,12 @@ AIなし・外部APIなしで、撮影者の会話、工事の機械音、工具
 - キープ済みシーンの一覧は動画名・開始位置のみに整理し、プレイの種類を表示しない。
 - 開始・終了時刻の入力、タイムライン調整、キープ・不採用、音声検出、イントロ、MP4書き出しは従来どおり使用できる。
 - 画面冒頭・保存ヘルプから現在使わないYouTubeタイムスタンプの案内を削除。表示関連の回帰テストを追加。
+
+## 2026-10-15 LINE共有リンクから外部ブラウザを開く（v17）
+
+- LINE Developers公式仕様のURLクエリパラメータ `openExternalBrowser=1` を使う。LINEのトークで**最初にタップするURL**にこのパラメータが含まれている必要がある。
+- PeakStampの「LINE共有用リンクをコピー」から `https://nyamokun5.github.io/peakstamp/?openExternalBrowser=1` をコピー可能。Safari等でクリップボード書き込みが拒否された場合は、選択してコピーできる欄を表示。
+- 普通のURLで訪問した場合も、ブラウザのアドレスバーにあるURLへパラメータを加える（History API の replaceState）。アプリの設定・動画・解析内容は一切外部送信しない。
+- `v=...` のような更新用クエリは共有リンクから除外し、常に短い固定URLを案内。
+- **制約:** ページをLINE内ブラウザで開いたあとに、ウェブページのJavaScriptから外部ブラウザを強制起動することはできない。URLの末尾にパラメータを付けるのは共有する前に行うこと。LINEのバージョン・OS・リンク経由により実機で確認が必要。LIFFでは非対応（PeakStampはLIFFではない）。
+- LINE公式仕様: https://developers.line.biz/ja/docs/line-login/using-line-url-scheme/
