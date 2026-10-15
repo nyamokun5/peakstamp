@@ -1032,14 +1032,19 @@ window.addEventListener('montage-export-state', event => {
 
 $('lineShareCopy').addEventListener('click',async()=>{
   const url=lineShareUrl(window.location.href);
+  const fallback=$('lineShareFallback');
+  fallback.hidden=true;
   try {
     if(!navigator.clipboard?.writeText)throw new Error('Clipboard API unavailable');
     await navigator.clipboard.writeText(url);
     $('lineShareStatus').textContent='コピーしました。LINEのトークに貼り付けてください。';
   } catch {
-    // iPhone/Safari can deny clipboard permission. Offer the URL for manual copy.
-    $('lineShareStatus').textContent='自動コピーできませんでした。表示されたURLをコピーしてください。';
-    window.prompt('LINEで送るURLをコピー',url);
+    // Safari can deny clipboard access. Keep a selectable URL in the page.
+    fallback.value=url;
+    fallback.hidden=false;
+    fallback.focus();
+    fallback.select();
+    $('lineShareStatus').textContent='URLを選択しました。コピーしてLINEに貼り付けてください。';
   }
 });
 
