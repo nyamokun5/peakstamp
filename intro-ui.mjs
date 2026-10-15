@@ -1,20 +1,29 @@
-import { drawIntro, introTitleRect } from './exporter.mjs?v=title14';
-import { introPreset, overlayRect, normalizeIntroPoint, imageDimensions } from './intro-layout.mjs?v=intro13';
+import { drawIntro, introTitleRect } from './exporter.mjs?v=scene15';
+import { introPreset, overlayRect, normalizeIntroPoint, imageDimensions, prepareIntroPlan, introOverlayOpacity } from './intro-layout.mjs?v=scene15';
 
 const $=id=>document.getElementById(id);
 const fileSignature=f=>f?[f.name,f.size,f.lastModified]:null;
 const state={
-  mode:'default',imageFile:null,backgroundImage:null,videoFile:null,
+  presentation:'overlay',mode:'default',imageFile:null,backgroundImage:null,videoFile:null,
   overlayFile:null,overlayImage:null,position:{x:.5,y:.5},overlayScale:.6,
   imageUrl:null,videoUrl:null,overlayUrl:null,revision:0,
 };
 let onChange=()=>{},isBusy=()=>false,loadedAspectUrl=null,aspectVideo=null;
 let playing=false,rafId=null,drag=null,previewStartedAt=0;
+let firstSceneUrl=null,firstSceneStart=0,firstSceneOverlaySeconds=3;
 function showError(message){
   $('introError').textContent=message;
   $('introError').hidden=!message;
 }
 function info(){
+  const overlay=state.presentation==='overlay';
+  $('introCardBackgroundSettings').hidden=overlay;
+  $('introDurationLabel').textContent=overlay?'先行再生＋タイトル3秒':'独立した5秒イントロ';
+  $('introPreviewHelp').textContent=overlay
+    ? '最初のシーンを最大3秒早く再生してタイトルを重ねます。プレビューはミュートですが、完成MP4では試合音声も再生されます。'
+    : 'タイトルはドラッグして位置変更できます。背景動画の音声は使用しません。';
+  for(const radio of document.querySelectorAll('input[name="introPresentation"]'))
+    radio.checked=radio.value===state.presentation;
   $('introBackgroundName').textContent=state.mode==='default'?'デフォルトの背景を使用':
     state.mode==='image'?(state.imageFile?.name||'背景画像を選択してください'):
     (state.videoFile?.name||'背景動画を選択してください');
@@ -26,7 +35,8 @@ function info(){
     : 'タイトルの位置（9か所・または指で自由に移動）';
   $('introImagePicker').hidden=state.mode!=='image';
   $('introVideoPicker').hidden=state.mode!=='video';
-  $('introPlay').hidden=state.mode!=='video';
+  $('introPlay').hidden=!overlay&&state.mode!=='video';
+  $('introPlay').textContent=overlay?'▶ 先頭3秒を再生':'▶ 5秒再生';
   $('introCanvas').classList.toggle('is-draggable',true);
   for(const radio of document.querySelectorAll('input[name="introBackgroundMode"]'))
     radio.checked=radio.value===state.mode;
@@ -37,6 +47,7 @@ function markChanged(){
 }
 export function getIntroConfiguration(){
   return {
+    presentation:state.presentation,
     mode:state.mode,backgroundFile:state.mode==='video'?state.videoFile:null,
     backgroundImage:state.mode==='image'?state.backgroundImage:null,
     overlayImage:state.overlayImage,
@@ -45,7 +56,7 @@ export function getIntroConfiguration(){
 }
 export function getIntroSignature(){
   return {
-    mode:state.mode,
+    presentation:state.presentation,mode:state.mode,
     bg:fileSignature(state.mode==='image'?state.imageFile:state.mode==='video'?state.videoFile:null),
     overlay:fileSignature(state.overlayFile),
     position:state.position,scale:state.overlayScale,revision:state.revision
@@ -57,7 +68,8 @@ function stopPreview(){
   rafId=null;
   const video=$('introVideoPreview');
   video.pause();
-  $('introPlay').textContent='▶ 5秒再生';
+  $('introFirstScenePreview').pause();
+  $('introPlay').textContent=state.presentation==='overlay'?'▶ 先頭3秒を再生':'▶ 5秒再生';
 }
 function applyAspect(width,height){
   const ratio=width/height;
@@ -74,7 +86,31 @@ export function refreshIntroAspect(activeState,plan){
   const id=plan?.[0]?.sourceId;
   const selected=activeState?.sources?.find(s=>s.id===id);
   const url=selected?.objectUrl||null;
-  if(!url||loadedAspectUrl===url)return;
+  const prepared=prepareIntroPlan(plan,{presentation:'overlay'});
+  const first=prepared.clips[0];
+  const firstStart=first?.start??0;
+  const firstEnd=prepared.overlaySeconds||0;
+  const firstVideo=$('introFirstScenePreview');
+  if(firstSceneUrl!==url || firstSceneStart!==firstStart){
+    stopPreview();
+    firstSceneUrl=url;
+    firstSceneStart=firstStart;
+    firstSceneOverlaySeconds=firstEnd;
+    if(url){
+      firstVideo.src=url;
+      firstVideo.onloadedmetadata=()=>{
+        if(firstSceneUrl===url){
+          firstVideo.currentTime=firstSceneStart;
+          renderIntroPreview();
+        }
+      };
+      firstVideo.load();
+    }else firstVideo.removeAttribute('src');
+  }else firstSceneOverlaySeconds=firstEnd;
+  if(!url||loadedAspectUrl===url){
+    renderIntroPreview();
+    return;
+  }
   loadedAspectUrl=url;
   if(!aspectVideo)aspectVideo=document.createElement('video');
   aspectVideo.preload='metadata';
@@ -89,15 +125,23 @@ export function renderIntroPreview(){
   if(!ctx)return;
   const width=canvas.width,height=canvas.height;
   ctx.clearRect(0,0,width,height);
-  const videoMode=state.mode==='video';
+  const overlayMode=state.presentation==='overlay';
+  const videoMode=!overlayMode&&state.mode==='video';
   $('introVideoPreview').hidden=!videoMode;
-  drawIntro(ctx,width,height,$('montageTitle').value||'GOALS!',{
+  $('introFirstScenePreview').hidden=!overlayMode;
+  const options={
     font:$('titleFont').value||'impact',
     size:Number($('titleSize').value)||100,
-    skipBackground:videoMode,
-    backgroundImage:state.mode==='image'?state.backgroundImage:null,
+    skipBackground:videoMode||overlayMode,
+    backgroundImage:!overlayMode&&state.mode==='image'?state.backgroundImage:null,
     overlayImage:state.overlayImage,position:state.position,overlayScale:state.overlayScale
-  });
+  };
+  if(overlayMode && playing){
+    const elapsed=Math.max(0,$('introFirstScenePreview').currentTime-firstSceneStart);
+    ctx.globalAlpha=introOverlayOpacity(elapsed,firstSceneOverlaySeconds);
+  }
+  drawIntro(ctx,width,height,$('montageTitle').value||'GOALS!',options);
+  ctx.globalAlpha=1;
 }
 async function loadImage(file){
   const url=URL.createObjectURL(file);
@@ -229,19 +273,23 @@ function wireDrag(){
 }
 function tickPreview(){
   if(!playing)return;
-  const video=$('introVideoPreview');
-  if(performance.now()-previewStartedAt>=5000){
-    stopPreview();renderIntroPreview();return;
+  const overlay=state.presentation==='overlay';
+  const duration=overlay?firstSceneOverlaySeconds:5;
+  const video=overlay?$('introFirstScenePreview'):$('introVideoPreview');
+  if(performance.now()-previewStartedAt>=duration*1000 ||
+    (overlay&&video.currentTime>=firstSceneStart+duration)){
+    stopPreview();
+    if(overlay)video.currentTime=firstSceneStart;
+    renderIntroPreview();return;
   }
-  // Background video is layered behind the transparent canvas. It plays
-  // visibly using native browser media hardware rather than canvas redecoding.
+  if(overlay)renderIntroPreview();
   rafId=requestAnimationFrame(tickPreview);
 }
 export function setIntroWorking(busy){
   for(const id of ['introImageFile','introVideoFile','introOverlayFile','introOverlayClear',
     'introOverlayScale','introPlay'])
     $(id).disabled=busy;
-  for(const el of document.querySelectorAll('input[name="introBackgroundMode"]'))
+  for(const el of document.querySelectorAll('input[name="introBackgroundMode"], input[name="introPresentation"]'))
     el.disabled=busy;
   for(const el of document.querySelectorAll('[data-intro-position]'))el.disabled=busy;
 }
@@ -250,9 +298,18 @@ export function initIntroEditor(callback,busy){
   isBusy=busy||(()=>false);
   const video=$('introVideoPreview');
   video.muted=true;video.playsInline=true;
+  const first=$('introFirstScenePreview');
+  first.muted=true;first.playsInline=true;
   video.addEventListener('timeupdate',()=>{
     if(playing&&video.currentTime>=4.97){video.pause();}
   });
+  for(const radio of document.querySelectorAll('input[name="introPresentation"]')){
+    radio.addEventListener('change',()=>{
+      if(!radio.checked||isBusy())return;
+      stopPreview();state.presentation=radio.value;
+      info();renderIntroPreview();markChanged();
+    });
+  }
   for(const radio of document.querySelectorAll('input[name="introBackgroundMode"]')){
     radio.addEventListener('change',()=>{
       if(!radio.checked||isBusy())return;
@@ -280,11 +337,19 @@ export function initIntroEditor(callback,busy){
   });
   $('introOverlayScale').addEventListener('change',markChanged);
   $('introPlay').addEventListener('click',async()=>{
-    if(state.mode!=='video'||!state.videoFile||isBusy())return;
+    if(isBusy())return;
+    const overlay=state.presentation==='overlay';
+    if(overlay&&!firstSceneUrl)return;
+    if(!overlay&&(state.mode!=='video'||!state.videoFile))return;
     stopPreview();
-    video.currentTime=0;
-    try{await video.play();previewStartedAt=performance.now();playing=true;$('introPlay').textContent='再生中…';tickPreview();}
-    catch(err){showError('イントロ動画を再生できません：'+(err?.message||String(err)));}
+    const active=overlay?first:video;
+    active.currentTime=overlay?firstSceneStart:0;
+    try{
+      await active.play();
+      previewStartedAt=performance.now();playing=true;
+      $('introPlay').textContent='再生中…';
+      tickPreview();
+    }catch(err){showError('イントロ動画を再生できません：'+(err?.message||String(err)));}
   });
   window.addEventListener('pagehide',()=>{
     stopPreview();
