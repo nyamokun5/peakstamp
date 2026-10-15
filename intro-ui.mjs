@@ -10,7 +10,7 @@ const state={
 };
 let onChange=()=>{},isBusy=()=>false,loadedAspectUrl=null,aspectVideo=null;
 let playing=false,rafId=null,drag=null,previewStartedAt=0;
-let firstSceneUrl=null,firstSceneStart=0,firstSceneOverlaySeconds=3;
+let firstSceneUrl=null,firstSceneStart=0,firstSceneOverlaySeconds=3,firstSceneZoom=1;
 function showError(message){
   $('introError').textContent=message;
   $('introError').hidden=!message;
@@ -91,6 +91,10 @@ export function refreshIntroAspect(activeState,plan){
   const firstStart=first?.start??0;
   const firstEnd=prepared.overlaySeconds||0;
   const firstVideo=$('introFirstScenePreview');
+  // Match the first clip's existing digital center zoom in the preview.
+  firstSceneZoom=Math.max(1,Math.min(3,Number(first?.zoom)||1));
+  firstVideo.style.transform='scale('+firstSceneZoom+')';
+  firstVideo.style.transformOrigin='center center';
   if(firstSceneUrl!==url || firstSceneStart!==firstStart){
     stopPreview();
     firstSceneUrl=url;
