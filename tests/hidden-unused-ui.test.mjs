@@ -38,6 +38,8 @@ test('source start and end editors and Keep/Reject controls remain enabled',()=>
 
 test('obsolete YouTube messaging is absent from visible introduction and storage help',()=>{
   assert.doesNotMatch(html,/<meta name="description" content="[^"]*YouTube/);
-  assert.doesNotMatch(html,/<section class="hero">[\s\S]*?YouTube[\s\S]*?<\/section>/);
-  assert.doesNotMatch(html,/<details class="storage-tips">[\s\S]*?YouTube[\s\S]*?<\/details>/);
+  const hero=html.split('<section class="hero">')[1].split('</section>')[0];
+  assert.doesNotMatch(hero,/YouTube/);
+  const storage=html.split('<details class="storage-tips">')[1].split('</details>')[0];
+  assert.doesNotMatch(storage,/YouTube/);
 });
