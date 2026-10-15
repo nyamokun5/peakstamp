@@ -1,5 +1,5 @@
 import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES, zoomDrawRect } from './editing-rules.mjs?v=zoom11';
-import { coverRect, drawCover, drawIntroOverlay, normalizeIntroPoint, INTRO_SECONDS as INTRO_LENGTH } from './intro-layout.mjs?v=title14';
+import { coverRect, drawCover, drawIntroOverlay, normalizeIntroPoint, prepareIntroPlan, introOverlayOpacity, INTRO_SECONDS as INTRO_LENGTH } from './intro-layout.mjs?v=scene15';
 /**
  * PeakStamp: automatic highlight montage with a 5-second title card.
  * Only processes an explicitly selected local file, never uploads it.
@@ -59,8 +59,10 @@ export function buildClipPlan(candidates, duration, seconds = 16) {
   return clips;
 }
 
-export function montageSeconds(plan) {
-  return Math.max(INTRO_SECONDS,INTRO_SECONDS + plan.reduce((n, clip) => n + (clip.end - clip.start), 0) - dissolveOverlap(plan,FRAME_RATE));
+export function montageSeconds(plan,intro=null) {
+  const prepared=prepareIntroPlan(plan,intro);
+  return prepared.introSeconds + Math.max(0,prepared.clips.reduce((n,clip)=>
+    n+(clip.end-clip.start),0)-dissolveOverlap(prepared.clips,FRAME_RATE));
 }
 
 /**
@@ -127,7 +129,8 @@ export async function exportMontage({
     ? sources.map(s => ({ id: s.id, file: s.file }))
     : file ? [{ id: '__single__', file }] : [];
   const fileMap = new Map(items.map(s => [s.id, s.file]));
-  const clips = plan.map(c => ({
+  const prepared=prepareIntroPlan(plan,intro);
+  const clips = prepared.clips.map(c => ({
     ...c, sourceId: c.sourceId ?? '__single__',
   }));
   if (!items.length || clips.some(c => !fileMap.has(c.sourceId))) {
@@ -195,11 +198,15 @@ export async function exportMontage({
     });
     output.addAudioTrack(audioSource);
     await output.start();
-    onProgress('冒頭5秒のイントロを作成中', 2);
+    const overlayFirstScene=intro?.presentation==='overlay';
+    onProgress(overlayFirstScene?'最初のシーンを準備中':'冒頭5秒のイントロを作成中',2);
     const mode=intro?.mode||'default';
     const options={font,size:titleSize,overlayImage:intro?.overlayImage||null,
       position:intro?.position||{x:.5,y:.5},overlayScale:intro?.overlayScale??.6};
-    if(mode==='image'){
+    if(overlayFirstScene){
+      // The first source starts up to 3 seconds earlier. Its original audio is
+      // retained; the title is composited on those very same video frames.
+    }else if(mode==='image'){
       if(!intro?.backgroundImage)throw new Error('イントロの背景画像が選択されていません');
       drawIntro(context,width,height,title,{...options,backgroundImage:intro.backgroundImage});
       await videoSource.add(0,INTRO_SECONDS,{keyFrame:true});
@@ -254,7 +261,7 @@ export async function exportMontage({
     const totalFrames = clips.reduce((n, c) => n +
       Math.ceil((c.end - c.start) * settings.frameRate), 0);
     let done = 0;
-    let timeline = INTRO_SECONDS;
+    let timeline = prepared.introSeconds;
     let loadedSourceId = clips[0].sourceId;
     let pendingTail = [];
     let videoSink = new VideoSampleSink(opened.videoTrack);
@@ -311,6 +318,14 @@ export async function exportMontage({
             previousTail[frame] = null;
           } else {
             sample.draw(context, dx, dy, dw, dh);
+          }
+          if (overlayFirstScene && section===0) {
+            const opacity=introOverlayOpacity(frame/settings.frameRate,prepared.overlaySeconds);
+            if(opacity>0){
+              context.globalAlpha=opacity;
+              drawIntro(context,width,height,title,{...options,skipBackground:true});
+              context.globalAlpha=1;
+            }
           }
           if (frame >= clipFrames - outgoingFrames) {
             // Retain last few source frames to blend with the next clip.
