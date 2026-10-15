@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=ui16" />
+  <link rel="stylesheet" href="styles.css?v=line17" />
 </head>
 <body>
   <header class="topbar">
@@ -19,6 +19,11 @@
       <div class="eyebrow">MATCH HIGHLIGHT FINDER <span>01 / 03</span></div>
       <h1>あの瞬間を、<br/><em>音で見つける。</em></h1>
       <p>複数の試合動画から盛り上がりを自動検出。好きなシーンをキープすれば、静かになったところで切り出して1本のハイライト動画に結合できます。冒頭タイトルの編集や、複数動画のハイライト結合にも対応。</p>
+      <div class="line-share-row">
+        <button id="lineShareCopy" type="button" class="line-share-copy">LINE共有用リンクをコピー <span aria-hidden="true">↗</span></button>
+        <span id="lineShareStatus" role="status" aria-live="polite" class="line-share-status"></span>
+      </div>
+      <p class="line-share-hint">LINEのトークで送ったリンクは、SafariやChromeなどの外部ブラウザで開くよう指定されます。</p>
     </section>
     <section class="panel choose-panel">
       <div class="panel-label"><span class="number">01</span><h2>動画を選ぶ</h2></div>
@@ -245,6 +250,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=ui16"></script>
+  <script type="module" src="app.mjs?v=line17"></script>
 </body>
 </html>
