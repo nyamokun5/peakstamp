@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="動画の盛り上がりを音声から検出し、YouTube用タイムスタンプを作成。端末内で処理します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=title14" />
+  <link rel="stylesheet" href="styles.css?v=scene15" />
 </head>
 <body>
   <header class="topbar">
@@ -101,9 +101,18 @@
 
     <section class="panel montage-panel" id="montagePanel" hidden>
       <div class="panel-label"><span class="number">04</span><h2>ハイライト動画を作成</h2></div>
-      <p class="list-help">「キープ済み」のシーンだけを自動結合。静かになったあと3秒程度で切り、場面間は0.5秒ディゾルブ。冒頭は5秒のタイトルです。</p>
+      <p class="list-help">「キープ済み」のシーンだけを自動結合。冒頭は最初のシーンを最大3秒早く再生してタイトルを重ねます。従来の5秒イントロにも切り替えられます。</p>
 
-      <label class="montage-label" for="montageTitle">冒頭5秒のタイトル</label>
+      <fieldset class="intro-presentation-picker">
+        <legend>タイトルの見せ方</legend>
+        <label><input type="radio" name="introPresentation" value="overlay" checked />
+          <span><strong>最初のシーンに重ねる（おすすめ）</strong><small>最初のシーンを最大3秒早く再生。元の試合音声も再生し、独立したイントロは挿入しません。</small></span>
+        </label>
+        <label><input type="radio" name="introPresentation" value="card" />
+          <span><strong>独立した5秒イントロ（従来）</strong><small>背景画像・動画を選び、5秒間のタイトルを挿入できます。</small></span>
+        </label>
+      </fieldset>
+      <label class="montage-label" for="montageTitle">タイトル文字</label>
       <div class="montage-presets" role="group" aria-label="タイトルのテンプレート">
         <button type="button" class="active" data-montage-title="GOALS!">GOALS!</button>
         <button type="button" data-montage-title="HIGHLIGHTS!">HIGHLIGHTS!</button>
@@ -123,7 +132,8 @@
       </div>
 
       <section class="intro-customizer" aria-label="イントロ素材を編集">
-        <div class="intro-section-heading"><strong>イントロをカスタマイズ</strong><span>冒頭5秒</span></div>
+        <div class="intro-section-heading"><strong>イントロをカスタマイズ</strong><span id="introDurationLabel">シーン先行再生・3秒</span></div>
+        <div id="introCardBackgroundSettings" hidden>
         <fieldset class="intro-background-modes">
           <legend>背景を選択</legend>
           <label><input type="radio" name="introBackgroundMode" value="default" checked /> デフォルト</label>
@@ -137,6 +147,7 @@
           <input type="file" id="introVideoFile" accept="video/*,.mp4,.mov,.m4v" />
         </label>
         <p id="introBackgroundName" class="intro-asset-name">デフォルトの背景を使用</p>
+        </div>
         <div class="intro-overlay-input">
           <label for="introOverlayFile">文字・ロゴの透過PNG</label>
           <input type="file" id="introOverlayFile" accept="image/png" />
@@ -150,8 +161,9 @@
         <div class="intro-preview-frame" id="introPreviewFrame">
           <canvas id="introCanvas" width="640" height="360" aria-label="背景と文字タイトルまたは透過PNGの配置プレビュー"></canvas>
           <video id="introVideoPreview" muted playsinline preload="metadata" hidden></video>
+          <video id="introFirstScenePreview" muted playsinline preload="metadata" hidden></video>
         </div>
-        <p class="intro-help">文字タイトル・透過PNGはプレビューでドラッグして移動できます。背景動画は音声なしで書き出します。</p>
+        <p class="intro-help" id="introPreviewHelp">最初のシーンにタイトルを重ねます。ドラッグで位置を変更できます。プレビューはミュートですが、完成MP4では試合音声も再生されます。</p>
         <p class="intro-error" id="introError" role="alert" hidden></p>
         <div id="introPlacementControls">
           <p class="montage-label" id="introPositionLabel">タイトルの位置（9か所・または指で自由に移動）</p>
@@ -233,6 +245,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=title14"></script>
+  <script type="module" src="app.mjs?v=scene15"></script>
 </body>
 </html>
