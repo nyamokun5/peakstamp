@@ -73,10 +73,10 @@ test('title starts transparent, fades in, holds, then disappears by three second
 });
 test('video chapters reflect actual first-source media time, with no phantom intro',()=>{
  const c=montageChapters(plan,'GOALS!',30,overlay);
- assert.ok(c.startsWith('0:00 Highlight 1 — game.mov'),c);
- assert.ok(c.includes('0:12 Highlight 2 — drone.mov'),c);
- assert.ok(!c.includes('0:00 GOALS!'),c);
+ assert.ok(c.startsWith('00:00 Highlight 1 — game.mov'),c);
+ assert.ok(c.includes('00:12 Highlight 2 — drone.mov'),c);
+ assert.ok(!c.includes('00:00 GOALS!'),c);
  const old=montageChapters(plan,'GOALS!',30,card);
  assert.ok(old.includes('0:00 GOALS!'),old);
- assert.ok(old.includes('0:05 Highlight 1 — game.mov'),old);
+ assert.ok(old.includes('00:05 Highlight 1 — game.mov'),old);
 });
