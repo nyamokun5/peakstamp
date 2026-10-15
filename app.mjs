@@ -5,9 +5,20 @@ import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom } from './editing-rules.mjs?v=zoom11';
 import { montageSeconds } from './exporter.mjs?v=scene15';
 import { getIntroConfiguration } from './intro-ui.mjs?v=scene15';
+import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
 
 const $ = id => document.getElementById(id);
+// When someone copies the address bar, preserve LINE's external-browser flag.
+// This does NOT switch browser after LINE has already opened an in-app page.
+try {
+  const normalized=normalizeVisibleLineUrl(window.location.href);
+  if(normalized && window.history?.replaceState)
+    window.history.replaceState(window.history.state,'',normalized);
+} catch {
+  // The app remains usable even if a browser blocks History API operations.
+}
+
 const make = (tag, cls, text) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -1017,6 +1028,19 @@ window.addEventListener('montage-export-state', event => {
   $('analyzeButton').disabled = state.exporting || state.working || !state.sources.length;
   renderSourceList();
   updateStickyBar();
+});
+
+$('lineShareCopy').addEventListener('click',async()=>{
+  const url=lineShareUrl(window.location.href);
+  try {
+    if(!navigator.clipboard?.writeText)throw new Error('Clipboard API unavailable');
+    await navigator.clipboard.writeText(url);
+    $('lineShareStatus').textContent='コピーしました。LINEのトークに貼り付けてください。';
+  } catch {
+    // iPhone/Safari can deny clipboard permission. Offer the URL for manual copy.
+    $('lineShareStatus').textContent='自動コピーできませんでした。表示されたURLをコピーしてください。';
+    window.prompt('LINEで送るURLをコピー',url);
+  }
 });
 
 initMontageEditor(state);
