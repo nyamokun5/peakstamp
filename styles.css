@@ -450,3 +450,8 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .line-share-copy:focus-visible{outline:2px solid #a4f7d8;outline-offset:2px}
 .line-share-status{font-size:11px;color:#99e9d3;line-height:1.5}
 .hero .line-share-hint{font-size:11px;line-height:1.5;margin:8px 0 0;color:#9cbfc8}
+
+
+.line-share-fallback{display:block;flex-basis:100%;max-width:100%;
+  border:1px solid #6c9ca3;border-radius:7px;background:#0c2b3e;
+  padding:10px;color:#e9faf7;font-size:12px}
