@@ -420,3 +420,15 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
   .intro-position-grid{gap:4px}
   .intro-position-grid button{font-size:11px;min-height:41px}
 }
+
+
+/* v15: in-place opening title, no separate five-second card by default. */
+.intro-presentation-picker{margin:13px 0 14px;padding:0;border:0;display:flex;flex-direction:column;gap:7px}
+.intro-presentation-picker legend{font-weight:850;font-size:13px;margin-bottom:8px}
+.intro-presentation-picker label{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:1px solid #416a76;background:#10283d;border-radius:10px;cursor:pointer}
+.intro-presentation-picker label:has(input:checked){border-color:#77d8ba;background:#1b4b4b}
+.intro-presentation-picker input{margin:3px 0 0;accent-color:#8de8c5}
+.intro-presentation-picker span{display:flex;flex-direction:column;gap:4px}
+.intro-presentation-picker strong{font-size:13px;color:#f2fffc}
+.intro-presentation-picker small{font-size:11px;line-height:1.45;color:#bacfd7}
+.intro-preview-frame video#introFirstScenePreview{object-fit:contain;background:#081523}

@@ -1,5 +1,6 @@
-import { INTRO_SECONDS } from './exporter.mjs?v=title14';
+import { INTRO_SECONDS } from './exporter.mjs?v=scene15';
 import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom } from './editing-rules.mjs?v=zoom11';
+import { prepareIntroPlan } from './intro-layout.mjs?v=scene15';
 
 /**
  * Produce non-overlapping clips, in user-controlled file order.
@@ -66,7 +67,7 @@ function formatLocalTime(seconds){
     String(s).padStart(2,'0')+':'+ss;
 }
 /** Timestamps refer to the generated montage, not the original videos. */
-export function montageChapters(plan, title = 'GOALS!', fps = 30) {
+export function montageChapters(plan, title = 'GOALS!', fps = 30, intro=null) {
   if (!plan?.length) return '';
   const format = s => {
     const n = Math.floor(Math.max(0, s));
@@ -74,15 +75,17 @@ export function montageChapters(plan, title = 'GOALS!', fps = 30) {
     return hh ? [hh, mm, ss].map(x => String(x).padStart(2, '0')).join(':')
       : [mm, ss].map(x => String(x).padStart(2, '0')).join(':');
   };
-  let at = 0;
-  const lines = ['0:00 ' + (title || 'GOALS!').trim()];
-  at += INTRO_SECONDS;
+  const prepared=prepareIntroPlan(plan,intro);
+  let at = prepared.introSeconds;
+  const lines = prepared.introSeconds
+    ? ['0:00 ' + (title || 'GOALS!').trim()]
+    : [];
   let i = 0;
-  for (const clip of plan) {
+  for (const clip of prepared.clips) {
     const label = clip.sourceName || 'Video';
     lines.push(format(at) + ' Highlight ' + (++i) + ' — ' + label);
     at += Math.ceil((clip.end - clip.start) * fps) / fps;
-    if(i<plan.length) at -= dissolveOverlap([clip,plan[i]],fps);
+    if(i<prepared.clips.length) at -= dissolveOverlap([clip,prepared.clips[i]],fps);
   }
   return lines.join('\n');
 }

@@ -1,9 +1,10 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audio12';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title14';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=intro13';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=scene15';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=scene15';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom } from './editing-rules.mjs?v=zoom11';
-import { montageSeconds } from './exporter.mjs?v=intro13';
+import { montageSeconds } from './exporter.mjs?v=scene15';
+import { getIntroConfiguration } from './intro-ui.mjs?v=scene15';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
 
 const $ = id => document.getElementById(id);
@@ -850,7 +851,7 @@ function updateStickyBar() {
   if(!visible) return;
   const count=state.candidates.filter(item=>item.enabled).length;
   const plan=buildMultiClipPlan(state.sources,currentClipOptions());
-  const estimate=montageSeconds(plan);
+  const estimate=montageSeconds(plan,getIntroConfiguration());
   const blocked=estimate>185;
   $('stickyCount').textContent=String(count);
   $('stickyDuration').textContent=blocked

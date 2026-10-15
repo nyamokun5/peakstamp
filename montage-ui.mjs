@@ -1,7 +1,7 @@
-import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=title14';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=intro13';
+import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=scene15';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=scene15';
 import { formatTime } from './detector.mjs';
-import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=title14';
+import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=scene15';
 
 const $ = id => document.getElementById(id);
 function clipOptions() {
@@ -99,7 +99,7 @@ export function updateMontageEditor(state) {
   if (!working && lastEditSignature !== null && lastEditSignature !== signature) revokeOutput();
   lastEditSignature = signature;
   $('montageSelected').textContent = plan.length + 'シーンを結合';
-  const seconds = montageSeconds(plan);
+  const seconds = montageSeconds(plan,getIntroConfiguration());
   $('montageLength').textContent = '完成：約' + formatTime(Math.ceil(seconds));
   const quality = document.querySelector('input[name="exportQuality"]:checked')?.value || 'high';
   $('montageSizeEstimate').textContent = plan.length
@@ -181,7 +181,7 @@ export function initMontageEditor(state) {
       displayError('まずシーンにチェックを入れてください。');
       return;
     }
-    if (montageSeconds(plan) > 185) {
+    if (montageSeconds(plan,getIntroConfiguration()) > 185) {
       displayError('スマホのメモリ負荷を抑えるため、最初は3分以内にしてください。秒数や候補件数を減らせます。');
       return;
     }

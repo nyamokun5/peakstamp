@@ -53,3 +53,28 @@ export function drawIntroOverlay(context,image,width,height,point,size){
   context.drawImage(image,rect.x,rect.y,rect.width,rect.height);
   return rect;
 }
+
+/** Intro overlays use the first highlight's own video; no separate card time. */
+export const FIRST_SCENE_LEAD_SECONDS=3;
+export function prepareIntroPlan(plan,intro=null){
+  const clips=(plan||[]).map(c=>({...c}));
+  if(!clips.length)return {clips,introSeconds:0,overlaySeconds:0,prerollSeconds:0};
+  if(intro?.presentation!=='overlay')
+    return {clips,introSeconds:INTRO_SECONDS,overlaySeconds:0,prerollSeconds:0};
+  const originalStart=Math.max(0,Number(clips[0].start)||0);
+  const previous=Math.max(0,originalStart-FIRST_SCENE_LEAD_SECONDS);
+  clips[0].start=previous;
+  const prerollSeconds=originalStart-previous;
+  // If a scene begins before 3 seconds into its original video, keep showing
+  // the title over its opening frames rather than making it disappear.
+  const overlaySeconds=Math.min(FIRST_SCENE_LEAD_SECONDS,
+    Math.max(0,Number(clips[0].end)-previous));
+  return {clips,introSeconds:0,overlaySeconds,prerollSeconds};
+}
+export function introOverlayOpacity(seconds,duration=FIRST_SCENE_LEAD_SECONDS){
+  const t=Number(seconds),d=Number(duration);
+  if(!Number.isFinite(t)||!Number.isFinite(d)||d<=0||t<0||t>=d)return 0;
+  const fadeIn=Math.min(.3,d*.35);
+  const fadeOut=Math.min(.5,d*.4);
+  return Math.max(0,Math.min(1,t/fadeIn,(d-t)/fadeOut));
+}
