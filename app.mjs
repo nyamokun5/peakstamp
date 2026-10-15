@@ -607,6 +607,9 @@ function row(item, index) {
     refreshComment();
   });
   titleGroup.append(titleLabel,titleSelect,title);
+  // Keep metadata/editor logic for compatibility; play classification is unused
+  // in the current highlight-video workflow and intentionally hidden.
+  titleGroup.hidden = true;
 
   const rangeEditor=make('div','range-editor');
   const rangeHeading=make('div','range-heading');
@@ -839,7 +842,7 @@ function refreshComment() {
     const src = state.sources.find(s => s.id === item.sourceId);
     return make('span','selected-chip', String(i+1) + '. ' +
       (isMulti ? src?.file.name + ' · ' : '') +
-      formatTime(item.time) + ' ' + (item.title || 'Highlight'));
+      formatTime(item.time));
   }));
   summary.hidden = selected.length === 0;
   updateMontageEditor(state);
@@ -872,6 +875,7 @@ function drawResults() {
       make('small','',source.candidates.length+'件の候補'));
     const copy=make('button','source-copy','この動画の時刻をコピー');
     copy.type='button';
+    copy.hidden=true; // YouTube timestamp feature is dormant, not deleted.
     copy.addEventListener('click', async()=>{
       const current=sourceTimestampComments([source])[0];
       if(!current?.text){
