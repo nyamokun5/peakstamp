@@ -25,7 +25,7 @@ test('play-content selector is not visible in any candidate card',()=>{
 });
 
 test('kept scene summary no longer exposes play name',()=>{
-  assert.match(app,/formatTime\\(item\\.time\\)\\);/);
+  assert.ok(app.includes("formatTime(item.time));"));
   assert.doesNotMatch(app,/formatTime\(item\.time\)\s*\+\s*' '\s*\+\s*\(item\.title/);
 });
 
