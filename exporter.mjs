@@ -1,4 +1,4 @@
-import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES, zoomDrawRect } from './editing-rules.mjs?v=zoom11';
+import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES, zoomDrawRect } from './editing-rules.mjs?v=pinch18';
 import { coverRect, drawCover, drawIntroOverlay, normalizeIntroPoint, prepareIntroPlan, introOverlayOpacity, INTRO_SECONDS as INTRO_LENGTH } from './intro-layout.mjs?v=scene15';
 /**
  * PeakStamp: automatic highlight montage with a 5-second title card.
@@ -295,7 +295,7 @@ export async function exportMontage({
       const vHeight = await opened.videoTrack.getDisplayHeight();
       // Digital zoom is baked into both ordinary frames and dissolve frames.
       // Canvas bounds clip the centered, enlarged picture without changing output size.
-      const { dx,dy,dw,dh }=zoomDrawRect(vWidth,vHeight,width,height,clip.zoom);
+      const { dx,dy,dw,dh }=zoomDrawRect(vWidth,vHeight,width,height,clip.zoom,clip.zoomX,clip.zoomY);
 
       let frame = 0;
       for await (const sample of videoSink.samplesAtTimestamps(stamps)) {
