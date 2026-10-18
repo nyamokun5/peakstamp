@@ -1,4 +1,5 @@
 import { drawIntro, introTitleRect } from './exporter.mjs?v=scene15';
+import { zoomDrawRect } from './editing-rules.mjs?v=pinch18';
 import { introPreset, overlayRect, normalizeIntroPoint, imageDimensions, prepareIntroPlan, introOverlayOpacity } from './intro-layout.mjs?v=scene15';
 
 const $=id=>document.getElementById(id);
@@ -91,9 +92,14 @@ export function refreshIntroAspect(activeState,plan){
   const firstStart=first?.start??0;
   const firstEnd=prepared.overlaySeconds||0;
   const firstVideo=$('introFirstScenePreview');
-  // Match the first clip's existing digital center zoom in the preview.
+  // The title preview uses the same crop/focal point as the exported clip.
   firstSceneZoom=Math.max(1,Math.min(3,Number(first?.zoom)||1));
-  firstVideo.style.transform='scale('+firstSceneZoom+')';
+  const canvas=$('introCanvas');
+  const width=canvas.width,height=canvas.height;
+  const crop=zoomDrawRect(width,height,width,height,firstSceneZoom,first?.zoomX,first?.zoomY);
+  const tx=(crop.dx-(width-crop.dw)/2)/width*100;
+  const ty=(crop.dy-(height-crop.dh)/2)/height*100;
+  firstVideo.style.transform='translate('+tx+'%, '+ty+'%) scale('+firstSceneZoom+')';
   firstVideo.style.transformOrigin='center center';
   if(firstSceneUrl!==url || firstSceneStart!==firstStart){
     stopPreview();
