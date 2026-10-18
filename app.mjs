@@ -1,11 +1,11 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audio12';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=scene15';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
 import { attachScenePinchEditor } from './scene-gesture.mjs?v=pinch18';
-import { montageSeconds } from './exporter.mjs?v=scene15';
-import { getIntroConfiguration } from './intro-ui.mjs?v=scene15';
+import { montageSeconds } from './exporter.mjs?v=pinch18';
+import { getIntroConfiguration } from './intro-ui.mjs?v=pinch18';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
 
