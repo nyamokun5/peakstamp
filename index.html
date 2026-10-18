@@ -86,6 +86,15 @@
       <div class="panel-label"><span class="number">03</span><h2>確認してキープ</h2></div>
       <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
 
+      <section id="aiRerankPanel" class="whisper-experiment" aria-label="AIハイライト再評価の実験">
+        <div class="whisper-experiment-head"><strong>β AI再評価 — 実際のシーンと比較</strong><span>任意・無料</span></div>
+        <p>まずは音響上位5件だけ、VAD発話検出＋Whisper Base＋サッカー掛け声辞書で参考順位を作成。動画を見ながら実際の結果を評価できます。元の候補順位・採用状態・動画書き出しは変更しません。</p>
+        <button id="aiRerankButton" class="whisper-run" type="button" disabled>音響上位5件をAIで再評価</button>
+        <small id="aiRerankHelp" class="whisper-disclaimer">先に音声を解析してハイライト候補を作成してください。</small>
+        <p id="aiRerankStatus" class="whisper-status" role="status" aria-live="polite"></p>
+        <div id="aiRerankResults" class="whisper-output" hidden></div>
+        <small class="whisper-disclaimer">参考順位は推定であり、ゴールや選手の映像を直接認識した結果ではありません。比較結果と人による評価はこの端末内に保存。モデルデータの取得には通信が必要ですが、元動画・音声のサーバー送信は行いません。初回は時間がかかる場合があります。</small>
+      </section>
       <section id="whisperExperiment" class="whisper-experiment" aria-label="AI文字起こしの実験">
         <div class="whisper-experiment-head"><strong>β AI文字起こし（実験）</strong><span>任意・無料</span></div>
         <p>音声ピークの前後約16秒だけをiPhone内で日本語文字起こし。まず1シーンずつ精度を確認できます。候補の判定や動画編集には自動反映しません。</p>
