@@ -85,6 +85,7 @@ function busy(value) {
   $('analyzeButton').disabled = value || !state.sources.length;
   $('analyzeButton').textContent = value ? '音声を解析中…' : '⌁　音声を解析する　→';
   $('cancelButton').hidden = !value;
+  refreshAIReview(state);
 }
 function syncSources() {
   closeInlinePreview();
@@ -1102,6 +1103,7 @@ window.addEventListener('montage-export-state', event => {
   $('analyzeButton').disabled = state.exporting || state.working || !state.sources.length;
   renderSourceList();
   updateStickyBar();
+  refreshAIReview(state);
 });
 
 $('lineShareCopy').addEventListener('click',async()=>{
