@@ -1,36 +1,108 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>PeakStamp | Whisper実験</title>
 <style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#091728;color:#eef5ff;margin:0;padding:22px;line-height:1.65}main{max-width:650px;margin:auto}a{color:#91d6ff}section{background:#13283e;border-radius:15px;padding:18px;margin:16px 0}button,input{font:inherit}button{padding:13px;border:0;border-radius:10px;background:#60d6b1;color:#071a25;font-weight:700}button:disabled{opacity:.4}input{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere}small{color:#adc2d1}</style></head>
-<body><main><a href="./">← PeakStampへ戻る</a><h1>Whisper 音声認識テスト</h1><p>iPhone Safariで動くかを確かめる実験機能です。まずは30秒以下の短い動画・音声でお試しください。</p>
-<section><label>動画または音声を選択<br><input id="file" type="file" accept="video/*,audio/*,.mp4,.mov,.m4a,.wav"></label><p><button id="run" disabled>日本語を文字起こし</button></p><small>初回はAIモデルをダウンロードします（数十MB以上）。Wi-Fi推奨。端末によってメモリ不足になる場合があります。音声はサーバーへ送信しませんが、モデルの取得にはネット接続が必要です。</small></section>
-<section><strong>処理状況</strong><p id="status" role="status">ファイルを選択してください</p><strong>認識結果</strong><pre id="output">—</pre></section>
+<body><main><a href="./">← PeakStampへ戻る</a><h1>Whisper 音声認識テスト</h1><p>iPhone Safariで動くかを確かめる実験機能です。まずは会話や掛け声のある10秒間を指定してお試しください。</p>
+<section>
+<label>動画または音声を選択<br><input id="file" type="file" accept="video/*,audio/*,.mp4,.mov,.m4a,.wav"></label>
+<p><label>解析開始（秒） <input id="start" type="number" min="0" step="1" value="0" style="width:90px;background:#eff7ff;color:#10283a;border:0;border-radius:7px;padding:9px"></label></p>
+<p><label>解析する長さ <select id="length" style="padding:9px;border-radius:7px"><option value="10" selected>10秒（おすすめ）</option><option value="15">15秒</option><option value="30">30秒</option></select></label></p>
+<p><label>音声認識モデル <select id="model" style="padding:9px;border-radius:7px"><option value="tiny">Tiny（軽量・現在のモデル）</option><option value="base" selected>Base（精度優先・処理が重い）</option></select></label></p>
+<p><button id="run" disabled>日本語を文字起こし</button></p>
+<small>まずは会話や掛け声のある10秒を選んでください。Baseの初回実行では追加のモデル取得が必要です。iPhoneでメモリ不足になる場合はTinyに変更してください。音声データは外部サーバーに送信しません。</small>
+</section>
+<section><strong>処理状況</strong><p id="status" role="status">ファイルを選択してください</p><strong>認識結果</strong><p id="quality" aria-live="polite"></p><pre id="output">—</pre><details><summary>認識結果の詳細（確認用）</summary><pre id="raw">—</pre></details></section>
 <script type="module">
-const file=document.querySelector('#file'),run=document.querySelector('#run'),status=document.querySelector('#status'),output=document.querySelector('#output');
-file.onchange=()=>{run.disabled=!file.files.length;status.textContent=file.files[0]?.name||'ファイルを選択してください'};
+const $=id=>document.getElementById(id);
+const file=$('file'),run=$('run'),status=$('status'),output=$('output'),quality=$('quality'),raw=$('raw');
+let loadedPipe=null,loadedModel='';
+file.onchange=()=>{run.disabled=!file.files.length;status.textContent=file.files[0]?.name||'ファイルを選択してください';quality.textContent='';output.textContent='—';raw.textContent='—'};
+const repetitive=text=>{
+  const compact=(text||'').replace(/\s/g,'');
+  if(/(.)\1{11,}/u.test(compact))return true;
+  if(/(.{2,6}?)\1{7,}/u.test(compact))return true;
+  if(compact.length>70 && new Set([...compact]).size / [...compact].length <0.14)return true;
+  return false;
+};
+const fmtSec=sec=>Math.floor(sec/60)+':'+String(Math.floor(sec%60)).padStart(2,'0');
 run.onclick=async()=>{
-run.disabled=true;output.textContent='—';
-try{
-const f=file.files[0];if(!f)throw Error('ファイルがありません');
-status.textContent='音声を読み込み中…';
-const buffer=await f.arrayBuffer();
-const context=new (window.AudioContext||window.webkitAudioContext)();
-let audio;try{audio=await context.decodeAudioData(buffer)}finally{await context.close()}
-const seconds=Math.min(audio.duration,30),sampleRate=16000;
-if(!Number.isFinite(seconds)||seconds<=0)throw Error('音声を読み取れません');
-status.textContent='音声を16kHzへ変換中…';
-const offline=new OfflineAudioContext(1,Math.ceil(seconds*sampleRate),sampleRate);
-const src=offline.createBufferSource();src.buffer=audio;src.connect(offline.destination);src.start(0,0,seconds);
-const resampled=await offline.startRendering();
-const samples=resampled.getChannelData(0);
-status.textContent='Whisperモデルを読み込み中…（初回は時間がかかります）';
-const {pipeline,env}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1');
-env.allowLocalModels=false;
-const transcriber=await pipeline('automatic-speech-recognition','onnx-community/whisper-tiny',{dtype:'q8',device:'wasm',progress_callback:p=>{if(p.status==='progress'&&p.progress!=null)status.textContent='モデル取得中 '+Math.round(p.progress)+'%'}});
-status.textContent='文字起こし中…';
-const result=await transcriber(samples,{language:'japanese',task:'transcribe',chunk_length_s:30,return_timestamps:true});
-output.textContent=JSON.stringify(result,null,2);
-status.textContent='完了（冒頭最大30秒）';
-}catch(e){status.textContent='失敗: '+(e?.message||String(e))+'。iPhoneでMOVが読めない場合は短いM4A/WAVで試してください。'}
-finally{run.disabled=false}
+  run.disabled=true;output.textContent='—';raw.textContent='—';quality.textContent='';
+  try{
+    const f=file.files[0];if(!f)throw Error('ファイルを選択してください');
+    const start=Math.max(0,Number($('start').value)||0);
+    const length=Number($('length').value);
+    const model=$('model').value;
+    if(!Number.isFinite(start)||start<0)throw Error('開始位置を確認してください');
+    status.textContent='音声を読み込み中…（動画全体の読み込みには時間がかかることがあります）';
+    const buffer=await f.arrayBuffer();
+    const context=new (window.AudioContext||window.webkitAudioContext)();
+    let audio;try{audio=await context.decodeAudioData(buffer)}finally{await context.close()}
+    if(start>=audio.duration)throw Error('開始位置が動画の長さを超えています（動画は約'+Math.floor(audio.duration)+'秒）');
+    const seconds=Math.min(length,audio.duration-start);
+    if(!Number.isFinite(seconds)||seconds<0.5)throw Error('指定した区間に音声がありません');
+    status.textContent='指定した区間を16kHzに変換中…';
+    const rate=16000;
+    const offline=new OfflineAudioContext(1,Math.max(1,Math.floor(seconds*rate)),rate);
+    const src=offline.createBufferSource();src.buffer=audio;src.connect(offline.destination);src.start(0,start,seconds);
+    const rendered=await offline.startRendering();
+    const samples=rendered.getChannelData(0);
+    let energy=0;
+    for(let i=0;i<samples.length;i++) energy+=samples[i]*samples[i];
+    const rms=Math.sqrt(energy/samples.length);
+    raw.textContent='区間: '+fmtSec(start)+'〜'+fmtSec(start+seconds)+'\n音量RMS: '+rms.toFixed(4);
+    if(rms<0.002){
+      quality.textContent='音量が非常に小さい区間です。声が聞こえる位置に開始時間を変更してください。';
+      output.textContent='音声を認識できませんでした。';
+      status.textContent='完了（無音に近い区間のため文字起こしを省略）';
+      return;
+    }
+    status.textContent='Whisperモデル準備中…（初回はダウンロードが必要です）';
+    const {pipeline,env}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1');
+    env.allowLocalModels=false;
+    if(!loadedPipe || loadedModel!==model){
+      if(loadedPipe){await loadedPipe.dispose();loadedPipe=null;loadedModel=''}
+      loadedPipe=await pipeline('automatic-speech-recognition','onnx-community/whisper-'+model,{
+        dtype:'q8',device:'wasm',
+        progress_callback:p=>{
+          if(p.status==='progress'&&Number.isFinite(p.progress))
+            status.textContent='モデル取得中 '+Math.round(p.progress)+'%';
+        }
+      });
+      loadedModel=model;
+    }
+    status.textContent='日本語を認識中…';
+    const started=performance.now();
+    const result=await loadedPipe(samples,{
+      language:'japanese',
+      task:'transcribe',
+      return_timestamps:true,
+      chunk_length_s:30,
+      max_new_tokens:128
+    });
+    const text=(result.text||'').trim();
+    const isRepeat=repetitive(text);
+    const tooLong=text.length>Math.max(120,Math.floor(seconds*16));
+    raw.textContent='モデル: '+model+'\n区間: '+fmtSec(start)+'〜'+fmtSec(start+seconds)+'\n処理時間: '+Math.round((performance.now()-started)/1000)+'秒\n音量RMS: '+rms.toFixed(4)+'\n'+JSON.stringify(result,null,2).slice(0,4500);
+    if(!text){
+      quality.textContent='言葉を認識できませんでした。';
+      output.textContent='（認識できる発話なし）';
+    }else if(isRepeat || tooLong){
+      quality.textContent='⚠ 異常に長い繰り返しを検出しました。誤認識の可能性が高いため、ハイライト判定には使用しません。';
+      output.textContent='（繰り返しの多い認識結果を除外しました）';
+    }else{
+      quality.textContent='候補として認識されました。実際の声と一致するか確認してください。';
+      output.textContent=text;
+      if(Array.isArray(result.chunks)){
+        const lines=result.chunks.map(c=>{
+          const t=Array.isArray(c.timestamp)?c.timestamp[0]:0;
+          return '['+fmtSec(start+Math.max(0,t||0))+'] '+(c.text||'').trim();
+        }).filter(Boolean);
+        if(lines.length)output.textContent=lines.join('\n');
+      }
+    }
+    status.textContent='完了（'+fmtSec(start)+'〜'+fmtSec(start+seconds)+' / '+model+'）';
+  }catch(e){
+    status.textContent='失敗: '+(e?.message||String(e));
+    quality.textContent='音声形式やメモリ不足が原因の可能性があります。別の短い動画か、軽量モデルTinyをお試しください。';
+  }finally{run.disabled=false}
 };
 </script></main></body></html>
