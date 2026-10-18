@@ -20,6 +20,9 @@ h1{font-size:clamp(33px,7vw,48px);line-height:1.3;letter-spacing:-.05em;margin:1
 .upload-icon{width:45px;height:45px;border-radius:13px;background:#285761;color:var(--mint);display:grid;place-items:center;font-size:28px}
 .upload strong{font-size:15px}.upload span:not(.upload-icon){color:var(--muted);font-size:12px}.upload small{color:#84b6a5;font-size:11px}
 .file-details{display:flex;align-items:center;gap:11px;background:#0b1f34;border-radius:11px;padding:10px;margin-top:12px}
+.file-import-timing{color:var(--mint);font-size:12px;line-height:1.6;margin:10px 0 3px;overflow-wrap:anywhere}
+.file-import-help{color:#91aebb;font-size:10px;line-height:1.6;margin:0 0 10px}
+.preview-load-button{display:block;width:100%;margin-top:12px;padding:12px 10px;background:#193d51;color:var(--mint);border:1px solid #477b83;border-radius:10px;font-size:12px;font-weight:700}
 .file-logo{flex:none;border-radius:9px;width:42px;height:42px;display:grid;place-items:center;background:#285569;color:var(--mint)}
 .file-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}.file-info strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-info span{font-size:11px;color:var(--muted)}
 .plain-link{color:var(--mint);background:none;border:0;font-size:12px}
