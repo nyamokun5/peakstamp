@@ -7,15 +7,31 @@
 <p><label>解析開始（秒） <input id="start" type="number" min="0" step="1" value="0" style="width:90px;background:#eff7ff;color:#10283a;border:0;border-radius:7px;padding:9px"></label></p>
 <p><label>解析する長さ <select id="length" style="padding:9px;border-radius:7px"><option value="10" selected>10秒（おすすめ）</option><option value="15">15秒</option><option value="30">30秒</option></select></label></p>
 <p><label>音声認識モデル <select id="model" style="padding:9px;border-radius:7px"><option value="tiny">Tiny（軽量・現在のモデル）</option><option value="base" selected>Base（精度優先・処理が重い）</option></select></label></p>
+<p><label><input id="compat" type="checkbox"> MOV互換モード（動画を再生しながら音声を取得）</label></p>
+<p><video id="mediaPreview" controls playsinline preload="metadata" style="width:100%;max-height:230px;border-radius:10px;background:#000" hidden></video></p>
 <p><button id="run" disabled>日本語を文字起こし</button></p>
-<small>まずは会話や掛け声のある10秒を選んでください。Baseの初回実行では追加のモデル取得が必要です。iPhoneでメモリ不足になる場合はTinyに変更してください。音声データは外部サーバーに送信しません。</small>
+<small>まずは掛け声のある10秒を指定してください。MOVでは互換モードを自動選択します。互換モードでは動画を実時間で再生して音声を取り出すため、約10〜30秒必要です。Baseの初回実行ではモデル取得が必要です。音声データは外部サーバーに送信しません。</small>
 </section>
 <section><strong>処理状況</strong><p id="status" role="status">ファイルを選択してください</p><strong>認識結果</strong><p id="quality" aria-live="polite"></p><pre id="output">—</pre><details><summary>認識結果の詳細（確認用）</summary><pre id="raw">—</pre></details></section>
 <script type="module">
 const $=id=>document.getElementById(id);
-const file=$('file'),run=$('run'),status=$('status'),output=$('output'),quality=$('quality'),raw=$('raw');
+const file=$('file'),run=$('run'),status=$('status'),output=$('output'),quality=$('quality'),raw=$('raw'),compat=$('compat'),preview=$('mediaPreview');
+let objectURL=null,mediaContext=null,mediaNode=null;
 let loadedPipe=null,loadedModel='';
-file.onchange=()=>{run.disabled=!file.files.length;status.textContent=file.files[0]?.name||'ファイルを選択してください';quality.textContent='';output.textContent='—';raw.textContent='—'};
+file.onchange=()=>{
+  run.disabled=!file.files.length;
+  const f=file.files[0];
+  status.textContent=f?.name||'ファイルを選択してください';
+  quality.textContent='';output.textContent='—';raw.textContent='—';
+  preview.pause();preview.removeAttribute('src');preview.load();
+  if(objectURL){URL.revokeObjectURL(objectURL);objectURL=null;}
+  if(f){
+    objectURL=URL.createObjectURL(f);
+    preview.src=objectURL;preview.hidden=false;preview.load();
+    compat.checked=/\\.mov$/i.test(f.name)||/quicktime/i.test(f.type);
+    if(compat.checked)status.textContent='MOVファイルを選択しました。互換モードで動画を読み込み中…';
+  }else preview.hidden=true;
+};
 const repetitive=text=>{
   const compact=(text||'').replace(/\s/g,'');
   if(/(.)\1{11,}/u.test(compact))return true;
@@ -24,6 +40,78 @@ const repetitive=text=>{
   return false;
 };
 const fmtSec=sec=>Math.floor(sec/60)+':'+String(Math.floor(sec%60)).padStart(2,'0');
+// Safari sometimes plays MOV even when decodeAudioData cannot open the container.
+// Capture the selected region in real time through the media element's Web Audio output.
+async function captureFromMedia(start,length){
+  if(preview.readyState<1||!Number.isFinite(preview.duration)){
+    throw Error('MOVの読み込みがまだ終わっていません。数秒待って再度押してください');
+  }
+  if(start>=preview.duration)throw Error('開始位置が動画の長さを超えています（約'+Math.floor(preview.duration)+'秒）');
+  const seconds=Math.min(length,preview.duration-start);
+  if(seconds<0.5)throw Error('指定した位置に音声がありません');
+  if(!window.AudioContext&&!window.webkitAudioContext)throw Error('Web Audio非対応のブラウザです');
+  if(!mediaContext){
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    mediaContext=new Ctx();
+    mediaNode=mediaContext.createMediaElementSource(preview);
+  }
+  const ctx=mediaContext;
+  const maxFrames=Math.ceil(seconds*ctx.sampleRate);
+  const recording=new Float32Array(maxFrames);
+  let filled=0;
+  const processor=ctx.createScriptProcessor(4096,2,1);
+  const silence=ctx.createGain();silence.gain.value=0;
+  mediaNode.connect(processor);processor.connect(silence);silence.connect(ctx.destination);
+  preview.pause();
+  preview.currentTime=start;
+  status.textContent='MOV互換モード：動画を再生して音声取得中（約'+Math.ceil(seconds)+'秒）…';
+  const recorded=await new Promise((resolve,reject)=>{
+    let settled=false, timer=null;
+    const cleanup=()=>{
+      clearTimeout(timer);
+      processor.onaudioprocess=null;
+      preview.removeEventListener('ended',onEnded);
+      preview.removeEventListener('error',onError);
+      preview.pause();
+      try{mediaNode.disconnect(processor);processor.disconnect();silence.disconnect();}catch(_){}
+    };
+    const finish=error=>{
+      if(settled)return;
+      settled=true;cleanup();
+      if(error)reject(error);
+      else if(filled<ctx.sampleRate*0.4)reject(Error('動画から音声を取得できませんでした。SafariのMOV形式が非対応の可能性があります'));
+      else resolve(recording.slice(0,filled));
+    };
+    const onEnded=()=>finish();
+    const onError=()=>finish(Error('動画を再生できません（MOVの映像・音声形式を確認してください）'));
+    preview.addEventListener('ended',onEnded);
+    preview.addEventListener('error',onError);
+    processor.onaudioprocess=event=>{
+      if(settled||preview.paused||preview.seeking||preview.currentTime<start-0.25)return;
+      const input=event.inputBuffer;
+      const left=input.getChannelData(0);
+      const right=input.numberOfChannels>1?input.getChannelData(1):left;
+      const n=Math.min(left.length,maxFrames-filled);
+      for(let i=0;i<n;i++)recording[filled+i]=(left[i]+right[i])*0.5;
+      filled+=n;
+      if(filled>=maxFrames || preview.currentTime>=start+seconds-0.07)finish();
+    };
+    timer=setTimeout(()=>finish(Error('音声取得がタイムアウトしました。動画が再生されているか確認してください')),Math.ceil((seconds+12)*1000));
+    // Invoke play() and resume() in the same click task for iPhone gesture gating.
+    const resumed=ctx.resume();
+    resumed.catch(err=>finish(Error('音声処理を開始できません: '+err.message)));
+    const playing=preview.play();
+    if(playing?.catch)playing.catch(err=>finish(Error('動画再生がブロックされました: '+err.message)));
+  });
+  const rate=16000;
+  const offline=new OfflineAudioContext(1,Math.max(1,Math.floor(recorded.length*rate/ctx.sampleRate)),rate);
+  const audio=offline.createBuffer(1,recorded.length,ctx.sampleRate);
+  audio.copyToChannel(recorded,0);
+  const src=offline.createBufferSource();src.buffer=audio;src.connect(offline.destination);src.start();
+  const rendered=await offline.startRendering();
+  return {samples:rendered.getChannelData(0),seconds:recorded.length/ctx.sampleRate,source:'MOV互換モード'};
+}
+
 run.onclick=async()=>{
   run.disabled=true;output.textContent='—';raw.textContent='—';quality.textContent='';
   try{
@@ -32,23 +120,33 @@ run.onclick=async()=>{
     const length=Number($('length').value);
     const model=$('model').value;
     if(!Number.isFinite(start)||start<0)throw Error('開始位置を確認してください');
-    status.textContent='音声を読み込み中…（動画全体の読み込みには時間がかかることがあります）';
-    const buffer=await f.arrayBuffer();
-    const context=new (window.AudioContext||window.webkitAudioContext)();
-    let audio;try{audio=await context.decodeAudioData(buffer)}finally{await context.close()}
-    if(start>=audio.duration)throw Error('開始位置が動画の長さを超えています（動画は約'+Math.floor(audio.duration)+'秒）');
-    const seconds=Math.min(length,audio.duration-start);
-    if(!Number.isFinite(seconds)||seconds<0.5)throw Error('指定した区間に音声がありません');
-    status.textContent='指定した区間を16kHzに変換中…';
-    const rate=16000;
-    const offline=new OfflineAudioContext(1,Math.max(1,Math.floor(seconds*rate)),rate);
-    const src=offline.createBufferSource();src.buffer=audio;src.connect(offline.destination);src.start(0,start,seconds);
-    const rendered=await offline.startRendering();
-    const samples=rendered.getChannelData(0);
+    let samples,seconds,sourceMode='通常モード';
+    if(compat.checked){
+      ({samples,seconds,source:sourceMode}=await captureFromMedia(start,length));
+    }else{
+      status.textContent='音声を読み込み中…（動画全体の読み込みには時間がかかることがあります）';
+      const buffer=await f.arrayBuffer();
+      const context=new (window.AudioContext||window.webkitAudioContext)();
+      let audio;
+      try{audio=await context.decodeAudioData(buffer)}
+      catch(e){
+        compat.checked=true;
+        throw Error('直接デコードに失敗しました。MOV互換モードをONにしたので、もう一度「日本語を文字起こし」を押してください');
+      }finally{await context.close()}
+      if(start>=audio.duration)throw Error('開始位置が動画の長さを超えています（動画は約'+Math.floor(audio.duration)+'秒）');
+      seconds=Math.min(length,audio.duration-start);
+      if(!Number.isFinite(seconds)||seconds<0.5)throw Error('指定した区間に音声がありません');
+      status.textContent='指定した区間を16kHzに変換中…';
+      const rate=16000;
+      const offline=new OfflineAudioContext(1,Math.max(1,Math.floor(seconds*rate)),rate);
+      const src=offline.createBufferSource();src.buffer=audio;src.connect(offline.destination);src.start(0,start,seconds);
+      const rendered=await offline.startRendering();
+      samples=rendered.getChannelData(0);
+    }
     let energy=0;
     for(let i=0;i<samples.length;i++) energy+=samples[i]*samples[i];
     const rms=Math.sqrt(energy/samples.length);
-    raw.textContent='区間: '+fmtSec(start)+'〜'+fmtSec(start+seconds)+'\n音量RMS: '+rms.toFixed(4);
+    raw.textContent='方式: '+sourceMode+'\n区間: '+fmtSec(start)+'〜'+fmtSec(start+seconds)+'\n音量RMS: '+rms.toFixed(4);
     if(rms<0.002){
       quality.textContent='音量が非常に小さい区間です。声が聞こえる位置に開始時間を変更してください。';
       output.textContent='音声を認識できませんでした。';
@@ -81,7 +179,7 @@ run.onclick=async()=>{
     const text=(result.text||'').trim();
     const isRepeat=repetitive(text);
     const tooLong=text.length>Math.max(120,Math.floor(seconds*16));
-    raw.textContent='モデル: '+model+'\n区間: '+fmtSec(start)+'〜'+fmtSec(start+seconds)+'\n処理時間: '+Math.round((performance.now()-started)/1000)+'秒\n音量RMS: '+rms.toFixed(4)+'\n'+JSON.stringify(result,null,2).slice(0,4500);
+    raw.textContent='方式: '+sourceMode+'\nモデル: '+model+'\n区間: '+fmtSec(start)+'〜'+fmtSec(start+seconds)+'\n処理時間: '+Math.round((performance.now()-started)/1000)+'秒\n音量RMS: '+rms.toFixed(4)+'\n'+JSON.stringify(result,null,2).slice(0,4500);
     if(!text){
       quality.textContent='言葉を認識できませんでした。';
       output.textContent='（認識できる発話なし）';
@@ -102,7 +200,7 @@ run.onclick=async()=>{
     status.textContent='完了（'+fmtSec(start)+'〜'+fmtSec(start+seconds)+' / '+model+'）';
   }catch(e){
     status.textContent='失敗: '+(e?.message||String(e));
-    quality.textContent='音声形式やメモリ不足が原因の可能性があります。別の短い動画か、軽量モデルTinyをお試しください。';
+    quality.textContent='MOVの場合は互換モードで再試行してください。互換モードでも失敗する場合は音声形式を確認してください。';
   }finally{run.disabled=false}
 };
 </script></main></body></html>
