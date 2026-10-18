@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=import19" />
+  <link rel="stylesheet" href="styles.css?v=picker20" />
 </head>
 <body>
   <header class="topbar">
@@ -35,6 +35,7 @@
         <span>写真ライブラリ / ファイル / MP4・MOV（複数可）</span>
         <small>動画そのものはアップロードしません</small>
       </label>
+      <p class="photo-picker-tip">iPhoneで長い動画が途中で止まる場合：まずは<strong>1本ずつ選択</strong>してください。失敗するときは写真アプリから「未編集のオリジナルを書き出す」で「このiPhone内」に保存し、PeakStampでは「ファイルを選択」を利用してください。</p>
       <div class="file-details" id="fileDetails" hidden>
         <div class="file-logo">▶</div>
         <div class="file-info"><strong id="fileName"></strong><span id="fileSize"></span></div>
@@ -254,6 +255,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=import19"></script>
+  <script type="module" src="app.mjs?v=picker20"></script>
 </body>
 </html>
