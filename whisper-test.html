@@ -8,8 +8,18 @@
 <p><label>解析する長さ <select id="length" style="padding:9px;border-radius:7px"><option value="10" selected>10秒（おすすめ）</option><option value="15">15秒</option><option value="30">30秒</option></select></label></p>
 <p><label>音声認識モデル <select id="model" style="padding:9px;border-radius:7px"><option value="base" selected>Base（推奨・日本語の認識精度を優先）</option><option value="tiny">Tiny（低負荷・精度が低くなりがち）</option></select></label></p>
 <p id="modelHint" style="color:#b8d8ef">まずBaseで試してください。Tinyは精度比較またはBaseが動作しない場合に使用します。</p>
-<p><label>認識方式 <select id="segMode" style="padding:9px;border-radius:7px;max-width:100%"><option value="split" selected>短い発話に区切って認識（おすすめ）</option><option value="whole">10秒を一括認識（比較用）</option></select></label></p>
-<p id="segHint" style="color:#b8d8ef">音量が低くなる箇所を探して約2〜4秒ずつ認識します。無音が見つからない場合は仮の区切りになるため、実際の発言とずれることがあります。</p>
+<p><label>認識方式 <select id="segMode" style="padding:9px;border-radius:7px;max-width:100%">
+<option value="vad" selected>サッカー掛け声モード：発話検出VAD（実験）</option>
+<option value="split">音量による短い区切り（従来）</option>
+<option value="whole">10秒を一括認識（比較用）</option>
+</select></label></p>
+<p id="segHint" style="color:#b8d8ef">声らしい部分をSilero VADで検出し、その区間だけWhisperで独立して認識します。初回は追加のモデルを取得します。Safariで動かない場合は従来方式に切り替えます。</p>
+<details id="soccerGlossary" style="margin:14px 0;background:#0b2033;border-radius:9px;padding:12px">
+<summary>サッカーの掛け声・選手名辞書（編集できます）</summary>
+<p style="font-size:13px;color:#b8d8ef">1行に1語。「惜しい」「上手いね」「ナイスパス」などを登録。人名は「山田=やまだ」のように読みを付けてください。辞書はWhisperの認識結果に修正候補を表示するためのものです。音声にない発言は補いません。</p>
+<textarea id="contextWords" spellcheck="false" rows="10" style="width:100%;max-width:100%;border-radius:8px;padding:10px;background:#eaf2ff;color:#102036;font:14px/1.5 -apple-system,sans-serif"></textarea>
+<p style="font-size:12px;color:#b8d8ef">内容はこのiPhoneのブラウザに保存します。公開サイトのソースには選手名を掲載しません。</p>
+</details>
 <p><label><input id="windFilter" type="checkbox"> 風切り音を軽減して認識（実験・比較用）</label></p>
 <p style="color:#80e0bc">MOV / MP4を変換せず、指定区間の音声だけを直接デコードします。</p>
 <p><button id="run" disabled>日本語を文字起こし</button></p>
@@ -20,9 +30,16 @@
 <p><strong>認識結果（実際の音声との一致は要確認）</strong></p><p id="quality" aria-live="polite"></p><pre id="output">—</pre><div id="segmentList" style="display:grid;gap:10px" aria-live="polite"></div><details><summary>認識結果の詳細（確認用）</summary><pre id="raw">—</pre></details></section>
 <script type="module">
 import { extractSnippet } from './whisper-experiment.mjs?v=movfast2';
+import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=1';
 const $=id=>document.getElementById(id);
-const file=$('file'),run=$('run'),status=$('status'),output=$('output'),quality=$('quality'),raw=$('raw'),timing=$('timing'),model=$('model'),modelHint=$('modelHint'),windFilter=$('windFilter'),listenWrap=$('listenWrap'),listenAudio=$('listenAudio'),segMode=$('segMode'),segHint=$('segHint'),segmentList=$('segmentList');
+const file=$('file'),run=$('run'),status=$('status'),output=$('output'),quality=$('quality'),raw=$('raw'),timing=$('timing'),model=$('model'),modelHint=$('modelHint'),windFilter=$('windFilter'),listenWrap=$('listenWrap'),listenAudio=$('listenAudio'),segMode=$('segMode'),segHint=$('segHint'),segmentList=$('segmentList'),contextWords=$('contextWords');
 let segmentAudioURLs=[];
+const LOCAL_WORDS_KEY='peakstamp_soccer_vocabulary_v1';
+try{contextWords.value=localStorage.getItem(LOCAL_WORDS_KEY)||DEFAULT_CONTEXT;}catch(_){contextWords.value=DEFAULT_CONTEXT;}
+contextWords.addEventListener('input',()=>{
+  try{localStorage.setItem(LOCAL_WORDS_KEY,contextWords.value.slice(0,2500));}catch(_){}
+});
+
 let audioURL=null;
 function clearAudio(){
   listenAudio.pause();listenAudio.removeAttribute('src');listenAudio.load();
@@ -58,9 +75,12 @@ async function filterWindNoise(samples){
   return rendered.getChannelData(0);
 }
 segMode.addEventListener('change',()=>{
-  segHint.textContent=segMode.value==='split'
-   ? '静かな隙間を探し約2〜4秒ずつ独立して認識します。無音がなければ仮区切りです。実際の発話境界とは限りません。'
-   : '従来の10秒一括認識です。離れた掛け声を一つの文章につなげてしまう場合があります。';
+  const options={
+    vad:'Silero VADで声らしい区間だけを独立認識します。発話がない場合は認識を省略。VAD自体が歓声を見落とすこともあります。',
+    split:'音量の谷で短く区切る従来方式。人の声がない区間でも認識する場合があります。',
+    whole:'従来の10秒一括認識。離れた掛け声が一つの文章につながる場合があります。'
+  };
+  segHint.textContent=options[segMode.value]||'';
 });
 model.addEventListener('change',()=>{
   modelHint.textContent=model.value==='tiny'
@@ -162,7 +182,7 @@ const acceptableTranscript=(text,seconds)=>{
   const t=String(text||'').trim();
   return !!t && !repetitive(t) && t.length<=Math.max(70,Math.round(seconds*16));
 };
-function showSegment(part,idx,transcript,passed,samples,start){
+function showSegment(part,idx,transcript,passed,samples,start,vocabulary){
   const row=document.createElement('div');
   row.style.cssText='background:#0c2032;border:1px solid #28425b;padding:12px;border-radius:10px';
   const header=document.createElement('strong');
@@ -175,6 +195,12 @@ function showSegment(part,idx,transcript,passed,samples,start){
   const message=document.createElement('p');
   message.style.cssText='margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere';
   message.textContent=passed?transcript:'（不明瞭・繰り返し等のため判定保留）';
+  const hints=passed?contextualHints(transcript,vocabulary):[];
+  const hintsEl=document.createElement('p');
+  hintsEl.style.cssText='font-size:13px;color:#9be5ca;margin:6px 0';
+  hintsEl.textContent=hints.length
+    ? 'サッカー辞書の照合：'+hints.map(h=>h.term+'（'+h.kind+'）').join(' / ')
+    : 'サッカー辞書に近い表現は見つかりませんでした。';
   const audioEl=document.createElement('audio');
   audioEl.controls=true;
   audioEl.preload='none';
@@ -182,7 +208,7 @@ function showSegment(part,idx,transcript,passed,samples,start){
   const url=URL.createObjectURL(makeWav(samples));
   segmentAudioURLs.push(url);
   audioEl.src=url;
-  row.append(header,description,message,audioEl);
+  row.append(header,description,message,hintsEl,audioEl);
   segmentList.append(row);
 }
 
@@ -202,6 +228,7 @@ run.onclick=async()=>{
     });
     const seconds=samples.length/16000;
     const sourceMode='Mediabunny直接デコード';
+    const dictionary=parseContextVocabulary(contextWords.value);
     if(windFilter.checked){
       status.textContent='風切り音の低減処理中…';
       samples=await filterWindNoise(samples);
@@ -221,7 +248,24 @@ run.onclick=async()=>{
       status.textContent='完了（無音に近い区間のため文字起こしを省略）';
       return;
     }
-    status.textContent='Whisperモデル準備中…（初回はダウンロードが必要です）';
+    let precomputedParts=null;
+    let vadWarning='';
+    if(segMode.value==='vad'){
+      try{
+        precomputedParts=await speechSegmentsByVAD(samples,msg=>{status.textContent=msg;});
+      }catch(vadError){
+        vadWarning='⚠ VADが使えなかったため、従来の音量分割で解析しました：'+(vadError?.message||String(vadError));
+        precomputedParts=splitAtQuietSpans(samples);
+      }
+      if(precomputedParts.length===0){
+        status.textContent='完了：発話候補なし（Silero VAD）';
+        quality.textContent='VADでは声が見つかりませんでした。歓声や短い声は見落とす場合があります。必要なら「音量による短い区切り」で比較してください。';
+        output.textContent='（音声認識を実行しませんでした）';
+        raw.textContent=JSON.stringify({mode:'vad',detected:0,seconds,model:modelName},null,2);
+        return;
+      }
+    }
+    status.textContent='Whisperモデル準備中（初回はダウンロードが必要です）…';
     const {pipeline,env}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1');
     env.allowLocalModels=false;
     if(!loadedPipe || loadedModel!==modelName){
@@ -243,11 +287,15 @@ run.onclick=async()=>{
       start,
       length:seconds,
       filter:windFilter.checked,
+      dictionary_count:dictionary.length,
+      vadWarning,
       results:[]
     };
-    if(segMode.value==='split'){
-      const segments=splitAtQuietSpans(samples);
-      quality.textContent='短い区間を個別に認識します。区切りは音量からの推定で、声だけを検出しているわけではありません。';
+    if(segMode.value==='split'||segMode.value==='vad'){
+      const segments=precomputedParts||splitAtQuietSpans(samples);
+      quality.textContent=vadWarning||(segMode.value==='vad'
+        ? 'Silero VADで検出した声らしい部分だけを認識します。歓声や掛け声を見落とす可能性があります。'
+        : '音量で分割した区間を個別に認識します。声だけを検出しているわけではありません。');
       output.textContent='音声候補 '+segments.length+'件：以下で独立して認識します。';
       for(let i=0;i<segments.length;i++){
         const segment=segments[i];
@@ -263,19 +311,20 @@ run.onclick=async()=>{
         });
         const transcript=String(recognized?.text||'').trim();
         const accepted=acceptableTranscript(transcript,clip.length/16000);
-        showSegment(segment,i,transcript,accepted,clip,start);
+        showSegment(segment,i,transcript,accepted,clip,start,dictionary);
         resultInfo.results.push({
           at:start+segment.start,
           end:start+segment.end,
           boundary:segment.why,
           text:transcript,
+          dictionary_hints:accepted?contextualHints(transcript,dictionary):[],
           accepted,
         });
         // Yield so Safari can update the progress UI between model runs.
         await new Promise(resolve=>setTimeout(resolve,0));
       }
       const accepted=resultInfo.results.filter(r=>r.accepted);
-      output.textContent='独立して認識：'+segments.length+'区間（文字起こし候補 '+accepted.length+'件）。離れた声は結合しません。';
+      output.textContent=(segMode.value==='vad'?'発話検出':'音量分割')+'：'+segments.length+'区間（文字起こし候補 '+accepted.length+'件）。離れた声は結合しません。';
       raw.textContent=JSON.stringify(resultInfo,null,2);
       quality.textContent+=' 各区間の音声と文章を聞き比べてください。文脈の捏造や空耳は完全には防げません。';
     }else{
@@ -299,6 +348,9 @@ run.onclick=async()=>{
       }else{
         quality.textContent='一括認識の結果です。離れた掛け声がつながっている可能性があります。';
         output.textContent=text;
+        const suggestions=contextualHints(text,dictionary);
+        resultInfo.contextual_hints=suggestions;
+        if(suggestions.length)quality.textContent+=' 辞書の照合候補：'+suggestions.map(s=>s.term+'（'+s.kind+'）').join(' / ');
         if(Array.isArray(result.chunks)&&result.chunks.length){
           output.textContent=result.chunks.map(c=>
             '['+fmtSec(start+Math.max(0,c.timestamp?.[0]||0))+'] '+String(c.text||'').trim()
@@ -307,7 +359,7 @@ run.onclick=async()=>{
       }
     }
     timing.textContent+=' ／ Whisper認識：'+((performance.now()-startTranscription)/1000).toFixed(1)+'秒';
-    status.textContent='完了（'+fmtSec(start)+'〜'+fmtSec(start+seconds)+' / '+modelName+' / '+(segMode.value==='split'?'区切り認識':'一括認識')+'）';
+    status.textContent='完了（'+fmtSec(start)+'〜'+fmtSec(start+seconds)+' / '+modelName+' / '+(segMode.value==='vad'?'VAD発話検出':segMode.value==='split'?'音量分割':'一括認識')+'）';
   }catch(e){
     status.textContent='失敗: '+(e?.message||String(e));
     quality.textContent='このMOVの音声コーデックがSafari非対応の可能性があります。エラーメッセージを教えてください。';
