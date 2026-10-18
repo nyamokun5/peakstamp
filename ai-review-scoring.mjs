@@ -32,10 +32,18 @@ export function plausibleSpeech(text, seconds=4) {
   if(s.length>=35 && new Set([...s]).size/s.length<.14)return false;
   return true;
 }
-export function classifyEvidence(transcripts=[],speechDetected=false) {
+export function classifyEvidence(transcripts=[],speechDetected=false,peakSeconds=null) {
   const segments=Array.isArray(transcripts)?transcripts:[];
   if(!speechDetected || !segments.length)return {kind:'音響のみ',bonus:0,phrases:[],hasUsableSpeech:false};
-  const usable=segments.filter(x=>x && x.speechDetected!==false && plausibleSpeech(x.text,x.seconds));
+  const usable=segments.filter(x=>{
+    if(!x || x.speechDetected===false || !plausibleSpeech(x.text,x.seconds))return false;
+    // Guard against incidental chat far from the acoustic event.
+    if(Number.isFinite(peakSeconds) && Number.isFinite(x.when)){
+      const centre=x.when+(Number(x.seconds)||0)/2;
+      return Math.abs(centre-peakSeconds)<=4;
+    }
+    return true;
+  });
   if(!usable.length)return {kind:'発話あり・認識不明',bonus:0,phrases:[],hasUsableSpeech:false};
   const texts=usable.map(x=>strip(x.text));
   const candidates=GROUPS.map(g=>({...g,hits:g.words.filter(word=>texts.some(t=>t.includes(strip(word))))}))
@@ -50,7 +58,7 @@ export function rankSceneEvidence(entries=[]) {
   const baseline=[...entries].sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0)||
     (Number(a.peakSeconds)||0)-(Number(b.peakSeconds)||0));
   const scored=baseline.map((x,index)=>{
-    const evidence=classifyEvidence(x.ai?.transcripts||[],x.ai?.speechDetected===true);
+    const evidence=classifyEvidence(x.ai?.transcripts||[],x.ai?.speechDetected===true,x.peakSeconds);
     // Acoustic ranking must remain dominant. Bonus can move a plausible event
     // about one or two places, but cannot automatically reject a quiet goal.
     const baseIndex=100-index*9;
