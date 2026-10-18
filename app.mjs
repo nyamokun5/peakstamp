@@ -1,4 +1,5 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audio12';
+import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
@@ -103,6 +104,7 @@ function syncSources() {
   state.duration = offset;
   state.bins = bins.length ? bins : null;
   state.candidates = candidates;
+  refreshWhisperTargets(state);
   if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
   $('stickyBar').hidden = !state.bins;
   $('resultsPanel').hidden = !state.bins;
@@ -1119,3 +1121,4 @@ $('lineShareCopy').addEventListener('click',async()=>{
 });
 
 initMontageEditor(state);
+initWhisperExperiment(state);
