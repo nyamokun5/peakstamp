@@ -226,8 +226,8 @@ $('fileInput').addEventListener('change', e => {
   const receivedAt = performance.now();
   const pickerMs = filePickerOpenedAt === null ? null : receivedAt - filePickerOpenedAt;
   const filesProvided = Boolean(e.target.files?.length);
-  filePickerOpenedAt = null;
   if (!filesProvided) showIncompleteFilePick();
+  else filePickerOpenedAt = null;
   const validFileSelected = Array.from(e.target.files || []).some(file =>
     /\.(mp4|mov|m4v)$/i.test(file.name) || /^video\//.test(file.type));
   chooseFiles(e.target.files,appendOnPick);
