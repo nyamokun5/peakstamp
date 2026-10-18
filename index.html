@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=pinch18" />
+  <link rel="stylesheet" href="styles.css?v=import19" />
 </head>
 <body>
   <header class="topbar">
@@ -41,13 +41,16 @@
         <button id="changeFile" class="plain-link" type="button">変更</button>
         <button id="addFiles" class="plain-link" type="button">＋追加</button>
       </div>
+      <p id="fileImportTiming" class="file-import-timing" role="status" aria-live="polite" hidden></p>
+      <p id="fileImportHelp" class="file-import-help" hidden>「ファイル選択」には写真を探す・選ぶ時間や、iCloudからの取得・iOS側の変換があればその時間も含まれます。iCloud取得だけを個別に計測することはできません。</p>
       <div class="source-board" id="sourceBoard" hidden>
         <div class="source-board-header"><strong>動画の結合順 <span id="sourceCount">0</span>本</strong><small>↑↓で並び替え・×で削除</small></div>
         <div id="sourceList" class="source-list"></div>
         <p class="fine-print">ファイルごとに音声解析し、ここに並んだ順番でハイライトを結合します。</p>
       </div>
       <div id="videoWrapper" hidden>
-        <video id="preview" controls playsinline preload="metadata"></video>
+        <button id="loadPreview" class="preview-load-button" type="button">▶ 先頭動画をプレビュー（必要な場合のみ）</button>
+        <video id="preview" controls playsinline preload="none" hidden></video>
       </div>
       <p id="loadError" class="error" role="alert" hidden></p>
     </section>
@@ -251,6 +254,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=pinch18"></script>
+  <script type="module" src="app.mjs?v=import19"></script>
 </body>
 </html>
