@@ -1,8 +1,9 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audio12';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=scene15';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=scene15';
-import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom } from './editing-rules.mjs?v=zoom11';
+import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
+import { attachScenePinchEditor } from './scene-gesture.mjs?v=pinch18';
 import { montageSeconds } from './exporter.mjs?v=scene15';
 import { getIntroConfiguration } from './intro-ui.mjs?v=scene15';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
@@ -336,7 +337,8 @@ function rebuild() {
         enabled: old?.enabled ?? false, rejected: old?.rejected ?? false,
         title: old?.title || item.title,
         time: old?.time ?? item.time, manualEnd: old?.manualEnd ?? null,
-        zoom: normalizeSceneZoom(old?.zoom) };
+        zoom: normalizeSceneZoom(old?.zoom),
+        zoomX: normalizeSceneFocus(old?.zoomX),zoomY: normalizeSceneFocus(old?.zoomY) };
     });
   }
   syncSources();
@@ -453,7 +455,10 @@ function row(item, index) {
   play.title = '切り取り範囲をもう一度再生';
   let replayVideo=null;
   let frameWatchId=null;
+  let teardownZoom=null;
   const close=()=>{
+    teardownZoom?.();
+    teardownZoom=null;
     if(replayVideo){
       if(frameWatchId!==null && replayVideo.cancelVideoFrameCallback){
         replayVideo.cancelVideoFrameCallback(frameWatchId);
@@ -524,32 +529,29 @@ function row(item, index) {
       source.file.name+' — '+formatTimelineTime(item.time)+' 〜 '+
       formatTimelineTime(getCandidateEnd(source,item,currentClipOptions()))+' をリプレイ');
     const viewport=make('div','zoom-video-viewport');
+    viewport.setAttribute('tabindex','0');
+    viewport.setAttribute('role','group');
+    viewport.setAttribute('aria-label','映像の画角調整：2本指で拡大縮小、拡大後は1本指で移動。キーボードのプラス・マイナスでも倍率変更可能');
     viewport.append(video);
-    video.style.transform='scale('+normalizeSceneZoom(item.zoom)+')';
-    const zoomRow=make('div','scene-zoom-control');
-    const zoomHeading=make('div','scene-zoom-heading');
-    const zoomText=make('span','scene-zoom-label','映像を拡大（中央）');
-    const zoomValue=make('output','scene-zoom-value');
-    const zoomSlider=make('input','scene-zoom-slider');
-    zoomSlider.type='range';
-    zoomSlider.min='1';
-    zoomSlider.max='3';
-    zoomSlider.step='0.1';
-    zoomSlider.value=String(normalizeSceneZoom(item.zoom));
-    zoomSlider.setAttribute('aria-label','このシーンの映像拡大倍率（1.0倍から3.0倍）');
-    zoomValue.textContent=Number(zoomSlider.value).toFixed(1)+'倍';
-    zoomSlider.addEventListener('input',()=>{
-      item.zoom=normalizeSceneZoom(zoomSlider.value);
-      zoomSlider.value=String(item.zoom);
-      zoomValue.textContent=item.zoom.toFixed(1)+'倍';
-      video.style.transform='scale('+item.zoom+')';
-      refreshComment();
-    });
-    const zoomEnds=make('div','scene-zoom-ends');
-    zoomEnds.append(make('span','','1.0倍'),make('span','','3.0倍'));
-    zoomHeading.append(zoomText,zoomValue);
-    zoomRow.append(zoomHeading,zoomSlider,zoomEnds);
+    const zoomRow=make('div','scene-pinch-toolbar');
+    const zoomHint=make('span','scene-pinch-hint','2本指で拡大・縮小 ／ 1本指で移動');
+    const zoomValue=make('output','scene-pinch-value');
+    const zoomReset=make('button','scene-pinch-reset','リセット');
+    zoomReset.type='button';
+    zoomReset.setAttribute('aria-label','映像の拡大と位置を初期化');
+    zoomRow.append(zoomHint,zoomValue,zoomReset);
     inline.replaceChildren(label,viewport,zoomRow);
+    teardownZoom=attachScenePinchEditor({
+      viewport,video,read:()=>({
+        zoom:normalizeSceneZoom(item.zoom),
+        zoomX:normalizeSceneFocus(item.zoomX),zoomY:normalizeSceneFocus(item.zoomY)
+      }),
+      write:next=>{
+        item.zoom=next.zoom;item.zoomX=next.zoomX;item.zoomY=next.zoomY;
+      },
+      commit:()=>refreshComment(),
+      resetButton:zoomReset,readout:zoomValue
+    });
     inline.hidden=false;
     entry.classList.add('preview-active');
     activeInlineClose=close;
