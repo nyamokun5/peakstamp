@@ -77,10 +77,12 @@ export function contextualHints(transcript, vocabulary, maxHints = 4) {
   const items = Array.isArray(vocabulary) ? vocabulary : parseContextVocabulary(vocabulary);
   const hits = [];
   for (const entry of items) {
-    const target = normalizeJapanese(entry.reading);
-    if (!target || target.length < 2) continue;
-    const exact = source.includes(target);
-    if (exact || approximateMatch(source, target)) {
+    const targets = [...new Set([normalizeJapanese(entry.term), normalizeJapanese(entry.reading)])]
+      .filter(target => target.length >= 2);
+    if (!targets.length) continue;
+    const exact = targets.some(target => source.includes(target));
+    const close = !exact && targets.some(target => approximateMatch(source, target));
+    if (exact || close) {
       hits.push({ term: entry.term, kind: exact ? '一致' : '近い発音（要確認）' });
     }
   }
