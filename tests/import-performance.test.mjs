@@ -24,3 +24,13 @@ test('import timings separate native picker from app list paint with honest cave
   assert.match(app,/requestAnimationFrame\(\(\) =>/);
   assert.match(app,/PeakStampの一覧表示/);
 });
+
+test('native photo picker cancel or empty file change receives an actionable local-files workaround',()=>{
+  assert.match(app,/addEventListener\('cancel', showIncompleteFilePick\)/);
+  assert.match(app,/if \(!filesProvided\) showIncompleteFilePick\(\)/);
+  assert.match(app,/filePickerOpenedAt = null/);
+  assert.match(app,/選択画面を開いてから約/);
+  assert.match(app,/未編集のオリジナルを書き出す/);
+  assert.match(html,/class="photo-picker-tip"/);
+  assert.match(html,/1本ずつ選択/);
+});
