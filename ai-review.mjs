@@ -103,6 +103,13 @@ function beginPreview(source, candidate, host) {
   };
   video.addEventListener('loadedmetadata',seek);
   if(video.readyState>=1)seek();
+  const stopAt=Math.min(source.duration,Math.max(candidate.peakSeconds+6,where+12));
+  video.addEventListener('timeupdate',()=>{
+    if(video===activeVideo && video.currentTime>=stopAt-.06){
+      video.pause();
+      video.currentTime=where;
+    }
+  });
   // iOS playback stays behind a user gesture via native controls.
 }
 async function loadASR(update) {
