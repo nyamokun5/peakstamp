@@ -1,7 +1,7 @@
-import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=scene15';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=scene15';
+import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=pinch18';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=pinch18';
 import { formatTime } from './detector.mjs';
-import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=scene15';
+import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=pinch18';
 
 const $ = id => document.getElementById(id);
 function clipOptions() {
@@ -28,7 +28,7 @@ let lastEditSignature = null;
 function editSignature(state, plan) {
   return JSON.stringify({
     sources:(state?.sources||[]).map(s=>[s.id,s.file?.name,s.file?.size,s.file?.lastModified]),
-    clips:plan.map(c=>[c.sourceId,c.start,c.end,c.zoom || 1]),
+    clips:plan.map(c=>[c.sourceId,c.start,c.end,c.zoom || 1,c.zoomX ?? .5,c.zoomY ?? .5]),
     title:$('montageTitle').value,
     font:$('titleFont').value,
     titleSize:$('titleSize').value,

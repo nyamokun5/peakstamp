@@ -1,5 +1,5 @@
-import { INTRO_SECONDS } from './exporter.mjs?v=scene15';
-import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom } from './editing-rules.mjs?v=zoom11';
+import { INTRO_SECONDS } from './exporter.mjs?v=pinch18';
+import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
 import { prepareIntroPlan } from './intro-layout.mjs?v=scene15';
 
 /**
@@ -19,10 +19,14 @@ export function buildMultiClipPlan(sources, options = 16) {
       start: Math.max(0, Math.min(source.duration, Number(candidate.time) || 0)),
       end: getCandidateEnd(source, candidate, cfg),
       zoom: normalizeSceneZoom(candidate.zoom),
+      zoomX:normalizeSceneZoom(candidate.zoom)>1 ? normalizeSceneFocus(candidate.zoomX) : .5,
+      zoomY:normalizeSceneZoom(candidate.zoom)>1 ? normalizeSceneFocus(candidate.zoomY) : .5,
     })), source.duration);
     for(const span of spans) plan.push({
       sourceId:source.id,sourceName:source.file.name,start:span.start,end:span.end,
-      ...(span.zoom !== 1 ? { zoom:span.zoom } : {})
+      ...(span.zoom !== 1 ? { zoom:span.zoom,
+        ...(span.zoomX!==.5 ? {zoomX:span.zoomX} : {}),
+        ...(span.zoomY!==.5 ? {zoomY:span.zoomY} : {}) } : {})
     });
   }
   return plan;
@@ -31,15 +35,20 @@ function mergeAdaptive(raw,duration){
   const clips=[];
   for(const segment of raw.filter(c=>c.end>c.start+.2).sort((a,b)=>a.start-b.start)){
     const prev=clips.at(-1);
-    if(prev && prev.zoom===segment.zoom && segment.start<=prev.end+.2){
+    if(prev && prev.zoom===segment.zoom &&
+      prev.zoomX===segment.zoomX && prev.zoomY===segment.zoomY &&
+      segment.start<=prev.end+.2){
       prev.end=Math.max(prev.end,Math.min(duration,segment.end));
     }else{
       // Different zooms are separate shots. Avoid repeating overlap footage.
-      if(prev && prev.zoom!==segment.zoom && segment.start<prev.end){
+      if(prev && (prev.zoom!==segment.zoom ||
+        prev.zoomX!==segment.zoomX || prev.zoomY!==segment.zoomY) &&
+        segment.start<prev.end){
         prev.end=Math.min(prev.end,segment.start);
         if(prev.end-prev.start<=.2)clips.pop();
       }
-      clips.push({start:segment.start,end:Math.min(duration,segment.end),zoom:segment.zoom});
+      clips.push({start:segment.start,end:Math.min(duration,segment.end),
+        zoom:segment.zoom,zoomX:segment.zoomX,zoomY:segment.zoomY});
     }
   }
   return clips;

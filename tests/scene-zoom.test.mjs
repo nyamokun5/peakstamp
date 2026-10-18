@@ -12,8 +12,8 @@ test('zoom defaults to unchanged original',()=>{
  assert.equal(normalizeSceneZoom('2'),2);
  assert.equal(normalizeSceneZoom(17),3);
  assert.equal(normalizeSceneZoom(2.3),2.3);
- assert.equal(normalizeSceneZoom('1.76'),1.8);
- assert.equal(normalizeSceneZoom(2.94),2.9);
+ assert.equal(normalizeSceneZoom('1.76'),1.76);
+ assert.equal(normalizeSceneZoom(2.94),2.94);
  assert.equal(normalizeSceneZoom(3.2),3);
  assert.equal(normalizeSceneZoom(NaN),1);
  assert.equal(normalizeSceneZoom(Infinity),1);

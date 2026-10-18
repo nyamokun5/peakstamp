@@ -133,26 +133,41 @@ export function clampTimelineEdge(edge, seconds, start, end, duration) {
   throw new Error('Invalid timeline handle');
 }
 
-/** Per-scene digital center zoom. Raw footage and timestamps are unchanged. */
+/** Scene zoom and pan. Both normalized focus axes refer to source coordinates. */
 export const SCENE_ZOOM_MIN=1;
 export const SCENE_ZOOM_MAX=3;
-export const SCENE_ZOOM_STEP=0.1;
+export const SCENE_ZOOM_STEP=0.1; // Old slider values remain backward compatible.
 export function normalizeSceneZoom(value) {
   const n=Number(value);
   if (!Number.isFinite(n)) return SCENE_ZOOM_MIN;
   const clamped=Math.max(SCENE_ZOOM_MIN,Math.min(SCENE_ZOOM_MAX,n));
-  return Number((Math.round(clamped / SCENE_ZOOM_STEP) * SCENE_ZOOM_STEP).toFixed(1));
+  // Two decimals allow smooth native pinch zoom while reading prior 0.1 values.
+  return Number(clamped.toFixed(2));
 }
-/** Scale the aspect-fitted video around the output canvas center, cropping overflow. */
-export function zoomDrawRect(videoWidth,videoHeight,canvasWidth,canvasHeight,zoom=1) {
-  if(![videoWidth,videoHeight,canvasWidth,canvasHeight].every(n=>Number.isFinite(n)&&n>0)){
+export function normalizeSceneFocus(value) {
+  const n=Number(value);
+  if(!Number.isFinite(n))return .5;
+  return Number(Math.max(0,Math.min(1,n)).toFixed(4));
+}
+/**
+ * Draw source using a selected source-space focus point under canvas center.
+ * Clamp each axis to prevent showing any black space when zoomed. Preserve
+ * the original centered letterbox for sources with a different aspect ratio.
+ * Default focus .5/.5 reproduces legacy centered zoom exactly.
+ */
+export function zoomDrawRect(videoWidth,videoHeight,canvasWidth,canvasHeight,zoom=1,
+  focusX=.5,focusY=.5) {
+  if(![videoWidth,videoHeight,canvasWidth,canvasHeight].every(n=>Number.isFinite(n)&&n>0))
     throw new Error('無効な映像サイズです');
-  }
   const ratio=Math.min(canvasWidth/videoWidth,canvasHeight/videoHeight);
   const z=normalizeSceneZoom(zoom);
   const width=videoWidth*ratio*z;
   const height=videoHeight*ratio*z;
-  return {
-    dx:(canvasWidth-width)/2,dy:(canvasHeight-height)/2,dw:width,dh:height
+  const axis=(size,canvas,focus)=>{
+    if(size<=canvas)return (canvas-size)/2;
+    const ideal=canvas/2-normalizeSceneFocus(focus)*size;
+    return Math.max(canvas-size,Math.min(0,ideal));
   };
+  return {dx:axis(width,canvasWidth,focusX),dy:axis(height,canvasHeight,focusY),
+    dw:width,dh:height};
 }
