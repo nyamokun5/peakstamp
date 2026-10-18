@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=picker20" />
+  <link rel="stylesheet" href="styles.css?v=whisper21" />
 </head>
 <body>
   <header class="topbar">
@@ -85,6 +85,17 @@
     <section class="panel results-panel" id="resultsPanel" hidden>
       <div class="panel-label"><span class="number">03</span><h2>確認してキープ</h2></div>
       <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
+
+      <section id="whisperExperiment" class="whisper-experiment" aria-label="AI文字起こしの実験">
+        <div class="whisper-experiment-head"><strong>β AI文字起こし（実験）</strong><span>任意・無料</span></div>
+        <p>音声ピークの前後約16秒だけをiPhone内で日本語文字起こし。まず1シーンずつ精度を確認できます。候補の判定や動画編集には自動反映しません。</p>
+        <label for="whisperTarget">試すシーン</label>
+        <select id="whisperTarget" disabled aria-label="文字起こしするシーン"></select>
+        <button id="whisperButton" class="whisper-run" type="button" disabled>このシーンをWhisperで文字起こしする</button>
+        <p id="whisperStatus" class="whisper-status" role="status" aria-live="polite"></p>
+        <div id="whisperOutput" class="whisper-output" hidden></div>
+        <small class="whisper-disclaimer">初回のみAIモデル（大きなデータ）をダウンロードします。Wi-Fi推奨。動画・音声は送信しません。認識結果は誤認識の可能性があり、歓声のみは検出できない場合があります。iPhone Safariでの動作は検証中です。</small>
+      </section>
       <p id="multiWaveNotice" class="fine-print" hidden>波形は全動画をつなげた表示です。オレンジ線は各動画の検出位置を示します。</p>
       <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
       <div id="emptyResults" class="empty-results" hidden>指定した感度では見どころを検出できませんでした。「多めに拾う」に切り替えて再解析するか、音声が入っているかご確認ください。</div>
@@ -255,6 +266,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=picker20"></script>
+  <script type="module" src="app.mjs?v=whisper21"></script>
 </body>
 </html>
