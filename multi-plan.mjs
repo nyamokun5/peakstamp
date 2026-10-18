@@ -1,4 +1,4 @@
-import { INTRO_SECONDS } from './exporter.mjs?v=scene15';
+import { INTRO_SECONDS } from './exporter.mjs?v=pinch18';
 import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
 import { prepareIntroPlan } from './intro-layout.mjs?v=scene15';
 
