@@ -105,10 +105,11 @@ test('pointer listener supports a complete two-finger pinch and reset without sl
   assert.equal(resetButton.disabled,false);
   assert.ok(video.style.transform.includes('scale(2)'));
   // Swipe with one finger after the pinch.
+  const focusBeforePan=state.zoomX;
   viewport.handlers.pointerdown(e(15,500,300));
   viewport.handlers.pointermove(e(15,400,300));
   viewport.handlers.pointerup(e(15,400,300));
-  assert.ok(state.zoomX>.5);
+  assert.ok(state.zoomX>focusBeforePan);
   assert.equal(commits,2);
   resetButton.handlers.click();
   assert.deepEqual(state,initial);
