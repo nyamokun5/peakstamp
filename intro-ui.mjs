@@ -1,4 +1,4 @@
-import { drawIntro, introTitleRect } from './exporter.mjs?v=scene15';
+import { drawIntro, introTitleRect } from './exporter.mjs?v=pinch18';
 import { zoomDrawRect } from './editing-rules.mjs?v=pinch18';
 import { introPreset, overlayRect, normalizeIntroPoint, imageDimensions, prepareIntroPlan, introOverlayOpacity } from './intro-layout.mjs?v=scene15';
 
