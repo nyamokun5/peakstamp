@@ -510,3 +510,19 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .whisper-output small,.whisper-disclaimer{display:block;color:#9cb5c5;font-size:11px;line-height:1.65}
 .whisper-output summary{cursor:pointer;margin-top:12px;font-size:12px}
 .whisper-output li{font-size:12px;line-height:1.65;margin:5px 0}
+
+
+/* AI re-review beta: compact, touch-friendly preview and review controls. */
+#aiRerankPanel .whisper-output{padding:10px;max-width:100%;overflow-wrap:anywhere}
+#aiRerankPanel .ai-rerank-preview,
+#aiRerankPanel .ai-rerank-export{
+  border:1px solid #66899a;border-radius:9px;background:#20475b;
+  color:#f0faff;padding:11px 12px;min-height:42px;
+  width:100%;font-size:12px;font-weight:800;text-align:center;
+}
+#aiRerankPanel .ai-rerank-export{background:#1b675d;color:#ecfff6;border-color:#6fc9b5}
+#aiRerankPanel video{width:100%;max-width:100%;border-radius:10px}
+#aiRerankPanel details summary{cursor:pointer;color:#b8e9da}
+#aiRerankPanel .whisper-output strong{display:initial}
+#aiRerankPanel #aiRerankMetrics{font-size:12px;color:#e1f3f4}
+#aiRerankPanel [aria-label$="の実際の評価"]{min-height:43px}
