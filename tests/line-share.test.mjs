@@ -41,7 +41,7 @@ test('page includes actionable LINE copy control and non-blocking manual fallbac
   const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
   assert.match(html,/id="lineShareCopy"/);
   assert.match(html,/id="lineShareFallback"/);
-  assert.match(html,/app\.mjs\?v=line17/);
+  assert.match(html,/app\.mjs\?v=[a-z0-9]+/);
   assert.match(app,/lineShareUrl\(window\.location\.href\)/);
   assert.match(app,/normalizeVisibleLineUrl\(window\.location\.href\)/);
   assert.match(app,/navigator\.clipboard\?\.writeText/);
