@@ -1,7 +1,7 @@
-import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=scene15';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=scene15';
+import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=pinch18';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=pinch18';
 import { formatTime } from './detector.mjs';
-import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=scene15';
+import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=pinch18';
 
 const $ = id => document.getElementById(id);
 function clipOptions() {
