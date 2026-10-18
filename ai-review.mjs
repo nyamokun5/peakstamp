@@ -5,7 +5,7 @@
  */
 import { extractSnippet, snippetWindow } from './whisper-experiment.mjs?v=whisper21';
 import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=2';
-import { plausibleSpeech, rankSceneEvidence, LABELS, precisionAtK } from './ai-review-scoring.mjs?v=1';
+import { plausibleSpeech, rankSceneEvidence, LABELS, precisionAtK } from './ai-review-scoring.mjs?v=2';
 
 const $ = id => document.getElementById(id);
 const STORAGE_KEY = 'peakstamp_ai_scene_labels_v1';
@@ -94,7 +94,8 @@ function beginPreview(source, candidate, host) {
   video.src=source.objectUrl;
   host.replaceChildren(video);
   activeVideo=video;
-  const where=Math.max(0,Math.min(source.duration-0.3,Math.max(0,candidate.peakSeconds-7)));
+  const editedStart=Number.isFinite(candidate.time)?candidate.time:candidate.peakSeconds-7;
+  const where=Math.max(0,Math.min(source.duration-0.3,Math.max(0,editedStart)));
   const seek=()=> {
     if(activeVideo!==video)return;
     try{video.currentTime=where;}catch(_){}
@@ -280,8 +281,17 @@ function render() {
   for(const item of [...records].sort((a,b)=>a.aiRank-b.aiRank))wrapper.append(makeCard(item,'ai'));
   const oldDetails=document.createElement('details');
   oldDetails.style.cssText='margin-top:15px';
-  oldDetails.append(el('summary','従来順位でも同じ5件を確認する'));
-  for(const item of [...records].sort((a,b)=>a.baseRank-b.baseRank))oldDetails.append(makeCard(item,'base'));
+  oldDetails.append(el('summary','従来順位との比較一覧を見る'));
+  const originalList=document.createElement('ol');
+  originalList.style.cssText='padding-left:20px;font-size:13px;line-height:1.9';
+  for(const item of [...records].sort((a,b)=>a.baseRank-b.baseRank)){
+    const li=el('li',item.fileName+' '+safeTime(item.peakSeconds)+
+      ' → AI '+item.aiRank+'位'+
+      (feedback[item.key]?' ／ '+(LABELS.find(x=>x.value===feedback[item.key])?.text||''):''));
+    li.style.overflowWrap='anywhere';
+    originalList.append(li);
+  }
+  oldDetails.append(originalList);
   wrapper.append(oldDetails);
   const exportButton=btn('評価データをJSONで保存',()=>exportResults(),'ai-rerank-export');
   exportButton.style.cssText='display:block;width:100%;margin-top:12px';
