@@ -63,7 +63,18 @@ $('fileInput').addEventListener('click', () => {
   // The native picker may browse Photos, retrieve iCloud originals and convert
   // media before firing "change"; this timer ALSO includes human selection time.
   filePickerOpenedAt = performance.now();
+  error('loadError', '');
 });
+function showIncompleteFilePick() {
+  // Native iOS Photos/Files picker sometimes returns without selected File objects.
+  // We cannot access, speed up, or measure the OS-side preparation itself.
+  const waited = filePickerOpenedAt === null ? '' :
+    '（選択画面を開いてから約' + elapsedLabel(performance.now() - filePickerOpenedAt) + '）';
+  filePickerOpenedAt = null;
+  error('loadError','動画の選択が完了しませんでした' + waited +
+    '。大きな動画はSafariで1本ずつ選択するか、写真アプリから「未編集のオリジナルを書き出す」で「このiPhone内」に保存し、ファイルから選択してください。');
+}
+$('fileInput').addEventListener('cancel', showIncompleteFilePick);
 function busy(value) {
   state.working = value;
   $('fileInput').disabled = value || state.exporting;
@@ -214,7 +225,9 @@ function chooseFiles(files, append = false) {
 $('fileInput').addEventListener('change', e => {
   const receivedAt = performance.now();
   const pickerMs = filePickerOpenedAt === null ? null : receivedAt - filePickerOpenedAt;
+  const filesProvided = Boolean(e.target.files?.length);
   filePickerOpenedAt = null;
+  if (!filesProvided) showIncompleteFilePick();
   const validFileSelected = Array.from(e.target.files || []).some(file =>
     /\.(mp4|mov|m4v)$/i.test(file.name) || /^video\//.test(file.type));
   chooseFiles(e.target.files,appendOnPick);
