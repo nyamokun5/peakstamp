@@ -6,21 +6,61 @@
 <label>動画または音声を選択<br><input id="file" type="file" accept="video/*,audio/*,.mp4,.mov,.m4a,.wav"></label>
 <p><label>解析開始（秒） <input id="start" type="number" min="0" step="1" value="0" style="width:90px;background:#eff7ff;color:#10283a;border:0;border-radius:7px;padding:9px"></label></p>
 <p><label>解析する長さ <select id="length" style="padding:9px;border-radius:7px"><option value="10" selected>10秒（おすすめ）</option><option value="15">15秒</option><option value="30">30秒</option></select></label></p>
-<p><label>音声認識モデル <select id="model" style="padding:9px;border-radius:7px"><option value="tiny">Tiny（軽量・現在のモデル）</option><option value="base" selected>Base（精度優先・処理が重い）</option></select></label></p>
+<p><label>音声認識モデル <select id="model" style="padding:9px;border-radius:7px"><option value="base" selected>Base（推奨・日本語の認識精度を優先）</option><option value="tiny">Tiny（低負荷・精度が低くなりがち）</option></select></label></p>
+<p id="modelHint" style="color:#b8d8ef">まずBaseで試してください。Tinyは精度比較またはBaseが動作しない場合に使用します。</p>
+<p><label><input id="windFilter" type="checkbox"> 風切り音を軽減して認識（実験・比較用）</label></p>
 <p style="color:#80e0bc">MOV / MP4を変換せず、指定区間の音声だけを直接デコードします。</p>
 <p><button id="run" disabled>日本語を文字起こし</button></p>
 <small>まずは掛け声のある10秒を指定してください。MOVもMP4も再生や変換なしで音声を抽出します。Baseの初回実行ではモデル取得が必要です。音声データは外部サーバーに送信しません。</small>
 </section>
-<section><strong>処理状況</strong><p id="status" role="status">ファイルを選択してください</p><p id="timing" style="color:#adc2d1"></p><strong>認識結果</strong><p id="quality" aria-live="polite"></p><pre id="output">—</pre><details><summary>認識結果の詳細（確認用）</summary><pre id="raw">—</pre></details></section>
+<section><strong>処理状況</strong><p id="status" role="status">ファイルを選択してください</p><p id="timing" style="color:#adc2d1"></p>
+<div id="listenWrap" hidden><strong>Whisperが聞いた音声（確認用）</strong><p><audio id="listenAudio" controls preload="none" style="width:100%"></audio></p><small>選択した10秒の音声を、端末内で再生できます。音が聞き取りにくければAIの認識結果も不正確になりやすいです。</small></div>
+<p><strong>認識結果（実際の音声との一致は要確認）</strong></p><p id="quality" aria-live="polite"></p><pre id="output">—</pre><details><summary>認識結果の詳細（確認用）</summary><pre id="raw">—</pre></details></section>
 <script type="module">
 import { extractSnippet } from './whisper-experiment.mjs?v=movfast2';
 const $=id=>document.getElementById(id);
-const file=$('file'),run=$('run'),status=$('status'),output=$('output'),quality=$('quality'),raw=$('raw'),timing=$('timing');
+const file=$('file'),run=$('run'),status=$('status'),output=$('output'),quality=$('quality'),raw=$('raw'),timing=$('timing'),model=$('model'),modelHint=$('modelHint'),windFilter=$('windFilter'),listenWrap=$('listenWrap'),listenAudio=$('listenAudio');
+let audioURL=null;
+function clearAudio(){
+  listenAudio.pause();listenAudio.removeAttribute('src');listenAudio.load();
+  listenWrap.hidden=true;
+  if(audioURL){URL.revokeObjectURL(audioURL);audioURL=null;}
+}
+function makeWav(samples,rate=16000){
+  const buffer=new ArrayBuffer(44+samples.length*2),view=new DataView(buffer);
+  const ascii=(offset,value)=>{for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i));};
+  ascii(0,'RIFF');view.setUint32(4,36+samples.length*2,true);ascii(8,'WAVE');
+  ascii(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);
+  view.setUint16(22,1,true);view.setUint32(24,rate,true);
+  view.setUint32(28,rate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);
+  ascii(36,'data');view.setUint32(40,samples.length*2,true);
+  for(let i=0;i<samples.length;i++){
+    const sample=Math.min(1,Math.max(-1,samples[i]||0));
+    view.setInt16(44+i*2,sample<0?sample*32768:sample*32767,true);
+  }
+  return new Blob([buffer],{type:'audio/wav'});
+}
+async function filterWindNoise(samples){
+  const offline=new OfflineAudioContext(1,samples.length,16000);
+  const buffer=offline.createBuffer(1,samples.length,16000);
+  buffer.copyToChannel(samples,0);
+  const src=offline.createBufferSource();src.buffer=buffer;
+  const high=offline.createBiquadFilter();high.type='highpass';high.frequency.value=160;
+  const low=offline.createBiquadFilter();low.type='lowpass';low.frequency.value=3800;
+  src.connect(high);high.connect(low);low.connect(offline.destination);src.start();
+  const rendered=await offline.startRendering();
+  return rendered.getChannelData(0);
+}
+model.addEventListener('change',()=>{
+  modelHint.textContent=model.value==='tiny'
+    ? 'Tinyは速度優先です。今回のような屋外の掛け声は誤認識が増える可能性があります。'
+    : 'BaseはTinyより精度を重視します。初回は追加のモデル取得が必要です。';
+});
 let loadedPipe=null,loadedModel='';
 file.onchange=()=>{
   run.disabled=!file.files.length;
   status.textContent=file.files[0]?.name||'ファイルを選択してください';
-  quality.textContent='';output.textContent='—';raw.textContent='—';timing.textContent='';
+  quality.textContent='';output.textContent='—';raw.textContent='—';timing.textContent='';clearAudio();
 };
 const repetitive=text=>{
   const compact=(text||'').replace(/\s/g,'');
@@ -31,20 +71,27 @@ const repetitive=text=>{
 };
 const fmtSec=sec=>Math.floor(sec/60)+':'+String(Math.floor(sec%60)).padStart(2,'0');
 run.onclick=async()=>{
-  run.disabled=true;output.textContent='—';raw.textContent='—';quality.textContent='';
+  run.disabled=true;output.textContent='—';raw.textContent='—';quality.textContent='';clearAudio();
   try{
     const f=file.files[0];if(!f)throw Error('ファイルを選択してください');
     const start=Math.max(0,Number($('start').value)||0);
     const length=Number($('length').value);
-    const model=$('model').value;
+    const modelName=model.value;
     if(!Number.isFinite(start)||start<0)throw Error('開始位置を確認してください');
     status.textContent='MOV/MP4から音声を直接抽出中…';
     const startExtraction=performance.now();
-    const samples=await extractSnippet(f,start,start+length,percent=>{
+    let samples=await extractSnippet(f,start,start+length,percent=>{
       status.textContent='音声を直接抽出中：'+percent+'%';
     });
     const seconds=samples.length/16000;
     const sourceMode='Mediabunny直接デコード';
+    if(windFilter.checked){
+      status.textContent='風切り音の低減処理中…';
+      samples=await filterWindNoise(samples);
+    }
+    audioURL=URL.createObjectURL(makeWav(samples));
+    listenAudio.src=audioURL;
+    listenWrap.hidden=false;
     timing.textContent='音声抽出：'+((performance.now()-startExtraction)/1000).toFixed(1)+'秒（'+seconds.toFixed(1)+'秒分）';
     if(seconds<0.5)throw Error('指定範囲から音声を抽出できません。開始位置を確認してください。');
     let energy=0;
@@ -60,16 +107,16 @@ run.onclick=async()=>{
     status.textContent='Whisperモデル準備中…（初回はダウンロードが必要です）';
     const {pipeline,env}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1');
     env.allowLocalModels=false;
-    if(!loadedPipe || loadedModel!==model){
+    if(!loadedPipe || loadedModel!==modelName){
       if(loadedPipe){await loadedPipe.dispose();loadedPipe=null;loadedModel=''}
-      loadedPipe=await pipeline('automatic-speech-recognition','onnx-community/whisper-'+model,{
+      loadedPipe=await pipeline('automatic-speech-recognition','onnx-community/whisper-'+modelName,{
         dtype:'q8',device:'wasm',
         progress_callback:p=>{
           if(p.status==='progress'&&Number.isFinite(p.progress))
             status.textContent='モデル取得中 '+Math.round(p.progress)+'%';
         }
       });
-      loadedModel=model;
+      loadedModel=modelName;
     }
     status.textContent='日本語を認識中…';
     const started=performance.now();
@@ -79,13 +126,14 @@ run.onclick=async()=>{
       task:'transcribe',
       return_timestamps:true,
       chunk_length_s:30,
-      max_new_tokens:128
+      max_new_tokens:128,
+      temperature:0
     });
     timing.textContent+=' ／ Whisper認識：'+((performance.now()-startTranscription)/1000).toFixed(1)+'秒';
     const text=(result.text||'').trim();
     const isRepeat=repetitive(text);
     const tooLong=text.length>Math.max(120,Math.floor(seconds*16));
-    raw.textContent='方式: '+sourceMode+'\nモデル: '+model+'\n区間: '+fmtSec(start)+'〜'+fmtSec(start+seconds)+'\n処理時間: '+Math.round((performance.now()-started)/1000)+'秒\n音量RMS: '+rms.toFixed(4)+'\n'+JSON.stringify(result,null,2).slice(0,4500);
+    raw.textContent='方式: '+sourceMode+'\nフィルター: '+(windFilter.checked?'風切り低減あり':'なし')+'\nモデル: '+modelName+'\n区間: '+fmtSec(start)+'〜'+fmtSec(start+seconds)+'\n処理時間: '+Math.round((performance.now()-started)/1000)+'秒\n音量RMS: '+rms.toFixed(4)+'\n'+JSON.stringify(result,null,2).slice(0,4500);
     if(!text){
       quality.textContent='言葉を認識できませんでした。';
       output.textContent='（認識できる発話なし）';
@@ -93,7 +141,7 @@ run.onclick=async()=>{
       quality.textContent='⚠ 異常に長い繰り返しを検出しました。誤認識の可能性が高いため、ハイライト判定には使用しません。';
       output.textContent='（繰り返しの多い認識結果を除外しました）';
     }else{
-      quality.textContent='候補として認識されました。実際の声と一致するか確認してください。';
+      quality.textContent='認識された文章です。上の音声を聴き、発言と一致するか確認してください。日本語らしく見えても誤認識の可能性があります。';
       output.textContent=text;
       if(Array.isArray(result.chunks)){
         const lines=result.chunks.map(c=>{
@@ -103,7 +151,7 @@ run.onclick=async()=>{
         if(lines.length)output.textContent=lines.join('\n');
       }
     }
-    status.textContent='完了（'+fmtSec(start)+'〜'+fmtSec(start+seconds)+' / '+model+'）';
+    status.textContent='完了（'+fmtSec(start)+'〜'+fmtSec(start+seconds)+' / '+modelName+'）';
   }catch(e){
     status.textContent='失敗: '+(e?.message||String(e));
     quality.textContent='このMOVの音声コーデックがSafari非対応の可能性があります。エラーメッセージを教えてください。';
