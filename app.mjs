@@ -53,6 +53,17 @@ function progress(message, value) {
 }
 let nextSourceId = 0;
 let appendOnPick = false;
+let filePickerOpenedAt = null;
+let importTimingSequence = 0;
+function elapsedLabel(milliseconds) {
+  return milliseconds < 1000 ? Math.round(milliseconds) + 'ms'
+    : (milliseconds / 1000).toFixed(1) + '秒';
+}
+$('fileInput').addEventListener('click', () => {
+  // The native picker may browse Photos, retrieve iCloud originals and convert
+  // media before firing "change"; this timer ALSO includes human selection time.
+  filePickerOpenedAt = performance.now();
+});
 function busy(value) {
   state.working = value;
   $('fileInput').disabled = value || state.exporting;
@@ -102,19 +113,34 @@ function renderSourceList() {
   $('fileSize').textContent = megabytes.toFixed(1) + ' MB 合計';
   $('analyzeButton').disabled = !sources.length || state.working || state.exporting;
   const preview = $('preview');
+  const previewButton = $('loadPreview');
   const first = sources[0];
   if (first) {
-    if (preview.src !== first.objectUrl) {
+    if (preview.dataset.sourceId !== first.id) {
       preview.pause();
-      preview.src = first.objectUrl;
-      preview.load();
+      // Release an old source, but never open/read the NEW video until requested.
+      if (preview.hasAttribute('src')) {
+        preview.removeAttribute('src');
+        preview.load();
+      }
+      delete preview.dataset.sourceId;
+      preview.preload = 'none';
+      preview.hidden = true;
+      previewButton.hidden = false;
     }
     $('videoWrapper').hidden = false;
   } else {
     preview.pause();
-    preview.removeAttribute('src');
-    preview.load();
+    if (preview.hasAttribute('src')) {
+      preview.removeAttribute('src');
+      preview.load();
+    }
+    delete preview.dataset.sourceId;
+    preview.hidden = true;
+    previewButton.hidden = true;
     $('videoWrapper').hidden = true;
+    $('fileImportTiming').hidden = true;
+    $('fileImportHelp').hidden = true;
   }
   const list = $('sourceList');
   list.replaceChildren(...sources.map((source, i) => {
@@ -186,9 +212,38 @@ function chooseFiles(files, append = false) {
   syncSources();
 }
 $('fileInput').addEventListener('change', e => {
+  const receivedAt = performance.now();
+  const pickerMs = filePickerOpenedAt === null ? null : receivedAt - filePickerOpenedAt;
+  filePickerOpenedAt = null;
+  const validFileSelected = Array.from(e.target.files || []).some(file =>
+    /\.(mp4|mov|m4v)$/i.test(file.name) || /^video\//.test(file.type));
   chooseFiles(e.target.files,appendOnPick);
+  const timingSequence = ++importTimingSequence;
+  if (validFileSelected && state.sources.length) {
+    // Measure until the browser gets a chance to paint the list, not video decode.
+    requestAnimationFrame(() => {
+      if (timingSequence !== importTimingSequence) return;
+      const appMs = performance.now() - receivedAt;
+      const pickerText = pickerMs === null ? '不明' : elapsedLabel(pickerMs);
+      $('fileImportTiming').textContent =
+        'ファイル選択：' + pickerText + ' ／ PeakStampの一覧表示：' + elapsedLabel(appMs);
+      $('fileImportTiming').hidden = false;
+      $('fileImportHelp').hidden = false;
+    });
+  }
   e.target.value = '';
   appendOnPick = false;
+});
+$('loadPreview').addEventListener('click', () => {
+  const first = state.sources[0];
+  if (!first) return;
+  const preview = $('preview');
+  preview.dataset.sourceId = first.id;
+  preview.preload = 'metadata';
+  preview.src = first.objectUrl;
+  preview.hidden = false;
+  $('loadPreview').hidden = true;
+  preview.load();
 });
 $('changeFile').addEventListener('click', () => { appendOnPick = false; $('fileInput').click(); });
 $('addFiles').addEventListener('click', () => { appendOnPick = true; $('fileInput').click(); });
