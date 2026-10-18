@@ -28,7 +28,7 @@ let lastEditSignature = null;
 function editSignature(state, plan) {
   return JSON.stringify({
     sources:(state?.sources||[]).map(s=>[s.id,s.file?.name,s.file?.size,s.file?.lastModified]),
-    clips:plan.map(c=>[c.sourceId,c.start,c.end,c.zoom || 1]),
+    clips:plan.map(c=>[c.sourceId,c.start,c.end,c.zoom || 1,c.zoomX ?? .5,c.zoomY ?? .5]),
     title:$('montageTitle').value,
     font:$('titleFont').value,
     titleSize:$('titleSize').value,
