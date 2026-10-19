@@ -76,7 +76,7 @@ function showExtracted(source,record){
 async function extractSelected(state){
  const source=currentSource(state);
  if(!source||busy||state.working||state.exporting)return;
- busy=true;const run=++jobId;
+ busy=true;
  resetAudio();const expected=jobId;
  const mode=$('cloudAudioMode').value==='small'?'small':'fast';
  say('音声の準備中… 元動画はアップロードしません。');
@@ -93,7 +93,7 @@ async function extractSelected(state){
 async function shareAudio(){
  if(!exportedAudio){say('先に音声を抽出してください。');return;}
  try{
-  if(!navigator.share||!navigator.canShare?.({files:[exportedAudio.file]})){
+  if(!navigator.share||(navigator.canShare&&!navigator.canShare({files:[exportedAudio.file]}))){
    say('音声ファイルの共有に対応していません。M4Aダウンロードをお試しください。');return;
   }
   await navigator.share({files:[exportedAudio.file],title:'PeakStamp 音声解析テスト'});
