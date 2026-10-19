@@ -95,6 +95,38 @@
         <div id="aiRerankResults" class="whisper-output" hidden></div>
         <small class="whisper-disclaimer">新しく探した候補は通常のシーン一覧に自動追加しません。上位5件に加え、その他の候補も展開して再生・評価できます。Whisperは最大10件、声の検査は最大20件を対象にします。モデル取得以外で元動画・音声は送信せず、評価はこの端末内に保存されます。映像自体をAIで認識する機能ではありません。</small>
       </section>
+      <section id="cloudAudioPanel" class="whisper-experiment" aria-label="クラウド音声AI比較実験">
+        <div class="whisper-experiment-head"><strong>β クラウド音声AI比較 — Gemini</strong><span>音声だけ・任意</span></div>
+        <p>550MBの動画をアップロードせず、<strong>音声だけをM4Aに取り出し</strong>、Geminiで歓声・「ナイシュー」などの反応時刻を解析。AIの結果とPeakStampの候補を比較する初回実験です。</p>
+        <label for="cloudAudioSourcePicker">実験する動画（1回1本）</label>
+        <select id="cloudAudioSourcePicker" disabled></select>
+        <label for="cloudAudioMode">音声取り出し方法</label>
+        <select id="cloudAudioMode">
+          <option value="fast" selected>高速：音声のみコピー（音質を維持・推奨）</option>
+          <option value="small">軽量：48kbps AACで圧縮（処理に時間がかかる場合あり）</option>
+        </select>
+        <button id="cloudAudioExtract" type="button" class="whisper-run" disabled>① 音声だけ取り出す</button>
+        <p id="cloudAudioStatus" class="whisper-status" role="status" aria-live="polite"></p>
+        <div id="cloudAudioReady" class="whisper-output" hidden>
+          <strong id="cloudAudioFileInfo"></strong>
+          <audio id="cloudAudioPlayback" controls preload="none" style="width:100%;margin:8px 0"></audio>
+          <button id="cloudAudioShare" type="button" class="whisper-run">↑ iPhoneの「ファイルに保存」で音声を保存</button>
+          <button id="cloudAudioDownload" type="button" class="whisper-run">↓ M4A音声をダウンロード</button>
+          <a id="cloudAudioFallback" download class="save-fallback" hidden>保存されない場合はこちらを長押し</a>
+        </div>
+        <div class="cloud-audio-steps">
+          <p><strong>② Geminiで音声解析</strong>（初回はAPIキー不要）</p>
+          <button id="cloudAudioCopyPrompt" type="button" class="whisper-run" disabled>Geminiへの解析指示をコピー</button>
+          <a class="whisper-run cloud-audio-open" href="https://aistudio.google.com/prompts/new_chat" target="_blank" rel="noopener noreferrer">Google AI Studioを開く ↗</a>
+          <small class="whisper-disclaimer">Google AI StudioでGemini 2.5 Flashなどの音声対応モデルを選び、保存したM4A音声をアップロードして、コピーした指示を貼り付けて実行。GeminiのJSON回答をコピーします。</small>
+          <label for="cloudAudioPaste">③ Geminiが返したJSONをここに貼り付け</label>
+          <textarea id="cloudAudioPaste" rows="5" placeholder='{"events":[{"reaction_time_seconds":123.4, ...}]}'></textarea>
+          <button id="cloudAudioCompare" type="button" class="whisper-run" disabled>PeakStampの候補と比較する</button>
+          <p id="cloudAudioCompareStatus" class="whisper-status" role="status" aria-live="polite"></p>
+          <div id="cloudAudioResults" class="whisper-output" hidden></div>
+        </div>
+        <small class="whisper-disclaimer">PeakStamp自身は音声も動画も送信しません。音声M4AをGoogle AI Studioへアップロードする場合のみ、音声データがGoogleへ送信されます。会話などが含まれる場合はアップロード前にご確認ください。現在は手動の比較実験で、API自動連携や課金はありません。音だけではシュート・ゴールの発生を確定できません。</small>
+      </section>
       <section id="videoExplorePanel" class="whisper-experiment" aria-label="映像探索ベータ（カメラ追尾対応）">
         <div class="whisper-experiment-head"><strong>β 映像探索 — カメラ追尾対応</strong><span>無料・端末内</span></div>
         <p>手持ちスマホの左右追尾に対応するため、低解像度のフレームからカメラの移動を推定・補正して、映像に変化のある場面を探します。<strong>ボール・ゴール・シュートそのものを認識するAIではなく、試験的な候補探索です。</strong></p>
