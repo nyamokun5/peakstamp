@@ -5,7 +5,7 @@
  */
 import { extractSnippet, snippetWindow } from './whisper-experiment.mjs?v=whisper21';
 import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=4';
-import { plausibleSpeech, rankSceneEvidence, LABELS } from './ai-review-scoring.mjs?v=5';
+import { plausibleSpeech, rankSceneEvidence, LABELS } from './ai-review-scoring.mjs?v=6';
 import { discoverScenePool, EXPLORATION_LIMIT } from './ai-candidate-discovery.mjs?v=2';
 
 const $ = id => document.getElementById(id);
@@ -230,7 +230,7 @@ function makeCard(item, rankType) {
   meta.style.cssText='font-size:13px;line-height:1.55;margin:6px 0;color:#bdd2e4';
   const strength=item.evidence.strength||'なし';
   const initialPlace=Number.isFinite(item.originalRank)?'従来候補 '+item.originalRank+'位':'従来の候補外（新規探索）';
-  meta.textContent=initialPlace+' ／ 広域音響 '+item.baseRank+'位 → AI参考 '+item.aiRank+'位 ／ 音響スコア '+item.score.toFixed(3)+
+  meta.textContent=initialPlace+' ／ 広域音響 '+item.baseRank+'位 → AI参考 '+item.aiRank+'位 ／ 比較用音響指数 '+item.acousticIndex+
     ' ／ '+item.evidence.kind+(item.evidence.phrases.length?'（'+item.evidence.phrases.join('・')+'）':'')+
     ' ／ 掛け声の関連性：'+strength+
     (item.evidence.matchType==='発音近似'?'（近い発音・要確認）':
@@ -324,7 +324,12 @@ function render() {
   const stats=currentStatistics;
   summary.append(el('strong','広域音声探索：候補 '+records.length+'件'));
   summary.append(el('p','従来候補 '+(stats?.existing??0)+'件＋新規探索 '+(stats?.newFound??0)+'件。感度を上げたピーク探索と、短間隔の音量変化から追加しています。'));
-  summary.append(el('p','Whisper解析 '+speechAnalyzedCount+'件 ／ 発話スクリーニング '+vadAnalyzedCount+'件。AI順位はあくまで音声の参考指標です。'));
+  if((stats?.newFound||0)>0){
+    const indicator=el('div','★ 従来の候補外：'+stats.newFound+'件を追加発見');
+    indicator.style.cssText='color:#8de9cc;font-weight:800;padding:8px 0;font-size:14px';
+    summary.append(indicator);
+  }
+  summary.append(el('p','Whisper解析 '+speechAnalyzedCount+'件 ／ 発話スクリーニング '+vadAnalyzedCount+'件。各候補の音響指数を共通尺度で比較。AI順位は音声の参考指標です。'));
   const metrics=el('p','');
   metrics.id='aiRerankMetrics';
   metrics.style.cssText='font-size:13px;line-height:1.65';
@@ -383,7 +388,7 @@ function render() {
 function exportResults() {
   const payload={
     exportedAt:new Date().toISOString(),tool:'PeakStamp AI再評価β',
-    scoringVersion:'6-wide-candidate-discovery',
+    scoringVersion:'7-wide-candidate-comparable-acoustic',
     candidateDiscovery:'existing+detector-sensitive+raw-surge',
     statistics:currentStatistics,
     aiTranscribedCount:speechAnalyzedCount,
@@ -391,7 +396,7 @@ function exportResults() {
     caution:'参考指数は確率ではない。候補は最大20件まで。静かな見どころは検出対象外の可能性。',
     scenes:records.map(item=>({
       file:item.fileName,timeSeconds:item.peakSeconds,
-      acousticScore:item.score,baseRank:item.baseRank,originalRank:item.originalRank,
+      acousticScore:item.score,reviewScore:item.reviewScore,baseRank:item.baseRank,originalRank:item.originalRank,
       discovery:item.discovery,aiRank:item.aiRank,
       acousticIndex:item.acousticIndex,aiIndex:item.aiIndex,evidence:item.evidence,
       speech:item.ai?.transcripts?.map(x=>({text:x.text,when:x.when,seconds:x.seconds,usable:x.usable}))||[],
