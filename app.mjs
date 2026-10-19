@@ -3,13 +3,13 @@ import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experime
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=9';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=10';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
-import { attachScenePinchEditor } from './scene-gesture.mjs?v=pinch18';
+import { attachScenePinchEditor } from './scene-gesture.mjs?v=pinch28';
 import { montageSeconds } from './exporter.mjs?v=pinch18';
 import { getIntroConfiguration } from './intro-ui.mjs?v=pinch18';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
