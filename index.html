@@ -12,7 +12,7 @@
   <header class="topbar">
     <div class="brandmark">P<span>•</span></div>
     <div class="brandtext"><strong>PEAKSTAMP</strong><span>AUDIO HIGHLIGHTS</span></div>
-    <div class="local-pill"><span class="green-dot"></span>端末内処理</div>
+    <div class="local-pill"><span class="green-dot"></span>元動画は端末内</div>
   </header>
   <main class="page">
     <section class="hero">
@@ -56,8 +56,29 @@
       <p id="loadError" class="error" role="alert" hidden></p>
     </section>
 
+    <section class="panel gemini-primary-panel" id="geminiPrimaryPanel" aria-label="Geminiで音声を解析">
+      <div class="panel-label"><span class="number">02</span><h2>Geminiでハイライトを見つける</h2></div>
+      <p>動画はiPhoneに残したまま、<strong>音声だけを圧縮してGoogle Geminiに送信</strong>します。Whisperや従来の音量ピーク解析は必要ありません。</p>
+      <label for="geminiMainSource">解析する動画（1回1本ずつ）</label>
+      <select id="geminiMainSource" disabled aria-label="Geminiで解析する動画"></select>
+      <p id="geminiMainFileHelp" class="fine-print">上からMOV/MP4を選択してください。</p>
+      <label for="geminiMainAccess">APIアクセスコード（サーバーの利用制限用）</label>
+      <input id="geminiMainAccess" type="password" autocomplete="off" autocapitalize="off"
+             spellcheck="false" placeholder="管理者から受け取ったアクセスコード" />
+      <label class="gemini-consent"><input id="geminiMainConsent" type="checkbox" />
+        <span>試合中の会話・声を含む音声データがGoogleへ送信されることを了承します。</span>
+      </label>
+      <button id="geminiMainRun" class="main-button gemini-main-run" type="button" disabled>Geminiで音声解析する →</button>
+      <button id="geminiMainForce" class="whisper-run" type="button" hidden>Geminiで再解析（追加料金が発生する場合があります）</button>
+      <button id="geminiMainCancel" class="cancel-button" type="button" hidden>Gemini解析を中止</button>
+      <p id="geminiMainStatus" role="status" aria-live="polite" class="gemini-main-status"></p>
+      <small class="fine-print">音声のみを約40kbpsのM4Aに圧縮し、必要な場合はさらに小さくします。解析結果はiPhone内に保存して再利用可能。無料・完全オフラインの旧音声解析は下の予備メニューから使えます。Gemini API利用料や通信料が発生することがあります。</small>
+    </section>
+
+    <details class="legacy-audio-details">
+      <summary>予備：無料の音量解析を使う（Geminiを使わない場合）</summary>
     <section class="panel settings-panel" id="settingsPanel">
-      <div class="panel-label"><span class="number">02</span><h2>盛り上がりを検出</h2></div>
+      <div class="panel-label"><span class="number">予備</span><h2>従来の音量解析</h2></div>
       <div class="setting-head"><span>検出感度</span><span class="sub-label">音量変化のしきい値</span></div>
       <div class="segmented" role="group" aria-label="検出感度">
         <button data-sensitivity="sensitive" type="button">多めに拾う</button>
@@ -82,6 +103,8 @@
       <p class="fine-print">AI・サーバー・ログイン不要。音量変化に加え、音の持続性・音域・背景ノイズの特徴で候補を選定します。会話や工事音が混じる場合は「厳選」、見どころを見逃した場合は「多めに拾う」を試してください。音の意味やゴールそのものは認識しません。</p>
     </section>
 
+    </details>
+
     <section class="panel results-panel" id="resultsPanel" hidden>
       <div class="panel-label"><span class="number">03</span><h2>確認してキープ</h2></div>
       <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
@@ -95,6 +118,8 @@
         <div id="aiRerankResults" class="whisper-output" hidden></div>
         <small class="whisper-disclaimer">新しく探した候補は通常のシーン一覧に自動追加しません。上位5件に加え、その他の候補も展開して再生・評価できます。Whisperは最大10件、声の検査は最大20件を対象にします。モデル取得以外で元動画・音声は送信せず、評価はこの端末内に保存されます。映像自体をAIで認識する機能ではありません。</small>
       </section>
+      <details class="legacy-gemini-details">
+        <summary>旧Gemini手動比較（必要な場合だけ開く）</summary>
       <section id="cloudAudioPanel" class="whisper-experiment" aria-label="クラウド音声AI比較実験">
         <div class="whisper-experiment-head"><strong>β クラウド音声AI比較 — Gemini</strong><span>音声だけ・任意</span></div>
         <p>550MBの動画をアップロードせず、<strong>音声だけをM4Aに取り出し</strong>、Geminiで歓声・「ナイシュー」などの反応時刻を解析。AIの結果とPeakStampの候補を比較する初回実験です。</p>
@@ -136,6 +161,7 @@
         </div>
         <small class="whisper-disclaimer">PeakStamp自身は音声も動画も送信しません。音声M4AをGoogle AI Studioへアップロードする場合のみ、音声データがGoogleへ送信されます。会話などが含まれる場合はアップロード前にご確認ください。現在は手動の比較実験で、API自動連携や課金はありません。音だけではシュート・ゴールの発生を確定できません。</small>
       </section>
+      </details>
       <section id="videoExplorePanel" class="whisper-experiment" aria-label="映像探索ベータ（カメラ追尾対応）">
         <div class="whisper-experiment-head"><strong>β 映像探索 — カメラ追尾対応</strong><span>無料・端末内</span></div>
         <p>手持ちスマホの左右追尾に対応するため、低解像度のフレームからカメラの移動を推定・補正して、映像に変化のある場面を探します。<strong>ボール・ゴール・シュートそのものを認識するAIではなく、試験的な候補探索です。</strong></p>
