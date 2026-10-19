@@ -224,6 +224,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    alive();
    status('Gemini解析完了：'+summary.candidates+'件の候補（'+summary.merged+'件の近接反応を統合）。'+
     (cache?'保存済みのAI結果を利用。':'送信した音声 '+formatFileSize(audio.bytes)+'。')+
+    ' API方式：'+(answer.meta?.api||'不明')+(answer.meta?.usedFallback?'（予備方式で成功）':'')+'。'+
     ' 所要 '+elapsed(started)+'。下の「確認してキープ」で再生できます。');
   }catch(e){
    if(id===generation)status('Gemini解析エラー：'+(e?.message||String(e)));
