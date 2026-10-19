@@ -4,7 +4,7 @@
  */
 import { discoverScenePool } from './ai-candidate-discovery.mjs?v=audio-pilot1';
 import { extractAudioOnly,formatFileSize } from './cloud-audio-export.mjs?v=1';
-import { makeAudioAnalysisPrompt,parseAudioEvents,compareAudioCandidates,AUDIO_PROMPT_VERSION } from './cloud-audio-eval.mjs?v=2';
+import { makeAudioAnalysisPrompt,parseAudioEvents,compareAudioCandidates,AUDIO_PROMPT_VERSION } from './cloud-audio-eval.mjs?v=3';
 
 const $=id=>document.getElementById(id);
 const node=(tag,txt)=>{const el=document.createElement(tag);if(txt!==undefined)el.textContent=txt;return el;};
@@ -248,7 +248,9 @@ function compare(state){
   result=compareAudioCandidates(parsed.events,source.candidates||[],broad,7);
   ratings={};
   showComparison(state,source);
-  sayCompare('解析結果を読み込みました：'+result.total+'件。AIが新しく拾った場面を確認してください。');
+  sayCompare('解析結果を読み込みました：'+result.total+'件。'+
+    (parsed.repairedNewlines>0?'Geminiが文章内に入れた改行 '+parsed.repairedNewlines+'か所を自動補正しました。':'')+
+    'AIが新しく拾った場面を確認してください。');
  }catch(e){sayCompare('Geminiの回答を読み込めません：'+(e?.message||String(e)));}
 }
 export function initCloudAudioPilot(state){
