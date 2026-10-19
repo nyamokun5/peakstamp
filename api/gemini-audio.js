@@ -1,7 +1,8 @@
 /**
  * PeakStamp Gemini proxy. All secrets are server-only.
  *
- * Audio is temporarily forwarded to the Google Gemini Interactions API.
+ * Audio is forwarded to Google Gemini; minimal Interactions API is the primary
+ * request, with generateContent tried once only on a 400 or 404.
  * The video itself is never sent; this function stores no media or transcripts.
  * Requires GEMINI_API_KEY and PEAKSTAMP_ACCESS_CODE.
  */
@@ -17,23 +18,6 @@ const equalSecret=(value,secret)=>{
  if(typeof value!=='string'||typeof secret!=='string'||!secret)return false;
  const a=Buffer.from(value,'utf8'),b=Buffer.from(secret,'utf8');
  return a.length===b.length&&timingSafeEqual(a,b);
-};
-const requestSchema={
- type:'object',
- properties:{
-  duration_seconds:{type:'number'},
-  events:{type:'array',items:{type:'object',properties:{
-   reaction_time_seconds:{type:'number'},
-   type:{type:'string',enum:['goal_reaction','shot_reaction','save_reaction','excited_reaction','other','uncertain']},
-   confidence:{type:'string',enum:['high','medium','low']},
-   quote:{type:'string'},
-   audible_clue:{type:'string'},
-   suggested_clip_start_seconds:{type:'number'},
-   suggested_clip_end_seconds:{type:'number'}
-  },required:['reaction_time_seconds','type','confidence','quote','audible_clue','suggested_clip_start_seconds','suggested_clip_end_seconds']}},
-  limitations:{type:'string'}
- },
- required:['duration_seconds','events','limitations']
 };
 function prompt(duration){
  return [
@@ -69,6 +53,86 @@ async function googleError(response){
  if(response.status===401||response.status===403)return 'Gemini APIキー・請求設定・利用権限を確認してください（Google HTTP '+response.status+'）。';
  return 'Google Gemini APIがエラーを返しました（HTTP '+response.status+'）。'+(details?' '+details:'');
 }
+
+/*
+ * Two documented request shapes:
+ *  1. Minimal Interactions API, without structured-output schema or tuning.
+ *  2. Core generateContent API as a fallback only on HTTP 400 or 404.
+ * This avoids multiple paid successful generations for one video.
+ */
+async function requestGemini(base64,seconds,key){
+ const inputs=[
+  {
+   label:'Interactions API',
+   url:'https://generativelanguage.googleapis.com/v1beta/interactions',
+   body:{
+    model:MODEL,
+    input:[{type:'text',text:prompt(seconds)},{type:'audio',data:base64,mime_type:'audio/m4a'}],
+    store:false
+   }
+  },
+  {
+   label:'generateContent API',
+   url:'https://generativelanguage.googleapis.com/v1beta/models/'+MODEL+':generateContent',
+   body:{
+    contents:[{role:'user',parts:[
+      {text:prompt(seconds)},
+      {inlineData:{mimeType:'audio/mp4',data:base64}}
+    ]}],
+    generationConfig:{maxOutputTokens:8192}
+   }
+  }
+ ];
+ const errors=[];
+ for(let i=0;i<inputs.length;i++){
+  const attempt=inputs[i];
+  let response;
+  try{
+   response=await fetch(attempt.url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-goog-api-key':key},
+    body:JSON.stringify(attempt.body),
+    signal:AbortSignal.timeout(135000)
+   });
+  }catch(e){
+   const msg=e?.name==='TimeoutError'?'Geminiの解析が時間切れになりました。':'Googleへの接続に失敗しました。';
+   return {error:msg,code:504};
+  }
+  if(!response.ok){
+   const message=await googleError(response);
+   errors.push(attempt.label+'：'+message);
+   // Only invalid requests or unsupported endpoints can trigger a second try.
+   // Never retry auth failures, rate limits or potentially billed/server errors.
+   if((response.status===400||response.status===404)&&i===0)continue;
+   return {error:errors.join(' / ').slice(0,940),code:502};
+  }
+  let data;
+  try{data=await response.json();}
+  catch(_){return {error:attempt.label+'：Googleの応答JSONを読み取れませんでした。',code:502};}
+  return {data,api:i===0?'interactions':'generateContent',fallback:i>0};
+ }
+ return {error:errors.join(' / ').slice(0,940)||'Google APIを利用できません。',code:502};
+}
+/** Safely parse strict or Markdown-fenced JSON in non-schema responses. */
+function parseModelJson(answer){
+ const cleaned=String(answer||'').trim().replace(/^\x60{3}(?:json)?\s*/i,'').replace(/\s*\x60{3}$/,'');
+ const a=cleaned.indexOf('{'),b=cleaned.lastIndexOf('}');
+ const inputs=[cleaned];
+ if(a>=0&&b>a)inputs.push(cleaned.slice(a,b+1));
+ for(const input of inputs){
+  try{return JSON.parse(input);}catch(_){}
+  let inString=false,escaped=false,fixed='';
+  for(const c of input){
+   if(escaped){fixed+=c;escaped=false;continue;}
+   if(inString&&c==='\\'){fixed+=c;escaped=true;continue;}
+   if(c==='"'){inString=!inString;fixed+=c;continue;}
+   fixed+=inString&&(c==='\n'||c==='\r')?' ':c;
+  }
+  try{return JSON.parse(fixed);}catch(_){}
+ }
+ throw Error('Geminiの回答をJSONとして解釈できませんでした。');
+}
+
 const round=n=>Math.round(n*10)/10;
 export default async function handler(req,res){
  const origin=String(req.headers.origin||'');
@@ -117,41 +181,25 @@ export default async function handler(req,res){
  if(audio.toString('ascii',4,8)!=='ftyp')
   return reply(res,400,'抽出した音声が正常なM4Aコンテナではありません。音声を再抽出してください。');
 
- let upstream;
- try{
-  upstream=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
-   method:'POST',
-   headers:{'Content-Type':'application/json','x-goog-api-key':key},
-   body:JSON.stringify({
-    model:MODEL,
-    input:[{type:'text',text:prompt(seconds)},
-      {type:'audio',data:base64,mime_type:'audio/m4a'}],
-    response_format:{type:'text',mime_type:'application/json',schema:requestSchema},
-    generation_config:{max_output_tokens:8192,thinking_level:'low'},
-    store:false
-   }),
-   signal:AbortSignal.timeout(135000)
-  });
- }catch(e){
-  const timeout=e?.name==='TimeoutError';
-  return reply(res,504,timeout?'Geminiの解析が時間切れになりました。':'Geminiへの接続に失敗しました。');
- }
- if(!upstream.ok)return reply(res,502,await googleError(upstream));
-
- let google;
- try{google=await upstream.json();}
- catch(_){return reply(res,502,'Geminiの応答JSONを読み取れませんでした。');}
- if(google.status && google.status!=='completed')
+ const result=await requestGemini(base64,seconds,key);
+ if(result.error)return reply(res,result.code,result.error);
+ const google=result.data;
+ if(result.api==='interactions'&&google.status&&google.status!=='completed')
   return reply(res,502,'Geminiの処理が完了していません（'+String(google.status).slice(0,50)+'）。');
- // Interactions REST returns model_output steps, not generateContent candidates.
- const outputs=(Array.isArray(google.steps)?google.steps:[]).filter(step=>step?.type==='model_output');
- const last=outputs.at(-1);
- const answer=(Array.isArray(last?.content)?last.content:[]).filter(item=>item?.type==='text')
-  .map(item=>item.text||'').join('\n').trim();
- if(!answer)return reply(res,502,'Geminiの回答が空でした。');
+ let answer='';
+ if(result.api==='interactions'){
+  const outputs=(Array.isArray(google.steps)?google.steps:[]).filter(step=>step?.type==='model_output');
+  answer=outputs.flatMap(step=>Array.isArray(step.content)?step.content:[])
+   .filter(item=>item?.type==='text').map(item=>item.text||'').join('\n').trim();
+ }else{
+  answer=(Array.isArray(google.candidates)?google.candidates:[])
+   .flatMap(candidate=>Array.isArray(candidate?.content?.parts)?candidate.content.parts:[])
+   .map(part=>part?.text||'').join('\n').trim();
+ }
+ if(!answer)return reply(res,502,'Geminiは回答テキストを返しませんでした。');
  let parsed;
- try{parsed=JSON.parse(answer);}
- catch(_){return reply(res,502,'GeminiからのJSONが不完全でした。もう一度お試しください。');}
+ try{parsed=parseModelJson(answer);}
+ catch(_){return reply(res,502,'Geminiの回答に有効なJSONがありません。解析結果の保存前に停止しました。');}
  if(!Array.isArray(parsed?.events))return reply(res,502,'Geminiの回答にevents配列がありません。');
  const validTypes=new Set(['goal_reaction','shot_reaction','save_reaction','excited_reaction','other','uncertain']);
  const clamp=n=>Math.max(0,Math.min(seconds,n));
@@ -174,7 +222,10 @@ export default async function handler(req,res){
  return res.status(200).json({
   duration_seconds:seconds,events,
   limitations:'Audio-only results are not evidence that these shots or goals occurred.',
-  meta:{model:MODEL,api:'interactions',inputTokens:google?.usage?.total_input_tokens??null,
-   outputTokens:google?.usage?.total_output_tokens??null}
+  meta:{model:MODEL,api:result.api,usedFallback:result.fallback,
+   inputTokens:result.api==='interactions'?(google?.usage?.total_input_tokens??null):
+    (google?.usageMetadata?.promptTokenCount??null),
+   outputTokens:result.api==='interactions'?(google?.usage?.total_output_tokens??null):
+    (google?.usageMetadata?.candidatesTokenCount??null)}
  });
 }
