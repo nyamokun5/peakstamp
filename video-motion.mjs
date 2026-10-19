@@ -142,13 +142,9 @@ export function discoverVideoMotionCandidates(frames,options={}){
     const reverse=prior?.cameraConfidence>0&&currentPan*prevPan<0?
       clamp(Math.min(abs(currentPan),abs(prevPan))/10):0;
     const panTurn=clamp(brake*.7+reverse*.5);
-    const foreground=now.residual;
-    const motion=clamp(now.panSpeed/13)*(now.cameraConfidence>0?.7:.25);
-    const foregroundJump=clamp((foreground-(prior?.residual||0))/.28);
-    // Keep a significant portion of score independent of camera speed:
-    // shots while camera is stationary must not be automatically excluded.
-    const visualScore=clamp(.60*foreground+.19*panTurn+.12*motion+.09*foregroundJump);
-    features.push({...now,panTurn:+panTurn.toFixed(4),visualScore:+visualScore.toFixed(4)});
+    // Score calculation deliberately happens after the full-video
+    // normalization. Do not clip raw residuals at this stage.
+    features.push({...now,panTurn:+panTurn.toFixed(4)});
   }
   // Per-video normalization is essential. The previous fixed /38 clip
   // collapsed eleven of twelve real-world feedback examples to exactly 1.
@@ -207,11 +203,12 @@ export function discoverVideoMotionCandidates(frames,options={}){
   const chosen=findPeaks(timeline,spacing,maxResults);
   return {
     candidates:chosen,
-    measurements:features.map(x=>({
+    measurements:features.map((x,i)=>({
       time:x.time,dx:x.cameraDx,dy:x.cameraDy,
       rawResidual:x.residual,
       relativeResidual:+normalizeResidual(x).toFixed(4),
-      panTurn:x.panTurn,visualScore:+(.67*normalizeResidual(x)).toFixed(4),
+      panTurn:x.panTurn,visualScore:timeline[i].visualScore,
+      candidateScore:timeline[i].score,
       confidence:x.cameraConfidence,
       alignmentLimited:x.alignmentLimited
     })),
