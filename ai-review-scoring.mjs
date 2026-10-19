@@ -1,5 +1,5 @@
 /**
- * PeakStamp AI re-evaluation scorer, v4 (heuristic only).
+ * PeakStamp AI re-evaluation scorer, v5 (heuristic only).
  * Two independent cues: actual acoustic event strength and credible soccer shouts.
  * Do not infer a goal from speech alone. Never override the user's keep/reject.
  * Audio scores and ASR text are both unreliable in isolation.
@@ -47,6 +47,8 @@ export function plausibleSpeech(text, seconds=4) {
 function isSportShout(text,word,group){
   const raw=prepare(text).replace(/[！!。．、,？?\s]+$/gu,'');
   if(raw.length>22)return false;
+  // Quoting a call in ordinary conversation does not prove a highlight.
+  if(/(?:って言|ってい|っていう|という|と言っ|と言う|らしい|って言ってた)/u.test(raw))return false;
   const i=raw.indexOf(prepare(word));
   if(i<0)return false;
   const after=raw.slice(i+prepare(word).length);
@@ -61,6 +63,13 @@ function isSportShout(text,word,group){
 }
 function phoneticReaction(transcript) {
   const t=prepare(transcript);
+  // Whisper may write an actual "ナイシュー!" as "ナイスー!".
+  // A real "ナイスー!" also exists, so the clip type remains uncertain.
+  if(/^(?:ナイスー+|ないすー+|ナイスゥ+|ないすぅ+)[！!？?。\s]*$/u.test(t)){
+    return {kind:'ナイシュー／ナイスー（聞き取りが曖昧）',strength:'中',
+      bonus:9,phrases:['ナイシューの可能性'],matchType:'発音曖昧',
+      ambiguity:'ナイスーとナイシューの区別は文字起こしだけでは確定できません'};
+  }
   // e.g. "おーしー！" (candidate for 惜しい), but not arbitrary "おし" in a sentence.
   if(/^(?:おー?しー+|おしい+|おっしー+|惜しー+)(?:[！!？?。、\s]|$)/u.test(t) ||
      /^(?:おー?しー+|おしい+|おっしー+|惜しー+)$/u.test(t))
