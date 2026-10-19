@@ -305,6 +305,15 @@ function makeShotCard(item,index){
   const title=el('strong','シュート確認候補 '+(index+1)+'：'+item.fileName+' '+safeTime(item.peakSeconds));
   title.style.cssText='display:block;font-size:14px;color:#9ee8d4';
   card.append(title);
+  if(item.overlapsBroadPool){
+    const overlap=el('p','既存の広域候補にも含まれる場面です。シュートかどうか専用評価できます。');
+    overlap.style.cssText='font-size:12px;color:#f1d6a5';
+    card.append(overlap);
+  }else{
+    const novel=el('p','新規：広域20件に含まれていない場面です。');
+    novel.style.cssText='font-size:12px;color:#8de9cc';
+    card.append(novel);
+  }
   const msg=el('p','短い打撃音の指標 '+item.strength+' ／ 直後の音の変化 '+item.reaction+
       '。シュートと確定したわけではありません。足音・接触音・拍手なども含まれます。');
   msg.style.cssText='font-size:12px;color:#c2d8e3;line-height:1.6';
@@ -341,8 +350,11 @@ function renderShotProbes(wrapper){
   const title=el('h4','別枠：シュート確認候補 '+shotProbes.length+'件');
   title.style.cssText='font-size:16px;color:#9ee8d4;margin:6px 0';
   section.append(title);
+  const newCount=shotProbes.filter(x=>!x.overlapsBroadPool).length;
+  const overlapping=shotProbes.length-newCount;
   const explanation=el('p','歓声・掛け声とは別に、短く鋭い打撃音を探しています。実際のシュートとは限りません。'+
-   '通常の候補と重ならない位置から最大8件を追加し、映像を見て「シュートだった／違う」を記録できます。');
+   '最大8件：広域候補外 '+newCount+'件、広域候補と重複 '+overlapping+
+   '件。映像を見て「シュートだった／違う」を記録できます。');
   explanation.style.cssText='font-size:12px;line-height:1.6;color:#c2d8e3';
   section.append(explanation);
   if(!shotProbes.length){
@@ -473,6 +485,7 @@ function exportResults() {
     shotProbes:shotProbes.map(x=>({
       file:x.fileName,timeSeconds:x.peakSeconds,score:x.score,
       strikeEvidence:x.strength,reactionEvidence:x.reaction,
+      overlapsBroadPool:x.overlapsBroadPool===true,
       userSaysShot:shotFeedback[x.key]||'unknown'
     })),
     statistics:currentStatistics,
