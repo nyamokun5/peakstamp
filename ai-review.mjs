@@ -6,7 +6,7 @@
 import { extractSnippet, snippetWindow } from './whisper-experiment.mjs?v=whisper21';
 import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=4';
 import { plausibleSpeech, rankSceneEvidence, LABELS } from './ai-review-scoring.mjs?v=5';
-import { discoverScenePool, EXPLORATION_LIMIT } from './ai-candidate-discovery.mjs?v=1';
+import { discoverScenePool, EXPLORATION_LIMIT } from './ai-candidate-discovery.mjs?v=2';
 
 const $ = id => document.getElementById(id);
 const STORAGE_KEY = 'peakstamp_ai_scene_labels_v1';
