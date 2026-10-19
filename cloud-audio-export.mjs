@@ -17,10 +17,15 @@ export async function extractAudioOnly(file,{mode='fast',onProgress=()=>{},isCan
  try{
   const audio=await input.getPrimaryAudioTrack();
   if(!audio)throw Error('選択した動画に音声トラックがありません。');
+  const durationSeconds=await input.computeDuration();
+  if(!Number.isFinite(durationSeconds)||durationSeconds<=0)throw Error('動画の音声時間を取得できませんでした。');
   const output=new Output({format:new Mp4OutputFormat(),target:new BufferTarget()});
-  const options={input,output,tracks:'primary',video:{discard:true},audio:mode==='small'
-    ?{codec:'aac',numberOfChannels:1,sampleRate:24000,quality:new Quality({bitrate:48000}),forceTranscode:true}
-    :{codec:'aac'}};
+  const selectedBitrate=mode==='api-low'?28000:mode==='api'?40000:mode==='small'?48000:null;
+  const audioOptions=selectedBitrate
+    ?{codec:'aac',numberOfChannels:1,sampleRate:24000,
+      quality:new Quality({bitrate:selectedBitrate}),forceTranscode:true}
+    :{codec:'aac'};
+  const options={input,output,tracks:'primary',video:{discard:true},audio:audioOptions};
   const conversion=await Conversion.init(options);
   if(!conversion.isValid)throw Error('この動画の音声形式はM4Aへの変換に対応していません。軽量モードもお試しください。');
   conversion.onProgress=value=>{if(isCancelled())return;onProgress(Math.round(Math.max(0,Math.min(1,value))*100));};
@@ -32,7 +37,7 @@ export async function extractAudioOnly(file,{mode='fast',onProgress=()=>{},isCan
   const blob=new Blob([buffer],{type:'audio/mp4'});
   return {blob,file:new File([blob],suggestedAudioName(file),{type:'audio/mp4'}),
    bytes:blob.size,elapsedSeconds:+((performance.now()-start)/1000).toFixed(1),
-   sourceBytes:file.size,compressionRatio:+(file.size/blob.size).toFixed(1),
+   sourceBytes:file.size,durationSeconds,compressionRatio:+(file.size/blob.size).toFixed(1),
    mode,warning:blob.size>18*1024*1024?'Google AI Studioのアップロード制限にご注意ください。':''};
  }finally{input.dispose();}
 }
