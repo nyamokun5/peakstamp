@@ -117,12 +117,17 @@ export function classifyEvidence(transcripts=[],speechDetected=false,peakSeconds
  * A very weak peak still cannot jump above a strong event with a short phrase.
  */
 export function rankSceneEvidence(entries=[]) {
-  const baseline=[...entries].sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0)||
+  const nativeStrength=x=>Number.isFinite(x.reviewScore)?x.reviewScore:Number(x.score)||0;
+  const baseline=[...entries].sort((a,b)=>nativeStrength(b)-nativeStrength(a)||
     (Number(a.peakSeconds)||0)-(Number(b.peakSeconds)||0));
-  const maxScore=Math.max(0.0001,...baseline.map(x=>Math.max(0,Number(x.score)||0)));
+  // Broad discovery combines different detectors whose native scores are NOT
+  // comparable. Prefer normalized reviewScore when the expanded pool supplies it.
+  const strength=x=>Number.isFinite(x.reviewScore)?Math.max(0,x.reviewScore):
+    Math.max(0,Number(x.score)||0);
+  const maxScore=Math.max(0.0001,...baseline.map(strength));
   const scored=baseline.map((x,index)=>{
     const evidence=classifyEvidence(x.ai?.transcripts||[],x.ai?.speechDetected===true,x.peakSeconds);
-    const acousticIndex=100*Math.max(0,Number(x.score)||0)/maxScore;
+    const acousticIndex=100*strength(x)/maxScore;
     return {...x,baseRank:index+1,acousticIndex:+acousticIndex.toFixed(2),
       aiIndex:+(acousticIndex+evidence.bonus).toFixed(2),evidence};
   });
