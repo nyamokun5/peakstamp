@@ -44,6 +44,10 @@ export default async function handler(req,res){
  const key=process.env.GEMINI_API_KEY,access=process.env.PEAKSTAMP_ACCESS_CODE;
  if(!key||!access)return send(res,503,'APIサーバーの設定が未完了です。管理者にお問い合わせください。');
  if(!safeEqual(req.headers['x-peakstamp-access'],access))return send(res,401,'アクセスコードが違います。');
+ // Authenticated, zero-cost readiness probe. Never forwards data to Gemini.
+ // Verifies endpoint, access code and presence of env secrets, not Google key validity.
+ if(req.body?.probe===true)
+  return res.status(200).json({ok:true,service:'PeakStamp Gemini audio',ready:true,googleKeyVerified:false});
  const body=req.body;
  if(!body||typeof body!=='object'||Array.isArray(body))return send(res,400,'JSONリクエストを送ってください。');
  const seconds=Number(body.durationSeconds),base64=body.audioBase64;
