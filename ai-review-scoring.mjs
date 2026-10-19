@@ -10,7 +10,7 @@ export const GROUPS = [
   {kind:'ナイスキー（ナイスキーパー）',strength:'強',bonus:17,words:['ナイスキー','ナイスキ','ないすきー','ないすき','ナイスキーパー','ナイスセーブ']},
   {kind:'惜しい反応',strength:'強',bonus:15,words:['惜しい','おしい','おしー','おっしー']},
   {kind:'うまい反応',strength:'強',bonus:14,words:['うまい','上手い','上手','うまっ','うめえ','うめぇ']},
-  {kind:'その他のポジティブ反応',strength:'弱',bonus:5,words:['ナイスパス','ナイス','すごい','すげえ']}
+  {kind:'その他のポジティブ反応',strength:'弱',bonus:7,words:['ナイスパス','ナイス','すごい','すげえ']}
 ];
 export const LABELS = Object.freeze([
   {value:'unreviewed',text:'未評価',positive:null},
