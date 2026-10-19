@@ -3,7 +3,7 @@
  * Phase 1: low resolution motion compensation on a single manually selected
  * sideline-phone recording. Phase 1 does NOT recognize ball, goal, or shots.
  */
-import { discoverVideoMotionCandidates, VIDEO_SCAN_ALGORITHM } from './video-motion.mjs?v=1';
+import { discoverVideoMotionCandidates, VIDEO_SCAN_ALGORITHM } from './video-motion.mjs?v=2';
 import { fileIdentity, parseShotTime, prettyShotTime, evaluateManualShots } from './shot-evaluation.mjs?v=1';
 import { discoverScenePool } from './ai-candidate-discovery.mjs?v=2';
 
@@ -171,10 +171,14 @@ function makeCard(candidate,index,oldPool){
  const note=node('p',matched?'音声の広域候補にも近い場面があります':'音声の広域候補外から見つけた場面です');
  note.style.cssText='font-size:12px;color:'+(matched?'#d6d6c6':'#8feccc');
  container.append(note);
- const details=node('p','映像の変化 '+candidate.score.toFixed(2)+
-    ' ／ 補正後の残差 '+candidate.detail.residual.toFixed(2)+
+ const limited=candidate.detail.alignmentLimited===true;
+ const details=node('p','映像変化スコア '+candidate.score.toFixed(2)+
+    ' ／ 相対変化量 '+candidate.detail.residual.toFixed(2)+
+    ' ／ 元の差分値 '+(candidate.detail.rawResidual??0).toFixed(1)+
     ' ／ 推定カメラ移動 '+candidate.detail.cameraDx+'px'+
-    ' ／ カメラ移動の確信度 '+candidate.detail.cameraConfidence.toFixed(2));
+    ' ／ 補正の信頼度 '+candidate.detail.cameraConfidence.toFixed(2)+
+    (limited?' ／ ⚠ カメラ移動が補正範囲の限界に達した可能性あり':''));
+
  details.style.cssText='font-size:12px;line-height:1.7;color:#bfd7e5';
  container.append(details);
  const host=node('div');
@@ -245,8 +249,11 @@ function renderResults(){
  const heading=node('div','映像探索：'+candidates.length+'件の候補');
  heading.style.cssText='font-size:16px;font-weight:800;color:#8feccc;padding:8px 0';
  target.append(heading);
+ const quality=metadata.motionSummary||{};
  const overview=node('p','低解像度 '+metadata.frames+'フレームを約'+metadata.interval.toFixed(1)+
-    '秒間隔で比較。カメラの移動を補正していますが、シュート・ゴールを映像AIで識別した結果ではありません。');
+    '秒間隔で比較。映像変化は動画ごとに相対評価し、カメラ移動が補正範囲に達した場合は信頼度を下げています。'+
+    '補正範囲に達したフレームペア：'+(quality.alignmentLimitedPairs??'不明')+'/'+(quality.compared??'不明')+
+    '。シュート・ゴールを映像AIで識別した結果ではありません。');
  overview.style.cssText='font-size:12px;color:#c6dbe9;line-height:1.6';
  target.append(overview);
  const metrics=node('p');metrics.id='videoExploreMetrics';
@@ -280,7 +287,10 @@ function exportResults(){
   algorithm:VIDEO_SCAN_ALGORITHM,
   warning:'ヒトが評価する映像変化候補。ボール・ゴール・シュートの視覚認識モデルではない。',
   video:{name:source.file.name,size:source.file.size,duration:source.duration,
-    ...metadata},
+    mode:metadata.mode,frames:metadata.frames,interval:metadata.interval,
+    videoWidth:metadata.videoWidth,videoHeight:metadata.videoHeight},
+  motionSummary:metadata.motionSummary||{},
+  motionTimeline:metadata.motionTimeline||[],
   candidates:candidates.map(x=>({
     timeSeconds:x.peakSeconds,score:x.score,detail:x.detail,
     userLabel:feedback[x.key]||'unreviewed'
@@ -371,7 +381,9 @@ export function initVideoExplore(state){
     lastScan={source,candidates,metadata:{
       frames:metadata.frames,interval:metadata.interval,
       videoWidth:metadata.videoWidth,videoHeight:metadata.videoHeight,
-      duration:metadata.duration,mode
+      duration:metadata.duration,mode,
+      motionSummary:metadata.result.summary,
+      motionTimeline:metadata.result.measurements
     }};
     renderResults();
     $('videoExploreStatus').textContent='映像探索完了：'+candidates.length+
