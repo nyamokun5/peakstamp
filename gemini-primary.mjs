@@ -252,6 +252,8 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    let answer;
    let decodedDuringGemini=null;
    let geminiSeconds=0;
+   let wavSeconds=0;
+   let apiWaitSum=0;
    let waveformSeconds=0;
    if(cache){
     answer=cache;
@@ -270,7 +272,11 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
      let waveformFailed=false;
      const completed=await runGeminiFastPipeline({
       ranges:segmenter.ranges,
-      makeSegment:range=>segmenter.makeSegment(range),
+      makeSegment:async range=>{
+       const started=performance.now();
+       try{return await segmenter.makeSegment(range);}
+       finally{wavSeconds+=(performance.now()-started)/1000;}
+      },
       // Reuse already decoded 16 kHz audio for the preview waveform,
       // avoiding another full MOV audio decode on a fresh run.
       onWav:async wav=>{
@@ -278,7 +284,11 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
        try{await waveform.add(wav);}
        catch(_){waveformFailed=true;}
       },
-      request:(wav,range)=>callApi(wav,range.durationSeconds,access,signal,'wav'),
+      request:async(wav,range)=>{
+       const started=performance.now();
+       try{return await callApi(wav,range.durationSeconds,access,signal,'wav');}
+       finally{apiWaitSum+=(performance.now()-started)/1000;}
+      },
       cached:range=>previous[range.startSeconds+':'+range.durationSeconds],
       save:(range,response)=>{alive();saveChunk(source,range,response);},
       isCancelled:()=>signal.aborted||id!==generation,
@@ -318,7 +328,8 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    status('Gemini解析完了：'+summary.candidates+'件の候補（'+summary.merged+'件の近接反応を統合）。'+
     (cache?'保存済みのAI結果を利用。':'WAV音声を '+(answer.meta?.segments||'?')+' 区間に分けて並列解析。')+
     ' API方式：'+(answer.meta?.api||'不明')+'。'+
-    ' 所要 '+elapsed(started)+'（区間解析 '+geminiSeconds.toFixed(1)+'秒、波形 '+waveformSeconds.toFixed(1)+'秒）。'+
+    ' 所要 '+elapsed(started)+'（区間処理 '+geminiSeconds.toFixed(1)+'秒、WAV変換 '+wavSeconds.toFixed(1)+'秒、'+
+    'Gemini API待ち延べ '+apiWaitSum.toFixed(1)+'秒、波形 '+waveformSeconds.toFixed(1)+'秒）。'+
     ' 下の「確認してキープ」で再生できます。');
   }catch(e){
    if(id===generation)status('Gemini解析エラー：'+(e?.message||String(e)));
