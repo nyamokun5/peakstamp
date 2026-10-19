@@ -757,3 +757,35 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  .topbar .local-pill{display:none}
  .topbar .header-help{margin-left:auto}
 }
+
+
+/* v29: compact play/pause and audio volume beside the trim preview */
+.scene-playback-controls{
+  display:flex;align-items:center;flex-wrap:wrap;gap:9px;
+  padding:11px 2px 2px;max-width:100%
+}
+.scene-pause-button{
+  min-height:44px;min-width:111px;padding:10px 13px;
+  border:1px solid #69c7aa;border-radius:10px;
+  background:#286759;color:#f1fff9;font-size:13px;font-weight:850;
+  touch-action:manipulation
+}
+.scene-mute-button{
+  min-height:44px;min-width:44px;padding:7px;border-radius:10px;
+  background:#193e51;color:#fff;border:1px solid #5b8799;
+  font-size:19px;touch-action:manipulation
+}
+.scene-volume-label{display:flex;align-items:center;gap:7px;flex:1;
+  color:#c9e2e6;font-size:11px;min-width:132px}
+.scene-volume-slider{flex:1;min-width:64px;max-width:260px;
+  min-height:38px;accent-color:#7de3c8;touch-action:pan-y}
+.scene-volume-value{font-size:12px;color:#a7f6dd;
+  font-weight:800;min-width:35px;text-align:right;font-variant-numeric:tabular-nums}
+.scene-volume-note{font-size:10px;line-height:1.5;color:#9db9c3;
+  margin:0 0 3px;padding:0 2px}
+@media(max-width:390px){
+  .scene-playback-controls{gap:6px}
+  .scene-pause-button{min-width:100px;padding:8px;font-size:12px}
+  .scene-volume-label{min-width:115px;gap:5px}
+  .scene-mute-button{min-width:42px}
+}
