@@ -610,3 +610,43 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  text-align:center;touch-action:manipulation;
 }
 #cloudAudioPanel .cloud-audio-event-row select{min-height:44px}
+
+/* Gemini-first PeakStamp v18 */
+.gemini-primary-panel{
+ border:1px solid #4dbfae;
+ background:linear-gradient(180deg,#0e3041 0%,#0b2439 100%);
+ box-shadow:0 3px 21px rgba(16,134,117,.10);
+}
+.gemini-primary-panel .panel-label h2{color:#b9ffe8}
+.gemini-primary-panel p{font-size:13px;line-height:1.65;color:#d0e6e8}
+.gemini-primary-panel label:not(.gemini-consent){display:block;font-size:12px;color:#d0e7e8;margin:12px 0 7px}
+.gemini-primary-panel select,.gemini-primary-panel input[type=password]{
+ display:block;width:100%;max-width:100%;box-sizing:border-box;padding:12px 10px;
+ min-height:46px;border-radius:9px;border:1px solid #699a9f;
+ background:#173c50;color:#f6fdfd;font-size:16px;
+}
+.gemini-primary-panel .gemini-consent{
+ display:flex;align-items:flex-start;gap:10px;padding:12px 10px;
+ border:1px solid #4e7e86;border-radius:9px;background:#143346;
+ font-size:12px;line-height:1.5;color:#d8f3f0;margin:13px 0;
+}
+.gemini-primary-panel .gemini-consent input{width:20px;height:20px;flex-shrink:0;margin:0}
+.gemini-primary-panel .gemini-main-run{width:100%;min-height:51px;margin:4px 0}
+.gemini-primary-panel .gemini-main-run:disabled{opacity:.48}
+.gemini-primary-panel #geminiMainForce{background:#254b5a;border-color:#6b9fab}
+.gemini-primary-panel #geminiMainForce[hidden],
+.gemini-primary-panel #geminiMainCancel[hidden]{display:none}
+.gemini-primary-panel .gemini-main-status{
+ padding:8px 0;min-height:1.3em;overflow-wrap:anywhere;
+ color:#a9efdf;font-size:12px;font-weight:650;
+}
+.legacy-audio-details,.legacy-gemini-details{
+ margin:12px 0;border:1px solid #37586c;border-radius:10px;padding:12px;
+ background:#0b2131;
+}
+.legacy-audio-details>summary,.legacy-gemini-details>summary{
+ color:#9fc9cf;font-size:13px;cursor:pointer;line-height:1.5;
+}
+.legacy-audio-details .settings-panel{margin:12px 0 0}
+.legacy-gemini-details #cloudAudioPanel{margin:12px 0 0}
+#whisperExperiment,#aiRerankPanel,#videoExplorePanel{display:none}
