@@ -5,7 +5,7 @@
  */
 import { extractSnippet, snippetWindow } from './whisper-experiment.mjs?v=whisper21';
 import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=2';
-import { plausibleSpeech, rankSceneEvidence, LABELS, precisionAtK } from './ai-review-scoring.mjs?v=2';
+import { plausibleSpeech, rankSceneEvidence, LABELS, precisionAtK } from './ai-review-scoring.mjs?v=4';
 
 const $ = id => document.getElementById(id);
 const STORAGE_KEY = 'peakstamp_ai_scene_labels_v1';
@@ -202,8 +202,11 @@ function makeCard(item, rankType) {
   card.append(heading);
   const meta=el('p','');
   meta.style.cssText='font-size:13px;line-height:1.55;margin:6px 0;color:#bdd2e4';
+  const strength=item.evidence.strength||'なし';
   meta.textContent='従来 '+item.baseRank+'位 → AI参考 '+item.aiRank+'位 ／ 音響スコア '+item.score.toFixed(3)+
-    ' ／ '+item.evidence.kind+(item.evidence.phrases.length?'（'+item.evidence.phrases.join('・')+'）':'');
+    ' ／ '+item.evidence.kind+(item.evidence.phrases.length?'（'+item.evidence.phrases.join('・')+'）':'')+
+    ' ／ 掛け声の関連性：'+strength+
+    (item.evidence.matchType==='発音近似'?'（近い発音・要確認）':'');
   card.append(meta);
   const preview=el('div','');
   const previewButton=btn('▶ 実際のシーンを見る',()=>{
@@ -216,8 +219,9 @@ function makeCard(item, rankType) {
   details.append(sum);
   const reason=el('p','');
   reason.style.cssText='font-size:13px;line-height:1.6;color:#bdd2e4;overflow-wrap:anywhere';
-  reason.textContent='AI参考指数：'+item.aiIndex+'（確率ではありません）／ '+(item.ai?.reason||'未解析')+
-     ' ／ 認識：'+phraseInfo(item);
+  reason.textContent='AI参考指数：'+item.aiIndex+'（確率ではありません）'+
+     '＝音響指数 '+item.acousticIndex+' ＋ 掛け声の証拠 '+item.evidence.bonus+
+     ' ／ '+(item.ai?.reason||'未解析')+' ／ 認識：'+phraseInfo(item);
   details.append(reason);
   const accepted=(item.ai?.transcripts||[]).filter(t=>t.usable);
   const vocabulary=loadVocabulary();
@@ -277,6 +281,7 @@ function render() {
   const summary=el('div','');
   summary.style.cssText='background:#152d43;border-radius:10px;padding:10px;margin-bottom:12px';
   summary.append(el('strong','従来順位 vs AI参考順位（上位5候補）'));
+  summary.append(el('p','強い反応：ゴール！・ナイシュー！・ナイスキー！・惜しい！・うまい！。ナイス単独は中程度の証拠です。発音が近い候補は未確定として表示します。'));
   const metrics=el('p','');
   metrics.id='aiRerankMetrics';
   metrics.style.cssText='font-size:13px;line-height:1.65';
@@ -303,7 +308,7 @@ function render() {
   const exportButton=btn('評価データをJSONで保存',()=>exportResults(),'ai-rerank-export');
   exportButton.style.cssText='display:block;width:100%;margin-top:12px';
   wrapper.append(exportButton);
-  const caution=el('p','音声を認識できないゴール・無言の好プレーもあります。AIはキープ/不採用やシーン位置を変更しません。');
+  const caution=el('p','今回の5件を参考に調整した試験ルールです。未知の動画での精度向上は未検証。音声を認識できないゴールや無言の好プレーもあります。AIはキープ/不採用やシーン位置を変更しません。');
   caution.style.cssText='font-size:12px;color:#bdd2e4';
   wrapper.append(caution);
   refreshMetrics();
@@ -311,12 +316,14 @@ function render() {
 function exportResults() {
   const payload={
     exportedAt:new Date().toISOString(),tool:'PeakStamp AI再評価β',
-    caution:'辞書照合は確定認識ではない。指数は確率ではない。対象は音響上位5件のみ。',
+    scoringVersion:'4-direct-soccer-reactions',
+    caution:'発音近似は確定認識ではない。指数は確率ではない。対象は音響上位5件のみ。',
     scenes:records.map(item=>({
       file:item.fileName,timeSeconds:item.peakSeconds,
       acousticScore:item.score,baseRank:item.baseRank,aiRank:item.aiRank,
-      aiIndex:item.aiIndex,evidence:item.evidence,
-      speech:item.ai?.transcripts?.map(x=>({text:x.text,when:x.when,usable:x.usable}))||[],
+      acousticIndex:item.acousticIndex,aiIndex:item.aiIndex,evidence:item.evidence,
+      speech:item.ai?.transcripts?.map(x=>({text:x.text,when:x.when,seconds:x.seconds,usable:x.usable}))||[],
+      aiReason:item.ai?.reason||'',aiError:item.ai?.error||'',
       userLabel:feedback[item.key]||'unreviewed',
     }))
   };
