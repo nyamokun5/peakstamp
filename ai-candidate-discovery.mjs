@@ -93,7 +93,12 @@ export function discoverScenePool(sources,options={}) {
   const byScore=(a,b)=>b.score-a.score||a.peakSeconds-b.peakSeconds;
   originals.sort(byScore);
   originals.forEach((x,i)=>{x.originalRank=i+1;});
-  sensitive.sort(byScore);surges.sort(byScore);
+  // "new" MUST mean absent from every existing source.candidates entry,
+  // not merely absent from the first eight of the original pool.
+  const alreadyInNormalReview=x=>originals.some(y=>
+    y.sourceId===x.sourceId && Math.abs(y.peakSeconds-x.peakSeconds)<3);
+  const novelSensitive=sensitive.filter(x=>!alreadyInNormalReview(x)).sort(byScore);
+  const novelSurges=surges.filter(x=>!alreadyInNormalReview(x)).sort(byScore);
   const selected=[];
   const targetOriginal=Math.min(originals.length,Math.max(1,Math.floor(limit*.4)));
   const add=(pool,limitTo=limit)=>{
@@ -109,10 +114,10 @@ export function discoverScenePool(sources,options={}) {
   const targetNovel=Math.max(0,limit-selected.length);
   // Mix types: reserve 1/4 of novel slots for events outside sensitive detector thresholds.
   const surgeSlots=Math.min(Math.ceil(targetNovel*.25),Math.max(0,limit-selected.length));
-  add(sensitive,Math.max(0,targetNovel-surgeSlots));
-  add(surges,surgeSlots);
-  add(sensitive);
-  add(surges);
+  add(novelSensitive,Math.max(0,targetNovel-surgeSlots));
+  add(novelSurges,surgeSlots);
+  add(novelSensitive);
+  add(novelSurges);
   add(originals);
   const previous=selected.filter(x=>x.discovery==='existing').length;
   return {
