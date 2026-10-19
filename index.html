@@ -130,6 +130,7 @@
           <label for="cloudAudioPaste">③ Geminiが返したJSONをここに貼り付け</label>
           <textarea id="cloudAudioPaste" rows="5" placeholder='{"events":[{"reaction_time_seconds":123.4, ...}]}'></textarea>
           <button id="cloudAudioCompare" type="button" class="whisper-run" disabled>PeakStampの候補と比較する</button>
+          <small class="whisper-disclaimer">確認画面は1つの動画プレーヤーを使い回し、候補を切り替えます。「前の候補／次の候補」「−5秒／＋5秒」で確認できます。選択した評価とGemini回答は端末内に自動保存します。</small>
           <p id="cloudAudioCompareStatus" class="whisper-status" role="status" aria-live="polite"></p>
           <div id="cloudAudioResults" class="whisper-output" hidden></div>
         </div>
