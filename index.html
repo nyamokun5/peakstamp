@@ -95,6 +95,31 @@
         <div id="aiRerankResults" class="whisper-output" hidden></div>
         <small class="whisper-disclaimer">新しく探した候補は通常のシーン一覧に自動追加しません。上位5件に加え、その他の候補も展開して再生・評価できます。Whisperは最大10件、声の検査は最大20件を対象にします。モデル取得以外で元動画・音声は送信せず、評価はこの端末内に保存されます。映像自体をAIで認識する機能ではありません。</small>
       </section>
+      <section id="videoExplorePanel" class="whisper-experiment" aria-label="映像探索ベータ（カメラ追尾対応）">
+        <div class="whisper-experiment-head"><strong>β 映像探索 — カメラ追尾対応</strong><span>無料・端末内</span></div>
+        <p>手持ちスマホの左右追尾に対応するため、低解像度のフレームからカメラの移動を推定・補正して、映像に変化のある場面を探します。<strong>ボール・ゴール・シュートそのものを認識するAIではなく、試験的な候補探索です。</strong></p>
+        <label for="videoSourcePicker">映像解析する動画（1回1本）</label>
+        <select id="videoSourcePicker" disabled aria-label="映像探索の対象動画"></select>
+        <label for="videoExploreMode">解析モード</label>
+        <select id="videoExploreMode">
+          <option value="standard" selected>標準：最大150フレーム（iPhone推奨）</option>
+          <option value="detail">詳細：最大280フレーム（時間がかかります）</option>
+        </select>
+        <button id="videoExploreButton" class="whisper-run" type="button" disabled>この動画を映像で探索</button>
+        <button id="videoExploreCancel" class="video-explore-cancel" type="button" hidden>探索を停止</button>
+        <small id="videoExploreHelp" class="whisper-disclaimer">先に音声を解析し、動画を選択してください。</small>
+        <p id="videoExploreStatus" class="whisper-status" role="status" aria-live="polite"></p>
+        <div id="videoExploreResults" class="whisper-output" hidden></div>
+        <div id="videoGroundTruth" class="video-ground-truth" hidden>
+          <strong>実際のシュート時刻を記録（見逃しの検証）</strong>
+          <p>動画を見て確認できたシュートの時刻を入力。例：01:28, 04:39.5。複数を一度に入力できます。候補との時刻の近さ（±5秒）を比較します。</p>
+          <label for="videoGroundTruthInput">シュート時刻（分:秒）</label>
+          <input id="videoGroundTruthInput" type="text" inputmode="text" placeholder="01:28, 04:39.5" autocomplete="off" />
+          <button id="videoGroundTruthSave" class="video-ground-truth-save" type="button">実際のシュート時刻を保存</button>
+          <div id="videoGroundTruthList"></div>
+        </div>
+        <small class="whisper-disclaimer">新たなAIモデル・有料API・サーバー処理は使用しません。元動画は送信せず、Safari内で解析。初回検証ではまず短い動画と標準モードを試してください。iPhoneでの速度、手持ちブレへの耐性、シュート検出率は未検証です。通常のキープ／不採用／書き出しには反映しません。</small>
+      </section>
       <section id="whisperExperiment" class="whisper-experiment" aria-label="AI文字起こしの実験">
         <div class="whisper-experiment-head"><strong>β AI文字起こし（実験）</strong><span>任意・無料</span></div>
         <p>音声ピークの前後約16秒だけをiPhone内で日本語文字起こし。まず1シーンずつ精度を確認できます。候補の判定や動画編集には自動反映しません。</p>
