@@ -82,7 +82,7 @@ async function requestGemini(base64,seconds,key){
    body:{
     contents:[{role:'user',parts:[
       {text:prompt(seconds)},
-      {inlineData:{mimeType:'audio/mp4',data:base64}}
+      {inlineData:{mimeType:'audio/m4a',data:base64}}
     ]}],
     generationConfig:{maxOutputTokens:8192}
    }
@@ -138,6 +138,61 @@ function parseModelJson(answer){
  throw Error('Geminiの回答をJSONとして解釈できませんでした。');
 }
 
+
+/**
+ * Controlled diagnostic: uses only synthetic audio generated server-side.
+ * Both calls may bill a very small number of tokens; no user's match audio sent.
+ */
+function makeDiagnosticWave(){
+ const rate=16000,seconds=1,bytes=rate*seconds*2;
+ const buf=Buffer.alloc(44+bytes);
+ buf.write('RIFF',0,'ascii');buf.writeUInt32LE(buf.length-8,4);
+ buf.write('WAVEfmt ',8,'ascii');buf.writeUInt32LE(16,16);
+ buf.writeUInt16LE(1,20);buf.writeUInt16LE(1,22);
+ buf.writeUInt32LE(rate,24);buf.writeUInt32LE(rate*2,28);
+ buf.writeUInt16LE(2,32);buf.writeUInt16LE(16,34);
+ buf.write('data',36,'ascii');buf.writeUInt32LE(bytes,40);
+ for(let i=0;i<rate*seconds;i++){
+  const envelope=Math.sin(Math.PI*i/(rate*seconds))**2;
+  buf.writeInt16LE(Math.round(9000*Math.sin(2*Math.PI*440*i/rate)*envelope),44+i*2);
+ }
+ return buf.toString('base64');
+}
+async function runDiagnostic(key){
+ const scenarios=[
+  {id:'text',name:'文字だけのGemini API',
+   parts:[{text:'Reply with exactly OK.'}]},
+  {id:'wav',name:'1秒の人工WAV音声',
+   parts:[{text:'Describe the sound briefly.'},
+    {inlineData:{mimeType:'audio/wav',data:makeDiagnosticWave()}}]}
+ ];
+ const result=[];
+ for(const scenario of scenarios){
+  let response;
+  try{
+   response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+MODEL+':generateContent',{
+    method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
+    body:JSON.stringify({contents:[{parts:scenario.parts}]}),
+    signal:AbortSignal.timeout(30000)
+   });
+  }catch(e){
+   result.push({id:scenario.id,name:scenario.name,ok:false,status:null,
+    error:e?.name==='TimeoutError'?'タイムアウト':'Googleへの接続に失敗'});
+   break;
+  }
+  const output={id:scenario.id,name:scenario.name,ok:response.ok,status:response.status};
+  if(!response.ok)output.error=await googleError(response);
+  result.push(output);
+  // If text-only fails, audio cannot isolate an encoding problem yet.
+  if(!response.ok)break;
+ }
+ return {diagnostic:true,model:MODEL,steps:result,
+  conclusion:result[0]?.ok===false?'文字だけのGemini呼び出しでも失敗。APIキー・モデル・Google側の設定が原因の可能性があります。':
+   result[1]?.ok===false?'文字だけは成功しましたが、短いWAVが失敗。モデルの音声入力や送信条件を確認してください。':
+   result[1]?.ok===true?'文字と1秒のWAVの解析は成功。iPhoneで生成したM4Aの形式またはデータに問題がある可能性があります。':
+   '診断を完了できませんでした。'};
+}
+
 const round=n=>Math.round(n*10)/10;
 export default async function handler(req,res){
  const origin=String(req.headers.origin||'');
@@ -158,6 +213,10 @@ export default async function handler(req,res){
  const key=process.env.GEMINI_API_KEY,access=process.env.PEAKSTAMP_ACCESS_CODE;
  if(!key||!access)return reply(res,503,'Gemini APIのサーバー設定が未完了です。');
  if(!equalSecret(req.headers['x-peakstamp-access'],access))return reply(res,401,'アクセスコードが違います。');
+ if(req.body?.diagnostic==='audio-compat'){
+  if(req.body.confirmSmallCost!==true)return reply(res,400,'少額のGemini API利用を了承してください。');
+  return res.status(200).json(await runDiagnostic(key));
+ }
  if(req.body?.probe===true){
   let probe;
   try{
