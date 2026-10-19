@@ -1,8 +1,8 @@
 /** First-visit navigation. UI state only; never clears media or Gemini caches. */
 const GUIDE_KEY='peakstamp_first_run_guide_v1';
 const steps=[
-  {title:'動画を選ぶ',body:'まず試合のMOV / MP4を選択。長い動画は1本ずつがおすすめ。',target:'uploadZone'},
-  {title:'Geminiで見どころを探す',body:'アクセスコードを入力し、音声送信に同意して解析。完了区間がバーで分かります。',target:'geminiPrimaryPanel'},
+  {title:'動画を選ぶ',body:'まず試合のMOV / MP4を選択。長い動画は1本ずつがおすすめ。',target:'choosePanel'},
+  {title:'Geminiで見どころを探す',body:'アクセスコードと音声送信への同意を確認して解析。終わるまでこの画面を開いたままにしてください。',target:'geminiPrimaryPanel'},
   {title:'キープして動画にする',body:'「▶ リプレイ」で確認。再生・一時停止、音量、拡大、切り取り位置を調整してキープ。',target:'resultsPanel'}
 ];
 export function initFirstRunGuide({storage=window.localStorage,hasPriorAnalysis=()=>false}={}){
