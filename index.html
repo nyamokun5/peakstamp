@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=scenecontrols29" />
+  <link rel="stylesheet" href="styles.css?v=focus30" />
 </head>
 <body>
   <header class="topbar">
@@ -17,17 +17,8 @@
   </header>
   <main class="page">
     <section class="hero">
-      <div class="eyebrow">MATCH HIGHLIGHT FINDER <span>01 / 03</span></div>
       <h1>あの瞬間を、<br/><em>音で見つける。</em></h1>
       <p>試合動画を選ぶだけ。AIで見どころを探して、好きなシーンを1本に。</p>
-      <details class="compact-details share-details">
-        <summary>LINEでアプリを共有</summary>
-        <div class="line-share-row">
-          <button id="lineShareCopy" type="button" class="line-share-copy">共有リンクをコピー ↗</button>
-          <span id="lineShareStatus" role="status" aria-live="polite" class="line-share-status"></span>
-          <input id="lineShareFallback" class="line-share-fallback" type="text" readonly aria-label="LINEで送るURL" hidden />
-        </div>
-      </details>
     </section>
     <nav id="journeyNav" class="journey-nav" aria-label="作成ステップ">
       <button type="button" data-journey-step="0" class="current">1 <span>動画</span></button>
@@ -66,15 +57,15 @@
       <p id="loadError" class="error" role="alert" hidden></p>
     </section>
 
-    <section class="panel gemini-primary-panel" id="geminiPrimaryPanel" aria-label="Geminiで音声を解析">
+    <section class="panel gemini-primary-panel" id="geminiPrimaryPanel" aria-label="Geminiで音声を解析" hidden>
       <div class="panel-label"><span class="number">02</span><h2>Geminiでハイライトを見つける</h2></div>
       <p class="gemini-brief">音声だけをGeminiで解析し、見どころを自動で探します。</p>
       <label for="geminiMainSource">解析する動画（1回1本ずつ）</label>
       <select id="geminiMainSource" disabled aria-label="Geminiで解析する動画"></select>
       <p id="geminiMainFileHelp" class="fine-print">上からMOV/MP4を選択してください。</p>
-      <label for="geminiMainAccess">APIアクセスコード（サーバーの利用制限用）</label>
+      <label for="geminiMainAccess">アクセスコード</label>
       <input id="geminiMainAccess" type="password" autocomplete="off" autocapitalize="off"
-             spellcheck="false" placeholder="Vercelに登録したアクセスコード" />
+             spellcheck="false" placeholder="アクセスコードを入力" />
       <details class="compact-details gemini-diagnostics">
         <summary>接続できないとき・詳細設定</summary>
         <button id="geminiMainCheck" class="whisper-run gemini-check-button" type="button">接続テスト（課金なし）</button>
@@ -84,6 +75,13 @@
         <span>試合中の会話・声を含む音声データがGoogleへ送信されることを了承します。</span>
       </label>
       <button id="geminiMainRun" class="main-button gemini-main-run" type="button" disabled>Geminiで音声解析する →</button>
+      <div id="geminiStayNotice" class="gemini-stay-notice" role="note" hidden>
+        <span class="gemini-stay-icon" aria-hidden="true">!</span>
+        <div>
+          <strong id="geminiStayTitle">解析中はこの画面を開いたままにしてください</strong>
+          <p id="geminiStayDescription">LINEなど他のアプリへ切り替えたり、画面をロックすると解析が止まる場合があります。</p>
+        </div>
+      </div>
       <button id="geminiMainForce" class="whisper-run" type="button" hidden>Geminiで再解析（追加料金が発生する場合があります）</button>
       <div id="geminiProgress" class="gemini-progress" role="progressbar" aria-label="Gemini音声解析の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
         <div class="gemini-progress-top"><strong id="geminiProgressLabel">解析の準備中…</strong><output id="geminiProgressPercent">0%</output></div>
@@ -364,7 +362,17 @@
       <p id="montageSaveStatus" class="save-status" role="status" aria-live="polite"></p>
       <p class="fine-print">動画・音声は端末内で処理し、PeakStampのサーバーには送信しません。最初は30秒ほどの素材で試してください。iPhoneのOS・動画形式によってはMP4の書き出しに対応しない場合があります。長時間の処理中はSafariを閉じないでください。</p>
     </section>
-    <footer><strong>PEAKSTAMP</strong><span>Enjoy the game. Capture the moment.</span><p>解析対象の動画は端末外に送信されません。初回アクセス時に解析ライブラリのダウンロードが必要です。</p></footer>
+    <footer><strong>PEAKSTAMP</strong><span>Enjoy the game. Capture the moment.</span>
+            <details class="compact-details share-details">
+        <summary>LINEでアプリを共有</summary>
+        <div class="line-share-row">
+          <button id="lineShareCopy" type="button" class="line-share-copy">共有リンクをコピー ↗</button>
+          <span id="lineShareStatus" role="status" aria-live="polite" class="line-share-status"></span>
+          <input id="lineShareFallback" class="line-share-fallback" type="text" readonly aria-label="LINEで送るURL" hidden />
+        </div>
+      </details>
+      <p>元動画は端末内に残ります。Gemini解析時は音声のみGoogleへ送信されます。</p>
+    </footer>
   </main>
   <aside id="undoReview" class="review-undo-toast" hidden aria-live="polite">
     <span id="undoReviewText">シーンを不採用にしました</span>
@@ -397,6 +405,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api29"></script>
+  <script type="module" src="app.mjs?v=gemini-api30"></script>
 </body>
 </html>
