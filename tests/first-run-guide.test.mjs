@@ -13,7 +13,7 @@ function setup(){
  const links=Array.from({length:3},(_,i)=>Object.assign(button(),{dataset:{journeyStep:String(i)}}));
  nodes.firstRunOverlay=Object.assign(button(),{hidden:true,querySelectorAll:()=>steps});
  nodes.journeyNav=Object.assign(button(),{querySelectorAll:()=>links});
- for(const id of ['uploadZone','geminiPrimaryPanel','resultsPanel'])
+ for(const id of ['choosePanel','geminiPrimaryPanel','resultsPanel'])
   nodes[id]=Object.assign(button(),{scrollIntoView(){this.scrolled=true}});
  globalThis.document={activeElement:nodes.openGuide,getElementById:id=>nodes[id]};
  const saved=new Map([['gemini-results','never-touch']]);
@@ -29,7 +29,7 @@ test('new visitors are guided once and can reopen voluntarily',()=>{
  assert.match(nodes.guideTitle.textContent,/キープ/);
  nodes.guideNext.click();
  assert.equal(nodes.firstRunOverlay.hidden,true);
- assert.equal(nodes.uploadZone.scrolled,true);
+ assert.equal(nodes.choosePanel.scrolled,true);
  assert.equal(saved.get('gemini-results'),'never-touch');
  nodes.openGuide.click();
  assert.equal(nodes.firstRunOverlay.hidden,false);

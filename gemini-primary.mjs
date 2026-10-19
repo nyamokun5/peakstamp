@@ -6,6 +6,7 @@ import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=1';
 import { runGeminiFastPipeline } from './gemini-fast-pipeline.mjs?v=1';
 import { createGeminiFastWaveform } from './gemini-fast-waveform.mjs?v=1';
 import { createGeminiProgressUI } from './gemini-progress-ui.mjs?v=1';
+import { updateGeminiScreenNotice } from './gemini-screen-notice.mjs?v=1';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
 import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=2';
 
@@ -81,6 +82,13 @@ export function refreshGeminiPrimary(state) {
  const second=$('geminiMainForce');
  if(!picker||!button||!second)return;
  const sources=candidates(state);
+ updateGeminiScreenNotice({
+  panel:$('geminiPrimaryPanel'),
+  warning:$('geminiStayNotice'),
+  title:$('geminiStayTitle'),
+  description:$('geminiStayDescription'),
+  hasSource:sources.length>0,processing
+ });
  const current=picker.value;
  picker.replaceChildren();
  for(const [i,source] of sources.entries()){
@@ -96,14 +104,19 @@ export function refreshGeminiPrimary(state) {
  const source=sources[selected]||null;
  const cache=source&&cachedResult(source);
  picker.disabled=processing||sources.length<2;
+ picker.hidden=sources.length<2;
+ const pickerLabel=$('geminiSourceLabel');
+ if(pickerLabel)pickerLabel.hidden=sources.length<2;
  button.disabled=processing||!source||state.working||state.exporting||(!cache && !API_ENDPOINT);
  second.disabled=button.disabled;
  button.textContent=processing?'Gemini処理中…':cache?'保存済みのGemini結果を復元':(!API_ENDPOINT?'Gemini APIサーバー接続待ち':'Geminiで音声解析する →');
  second.hidden=!cache||processing||!API_ENDPOINT;
  $('geminiMainCancel').hidden=!processing;
- $('geminiMainFileHelp').textContent=source
-   ?'選択中：'+source.file.name+'。元動画は送信せず、音声を約70秒ずつWAV形式で送信します。'
-   :'まず上の「動画を選ぶ」からMOV/MP4を選択してください。';
+ const sourceHelp=$('geminiMainFileHelp');
+ if(sourceHelp){
+  sourceHelp.textContent=source&&sources.length>1?'選択中：'+source.file.name:'';
+  sourceHelp.hidden=!source||sources.length<2;
+ }
  if(!API_ENDPOINT && !cache && !processing){
   status('現在はAPIサーバーのデプロイ権限とGemini APIキーの設定待ちです。手動解析は「旧Gemini手動比較」から継続できます。');
  }
