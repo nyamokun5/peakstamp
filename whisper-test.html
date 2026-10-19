@@ -30,12 +30,21 @@
 <p><strong>認識結果（実際の音声との一致は要確認）</strong></p><p id="quality" aria-live="polite"></p><pre id="output">—</pre><div id="segmentList" style="display:grid;gap:10px" aria-live="polite"></div><details><summary>認識結果の詳細（確認用）</summary><pre id="raw">—</pre></details></section>
 <script type="module">
 import { extractSnippet } from './whisper-experiment.mjs?v=movfast2';
-import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=1';
+import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=4';
 const $=id=>document.getElementById(id);
 const file=$('file'),run=$('run'),status=$('status'),output=$('output'),quality=$('quality'),raw=$('raw'),timing=$('timing'),model=$('model'),modelHint=$('modelHint'),windFilter=$('windFilter'),listenWrap=$('listenWrap'),listenAudio=$('listenAudio'),segMode=$('segMode'),segHint=$('segHint'),segmentList=$('segmentList'),contextWords=$('contextWords');
 let segmentAudioURLs=[];
 const LOCAL_WORDS_KEY='peakstamp_soccer_vocabulary_v1';
-try{contextWords.value=localStorage.getItem(LOCAL_WORDS_KEY)||DEFAULT_CONTEXT;}catch(_){contextWords.value=DEFAULT_CONTEXT;}
+try{
+  const saved=localStorage.getItem(LOCAL_WORDS_KEY);
+  const required=['ナイシュー=ないしゅー','ナイスシュート','ナイスキー=ないすきー','ナイスキーパー'];
+  let words=saved||DEFAULT_CONTEXT;
+  for(const word of required){
+    if(!words.split(/\r?\n/).some(line=>line.trim()===word))words+='\n'+word;
+  }
+  contextWords.value=words;
+  if(saved&&words!==saved)localStorage.setItem(LOCAL_WORDS_KEY,words.slice(0,2500));
+}catch(_){contextWords.value=DEFAULT_CONTEXT;}
 contextWords.addEventListener('input',()=>{
   try{localStorage.setItem(LOCAL_WORDS_KEY,contextWords.value.slice(0,2500));}catch(_){}
 });
