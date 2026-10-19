@@ -61,21 +61,13 @@ export function compareVideoFrames(before,after){
   const xBound=Math.min(22,Math.floor(width*.23));
   const yBound=Math.min(6,Math.floor(height*.14));
   let best={dx:0,dy:0,error:zero};
-  // Coarse global translation search; no external computer vision library.
-  for(let dy=-yBound;dy<=yBound;dy+=2){
-    for(let dx=-xBound;dx<=xBound;dx+=2){
+  // Full-pixel search is deliberate: coarse 2px shifts can fail badly when
+  // an odd-pixel displacement (e.g. 9px) is a sharp correlation minimum.
+  // Frames are <=96px wide, so this remains inexpensive without OpenCV.
+  for(let dy=-yBound;dy<=yBound;dy++){
+    for(let dx=-xBound;dx<=xBound;dx++){
       const error=mismatch(before.luma,after.luma,width,height,dx,dy);
       if(error<best.error){best={dx,dy,error};}
-    }
-  }
-  // Refine x/y by one pixel around coarse match.
-  const coarse={...best};
-  for(let dy=coarse.dy-1;dy<=coarse.dy+1;dy++){
-    if(abs(dy)>yBound)continue;
-    for(let dx=coarse.dx-1;dx<=coarse.dx+1;dx++){
-      if(abs(dx)>xBound)continue;
-      const error=mismatch(before.luma,after.luma,width,height,dx,dy);
-      if(error<best.error)best={dx,dy,error};
     }
   }
   const compensated=best.error;
