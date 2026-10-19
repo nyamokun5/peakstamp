@@ -526,3 +526,23 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 #aiRerankPanel .whisper-output strong{display:initial}
 #aiRerankPanel #aiRerankMetrics{font-size:12px;color:#e1f3f4}
 #aiRerankPanel [aria-label$="の実際の評価"]{min-height:43px}
+
+/* PeakStamp local video motion exploration beta */
+#videoExplorePanel{border-color:#417a82;background:linear-gradient(180deg,#0d2c3c,#0b2134);}
+#videoExplorePanel .whisper-experiment-head strong{color:#8feccc;font-size:14px}
+#videoExplorePanel select,#videoExplorePanel input{font-size:15px;max-width:100%;width:100%;min-height:42px;
+  border-radius:8px;padding:9px;border:1px solid #55778b;background:#15354b;color:#eefcff;box-sizing:border-box}
+#videoExplorePanel .whisper-output{margin-top:12px;padding:10px}
+#videoExplorePanel button{cursor:pointer;touch-action:manipulation}
+#videoExplorePanel button:disabled{opacity:.4;cursor:default}
+#videoExplorePanel .video-explore-cancel{margin-top:10px;width:100%;min-height:40px;border-radius:8px;
+  background:#432b36;border:1px solid #b87780;color:#ffe5e6}
+#videoExplorePanel .video-ground-truth{margin-top:16px;border-top:1px solid #416773;
+  padding:14px 0 4px;max-width:100%}
+#videoExplorePanel .video-ground-truth strong{font-size:13px;color:#8feccc}
+#videoExplorePanel .video-ground-truth p{font-size:12px;line-height:1.6;color:#c2d7e4}
+#videoExplorePanel .video-ground-truth-save{width:100%;padding:11px;margin-top:10px;
+  border-radius:8px;background:#225a54;border:1px solid #69bea7;color:#e7fff3;font-weight:700}
+#videoExplorePanel #videoGroundTruthList{font-size:13px;line-height:1.7;padding:5px 0}
+#videoExplorePanel video{max-width:100%;border-radius:9px}
+#videoExplorePanel details>summary{cursor:pointer;color:#9be6d7;font-size:13px}
