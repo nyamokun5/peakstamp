@@ -234,9 +234,21 @@ function showComparison(state,source){
  stats.style.cssText='font-size:13px;padding:9px;background:#1a4c57;color:#e7f5fb;border-radius:7px';
  host.append(stats);
  host.append(node('p','※ 音声AIが見つけたのは歓声・掛け声などの反応で、実際にシュートがあったことの証明ではありません。'));
- const previewHolder=node('div');previewHolder.id='cloudAudioPreviewHolder';
+ discardReviewPlayer();
+ const rows=[];
+ reviewPlayer=createCloudAudioReviewPlayer({source,events:comp.events,onChange:index=>{
+  rows.forEach((row,i)=>{
+   row.classList.toggle('cloud-audio-active-event',i===index);
+   row.setAttribute('aria-current',i===index?'true':'false');
+  });
+ }});
+ reviewSource=source;
+ reviewEventSignature=comp.events.map(ratedEventKey).join(';');
+ host.append(reviewPlayer.element);
  for(let i=0;i<comp.events.length;i++){
   const event=comp.events[i],row=node('div');
+  rows.push(row);
+  row.className='cloud-audio-event-row';
   row.style.cssText='padding:10px 0;border-bottom:1px solid #45657a';
   const title=node('strong',mmss(event.timeSeconds)+' ｜ '+(TYPE_NAMES[event.type]||event.type)+'（'+event.confidence+'）');
   title.style.cssText='display:block;font-size:13px';
@@ -249,21 +261,21 @@ function showComparison(state,source){
   row.append(marker);
   const play=node('button','▶ '+mmss(event.clipStartSeconds)+'付近を元動画で確認');
   play.type='button';play.style.cssText='display:block;margin:8px 0;padding:9px;border-radius:7px;background:#285974;color:white;border:1px solid #699fa9';
-  play.addEventListener('click',()=>showVideoPreview(source,event.timeSeconds,previewHolder));
+  play.addEventListener('click',()=>reviewPlayer?.show(i));
   row.append(play);
   const label=node('label','確認結果：');
   label.style.cssText='font-size:12px;display:block';
   const picker=node('select');
   for(const [value,text] of LABELS){const option=node('option',text);option.value=value;picker.append(option);}
   picker.value=ratings[i]||'unreviewed';
-  picker.addEventListener('change',()=>{ratings[i]=picker.value;});
+  picker.addEventListener('change',()=>{ratings[i]=picker.value;saveRatings(source,comp.events,ratings);});
   label.append(picker);row.append(label);
   host.append(row);
  }
- host.append(previewHolder);
  const reportBtn=node('button','④ 評価レポートJSONをコピー');
  reportBtn.type='button';reportBtn.className='whisper-run';reportBtn.addEventListener('click',()=>copyReport(state));
  host.append(reportBtn);
+ if(comp.events.length)reviewPlayer.show(0,{play:false});
 }
 function compare(state){
  const source=currentSource(state);
@@ -272,7 +284,9 @@ function compare(state){
   const parsed=parseAudioEvents($('cloudAudioPaste').value,source.duration);
   const broad=discoverScenePool([source],{limit:20}).entries;
   result=compareAudioCandidates(parsed.events,source.candidates||[],broad,7);
-  ratings={};
+  const sameSource=reviewSource?.file===source.file;
+  const signature=result.events.map(ratedEventKey).join(';');
+  if(!(sameSource&&signature===reviewEventSignature))ratings=readRatings(source,result.events);
   showComparison(state,source);
   sayCompare('解析結果を読み込みました：'+result.total+'件。'+
     (parsed.repairedNewlines>0?'Geminiが文章内に入れた改行 '+parsed.repairedNewlines+'か所を自動補正しました。':'')+
