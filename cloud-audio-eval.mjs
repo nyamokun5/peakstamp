@@ -36,9 +36,11 @@ export function parseAudioEvents(text,durationSeconds){
  if(!(duration>0))throw Error('動画の長さが不正です。');
  const found=[];
  for(const v of data.events){
-  const t=Number(v?.reaction_time_seconds);
+  if(v?.reaction_time_seconds===null||v?.reaction_time_seconds===undefined||v?.reaction_time_seconds==='')continue;
+  const t=Number(v.reaction_time_seconds);
   if(!Number.isFinite(t)||t<0||t>duration+2)continue;
-  const start=Number(v?.suggested_clip_start_seconds),end=Number(v?.suggested_clip_end_seconds);
+  const start=v?.suggested_clip_start_seconds==null?NaN:Number(v.suggested_clip_start_seconds);
+  const end=v?.suggested_clip_end_seconds==null?NaN:Number(v.suggested_clip_end_seconds);
   const safeStart=Number.isFinite(start)?Math.min(clamp(start,0,duration),t):Math.max(0,t-8);
   const safeEnd=Number.isFinite(end)?Math.max(clamp(end,0,duration),Math.min(duration,t)):Math.min(duration,t+5);
   found.push({timeSeconds:+t.toFixed(1),type:TYPES.has(v.type)?v.type:'uncertain',
