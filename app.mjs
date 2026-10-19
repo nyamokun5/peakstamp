@@ -1,6 +1,7 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audio12';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
+import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
@@ -86,6 +87,7 @@ function busy(value) {
   $('analyzeButton').textContent = value ? '音声を解析中…' : '⌁　音声を解析する　→';
   $('cancelButton').hidden = !value;
   refreshAIReview(state);
+  refreshVideoExplore(state);
 }
 function syncSources() {
   closeInlinePreview();
@@ -108,6 +110,7 @@ function syncSources() {
   state.candidates = candidates;
   refreshWhisperTargets(state);
   refreshAIReview(state);
+  refreshVideoExplore(state);
   if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
   $('stickyBar').hidden = !state.bins;
   $('resultsPanel').hidden = !state.bins;
@@ -1127,3 +1130,4 @@ $('lineShareCopy').addEventListener('click',async()=>{
 initMontageEditor(state);
 initWhisperExperiment(state);
 initAIReview(state);
+initVideoExplore(state);
