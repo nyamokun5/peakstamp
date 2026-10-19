@@ -65,14 +65,15 @@ async function googleError(response){
  *  2. Core generateContent API as a fallback only on HTTP 400 or 404.
  * This avoids multiple paid successful generations for one video.
  */
-async function requestGemini(base64,seconds,key){
+async function requestGemini(base64,seconds,key,format='m4a'){
+ const mimeType=format==='wav'?'audio/wav':'audio/m4a';
  const inputs=[
   {
    label:'Interactions API',
    url:'https://generativelanguage.googleapis.com/v1beta/interactions',
    body:{
     model:MODEL,
-    input:[{type:'text',text:prompt(seconds)},{type:'audio',data:base64,mime_type:'audio/m4a'}],
+    input:[{type:'text',text:prompt(seconds)},{type:'audio',data:base64,mime_type:mimeType}],
     store:false
    }
   },
@@ -82,15 +83,18 @@ async function requestGemini(base64,seconds,key){
    body:{
     contents:[{role:'user',parts:[
       {text:prompt(seconds)},
-      {inlineData:{mimeType:'audio/m4a',data:base64}}
+      {inlineData:{mimeType,data:base64}}
     ]}],
     generationConfig:{maxOutputTokens:8192}
    }
   }
  ];
+ // The generated WAV format has already passed Google's real-audio diagnostic.
+ // Use its proven generateContent API directly; no redundant Interactions try.
+ const attempts=format==='wav'?[inputs[1]]:inputs;
  const errors=[];
- for(let i=0;i<inputs.length;i++){
-  const attempt=inputs[i];
+ for(let i=0;i<attempts.length;i++){
+  const attempt=attempts[i];
   let response;
   try{
    response=await fetch(attempt.url,{
@@ -108,13 +112,13 @@ async function requestGemini(base64,seconds,key){
    errors.push(attempt.label+'：'+message);
    // Only invalid requests or unsupported endpoints can trigger a second try.
    // Never retry auth failures, rate limits or potentially billed/server errors.
-   if((response.status===400||response.status===404)&&i===0)continue;
+   if((response.status===400||response.status===404)&&i===0&&attempts.length>1)continue;
    return {error:errors.join(' / ').slice(0,940),code:502};
   }
   let data;
   try{data=await response.json();}
   catch(_){return {error:attempt.label+'：Googleの応答JSONを読み取れませんでした。',code:502};}
-  return {data,api:i===0?'interactions':'generateContent',fallback:i>0};
+  return {data,api:attempt.label==='Interactions API'?'interactions':'generateContent',fallback:i>0};
  }
  return {error:errors.join(' / ').slice(0,940)||'Google APIを利用できません。',code:502};
 }
@@ -234,18 +238,31 @@ export default async function handler(req,res){
  if(!body||typeof body!=='object'||Array.isArray(body))return reply(res,400,'JSONリクエストを送ってください。');
  const seconds=Number(body.durationSeconds);
  const base64=body.audioBase64;
+ const format=body.audioFormat==='wav'?'wav':'m4a';
+ if(body.audioFormat!==undefined&&!['wav','m4a'].includes(body.audioFormat))
+  return reply(res,400,'対応していない音声形式です。');
  if(!Number.isFinite(seconds)||seconds<1||seconds>MAX_DURATION_SECONDS)
   return reply(res,400,'音声の長さは1秒以上10分以下で指定してください。');
  if(typeof base64!=='string'||base64.length<128||base64.length>Math.ceil(MAX_BYTES/3)*4||
     base64.length%4!==0||!/^[A-Za-z0-9+/]+={0,2}$/.test(base64))
-  return reply(res,413,'音声形式または容量が不正です。2.9MB以下のM4Aにしてください。');
+  return reply(res,413,'音声形式または容量が不正です。2.9MB以下の音声を指定してください。');
  const audio=Buffer.from(base64,'base64');
  if(audio.length<96||audio.length>MAX_BYTES)return reply(res,413,'音声は2.9MB以下にしてください。');
- // For an MP4/M4A container, the file type box follows the first 4 bytes.
- if(audio.toString('ascii',4,8)!=='ftyp')
+ // Reject mislabeled audio before invoking the paid Google endpoint.
+ if(format==='wav'){
+  if(audio.toString('ascii',0,4)!=='RIFF'||audio.toString('ascii',8,12)!=='WAVE'||
+     audio.toString('ascii',12,16)!=='fmt '||
+     audio.readUInt16LE(20)!==1||audio.readUInt16LE(22)!==1||
+     audio.readUInt16LE(34)!==16||audio.readUInt32LE(24)!==16000)
+   return reply(res,400,'WAVは16kHz・モノラル・16bit PCM形式を指定してください。');
+  const claimedDataBytes=audio.readUInt32LE(40);
+  const wavLength=44+claimedDataBytes;
+  if(claimedDataBytes<160||wavLength>audio.length||claimedDataBytes>16000*2*70+2000)
+   return reply(res,400,'WAVのデータ領域が不正です。');
+ }else if(audio.toString('ascii',4,8)!=='ftyp'){
   return reply(res,400,'抽出した音声が正常なM4Aコンテナではありません。音声を再抽出してください。');
-
- const result=await requestGemini(base64,seconds,key);
+ }
+ const result=await requestGemini(base64,seconds,key,format);
  if(result.error)return reply(res,result.code,result.error);
  const google=result.data;
  if(result.api==='interactions'&&google.status&&google.status!=='completed')
@@ -286,7 +303,7 @@ export default async function handler(req,res){
  return res.status(200).json({
   duration_seconds:seconds,events,
   limitations:'Audio-only results are not evidence that these shots or goals occurred.',
-  meta:{model:MODEL,api:result.api,usedFallback:result.fallback,
+  meta:{model:MODEL,api:result.api,audioFormat:format,usedFallback:result.fallback,
    inputTokens:result.api==='interactions'?(google?.usage?.total_input_tokens??null):
     (google?.usageMetadata?.promptTokenCount??null),
    outputTokens:result.api==='interactions'?(google?.usage?.total_output_tokens??null):
