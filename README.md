@@ -411,3 +411,20 @@ v11の修正：
 - Geminiへの通信自動化や新たな課金処理、元動画アップロードは追加していない。既存音声探索・映像探索・クリップ編集・動画出力は変更なし。
 - テスト：JS構文・依存参照・公開HTML確認、DOMモックで`src`設定一度、`load()`一度、候補移動・5秒操作・再生終端停止、レスポンス＆評価の保存復元を確認。**実際のiPhone SafariにおけるMOVのシーク速度・メモリ消費・スクロール体験は未検証。**
 - テストURL：`https://nyamokun5.github.io/peakstamp/?v=cloud-audio17`。
+
+
+## 2026-10-19 Geminiメイン導線 v18（APIサーバーの本番公開は未完了）
+
+3本の試合音声（約21分44秒）でGemini音声解析による見どころ候補の有用判定は18/22件（約81.8%）。これは提出された候補だけの適合率であり、動画全体のシュート再現率、Whisperとの比較ではない。これを受けてユーザーがGeminiを主解析エンジンに採用する方針を承認。
+
+- 新しいトップレベルの「Geminiでハイライトを見つける」画面を追加。元MOV/MP4を選択すると、端末内で音声だけを圧縮したM4Aを作り、Gemini APIの解析結果からプレー候補を取得する構成。従来のピーク検出やWhisper呼び出しはこの経路には含まれない。
+- `cloud-audio-export.mjs` にAPI専用40kbps AAC mono/24kHzと、サイズ超過時の28kbpsモードを追加。入力M4Aは2.9MB以下とし、Vercel FunctionsのHTTPペイロード上限4.5MBを超えないようBase64を含むリクエスト全体を小さくする。元動画本体は送信しない。実機変換品質・速度は未検証。
+- `api/gemini-audio.js`: サーバー側のみ`GEMINI_API_KEY`、`PEAKSTAMP_ACCESS_CODE`を参照するGemini 2.5 Flashプロキシ。CORSはGitHub Pagesの指定Originのみ、アクセスコード必須、入力時間・容量制限、失敗時の明示的なエラー応答。秘密鍵をGitHubやブラウザに配置しない。音声はリクエスト処理のため受信するが、アプリからの恒久保存処理は設けていない。Googleへの送信には利用者同意が必要。
+- `gemini-primary.mjs`: 選択動画を1本ずつ解析・キャンセル・同一ファイルの結果をローカル保存・再利用。結果再利用時は再送信せずAPI料金も増えない。アクセスコードはローカルストレージに保存しない。
+- `gemini-candidates.mjs`: Geminiの反応時刻から編集候補の開始・終了を作成し、同じ種類で6秒以内の近接する反応を統合。従来の「キープ／不採用」選択がある場合は極力保持し、従来の動画プレビュー・シーン調整・書き出しへ渡す。プレー自体を映像認識する機能ではない。
+- 無料の通常音声解析は折り畳みの予備メニューで引き続き使用可能。実験用Whisper・広域探索・映像探索はメイン画面から隠したが、コードと既存機能は削除していない。旧Gemini手動比較は折り畳みメニューから引き続き利用可能。
+- テスト: 純粋なシーン変換・近接イベント統合・前回キープ状態保持、APIのOrigin/アクセスコード/容量/未設定時拒否とGoogleへのモックリクエスト、ローカルM4Aからの模擬API送信・結果保存・再利用、既存動画エディタ連携コールバック、JS構文・画面接続をモックで検証。**実際のGemini APIへのリクエスト、Vercelデプロイ、iPhone実機でのM4A圧縮・Gemini後のMP4出力は未検証。**
+- 公開先のセキュリティ: 2026-10-19にVercelの既存 Team OPT へ `peakstamp-gemini-api` プロジェクト新規作成を試したが403 forbiddenで失敗。CLIコマンドも環境に未導入。**所有が確認されていない仮のvercel.app URLに、音声やパスワードを絶対送らない**ため、`gemini-primary.mjs` の`API_ENDPOINT`は空のままで安全に送信を無効化している。GitHub Pages側はメイン画面に設定待ちであることを明示。
+- Vercel手動セットアップ: Vercel Dashboard → Add New Project → GitHubの`nyamokun5/peakstamp`を選択 → プロジェクト名`peakstamp-gemini-api`（利用できる場合）、Framework Preset: Other、リポジトリルートを使用、環境変数`GEMINI_API_KEY`と`PEAKSTAMP_ACCESS_CODE`をProductionにSecretとして設定 → Deploy。`vercel.json`は`api/gemini-audio.js`に180秒のタイムアウトを指定。**実際に発行された、所有確認済みのAPI URL**をもらった後でのみ、ブラウザ側`API_ENDPOINT`をそのURLの`/api/gemini-audio`に設定して再公開する。
+- Vercel/Gemini APIの予算制限・使用量アラート、アクセスコードの管理、ユーザーの同意について本番運用前に設定する。共有アクセスコード単独には分散レート制限がないため、一般公開の高頻度利用には認証・サーバー側のレート制限が追加で必要。
+- 準備版URL: `https://nyamokun5.github.io/peakstamp/?v=gemini-primary18`（GitHub Pages伝播と実機動作は未検証）。API連携が利用可能になったことを意味しない。
