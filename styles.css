@@ -650,3 +650,110 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .legacy-audio-details .settings-panel{margin:12px 0 0}
 .legacy-gemini-details #cloudAudioPanel{margin:12px 0 0}
 #whisperExperiment,#aiRerankPanel,#videoExplorePanel{display:none}
+
+
+/* v28: focused first-use interface and honest Gemini progress */
+.header-help{
+  flex:none;border:1px solid #426778;background:#17364a;color:#d9f6f1;
+  border-radius:999px;padding:8px 11px;min-height:36px;font-size:11px;font-weight:750
+}
+.header-help span{display:inline-grid;place-items:center;margin-left:3px;width:15px;height:15px;
+  border:1px solid #7faeb6;border-radius:50%;font-size:10px}
+.hero{padding:25px 5px 16px}
+.hero h1{font-size:clamp(30px,6.7vw,43px);margin:10px 0}
+.hero p{line-height:1.6;font-size:13px}
+.compact-details{margin-top:10px;padding:0;border:0;background:transparent}
+.compact-details>summary{width:fit-content;color:#91b9c9;font-size:11px;
+  line-height:1.6;cursor:pointer;padding:5px 0;touch-action:manipulation}
+.compact-details[open]>summary{color:#b7e7dc}
+.share-details .line-share-row{margin-top:7px}
+.journey-nav{display:flex;align-items:center;justify-content:center;gap:7px;
+  margin:0 0 15px;border:1px solid #2e4c60;border-radius:12px;
+  background:#0e2539;padding:7px}
+.journey-nav>span{color:#618395;flex:none;font-size:17px}
+.journey-nav button{border:0;background:transparent;border-radius:8px;
+  color:#8daabd;padding:9px 8px;font-size:12px;font-weight:850;flex:1;
+  min-height:36px;white-space:nowrap}
+.journey-nav button.current{background:#23574f;color:#d8fff0}
+.journey-nav button.finished{color:#9ddcc9}
+.journey-nav button span{margin-left:3px}
+.gemini-primary-panel .gemini-brief{color:#b7dfda;font-size:12px;line-height:1.5;margin:0 0 8px}
+.gemini-primary-panel .gemini-diagnostics>summary{font-size:11px!important;margin:3px 0}
+.gemini-primary-panel .gemini-diagnostics .whisper-run{margin-top:7px}
+.gemini-primary-panel .gemini-diagnostics .fine-print{margin:3px 0 6px;font-size:11px}
+.gemini-progress{
+  margin:13px 0 8px;padding:14px;background:#0a1f30;
+  border:1px solid #3c7c70;border-radius:12px
+}
+.gemini-progress-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.gemini-progress-top strong{font-size:12px;color:#d9fff4;line-height:1.5}
+.gemini-progress-top output{font-weight:950;font-size:23px;color:#83efd0;font-variant-numeric:tabular-nums}
+.gemini-progress-track{height:11px;background:#29445a;border-radius:20px;overflow:hidden;margin:11px 0 7px}
+#geminiProgressBar{height:100%;width:0;background:linear-gradient(90deg,#36bea7,#9bf7d6);
+  border-radius:20px;transition:width .28s ease}
+#geminiProgressDetail{display:block;font-size:11px;color:#9dbbc2;line-height:1.5}
+.gemini-progress.progress-error{border-color:#986855}
+.gemini-progress.progress-error #geminiProgressBar{background:#d0aa74}
+.pinch-overlay-tip{
+  position:absolute;left:50%;bottom:12px;transform:translateX(-50%);
+  background:#09263de3;border:1px solid #b0e8d3;color:#f4fff9;
+  border-radius:999px;padding:7px 12px;font-size:12px;font-weight:850;
+  white-space:nowrap;pointer-events:none;z-index:2;
+  box-shadow:0 3px 12px #0009
+}
+.scene-pinch-toolbar{gap:7px;padding:10px 2px 6px}
+.scene-pinch-hint{flex-basis:100%;min-width:0!important;font-size:11px!important;color:#a9cfcf}
+.scene-zoom-action{width:47px;height:43px;border-radius:11px;border:1px solid #4f998c;
+  background:#173f48;color:#b9ffe4;font-size:24px;font-weight:800;touch-action:manipulation}
+.scene-zoom-action:disabled{opacity:.35}
+.scene-pinch-value{min-width:47px;text-align:center;font-size:17px}
+.scene-pinch-reset{height:42px;min-width:56px}
+.first-run-overlay{position:fixed;inset:0;z-index:1000;
+  background:rgba(3,14,24,.82);backdrop-filter:blur(8px);
+  display:grid;place-items:center;padding:16px}
+.first-run-card{width:min(100%,420px);padding:24px 22px 19px;
+  background:linear-gradient(155deg,#1d4051,#102439 85%);
+  border:1px solid #60998f;border-radius:21px;box-shadow:0 24px 60px #0009}
+.first-run-top{display:flex;justify-content:space-between;align-items:center;
+  color:#b6e3dd;letter-spacing:.08em;font-size:11px;font-weight:800}
+.first-run-art{display:flex;align-items:center;justify-content:center;
+  gap:9px;margin:21px 0 18px}
+.first-run-art span{display:grid;place-items:center;width:65px;height:65px;border-radius:15px;
+  background:#204659;border:1px solid #54837a;font-size:30px;color:#adf1d8}
+.first-run-art span:nth-child(2){color:#ffc081}
+.first-run-card h2{font-size:23px;line-height:1.35;margin:0 0 11px}
+.first-run-card p{font-size:14px;line-height:1.75;color:#c1d7e2;min-height:65px;margin:0 0 17px}
+.first-run-dots{display:flex;justify-content:center;gap:9px;margin:10px 0 20px}
+.first-run-dots button{width:32px;height:32px;border-radius:50%;border:1px solid #526f80;
+  background:#193448;color:#a4b9c6;font-size:12px;font-weight:800}
+.first-run-dots button.active{background:#66d8b9;color:#0a2837;border-color:#66d8b9}
+.first-run-next{justify-content:center}
+.first-run-skip{display:block;margin:13px auto 0;border:0;background:none;color:#b0c4cf;
+  font-size:12px;min-height:33px;padding:5px 17px}
+@media(max-width:390px){
+ .local-pill{font-size:9px;padding:6px;border:0}
+ .header-help{padding:7px 9px;font-size:10px}
+ .journey-nav{gap:3px;padding:5px}
+ .journey-nav button{font-size:11px;padding:7px 3px}
+ .journey-nav button span{margin-left:1px}
+ .first-run-card{padding:21px 18px 16px}
+ .scene-zoom-action{width:44px;height:42px}
+}
+@media(prefers-reduced-motion:reduce){#geminiProgressBar{transition:none}}
+
+/* Moving glint means the app is still waiting, not that a chunk is complete. */
+.gemini-progress-track{position:relative}
+.gemini-progress.is-running .gemini-progress-track::after{
+ content:'';position:absolute;top:0;bottom:0;left:0;width:20%;
+ border-radius:999px;background:linear-gradient(90deg,transparent,#cbfff5aa,transparent);
+ animation:gemini-progress-activity 1.8s linear infinite;pointer-events:none
+}
+@keyframes gemini-progress-activity{0%{left:-20%}100%{left:100%}}
+@media(prefers-reduced-motion:reduce){
+ .gemini-progress.is-running .gemini-progress-track::after{animation:none;display:none}
+}
+
+@media(max-width:480px){
+ .topbar .local-pill{display:none}
+ .topbar .header-help{margin-left:auto}
+}

@@ -5,6 +5,7 @@
 import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=1';
 import { runGeminiFastPipeline } from './gemini-fast-pipeline.mjs?v=1';
 import { createGeminiFastWaveform } from './gemini-fast-waveform.mjs?v=1';
+import { createGeminiProgressUI } from './gemini-progress-ui.mjs?v=1';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
 import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=2';
 
@@ -126,6 +127,7 @@ async function callApi(audio,duration,access,signal,format='m4a') {
 }
 export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
  if(!$('geminiMainRun')||typeof decodeAudio!=='function'||typeof commitResults!=='function')return;
+ const progressUI=createGeminiProgressUI();
  const checkConnection=$('geminiMainCheck');
  if(checkConnection)checkConnection.addEventListener('click',async()=>{
   const access=$('geminiMainAccess').value.trim();
@@ -216,8 +218,9 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
  $('geminiMainCancel').addEventListener('click',()=>{
   generation++;
   abortController?.abort();
-  status('解析を中止しました。既に送信された音声のAPI料金は発生する場合があります。');
-  // Audio conversion cannot be interrupted mid-execution on every device.
+  progressUI.fail('解析を中止しました');
+  status('解析を中止しました。完了済み区間は次回再利用します。');
+  // The running operation cleans up before a new run is permitted.
  });
  const run=async force=>{
   const source=selectedSource(state);
@@ -240,6 +243,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
   const started=performance.now();
   const id=++generation;
   processing=true;
+  progressUI.start(cache?'保存済み結果を復元中':'音声を準備中…');
   abortController=new AbortController();
   const signal=abortController.signal;
   const alive=()=>{
@@ -257,6 +261,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    let waveformSeconds=0;
    if(cache){
     answer=cache;
+    progressUI.waveform(0);
     status('保存済みのGemini結果を復元しています。APIへの再送信はありません。');
    }else{
     status('元動画のWAVを準備しながらGeminiへ最大2区間ずつ送信します…');
@@ -268,6 +273,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
      alive();
      duration=segmenter.durationSeconds;
      const previous=getSavedChunks(source);
+     progressUI.segments(0,segmenter.ranges.length);
      const waveform=createGeminiFastWaveform(duration);
      let waveformFailed=false;
      const completed=await runGeminiFastPipeline({
@@ -295,6 +301,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
       onFailure:()=>{if(id===generation)abortController?.abort();},
       onProgress:({index,phase,done,total,reused,inFlight})=>{
        if(id!==generation)return;
+       progressUI.segments(done,total,inFlight);
        const location=' 区間 '+(index+1)+'/'+total;
        if(phase==='decoding')status('音声をWAVに変換中：'+location+' / 完了 '+done+'/'+total);
        else if(phase==='submitted')status('Geminiへ並列送信中：完了 '+done+'/'+total+' / 処理中 '+inFlight+' 区間');
@@ -314,17 +321,23 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    const parsed=parseAudioEvents(JSON.stringify(answer),duration);
    alive();
    const waveformStarted=performance.now();
+   progressUI.waveform(0);
    status('Gemini候補'+parsed.events.length+'件。確認用の音声波形を準備しています…');
    // Existing waveform wins, then the one reused from streamed WAV segments.
    // Partial chunk caches may still need the legacy local-only decoder.
    const decoded=source.bins?.length?{bins:source.bins,duration:source.duration}:
     decodedDuringGemini||await decodeAudio(source.file,
-     (label,progress)=>{if(id===generation)status('確認用波形を準備中… '+Math.round(progress)+'%');},
+     (label,progress)=>{if(id===generation){
+      status('確認用波形を準備中… '+Math.round(progress)+'%');
+      progressUI.waveform(progress);
+     }},
      alive);
    waveformSeconds=(performance.now()-waveformStarted)/1000;
    alive();
+   progressUI.finalizing();
    const summary=await commitResults({source,parsed,audio:{durationSeconds:duration},decoded,answer,fromCache:!!cache});
    alive();
+   progressUI.complete();
    status('Gemini解析完了：'+summary.candidates+'件の候補（'+summary.merged+'件の近接反応を統合）。'+
     (cache?'保存済みのAI結果を利用。':'WAV音声を '+(answer.meta?.segments||'?')+' 区間に分けて並列解析。')+
     ' API方式：'+(answer.meta?.api||'不明')+'。'+
@@ -332,9 +345,14 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
     'Gemini API待ち延べ '+apiWaitSum.toFixed(1)+'秒、波形 '+waveformSeconds.toFixed(1)+'秒）。'+
     ' 下の「確認してキープ」で再生できます。');
   }catch(e){
-   if(id===generation)status('Gemini解析エラー：'+(e?.message||String(e)));
-  }finally{
    if(id===generation){
+    status('Gemini解析エラー：'+(e?.message||String(e)));
+    progressUI.fail('解析が完了しませんでした');
+   }
+  }finally{
+   // Cancel increments generation; still release the busy state so the user
+   // can safely resume with the already-saved per-chunk cache.
+   if(id===generation||signal.aborted){
     processing=false;abortController=null;
     refreshGeminiPrimary(state);
    }

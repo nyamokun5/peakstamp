@@ -161,7 +161,7 @@ export function attachScenePinchEditor({viewport,video,read,write,commit,resetBu
   observer?.observe(viewport);
   window.addEventListener('resize',render);
   resizeVideo();render();
-  return ()=>{
+  const destroy=()=>{
     finalize();closed=true;
     observer?.disconnect();
     window.removeEventListener('resize',render);
@@ -171,4 +171,14 @@ export function attachScenePinchEditor({viewport,video,read,write,commit,resetBu
     resetButton.removeEventListener('click',reset);
     video.removeEventListener('loadedmetadata',resizeVideo);
   };
+  // The + / - buttons use exactly the same zoom state and export framing
+  // as finger pinch. Avoid a second, incompatible zoom implementation.
+  destroy.zoomBy=(factor)=>{
+    if(closed)return;
+    const state=read();
+    const zoom=normalizeSceneZoom((Number(state.zoom)||1)*factor);
+    apply({...state,zoom});finalize();
+  };
+  destroy.reset=()=>{if(!closed)reset();};
+  return destroy;
 }

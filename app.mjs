@@ -3,18 +3,19 @@ import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experime
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=9';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=10';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
-import { attachScenePinchEditor } from './scene-gesture.mjs?v=pinch18';
+import { attachScenePinchEditor } from './scene-gesture.mjs?v=pinch28';
 import { montageSeconds } from './exporter.mjs?v=pinch18';
 import { getIntroConfiguration } from './intro-ui.mjs?v=pinch18';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
 import { createSceneReplayMedia } from './scene-replay-media.mjs?v=1';
+import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 
 const $ = id => document.getElementById(id);
 // Keep one video decoder across scene cards, independent of Gemini/candidate data.
@@ -40,6 +41,10 @@ const state = {
   sensitivity: 'normal', leadSeconds: 7, maxResults: 8,
   working: false, cancelled: false, exporting: false
 };
+const guide=initFirstRunGuide({hasPriorAnalysis:()=>{
+  try {return Object.keys(JSON.parse(localStorage.getItem('peakstamp_gemini_primary_json_v1')||'{}')).length>0;}
+  catch{return false;}
+}});
 const STEP = .25;
 let activeInlineClose = null;
 let reviewTab = 'all';
@@ -130,6 +135,7 @@ function syncSources() {
   if (state.bins) drawResults();
   else updateMontageEditor(state);
   renderSourceList();
+  guide.update({hasVideo:state.sources.length>0,hasResults:!!state.bins});
 }
 function renderSourceList() {
   const sources = state.sources;
@@ -663,20 +669,30 @@ function row(item, index) {
     video.setAttribute('webkit-playsinline','');
     video.disablePictureInPicture=true;
     const label=make('p','inline-caption',
-      source.file.name+' — '+formatTimelineTime(item.time)+' 〜 '+
-      formatTimelineTime(getCandidateEnd(source,item,currentClipOptions()))+' をリプレイ');
+      formatTimelineTime(item.time)+' 〜 '+
+      formatTimelineTime(getCandidateEnd(source,item,currentClipOptions())));
     const viewport=make('div','zoom-video-viewport');
     viewport.setAttribute('tabindex','0');
     viewport.setAttribute('role','group');
     viewport.setAttribute('aria-label','映像の画角調整：2本指で拡大縮小、拡大後は1本指で移動。キーボードのプラス・マイナスでも倍率変更可能');
     viewport.append(video);
+    const tip=make('span','pinch-overlay-tip','↔ 2本指で拡大');
+    tip.setAttribute('aria-hidden','true');
+    const isZoomTipSeen=()=>{try{return localStorage.getItem('peakstamp_zoom_discovered_v1')==='yes';}catch{return false;}};
+    const markZoomTipSeen=()=>{try{localStorage.setItem('peakstamp_zoom_discovered_v1','yes');}catch{}};
+    tip.hidden=isZoomTipSeen()||normalizeSceneZoom(item.zoom)>1;
+    viewport.append(tip);
     const zoomRow=make('div','scene-pinch-toolbar');
-    const zoomHint=make('span','scene-pinch-hint','2本指で拡大・縮小 ／ 1本指で移動');
+    const zoomHint=make('span','scene-pinch-hint','画角調整 · 2本指でも拡大');
     const zoomValue=make('output','scene-pinch-value');
-    const zoomReset=make('button','scene-pinch-reset','リセット');
+    const zoomOut=make('button','scene-zoom-action','−');
+    zoomOut.type='button';zoomOut.setAttribute('aria-label','映像を縮小');
+    const zoomIn=make('button','scene-zoom-action','＋');
+    zoomIn.type='button';zoomIn.setAttribute('aria-label','映像を拡大');
+    const zoomReset=make('button','scene-pinch-reset','戻す');
     zoomReset.type='button';
     zoomReset.setAttribute('aria-label','映像の拡大と位置を初期化');
-    zoomRow.append(zoomHint,zoomValue,zoomReset);
+    zoomRow.append(zoomHint,zoomOut,zoomValue,zoomIn,zoomReset);
     replayStatus=make('p','inline-caption','動画を準備しています…');
     replayStatus.setAttribute('role','status');
     replayStatus.setAttribute('aria-live','polite');
@@ -688,10 +704,17 @@ function row(item, index) {
       }),
       write:next=>{
         item.zoom=next.zoom;item.zoomX=next.zoomX;item.zoomY=next.zoomY;
+        zoomOut.disabled=normalizeSceneZoom(item.zoom)<=1;
+        zoomIn.disabled=normalizeSceneZoom(item.zoom)>=3;
+        if(normalizeSceneZoom(item.zoom)>1.02){markZoomTipSeen();tip.hidden=true;}
       },
       commit:()=>refreshComment(),
       resetButton:zoomReset,readout:zoomValue
     });
+    zoomOut.disabled=normalizeSceneZoom(item.zoom)<=1;
+    zoomIn.disabled=normalizeSceneZoom(item.zoom)>=3;
+    zoomOut.addEventListener('click',()=>teardownZoom?.zoomBy(.8));
+    zoomIn.addEventListener('click',()=>teardownZoom?.zoomBy(1.25));
     inline.hidden=false;
     entry.classList.add('preview-active');
     activeInlineClose=close;
@@ -733,9 +756,10 @@ function row(item, index) {
   });
   timeRow.append(number, badge);
   const score = make('span','score',item.origin==='gemini'
-    ? 'Gemini音声候補 · '+formatTime(item.peakSeconds)
-      +(item.geminiQuote?' · 「'+item.geminiQuote+'」':'')
+    ? 'Gemini · '+formatTime(item.peakSeconds)
+      +(item.geminiQuote?' · 「'+item.geminiQuote.slice(0,24)+(item.geminiQuote.length>24?'…':'')+'」':'')
     : 'ピーク ' + Math.round(item.peakSeconds) + '秒 / ' + item.db + 'dBFS');
+  score.title=item.origin==='gemini'?String(item.geminiQuote||item.geminiReason||''):'';
   const titleGroup=make('div','play-label-group');
   const titleLabel=make('label','play-label-caption','プレイ内容');
   const titleSelect=make('select','play-label-select');
@@ -803,7 +827,7 @@ function row(item, index) {
   startDot.setAttribute('aria-orientation','horizontal');
   endDot.setAttribute('aria-orientation','horizontal');
   track.append(fill,startDot,peakDot,endDot,playhead);
-  const rangeHint=make('p','range-hint','端の丸を左右に移動 ／ 長押しで0.1秒単位の微調整');
+  const rangeHint=make('p','range-hint','両端をドラッグ · 長押しで微調整');
   const rangeInputs=make('div','range-inputs');
   const startBox=make('div','range-field');
   startBox.append(make('label','', '開始'));
@@ -890,7 +914,7 @@ function row(item, index) {
     handle.classList.remove('dragging');
     dragging=null;
     track.classList.remove('is-fine');
-    rangeHint.textContent='端の丸を左右に移動 ／ 長押しで0.1秒単位の微調整';
+    rangeHint.textContent='両端をドラッグ · 長押しで微調整';
     renderRange();
     refreshComment();
   };
