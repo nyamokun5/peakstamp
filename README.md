@@ -428,3 +428,12 @@ v11の修正：
 - Vercel手動セットアップ: Vercel Dashboard → Add New Project → GitHubの`nyamokun5/peakstamp`を選択 → プロジェクト名`peakstamp-gemini-api`（利用できる場合）、Framework Preset: Other、リポジトリルートを使用、環境変数`GEMINI_API_KEY`と`PEAKSTAMP_ACCESS_CODE`をProductionにSecretとして設定 → Deploy。`vercel.json`は`api/gemini-audio.js`に180秒のタイムアウトを指定。**実際に発行された、所有確認済みのAPI URL**をもらった後でのみ、ブラウザ側`API_ENDPOINT`をそのURLの`/api/gemini-audio`に設定して再公開する。
 - Vercel/Gemini APIの予算制限・使用量アラート、アクセスコードの管理、ユーザーの同意について本番運用前に設定する。共有アクセスコード単独には分散レート制限がないため、一般公開の高頻度利用には認証・サーバー側のレート制限が追加で必要。
 - 準備版URL: `https://nyamokun5.github.io/peakstamp/?v=gemini-primary18`（GitHub Pages伝播と実機動作は未検証）。API連携が利用可能になったことを意味しない。
+
+
+## 2026-10-19 Gemini iPhone WAV decoding 修正（修正ブランチ）
+
+- 症状：Safari で `iPhone内のM4AをWAVに変換できませんでした：Decoding failed`。Gemini のAPIへ送る前の `AudioContext.decodeAudioData()` によるM4A全体のデコードで失敗していた。
+- `gemini-wav-stream.mjs`：元MOV/MP4の音声トラックを Mediabunny `AudioSampleSink` で直接ストリーミングデコードし、16 kHz / mono / 16-bit PCM WAVの70秒区間に変換。M4Aへの再エンコードと `decodeAudioData()` をGemini主導線から外した。
+- 5秒オーバーラップ、元動画を送信しない仕様、VercelへのWAV送信（1区間最大約2.24MB）、区間単位の結果キャッシュを維持。区間キャッシュのバージョンはv2へ更新し、以前の異なるエンコードによる古い区間結果を混ぜない。
+- 保存済みGemini回答がある場合はAPI再送信とWAV再生成を省略。レビュー用波形は元動画の既存ストリーミング音声解析を利用。
+- テスト：ステレオ48 kHz→モノラル16 kHz変換、正しいWAVヘッダー、70秒の容量上限、5秒重複、区間時刻、8 kHz補間、中止時のリソース解放、元動画の遅延デコードを検証。**実際のiPhone Safariでの動作・Gemini API送信は実機未検証**。まず短いMOVを使って正常完走するか確認する。

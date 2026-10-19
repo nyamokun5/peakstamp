@@ -8,7 +8,7 @@
 export const WAV_SAMPLE_RATE=16000;
 export const WAV_CHUNK_SECONDS=70;
 export const WAV_OVERLAP_SECONDS=5;
-export const WAV_SEGMENT_VERSION='pcm16-wav-70s-5s-v1';
+export const WAV_SEGMENT_VERSION='pcm16-wav-direct-source-70s-5s-v2';
 export function wavSegmentRanges(duration,{length=WAV_CHUNK_SECONDS,overlap=WAV_OVERLAP_SECONDS}={}){
  const total=Number(duration);
  if(!Number.isFinite(total)||total<=0||total>605)throw Error('WAV解析は10分以下の音声に対応します。');
