@@ -862,3 +862,12 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
    max-height:75dvh;object-fit:contain;
  }
 }
+
+/* Progressive disclosure: show only the upload task before a file exists. */
+.has-media .hero{display:none}
+.legacy-audio-details{display:none}
+.has-media .legacy-audio-details{display:block}
+@media(max-width:640px){
+ .page>.panel>.panel-label>.number{display:none}
+ .source-board .fine-print{display:none}
+}
