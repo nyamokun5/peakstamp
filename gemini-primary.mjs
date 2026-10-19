@@ -149,6 +149,46 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    checkConnection.textContent=previousLabel;
   }
  });
+ const runDiagnostic=$('geminiMainDiagnostic');
+ if(runDiagnostic)runDiagnostic.addEventListener('click',async()=>{
+  const access=$('geminiMainAccess').value.trim();
+  if(!access){
+   status('まずAPIアクセスコードを入力してください。');
+   $('geminiMainAccess').focus();
+   return;
+  }
+  if(!window.confirm('音声APIの診断を行います。1秒の人工音声だけをGoogleに送信し、2回以下の短いGemini解析を行います。ごく少額のAPI料金が発生する場合があります。試合動画・会話は送信しません。続けますか？'))return;
+  const original=runDiagnostic.textContent;
+  runDiagnostic.disabled=true;
+  runDiagnostic.textContent='音声API診断中…';
+  status('テキストのみの解析と1秒の人工WAV音声を順番に確認中…');
+  try{
+   const controller=new AbortController();
+   const timeout=setTimeout(()=>controller.abort(),80000);
+   let response;
+   try{
+    response=await fetch(API_ENDPOINT,{method:'POST',mode:'cors',signal:controller.signal,
+     headers:{'Content-Type':'application/json','X-PeakStamp-Access':access},
+     body:JSON.stringify({diagnostic:'audio-compat',confirmSmallCost:true})});
+   }finally{clearTimeout(timeout);}
+   let body={};
+   try{body=await response.json();}catch(_){}
+   if(!response.ok || !body?.diagnostic){
+    status('音声API診断を開始できませんでした（HTTP '+response.status+'）：'+
+     String(body?.error||'接続や公開状態を確認してください。'));
+    return;
+   }
+   const steps=(body.steps||[]).map(item=>item.name+'：'+
+    (item.ok?'成功':'失敗 (HTTP '+(item.status??'接続エラー')+')'+
+     (item.error?' '+item.error:''))).join(' ／ ');
+   status('Gemini音声診断結果 — '+steps+'。'+String(body.conclusion||''));
+  }catch(e){
+   status('音声API診断の通信エラー：'+(e?.name==='AbortError'?'時間切れ':'接続できませんでした'));
+  }finally{
+   runDiagnostic.disabled=false;
+   runDiagnostic.textContent=original;
+  }
+ });
  $('geminiMainSource').addEventListener('change',()=>{
   selected=Number($('geminiMainSource').value)||0;
   refreshGeminiPrimary(state);
