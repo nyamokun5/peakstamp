@@ -125,13 +125,15 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    try{
     response=await fetch(API_ENDPOINT,{method:'POST',mode:'cors',signal:controller.signal,
      headers:{'Content-Type':'application/json','X-PeakStamp-Access':access},
-     body:'{}'});
+     body:JSON.stringify({probe:true})});
    }finally{clearTimeout(timeout);}
    let body={};
    try{body=await response.json();}catch(_){}
    const error=String(body?.error||'');
-   if(response.status===400 && error.includes('JSONリクエスト')){
-    status('API接続成功！Vercelへの到達、アクセスコード認証、Gemini APIキーの環境変数登録を確認しました。Google側のキー有効性は最初の音声解析で確認します。');
+   if((response.ok && body?.ok===true && body?.ready===true) ||
+      (response.status===400 && (
+       error.includes('JSONリクエスト') || error.includes('音声の長さは1秒以上10分以下')))){
+    status('API接続成功！VercelのAPIサーバー、アクセスコード、環境変数の登録を確認しました。Google側のGemini APIキーの有効性は最初の音声解析で確認します。');
    }else if(response.status===401){
     status('APIには到達しましたが、アクセスコードが一致しません。Vercelに設定したPEAKSTAMP_ACCESS_CODEを確認してください。');
    }else if(response.status===503){
