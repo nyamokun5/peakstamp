@@ -856,7 +856,8 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
    border-radius:10px;
  }
  /* Original media preview is also full width when opened. */
- #videoWrapper #preview{
+ #videoWrapper #preview,
+ #montagePanel #montagePreview{
    position:relative;left:50%;transform:translateX(-50%);
    width:calc(100vw - 12px);max-width:calc(100vw - 12px);
    max-height:75dvh;object-fit:contain;
