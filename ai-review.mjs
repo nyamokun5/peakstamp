@@ -4,7 +4,7 @@
  * AI index is a heuristic, not a probability. Feedback provides ground truth.
  */
 import { extractSnippet, snippetWindow } from './whisper-experiment.mjs?v=whisper21';
-import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=2';
+import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=4';
 import { plausibleSpeech, rankSceneEvidence, LABELS, precisionAtK } from './ai-review-scoring.mjs?v=4';
 
 const $ = id => document.getElementById(id);
