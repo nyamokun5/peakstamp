@@ -15,11 +15,14 @@ import { getIntroConfiguration } from './intro-ui.mjs?v=pinch18';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
 import { createSceneReplayMedia } from './scene-replay-media.mjs?v=1';
+import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 
 const $ = id => document.getElementById(id);
 // Keep one video decoder across scene cards, independent of Gemini/candidate data.
 const sceneReplayMedia=createSceneReplayMedia(()=>document.createElement('video'));
+// Session preview volume persists while moving between scene cards.
+const scenePreviewAudio=createScenePreviewAudio();
 // When someone copies the address bar, preserve LINE's external-browser flag.
 // This does NOT switch browser after LINE has already opened an in-app page.
 try {
@@ -207,6 +210,7 @@ function renderSourceList() {
     del.addEventListener('click', () => {
       closeInlinePreview();
       // Release the retained decoder before revoking a media Blob URL.
+      scenePreviewAudio.dispose();
       sceneReplayMedia.dispose();
       sources.splice(i,1);
       URL.revokeObjectURL(source.objectUrl);
@@ -227,6 +231,7 @@ function chooseFiles(files, append = false) {
   }
   closeInlinePreview();
   if (!append) {
+    scenePreviewAudio.dispose();
     sceneReplayMedia.dispose();
     state.sources.forEach(source => URL.revokeObjectURL(source.objectUrl));
     state.sources = [];
@@ -576,6 +581,7 @@ function row(item, index) {
   let frameWatchId=null;
   let teardownZoom=null;
   let replayStatus=null;
+  let pauseResumeButton=null;
   let playVersion=0;
   let replayListeners=[];
   const setReplayStatus=message=>{
@@ -599,6 +605,7 @@ function row(item, index) {
       replayVideo=null;
     }
     replayStatus=null;
+    pauseResumeButton=null;
     inline.replaceChildren();
     inline.hidden=true;
     entry.classList.remove('preview-active');
@@ -627,6 +634,11 @@ function row(item, index) {
     };
     frameWatchId=video.requestVideoFrameCallback(tick);
   };
+  const updatePauseResume=()=>{
+    if(!pauseResumeButton||!replayVideo)return;
+    pauseResumeButton.textContent=replayVideo.paused?'▶ 再生':'⏸ 一時停止';
+    pauseResumeButton.setAttribute('aria-label',replayVideo.paused?'シーンを再生':'シーンを一時停止');
+  };
   const restartReplay=()=>{
     if(!replayVideo)return;
     const video=replayVideo;
@@ -639,6 +651,9 @@ function row(item, index) {
       return;
     }
     updatePlayhead();
+    updatePauseResume();
+    // Resume the iOS audio graph before requesting playback.
+    void scenePreviewAudio.wake();
     const attempt=++playVersion;
     try{
       Promise.resolve(video.play()).then(()=>{
@@ -661,6 +676,8 @@ function row(item, index) {
     const {video,sourceChanged}=sceneReplayMedia.acquire(source.id,source.objectUrl);
     replayVideo=video;
     video.className='inline-player';
+    const audioMode=scenePreviewAudio.attach(video);
+    void scenePreviewAudio.wake();
     // The Replay button is the playback control. Suppress iPhone's large
     // native pause overlay and keep playback inline within the clip card.
     video.controls=false;
@@ -693,10 +710,73 @@ function row(item, index) {
     zoomReset.type='button';
     zoomReset.setAttribute('aria-label','映像の拡大と位置を初期化');
     zoomRow.append(zoomHint,zoomOut,zoomValue,zoomIn,zoomReset);
+    const playbackRow=make('div','scene-playback-controls');
+    pauseResumeButton=make('button','scene-pause-button','⏸ 一時停止');
+    pauseResumeButton.type='button';
+    pauseResumeButton.setAttribute('aria-label','シーンを一時停止');
+    const mute=make('button','scene-mute-button','🔊');
+    mute.type='button';
+    mute.setAttribute('aria-label','音声をミュート');
+    const volumeLabel=make('label','scene-volume-label','音量');
+    const volumeSlider=make('input','scene-volume-slider');
+    volumeSlider.type='range';
+    volumeSlider.min='0';volumeSlider.max='100';volumeSlider.step='5';
+    volumeSlider.value=String(scenePreviewAudio.level);
+    volumeSlider.setAttribute('aria-label','シーン確認の音量');
+    const volumeValue=make('output','scene-volume-value',scenePreviewAudio.level+'%');
+    volumeLabel.append(volumeSlider,volumeValue);
+    playbackRow.append(pauseResumeButton,mute,volumeLabel);
+    const volumeNote=make('p','scene-volume-note',
+      audioMode.canAdjust?'確認時の音量 · 完成MP4には影響しません':
+       'このiPhoneでは本体の音量ボタンをご利用ください（ミュートは利用可）');
+    volumeSlider.disabled=!audioMode.canAdjust;
+    const updateVolumeUI=()=>{
+      const v=scenePreviewAudio.level;
+      volumeSlider.value=String(v);volumeValue.textContent=v+'%';
+      mute.textContent=v===0?'🔇':'🔊';
+      mute.setAttribute('aria-label',v===0?'音声のミュートを解除':'音声をミュート');
+    };
+    let lastAudibleVolume=Math.max(5,scenePreviewAudio.level);
+    volumeSlider.addEventListener('input',()=>{
+      const amount=scenePreviewAudio.setLevel(Number(volumeSlider.value));
+      if(amount>0)lastAudibleVolume=amount;
+      void scenePreviewAudio.wake();
+      updateVolumeUI();
+    });
+    mute.addEventListener('click',()=>{
+      if(scenePreviewAudio.level>0){
+        lastAudibleVolume=scenePreviewAudio.level;
+        scenePreviewAudio.setLevel(0);
+      }else scenePreviewAudio.setLevel(lastAudibleVolume);
+      void scenePreviewAudio.wake();
+      updateVolumeUI();
+    });
+    pauseResumeButton.addEventListener('click',()=>{
+      if(!replayVideo)return;
+      const player=replayVideo;
+      if(!player.paused){
+        player.pause();
+        updatePauseResume();
+        return;
+      }
+      const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
+      if(player.currentTime>=bounds.end-.08 || player.currentTime<bounds.start-.1){
+        restartReplay();
+        return;
+      }
+      void scenePreviewAudio.wake();
+      try{
+        Promise.resolve(player.play()).catch(()=>
+          {if(replayVideo===player)setReplayStatus('再生できませんでした。もう一度お試しください。');});
+      }catch(_){setReplayStatus('再生できませんでした。もう一度お試しください。');}
+      updatePauseResume();
+    });
+    updateVolumeUI();
+    updatePauseResume();
     replayStatus=make('p','inline-caption','動画を準備しています…');
     replayStatus.setAttribute('role','status');
     replayStatus.setAttribute('aria-live','polite');
-    inline.replaceChildren(label,viewport,zoomRow,replayStatus);
+    inline.replaceChildren(label,viewport,playbackRow,volumeNote,zoomRow,replayStatus);
     teardownZoom=attachScenePinchEditor({
       viewport,video,read:()=>({
         zoom:normalizeSceneZoom(item.zoom),
@@ -725,9 +805,9 @@ function row(item, index) {
     on('loadedmetadata',restartReplay);
     on('timeupdate',clampAndStop);
     on('seeked',clampAndStop);
-    on('play',()=>{updatePlayhead();watchVideoFrames();});
-    on('playing',()=>setReplayStatus(''));
-    on('pause',updatePlayhead);
+    on('play',()=>{updatePlayhead();updatePauseResume();watchVideoFrames();});
+    on('playing',()=>{setReplayStatus('');updatePauseResume();});
+    on('pause',()=>{updatePlayhead();updatePauseResume();});
     on('waiting',()=>setReplayStatus('動画の再生位置を準備しています…'));
     on('error',()=>setReplayStatus('元動画を再生できません（メディアエラー '+(video.error?.code||'不明')+'）。MOVの形式を確認してください。'));
     // sourceChanged is only true on first load or when switching files.
