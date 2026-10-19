@@ -11,7 +11,7 @@ const $=id=>document.getElementById(id);
 const LABEL_KEY='peakstamp_video_motion_labels_v1';
 const TRUTH_KEY='peakstamp_manual_shot_times_v1';
 const FRAME_WIDTH=96;
-let feedback={},knownShots={},selectedIndex=0,working=false,interrupt=null,lastScan=null,activePreview=null;
+let feedback={},knownShots={},selectedIndex=0,working=false,interrupt=null,activeScanSource=null,lastScan=null,activePreview=null;
 function readLocal(key){try{const item=JSON.parse(localStorage.getItem(key)||'{}');return item&&typeof item==='object'&&!Array.isArray(item)?item:{};}catch(_){return {};}}
 feedback=readLocal(LABEL_KEY);knownShots=readLocal(TRUTH_KEY);
 function save(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch(_){/* Safari storage disabled */}}
@@ -308,7 +308,7 @@ export function refreshVideoExplore(state){
  const chosen=(prev!=='' && Number(prev)<sources.length && Number(prev)>=0)?Number(prev):Math.min(selectedIndex,Math.max(0,sources.length-1));
  selectedIndex=chosen;picker.value=String(chosen);
  const source=sources[chosen]||null;
- if(working&&(!source || lastScan?.source?.objectUrl!==source.objectUrl)&&interrupt)interrupt.cancelled=true;
+ if(working&&(!source || activeScanSource?.objectUrl!==source.objectUrl)&&interrupt)interrupt.cancelled=true;
  picker.disabled=working||!sources.length;
  button.disabled=working||state.working||state.exporting||!source;
  button.textContent=working?'映像スキャン中…':'この動画を映像で探索';
@@ -351,7 +351,7 @@ export function initVideoExplore(state){
  button.addEventListener('click',async()=>{
   const source=currentSource(state);
   if(working||state.working||state.exporting||!source)return;
-  working=true;interrupt={cancelled:false};
+  working=true;interrupt={cancelled:false};activeScanSource=source;
   const token=interrupt;
   lastScan=null;renderResults();refreshVideoExplore(state);
   const mode=$('videoExploreMode').value==='detail'?'detail':'standard';
@@ -380,7 +380,7 @@ export function initVideoExplore(state){
     $('videoExploreStatus').textContent=(token.cancelled?'映像探索を停止しました。':'映像スキャン失敗：'+String(e?.message||e));
     lastScan=null;renderResults();
   }finally{
-    working=false;interrupt=null;refreshVideoExplore(state);
+    working=false;interrupt=null;activeScanSource=null;refreshVideoExplore(state);
   }
  });
  refreshVideoExplore(state);
