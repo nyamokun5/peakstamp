@@ -546,3 +546,16 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 #videoExplorePanel #videoGroundTruthList{font-size:13px;line-height:1.7;padding:5px 0}
 #videoExplorePanel video{max-width:100%;border-radius:9px}
 #videoExplorePanel details>summary{cursor:pointer;color:#9be6d7;font-size:13px}
+
+
+/* Gemini audio-only comparison pilot */
+#cloudAudioPanel{border-color:#368f84;background:linear-gradient(180deg,#0b2b38,#0b2134)}
+#cloudAudioPanel .whisper-experiment-head strong{color:#8feccc;font-size:14px}
+#cloudAudioPanel .cloud-audio-steps{margin-top:16px;padding-top:10px;border-top:1px solid #355f70}
+#cloudAudioPanel .cloud-audio-open{display:block;box-sizing:border-box;text-align:center;text-decoration:none;line-height:24px}
+#cloudAudioPanel .cloud-audio-open-alt{display:block;text-align:center;margin:12px 0;color:#a2ddec;font-size:12px;text-decoration:underline}
+#cloudAudioPanel textarea{display:block;width:100%;max-width:100%;min-height:100px;box-sizing:border-box;background:#10364b;color:#f1f8fb;border:1px solid #578193;border-radius:8px;padding:10px;font-size:12px;line-height:1.5}
+#cloudAudioPanel .whisper-output{margin-top:12px;padding:10px}
+#cloudAudioPanel .whisper-run{cursor:pointer;touch-action:manipulation}
+#cloudAudioPanel .whisper-run:disabled{opacity:.4}
+#cloudAudioPanel audio{width:100%;max-width:100%}
