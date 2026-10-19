@@ -111,12 +111,15 @@ export function discoverShotProbes(sources,exclude=[],options={}){
     }
   }
   pool.sort((a,b)=>b.score-a.score||a.peakSeconds-b.peakSeconds);
-  // These are deliberately outside the expanded audio candidate pool.
+  // Prefer genuinely new times, but also provide shot-focused review
+  // of existing candidates when the main search already captured all impulses.
+  const fresh=pool.filter(entry=>!tooNear(entry,exclude,5));
+  const shared=pool.filter(entry=>tooNear(entry,exclude,5));
   const choices=[];
-  for(const entry of pool){
+  for(const entry of [...fresh,...shared]){
     if(choices.length>=limit)break;
-    if(tooNear(entry,exclude,5)||tooNear(entry,choices,MIN_GAP))continue;
-    choices.push(entry);
+    if(tooNear(entry,choices,MIN_GAP))continue;
+    choices.push({...entry,overlapsBroadPool:tooNear(entry,exclude,5)});
   }
   return choices;
 }
