@@ -36,7 +36,7 @@ export function createGeminiProgressUI({
  return {
   start(message='解析の準備中…'){
    active=true;current=0;
-   if(root){root.classList.remove('progress-error');root.hidden=false;}
+   if(root){root.classList.remove('progress-error');root.classList.add('is-running');root.hidden=false;}
    show(message,0,'完了した音声区間を基準に表示');
   },
   segments(done,total,inFlight=0){
@@ -56,11 +56,13 @@ export function createGeminiProgressUI({
   complete(){
    if(!active)return;
    show('解析完了',100,'見どころ候補を確認できます');
+   root?.classList.remove('is-running');
    active=false;
   },
   fail(message='解析が中断されました'){
    if(!active)return;
    root?.classList.add('progress-error');
+   root?.classList.remove('is-running');
    show(message,current,'完了済み区間は保存されています');
    active=false;
   }
