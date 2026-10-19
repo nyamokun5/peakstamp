@@ -5,7 +5,7 @@
  */
 import { extractSnippet, snippetWindow } from './whisper-experiment.mjs?v=whisper21';
 import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=4';
-import { plausibleSpeech, rankSceneEvidence, LABELS, precisionAtK } from './ai-review-scoring.mjs?v=4';
+import { plausibleSpeech, rankSceneEvidence, LABELS, precisionAtK } from './ai-review-scoring.mjs?v=5';
 
 const $ = id => document.getElementById(id);
 const STORAGE_KEY = 'peakstamp_ai_scene_labels_v1';
@@ -206,7 +206,8 @@ function makeCard(item, rankType) {
   meta.textContent='従来 '+item.baseRank+'位 → AI参考 '+item.aiRank+'位 ／ 音響スコア '+item.score.toFixed(3)+
     ' ／ '+item.evidence.kind+(item.evidence.phrases.length?'（'+item.evidence.phrases.join('・')+'）':'')+
     ' ／ 掛け声の関連性：'+strength+
-    (item.evidence.matchType==='発音近似'?'（近い発音・要確認）':'');
+    (item.evidence.matchType==='発音近似'?'（近い発音・要確認）':
+     item.evidence.matchType==='発音曖昧'?'（ナイスー／ナイシューの区別未確定）':'');
   card.append(meta);
   const preview=el('div','');
   const previewButton=btn('▶ 実際のシーンを見る',()=>{
@@ -223,6 +224,11 @@ function makeCard(item, rankType) {
      '＝音響指数 '+item.acousticIndex+' ＋ 掛け声の証拠 '+item.evidence.bonus+
      ' ／ '+(item.ai?.reason||'未解析')+' ／ 認識：'+phraseInfo(item);
   details.append(reason);
+  if(item.evidence.ambiguity){
+    const warning=el('p','⚠ '+item.evidence.ambiguity+'。実際の映像を見てご確認ください。');
+    warning.style.cssText='font-size:13px;color:#f4d29d;line-height:1.5';
+    details.append(warning);
+  }
   const accepted=(item.ai?.transcripts||[]).filter(t=>t.usable);
   const vocabulary=loadVocabulary();
   for(const chunk of accepted){
@@ -316,7 +322,7 @@ function render() {
 function exportResults() {
   const payload={
     exportedAt:new Date().toISOString(),tool:'PeakStamp AI再評価β',
-    scoringVersion:'4-direct-soccer-reactions',
+    scoringVersion:'5-nice-shout-ambiguity',
     caution:'発音近似は確定認識ではない。指数は確率ではない。対象は音響上位5件のみ。',
     scenes:records.map(item=>({
       file:item.fileName,timeSeconds:item.peakSeconds,
