@@ -4,11 +4,29 @@
  */
 import { extractAudioOnly, formatFileSize } from './cloud-audio-export.mjs?v=2';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
+import { openWavSegmenter, mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=1';
 
 // Verified owner project: Vercel production domain for nyamokun5/peakstamp.
 const API_ENDPOINT = 'https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
 const MAX_AUDIO_BYTES = 2_900_000;
 const CACHE_KEY = 'peakstamp_gemini_primary_json_v1';
+const SEGMENT_CACHE_KEY='peakstamp_gemini_wav_segments_v1';
+const segmentCacheId=source=>fileKey(source)+'::'+WAV_SEGMENT_VERSION;
+function getSavedChunks(source){
+ try{return JSON.parse(localStorage.getItem(SEGMENT_CACHE_KEY+'::'+segmentCacheId(source))||'{}');}
+ catch(_){return {};}
+}
+function saveChunk(source,range,answer){
+ try{
+  const key=SEGMENT_CACHE_KEY+'::'+segmentCacheId(source);
+  const cache=getSavedChunks(source);
+  cache[range.startSeconds+':'+range.durationSeconds]={
+   startSeconds:range.startSeconds,events:answer.events,
+   model:answer?.meta?.model||'unknown'
+  };
+  localStorage.setItem(key,JSON.stringify(cache));
+ }catch(_){/* Private Safari/limited storage; processing still continues. */}
+}
 const $ = id => document.getElementById(id);
 let selected = 0, processing = false, generation = 0, abortController = null;
 const fileKey = source => [
@@ -44,12 +62,12 @@ function elapsed(start) { return ((performance.now()-start)/1000).toFixed(1)+'�
 function blobToBase64(blob) {
  return new Promise((resolve,reject)=>{
   const reader = new FileReader();
-  reader.onerror=()=>reject(Error('M4Aを読み取れませんでした。'));
-  reader.onabort=()=>reject(Error('M4Aの読み取りをキャンセルしました。'));
+  reader.onerror=()=>reject(Error('音声データを読み取れませんでした。'));
+  reader.onabort=()=>reject(Error('音声データの読み取りをキャンセルしました。'));
   reader.onload=()=>{
    const url=String(reader.result||'');
    const delimiter=url.indexOf(',');
-   if(delimiter<0)reject(Error('M4Aの読み取り形式が不正です。'));
+   if(delimiter<0)reject(Error('音声データの読み取り形式が不正です。'));
    else resolve(url.slice(delimiter+1));
   };
   reader.readAsDataURL(blob);
@@ -81,21 +99,21 @@ export function refreshGeminiPrimary(state) {
  second.hidden=!cache||processing||!API_ENDPOINT;
  $('geminiMainCancel').hidden=!processing;
  $('geminiMainFileHelp').textContent=source
-   ?'選択中：'+source.file.name+'。元動画は送信せず、約40kbpsの音声だけをGoogleへ送ります。'
+   ?'選択中：'+source.file.name+'。元動画は送信せず、音声を約70秒ずつWAV形式で送信します。'
    :'まず上の「動画を選ぶ」からMOV/MP4を選択してください。';
  if(!API_ENDPOINT && !cache && !processing){
   status('現在はAPIサーバーのデプロイ権限とGemini APIキーの設定待ちです。手動解析は「旧Gemini手動比較」から継続できます。');
  }
 }
-async function callApi(audio,duration,access,signal) {
+async function callApi(audio,duration,access,signal,format='m4a') {
  if(audio.bytes>MAX_AUDIO_BYTES)
-  throw Error('音声ファイルが2.9MBを超えました。10分以下の動画をお試しください。');
+  throw Error('音声ファイルが2.9MBを超えました。');
  const base64=await blobToBase64(audio.blob);
  if(signal.aborted)throw Error('解析をキャンセルしました。');
  const response=await fetch(API_ENDPOINT,{
   method:'POST',mode:'cors',signal,
   headers:{'Content-Type':'application/json','X-PeakStamp-Access':access},
-  body:JSON.stringify({audioBase64:base64,durationSeconds:duration})
+  body:JSON.stringify({audioBase64:base64,durationSeconds:duration,audioFormat:format})
  });
  let result=null;
  try{result=await response.json();}catch(_){}
@@ -242,16 +260,50 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    }
    if(audio.bytes>MAX_AUDIO_BYTES)throw Error('音声が2.9MBを超えました。動画を短く分割してください。');
    const duration=Number(audio.durationSeconds);
-   if(!(duration>0)||duration>900)throw Error('15分を超える動画は現在のAPIモードに対応していません。');
+   if(!(duration>0)||duration>600)throw Error('10分を超える動画は現在のAPIモードに対応していません。');
    let answer;
    if(cache){
     answer=cache;
     status('保存済みのGemini結果を復元しています。APIへの再送信はありません。');
    }else{
-    status(formatFileSize(audio.bytes)+'の音声だけをGeminiへ送信して解析しています…');
-    answer=await callApi(audio,duration,access,signal);
-    alive();
-    saveResult(source,answer);
+    status('M4Aの音声をiPhone内でWAVに変換し、約70秒ごとに分割しています…');
+    const segmenter=await openWavSegmenter(audio.blob,{
+     isCancelled:()=>signal.aborted||id!==generation
+    });
+    try{
+     alive();
+     const ranges=segmenter.ranges;
+     const previous=getSavedChunks(source);
+     const responses=[];
+     for(let i=0;i<ranges.length;i++){
+      const range=ranges[i];
+      alive();
+      const segmentKey=range.startSeconds+':'+range.durationSeconds;
+      let segmentResponse=previous[segmentKey];
+      if(segmentResponse?.events && Array.isArray(segmentResponse.events)){
+       status('Gemini '+(i+1)+'/'+ranges.length+'：以前成功した区間を復元しています…');
+      }else{
+       status('Gemini '+(i+1)+'/'+ranges.length+'：'+
+        Math.round(range.startSeconds)+'〜'+Math.round(range.endSeconds)+
+        '秒のWAV音声だけを送信しています…');
+       const wav=segmenter.makeSegment(range);
+       try{
+        segmentResponse=await callApi(wav,range.durationSeconds,access,signal,'wav');
+       }catch(err){
+        throw Error('区間 '+(i+1)+'/'+ranges.length+' で失敗しました：'+
+         (err?.message||String(err))+'。完了した区間は端末に保存しています。');
+       }
+       alive();
+       saveChunk(source,range,segmentResponse);
+      }
+      responses.push({...segmentResponse,startSeconds:range.startSeconds});
+     }
+     answer=mergeWavSegmentEvents(responses,segmenter.durationSeconds);
+     alive();
+     saveResult(source,answer);
+    }finally{
+     await segmenter.close();
+    }
    }
    const parsed=parseAudioEvents(JSON.stringify(answer),duration);
    alive();
