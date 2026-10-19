@@ -2,6 +2,7 @@ import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audi
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
+import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
@@ -88,6 +89,7 @@ function busy(value) {
   $('cancelButton').hidden = !value;
   refreshAIReview(state);
   refreshVideoExplore(state);
+  refreshCloudAudioPilot(state);
 }
 function syncSources() {
   closeInlinePreview();
@@ -1131,3 +1133,4 @@ initMontageEditor(state);
 initWhisperExperiment(state);
 initAIReview(state);
 initVideoExplore(state);
+initCloudAudioPilot(state);
