@@ -3,7 +3,7 @@ import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experime
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=8';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=9';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
