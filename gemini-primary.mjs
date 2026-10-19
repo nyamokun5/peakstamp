@@ -5,7 +5,8 @@
 import { extractAudioOnly, formatFileSize } from './cloud-audio-export.mjs?v=2';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
 
-const API_ENDPOINT = 'https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
+// Set only after deployment URL and ownership are verified; never guess a host.
+const API_ENDPOINT = '';
 const MAX_AUDIO_BYTES = 2_900_000;
 const CACHE_KEY = 'peakstamp_gemini_primary_json_v1';
 const $ = id => document.getElementById(id);
@@ -72,12 +73,12 @@ export function refreshGeminiPrimary(state) {
   selected=Number(current);
  picker.value=sources.length?String(selected):'';
  const source=sources[selected]||null;
- picker.disabled=processing||sources.length<2;
- button.disabled=processing||!source||state.working||state.exporting;
- second.disabled=button.disabled;
  const cache=source&&cachedResult(source);
- button.textContent=processing?'Gemini処理中…':cache?'保存済みのGemini結果を復元':'Geminiで音声解析する →';
- second.hidden=!cache||processing;
+ picker.disabled=processing||sources.length<2;
+ button.disabled=processing||!source||state.working||state.exporting||(!cache && !API_ENDPOINT);
+ second.disabled=button.disabled;
+ button.textContent=processing?'Gemini処理中…':cache?'保存済みのGemini結果を復元':(!API_ENDPOINT?'Gemini APIサーバー接続待ち':'Geminiで音声解析する →');
+ second.hidden=!cache||processing||!API_ENDPOINT;
  $('geminiMainCancel').hidden=!processing;
  $('geminiMainFileHelp').textContent=source
    ?'選択中：'+source.file.name+'。元動画は送信せず、約40kbpsの音声だけをGoogleへ送ります。'
@@ -117,6 +118,10 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
   if(!source||processing||state.working||state.exporting)return;
   const cache=force?null:cachedResult(source);
   const access=$('geminiMainAccess').value.trim();
+  if(!cache && !API_ENDPOINT){
+   status('APIサーバーの公開先が未設定です。Vercelでサーバーをデプロイしてから使用できます。');
+   return;
+  }
   if(!cache && !access){
    status('Gemini APIアクセスコードを入力してください。コードは端末に保存しません。');
    $('geminiMainAccess').focus();
