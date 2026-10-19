@@ -789,3 +789,76 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
   .scene-volume-label{min-width:115px;gap:5px}
   .scene-mute-button{min-width:42px}
 }
+
+
+/* v30: stay-foreground warning shown before and during Gemini work */
+.gemini-stay-notice{
+ display:flex;align-items:flex-start;gap:10px;margin:12px 0 14px;
+ padding:11px 12px;border:1px solid #796c4c;border-radius:10px;
+ background:#322f27;color:#f7e8cd;
+}
+.gemini-stay-icon{
+ display:grid;place-items:center;flex:none;width:22px;height:22px;
+ border-radius:50%;border:1px solid #e6c285;color:#ffe0a3;
+ font-weight:950;font-size:13px;
+}
+.gemini-stay-notice strong{
+ display:block;font-size:12px;font-weight:850;line-height:1.5;
+ color:#ffedc9;
+}
+.gemini-primary-panel .gemini-stay-notice p{
+ margin:4px 0 0;font-size:11px;line-height:1.65;color:#e0cfaf;
+}
+.gemini-stay-notice.is-processing{
+ background:#473621;border-color:#e1a960;
+ box-shadow:inset 3px 0 #ecc380;
+}
+.gemini-primary-panel[hidden]{display:none!important}
+
+/* Keep the same editing data and viewport gestures while allowing much
+   more of a mobile display to be used by the original video and trim bar.
+   Large/tablet layouts retain their existing constrained presentation. */
+@media(max-width:640px){
+ .hero{padding:15px 5px 11px}
+ .hero h1{font-size:clamp(29px,6.5vw,40px);margin:6px 0 7px}
+ .hero p{font-size:12px}
+ .results-panel{padding:12px 8px 14px}
+ .results-panel .highlight-list{gap:12px}
+ .highlight-entry.preview-active{overflow:visible;position:relative;z-index:2}
+ .highlight-entry.preview-active .inline-preview,
+ .highlight-entry.preview-active .range-editor{
+   position:relative;
+   left:50%;
+   transform:translateX(-50%);
+   width:calc(100vw - 12px);
+   max-width:calc(100vw - 12px);
+   box-sizing:border-box;
+ }
+ .highlight-entry.preview-active .inline-preview{
+   padding:0 0 8px;
+   margin:0 0 5px;
+   background:#0c2335;
+ }
+ .highlight-entry.preview-active .zoom-video-viewport{
+   width:100%!important;max-height:none;
+   border-radius:7px;
+   border:1px solid #3d6676;
+ }
+ .highlight-entry.preview-active .inline-caption,
+ .highlight-entry.preview-active .scene-playback-controls,
+ .highlight-entry.preview-active .scene-volume-note,
+ .highlight-entry.preview-active .scene-pinch-toolbar{
+   margin-inline:9px;
+ }
+ .highlight-entry.preview-active .range-editor{
+   margin-top:0;margin-bottom:11px;
+   padding:12px 10px;
+   border-radius:10px;
+ }
+ /* Original media preview is also full width when opened. */
+ #videoWrapper #preview{
+   position:relative;left:50%;transform:translateX(-50%);
+   width:calc(100vw - 12px);max-width:calc(100vw - 12px);
+   max-height:75dvh;object-fit:contain;
+ }
+}
