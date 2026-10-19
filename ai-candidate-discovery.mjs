@@ -56,13 +56,55 @@ export function rawSurgeCandidates(bins,leadSeconds=7,binSeconds=.25) {
   return found.sort((a,b)=>b.score-a.score||a.peakSeconds-b.peakSeconds).slice(0,100);
 }
 
+// All discovery algorithms have different native score scales.
+// Recalculate every candidate's acoustic strength on the SAME source-aware
+// signal scale before mixing scores or applying speech-based boosts.
+const profileCache=new WeakMap();
+const clamp01=n=>Math.max(0,Math.min(1,n));
+function binProfile(bins){
+  const cached=profileCache.get(bins);
+  if(cached)return cached;
+  const rms=bins.map(x=>Math.max(0,Number(x?.rms)||0));
+  const ordered=[...rms].sort((a,b)=>a-b);
+  const quantile=p=>ordered[Math.min(ordered.length-1,Math.floor(p*(ordered.length-1)))]||0;
+  const profile={rms,median:quantile(.5),p95:quantile(.95)};
+  profileCache.set(bins,profile);
+  return profile;
+}
+export function comparableAcousticScore(bins,seconds,binSeconds=.25){
+  if(!Array.isArray(bins)||!bins.length)return 0;
+  const p=binProfile(bins),values=p.rms;
+  const centre=Math.max(0,Math.min(values.length-1,Math.round(seconds/binSeconds)));
+  const from=Math.max(0,centre-Math.round(.5/binSeconds));
+  const to=Math.min(values.length-1,centre+Math.round(1.25/binSeconds));
+  let peak=0,sustained=0,count=0;
+  for(let i=from;i<=to;i++){
+    peak=Math.max(peak,values[i]);
+    if(values[i]>=Math.max(.01,p.median*1.25))sustained++;
+    count++;
+  }
+  const baselineBegin=Math.max(0,centre-Math.round(10/binSeconds));
+  const baselineEnd=Math.max(baselineBegin+1,centre-Math.round(2/binSeconds));
+  let baseline=0;
+  for(let i=baselineBegin;i<Math.min(baselineEnd,values.length);i++)baseline+=values[i];
+  baseline/=Math.max(1,Math.min(baselineEnd,values.length)-baselineBegin);
+  const prominence=clamp01((peak-p.median)/Math.max(.006,p.p95-p.median)/2);
+  const contrast=clamp01((peak/Math.max(.004,baseline)-1)/2.5);
+  const persistence=clamp01((sustained*binSeconds)/1.5);
+  const salience=.40*prominence+.36*contrast+.24*persistence;
+  // Constant ambient speech or silence cannot become a top-rank event.
+  return peak<.009 ? 0 : Math.round((.2+.8*salience)*10000)/10000;
+}
+
 function entry(source,candidate,discovery,originalRank=null) {
   const time=Math.max(0,Number(candidate.peakSeconds)||0);
   return {
     key:[source.file.name,source.file.size,source.file.lastModified,Math.round(time*1000)].join('::'),
     sourceId:source.id,candidateId:candidate.id,fileName:source.file.name,
     duration:source.duration,peakSeconds:time,time:candidate.time,
-    score:Number(candidate.score),source,candidate,discovery,originalRank
+    score:Number(candidate.score),
+    reviewScore:comparableAcousticScore(source.bins,time),
+    source,candidate,discovery,originalRank
   };
 }
 function tooClose(candidate,selected,minimum=GAP_SECONDS) {
