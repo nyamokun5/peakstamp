@@ -14,8 +14,11 @@ import { montageSeconds } from './exporter.mjs?v=pinch18';
 import { getIntroConfiguration } from './intro-ui.mjs?v=pinch18';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
+import { createSceneReplayMedia } from './scene-replay-media.mjs?v=1';
 
 const $ = id => document.getElementById(id);
+// Keep one video decoder across scene cards, independent of Gemini/candidate data.
+const sceneReplayMedia=createSceneReplayMedia(()=>document.createElement('video'));
 // When someone copies the address bar, preserve LINE's external-browser flag.
 // This does NOT switch browser after LINE has already opened an in-app page.
 try {
@@ -196,6 +199,9 @@ function renderSourceList() {
     del.disabled = state.working || state.exporting;
     del.setAttribute('aria-label',source.file.name+' を削除');
     del.addEventListener('click', () => {
+      closeInlinePreview();
+      // Release the retained decoder before revoking a media Blob URL.
+      sceneReplayMedia.dispose();
       sources.splice(i,1);
       URL.revokeObjectURL(source.objectUrl);
       syncSources();
@@ -215,6 +221,7 @@ function chooseFiles(files, append = false) {
   }
   closeInlinePreview();
   if (!append) {
+    sceneReplayMedia.dispose();
     state.sources.forEach(source => URL.revokeObjectURL(source.objectUrl));
     state.sources = [];
   }
@@ -562,6 +569,14 @@ function row(item, index) {
   let replayVideo=null;
   let frameWatchId=null;
   let teardownZoom=null;
+  let replayStatus=null;
+  let playVersion=0;
+  let replayListeners=[];
+  const setReplayStatus=message=>{
+    if(!replayStatus)return;
+    replayStatus.textContent=message;
+    replayStatus.hidden=!message;
+  };
   const close=()=>{
     teardownZoom?.();
     teardownZoom=null;
@@ -570,11 +585,14 @@ function row(item, index) {
         replayVideo.cancelVideoFrameCallback(frameWatchId);
       }
       frameWatchId=null;
-      replayVideo.pause();
-      replayVideo.removeAttribute('src');
-      replayVideo.load();
+      playVersion++;
+      for(const [event,handler] of replayListeners)replayVideo.removeEventListener(event,handler);
+      replayListeners=[];
+      // Detach the player but retain its media source for the next scene.
+      sceneReplayMedia.release();
       replayVideo=null;
     }
+    replayStatus=null;
     inline.replaceChildren();
     inline.hidden=true;
     entry.classList.remove('preview-active');
@@ -582,9 +600,9 @@ function row(item, index) {
   const clampAndStop=()=>{
     if(!replayVideo || !Number.isFinite(replayVideo.duration))return;
     const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
-    if(replayVideo.currentTime<bounds.start-.06){
-      replayVideo.currentTime=bounds.start;
-    } else if(replayVideo.currentTime >= bounds.end-.06){
+    // Repeatedly seeking backwards while Safari is seeking can freeze long MOVs.
+    // The start seek is performed once by restartReplay; only enforce the end.
+    if(!replayVideo.seeking && replayVideo.currentTime >= bounds.end-.06){
       replayVideo.pause();
       if(Math.abs(replayVideo.currentTime-bounds.end)>.08)replayVideo.currentTime=bounds.end;
     }
@@ -605,12 +623,27 @@ function row(item, index) {
   };
   const restartReplay=()=>{
     if(!replayVideo)return;
+    const video=replayVideo;
     const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
-    if(bounds.end<=bounds.start)return;
-    replayVideo.pause();
-    replayVideo.currentTime=bounds.start;
+    if(bounds.end<=bounds.start){setReplayStatus('再生範囲が不正です。開始・終了時刻を確認してください。');return;}
+    if(video.readyState<1){setReplayStatus('動画を準備中です。準備後に「▶ リプレイ」を押してください。');return;}
+    video.pause();
+    try{video.currentTime=bounds.start;}catch(_){
+      setReplayStatus('再生位置に移動できませんでした。もう一度「▶ リプレイ」を押してください。');
+      return;
+    }
     updatePlayhead();
-    replayVideo.play().catch(()=>{});
+    const attempt=++playVersion;
+    try{
+      Promise.resolve(video.play()).then(()=>{
+        if(replayVideo===video&&attempt===playVersion)setReplayStatus('');
+      }).catch(()=>{
+        if(replayVideo===video&&attempt===playVersion)
+          setReplayStatus('Safariで再生が開始できませんでした。もう一度「▶ リプレイ」を押してください。');
+      });
+    }catch(_){
+      setReplayStatus('Safariで再生が開始できませんでした。もう一度「▶ リプレイ」を押してください。');
+    }
   };
   play.addEventListener('click',()=>{
     if(activeInlineClose===close && replayVideo){
@@ -619,7 +652,7 @@ function row(item, index) {
     }
     closeInlinePreview();
     $('preview').pause();
-    const video=document.createElement('video');
+    const {video,sourceChanged}=sceneReplayMedia.acquire(source.id,source.objectUrl);
     replayVideo=video;
     video.className='inline-player';
     // The Replay button is the playback control. Suppress iPhone's large
@@ -629,8 +662,6 @@ function row(item, index) {
     video.setAttribute('playsinline','');
     video.setAttribute('webkit-playsinline','');
     video.disablePictureInPicture=true;
-    video.preload='metadata';
-    video.src=source.objectUrl;
     const label=make('p','inline-caption',
       source.file.name+' — '+formatTimelineTime(item.time)+' 〜 '+
       formatTimelineTime(getCandidateEnd(source,item,currentClipOptions()))+' をリプレイ');
@@ -646,7 +677,10 @@ function row(item, index) {
     zoomReset.type='button';
     zoomReset.setAttribute('aria-label','映像の拡大と位置を初期化');
     zoomRow.append(zoomHint,zoomValue,zoomReset);
-    inline.replaceChildren(label,viewport,zoomRow);
+    replayStatus=make('p','inline-caption','動画を準備しています…');
+    replayStatus.setAttribute('role','status');
+    replayStatus.setAttribute('aria-live','polite');
+    inline.replaceChildren(label,viewport,zoomRow,replayStatus);
     teardownZoom=attachScenePinchEditor({
       viewport,video,read:()=>({
         zoom:normalizeSceneZoom(item.zoom),
@@ -661,12 +695,21 @@ function row(item, index) {
     inline.hidden=false;
     entry.classList.add('preview-active');
     activeInlineClose=close;
-    video.addEventListener('loadedmetadata',restartReplay,{once:true});
-    video.addEventListener('timeupdate',clampAndStop);
-    video.addEventListener('seeked',clampAndStop);
-    video.addEventListener('play',()=>{updatePlayhead();watchVideoFrames();});
-    video.addEventListener('pause',updatePlayhead);
-    video.load();
+    const on=(event,handler)=>{
+      video.addEventListener(event,handler);
+      replayListeners.push([event,handler]);
+    };
+    on('loadedmetadata',restartReplay);
+    on('timeupdate',clampAndStop);
+    on('seeked',clampAndStop);
+    on('play',()=>{updatePlayhead();watchVideoFrames();});
+    on('playing',()=>setReplayStatus(''));
+    on('pause',updatePlayhead);
+    on('waiting',()=>setReplayStatus('動画の再生位置を準備しています…'));
+    on('error',()=>setReplayStatus('元動画を再生できません（メディアエラー '+(video.error?.code||'不明')+'）。MOVの形式を確認してください。'));
+    // sourceChanged is only true on first load or when switching files.
+    // For consecutive scenes of the same MOV, no src reassignment or load().
+    if(!sourceChanged && video.readyState>=1)restartReplay();
     if (!autoOpeningNextReplay) {
       inline.scrollIntoView({behavior:'smooth',block:'nearest'});
     }
