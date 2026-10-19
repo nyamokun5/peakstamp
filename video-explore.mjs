@@ -3,7 +3,7 @@
  * Phase 1: low resolution motion compensation on a single manually selected
  * sideline-phone recording. Phase 1 does NOT recognize ball, goal, or shots.
  */
-import { discoverVideoMotionCandidates, VIDEO_SCAN_ALGORITHM } from './video-motion.mjs?v=2';
+import { discoverVideoMotionCandidates, VIDEO_SCAN_ALGORITHM } from './video-motion.mjs?v=3';
 import { fileIdentity, parseShotTime, prettyShotTime, evaluateManualShots } from './shot-evaluation.mjs?v=1';
 import { discoverScenePool } from './ai-candidate-discovery.mjs?v=2';
 
