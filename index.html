@@ -110,14 +110,6 @@
         <small id="videoExploreHelp" class="whisper-disclaimer">先に音声を解析し、動画を選択してください。</small>
         <p id="videoExploreStatus" class="whisper-status" role="status" aria-live="polite"></p>
         <div id="videoExploreResults" class="whisper-output" hidden></div>
-        <div id="videoGroundTruth" class="video-ground-truth" hidden>
-          <strong>実際のシュート時刻を記録（見逃しの検証）</strong>
-          <p>動画を見て確認できたシュートの時刻を入力。例：01:28, 04:39.5。複数を一度に入力できます。候補との時刻の近さ（±5秒）を比較します。</p>
-          <label for="videoGroundTruthInput">シュート時刻（分:秒）</label>
-          <input id="videoGroundTruthInput" type="text" inputmode="text" placeholder="01:28, 04:39.5" autocomplete="off" />
-          <button id="videoGroundTruthSave" class="video-ground-truth-save" type="button">実際のシュート時刻を保存</button>
-          <div id="videoGroundTruthList"></div>
-        </div>
         <small class="whisper-disclaimer">新たなAIモデル・有料API・サーバー処理は使用しません。元動画は送信せず、Safari内で解析。初回検証ではまず短い動画と標準モードを試してください。iPhoneでの速度、手持ちブレへの耐性、シュート検出率は未検証です。通常のキープ／不採用／書き出しには反映しません。</small>
       </section>
       <section id="whisperExperiment" class="whisper-experiment" aria-label="AI文字起こしの実験">
@@ -300,6 +292,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=video-beta11"></script>
+  <script type="module" src="app.mjs?v=video-beta12"></script>
 </body>
 </html>
