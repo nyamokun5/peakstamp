@@ -7,9 +7,11 @@ import { extractSnippet, snippetWindow } from './whisper-experiment.mjs?v=whispe
 import { DEFAULT_CONTEXT, parseContextVocabulary, contextualHints, speechSegmentsByVAD } from './soccer-speech-context.mjs?v=4';
 import { plausibleSpeech, rankSceneEvidence, LABELS } from './ai-review-scoring.mjs?v=6';
 import { discoverScenePool, EXPLORATION_LIMIT } from './ai-candidate-discovery.mjs?v=2';
+import { discoverShotProbes } from './shot-candidate-discovery.mjs?v=1';
 
 const $ = id => document.getElementById(id);
 const STORAGE_KEY = 'peakstamp_ai_scene_labels_v1';
+const SHOT_STORAGE_KEY='peakstamp_shot_probe_labels_v1';
 const VOCAB_KEY = 'peakstamp_soccer_vocabulary_v1';
 const MODEL = 'onnx-community/whisper-base';
 const MODEL_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
@@ -26,11 +28,17 @@ let currentStatistics = null;
 let speechAnalyzedCount = 0;
 let vadAnalyzedCount = 0;
 let feedback = {};
+let shotProbes = [];
+let shotFeedback = {};
 
 try {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
   if (saved && typeof saved === 'object' && !Array.isArray(saved)) feedback = saved;
 } catch (_) { feedback = {}; }
+try {
+  const shotSaved=JSON.parse(localStorage.getItem(SHOT_STORAGE_KEY)||'{}');
+  if(shotSaved&&typeof shotSaved==='object'&&!Array.isArray(shotSaved))shotFeedback=shotSaved;
+}catch(_){shotFeedback={};}
 
 function safeTime(sec) {
   const value = Math.max(0, Math.floor(sec || 0));
@@ -64,6 +72,11 @@ function persistFeedback() {
   const keys=Object.keys(feedback);
   for(const key of keys.slice(0,Math.max(0,keys.length-300)))delete feedback[key];
   try {localStorage.setItem(STORAGE_KEY,JSON.stringify(feedback));} catch (_) {}
+}
+function persistShotFeedback(){
+  const keys=Object.keys(shotFeedback);
+  for(const key of keys.slice(0,Math.max(0,keys.length-300)))delete shotFeedback[key];
+  try{localStorage.setItem(SHOT_STORAGE_KEY,JSON.stringify(shotFeedback));}catch(_){}
 }
 function positive(value) {
   return LABELS.find(x=>x.value===value)?.positive ?? null;
@@ -286,6 +299,68 @@ function makeCard(item, rankType) {
   card.append(labelRow);
   return card;
 }
+function makeShotCard(item,index){
+  const card=el('div','');
+  card.style.cssText='padding:12px;margin:9px 0;background:#0b2639;border:1px solid #547a8b;border-radius:12px';
+  const title=el('strong','シュート確認候補 '+(index+1)+'：'+item.fileName+' '+safeTime(item.peakSeconds));
+  title.style.cssText='display:block;font-size:14px;color:#9ee8d4';
+  card.append(title);
+  const msg=el('p','短い打撃音の指標 '+item.strength+' ／ 直後の音の変化 '+item.reaction+
+      '。シュートと確定したわけではありません。足音・接触音・拍手なども含まれます。');
+  msg.style.cssText='font-size:12px;color:#c2d8e3;line-height:1.6';
+  card.append(msg);
+  const host=el('div','');
+  const replay=btn('▶ シュートか映像で確認',()=>{
+    if(host.firstChild){stopPreview();host.replaceChildren();}
+    else beginPreview(item.source,item.candidate,host);
+  },'ai-rerank-preview');
+  card.append(replay,host);
+  const label=el('label','このシーンは実際にシュート？');
+  label.style.cssText='display:block;font-size:12px;color:#c2d8e3;margin:9px 0 5px';
+  const picker=document.createElement('select');
+  picker.setAttribute('aria-label',item.fileName+' '+safeTime(item.peakSeconds)+' シュート確認');
+  picker.style.cssText='width:100%;padding:9px;background:#e6f5fa;color:#18334a;border-radius:8px';
+  for(const [value,text] of [
+    ['unknown','未確認'],['shot','シュートだった'],['not-shot','シュートではなかった'],['unclear','映像で判断できない']
+  ]){
+    const option=document.createElement('option');
+    option.value=value;option.textContent=text;picker.append(option);
+  }
+  picker.value=shotFeedback[item.key]||'unknown';
+  picker.addEventListener('change',()=>{
+    if(picker.value==='unknown')delete shotFeedback[item.key];
+    else shotFeedback[item.key]=picker.value;
+    persistShotFeedback();refreshMetrics();
+  });
+  card.append(label,picker);
+  return card;
+}
+function renderShotProbes(wrapper){
+  const section=el('div','');
+  section.style.cssText='border-top:1px solid #4c6c7a;margin:20px 0 5px;padding-top:12px';
+  const title=el('h4','別枠：シュート確認候補 '+shotProbes.length+'件');
+  title.style.cssText='font-size:16px;color:#9ee8d4;margin:6px 0';
+  section.append(title);
+  const explanation=el('p','歓声・掛け声とは別に、短く鋭い打撃音を探しています。実際のシュートとは限りません。'+
+   '通常の候補と重ならない位置から最大8件を追加し、映像を見て「シュートだった／違う」を記録できます。');
+  explanation.style.cssText='font-size:12px;line-height:1.6;color:#c2d8e3';
+  section.append(explanation);
+  if(!shotProbes.length){
+    const warning=el('p','音声からは追加の打撃音候補を特定できませんでした。静かなシュートは音声解析だけでは発見できない場合があります。');
+    warning.style.cssText='color:#ebd29e;font-size:12px';
+    section.append(warning);
+  }
+  const top=shotProbes.slice(0,4);
+  for(let i=0;i<top.length;i++)section.append(makeShotCard(top[i],i));
+  if(shotProbes.length>4){
+    const extra=document.createElement('details');
+    extra.style.cssText='margin:9px 0;padding:10px;border:1px solid #547a8b;border-radius:10px';
+    extra.append(el('summary','さらに'+(shotProbes.length-4)+'件のシュート確認候補を表示'));
+    for(let i=4;i<shotProbes.length;i++)extra.append(makeShotCard(shotProbes[i],i));
+    section.append(extra);
+  }
+  wrapper.append(section);
+}
 function loadVocabulary() {
   let text=DEFAULT_CONTEXT;
   try{text=localStorage.getItem(VOCAB_KEY)||DEFAULT_CONTEXT;}catch(_){}
@@ -306,7 +381,10 @@ function refreshMetrics() {
     .sort((a,b)=>a.originalRank-b.originalRank).slice(0,5);
   const aiTop=[...records].sort((a,b)=>a.aiRank-b.aiRank).slice(0,5);
   const originalHits=precision(original),aiHits=precision(aiTop);
-  target.textContent='評価済み：見どころ '+positiveCount+'件 ／ 通常・ノイズ '+negativeCount+'件。'+
+  const shotYes=shotProbes.filter(x=>shotFeedback[x.key]==='shot').length;
+  const shotNo=shotProbes.filter(x=>shotFeedback[x.key]==='not-shot').length;
+  target.textContent='評価済み：見どころ '+positiveCount+'件 ／ 通常・ノイズ '+negativeCount+
+    '件。新規シュート確認候補：シュート '+shotYes+'件 ／ 違った '+shotNo+'件。'+
     (originalHits!==null&&aiHits!==null
       ? ' 上位5件の的中：従来 '+originalHits+'/5、AI探索 '+aiHits+'/5'
       : ' 従来上位5件とAI探索上位5件を評価すると、的中率を比較できます。')+
@@ -376,6 +454,7 @@ function render() {
   }
   oldDetails.append(originalList);
   wrapper.append(oldDetails);
+  renderShotProbes(wrapper);
   const exportButton=btn('評価データをJSONで保存',()=>exportResults(),'ai-rerank-export');
   exportButton.style.cssText='display:block;width:100%;margin-top:12px';
   exportButton.disabled=running;
@@ -388,8 +467,14 @@ function render() {
 function exportResults() {
   const payload={
     exportedAt:new Date().toISOString(),tool:'PeakStamp AI再評価β',
-    scoringVersion:'7-wide-candidate-comparable-acoustic',
-    candidateDiscovery:'existing+detector-sensitive+raw-surge',
+    scoringVersion:'8-wide-discovery-with-impulse-probes',
+    candidateDiscovery:'existing+detector-sensitive+raw-surge+separate-impulse-probe',
+    shotProbeVersion:'1-kick-like-impulse-exploratory',
+    shotProbes:shotProbes.map(x=>({
+      file:x.fileName,timeSeconds:x.peakSeconds,score:x.score,
+      strikeEvidence:x.strength,reactionEvidence:x.reaction,
+      userSaysShot:shotFeedback[x.key]||'unknown'
+    })),
     statistics:currentStatistics,
     aiTranscribedCount:speechAnalyzedCount,
     vadCheckedCount:vadAnalyzedCount,
@@ -418,7 +503,7 @@ export function refreshAIReview(state) {
   const entries=pool.entries;
   const current=keyOf(entries);
   if(snapshot && snapshot!==current && !running){
-    records=[];snapshot='';render();
+    records=[];shotProbes=[];snapshot='';render();
     setStatus(entries.length?'候補が変わったため、広域探索をやり直してください。':'');
   }
   button.disabled=running||state.working||state.exporting||!entries.length;
@@ -436,6 +521,9 @@ export function initAIReview(state) {
     const entries=pool.entries;
     if(!entries.length)return;
     const signature=keyOf(entries);
+    // Separate exploratory lane that deliberately looks for brief impacts.
+    // No ASR or VAD overhead for these additional manual-review probes.
+    shotProbes=discoverShotProbes(state.sources,entries,{limit:8});
     snapshot=signature;
     currentStatistics=pool.statistics;
     vadAnalyzedCount=0;speechAnalyzedCount=0;
@@ -450,7 +538,8 @@ export function initAIReview(state) {
     render();
     let vadUnavailable=false,asrFailed=false;
     const collected=[];
-    setStatus('従来の候補以外に '+pool.statistics.newFound+'件の探索候補を用意しました。VAD検査を開始します。');
+    setStatus('従来の候補外 '+pool.statistics.newFound+'件に加え、打撃音からシュート確認候補 '+shotProbes.length+
+      '件を別枠で用意しました。VAD検査を開始します。');
     try{
       for(let i=0;i<entries.length;i++){
         if(!isCurrent())throw Error('動画の候補が変わったため中止しました');
