@@ -334,12 +334,25 @@ function render() {
   aiHeader.style.cssText='font-size:15px;margin:15px 0 6px';
   wrapper.append(aiHeader);
   const byAI=[...records].sort((a,b)=>a.aiRank-b.aiRank);
-  for(const item of byAI.slice(0,5))wrapper.append(makeCard(item,'ai'));
+  const aiTop=byAI.slice(0,5);
+  for(const item of aiTop)wrapper.append(makeCard(item,'ai'));
+  // Crucial: surface NEW discoveries without requiring the user to open a
+  // collapsed details section. The normal audio top five might still lead.
+  const newToShow=byAI.filter(x=>x.discovery!=='existing'&&!aiTop.includes(x)).slice(0,4);
+  if(newToShow.length){
+    const newHeader=el('h4','NEW：これまで抽出されなかったシーン '+newToShow.length+'件');
+    newHeader.style.cssText='font-size:15px;margin:18px 0 6px;color:#90e0c8';
+    wrapper.append(newHeader);
+    const description=el('p','これらは通常の候補外から探索しました。まだ好プレーと確定したわけではないので、映像を確認してください。');
+    description.style.cssText='font-size:12px;color:#bbd0db';
+    wrapper.append(description);
+    for(const item of newToShow)wrapper.append(makeCard(item,'ai'));
+  }
+  const shown=new Set([...aiTop,...newToShow]);
+  const extraItems=byAI.filter(x=>!shown.has(x));
   const extra=document.createElement('details');
   extra.style.cssText='margin-top:14px;padding:10px;background:#092238;border-radius:10px';
-  extra.append(el('summary','その他の探索候補 '+Math.max(0,byAI.length-5)+'件を表示（従来の候補外も確認）'));
-  const extraItems=byAI.slice(5);
-  // Put genuinely new scenes first for quick visual inspection.
+  extra.append(el('summary','さらに探索候補 '+extraItems.length+'件を表示'));
   extraItems.sort((a,b)=>(a.discovery==='existing'?1:0)-(b.discovery==='existing'?1:0)||a.aiRank-b.aiRank);
   for(const item of extraItems)extra.append(makeCard(item,'ai'));
   wrapper.append(extra);
