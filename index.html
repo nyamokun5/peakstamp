@@ -60,7 +60,7 @@
     <section class="panel gemini-primary-panel" id="geminiPrimaryPanel" aria-label="Geminiで音声を解析" hidden>
       <div class="panel-label"><span class="number">02</span><h2>Geminiでハイライトを見つける</h2></div>
       <p class="gemini-brief">音声だけをGeminiで解析し、見どころを自動で探します。</p>
-      <label for="geminiMainSource">解析する動画（1回1本ずつ）</label>
+      <label id="geminiSourceLabel" for="geminiMainSource">解析する動画</label>
       <select id="geminiMainSource" disabled aria-label="Geminiで解析する動画"></select>
       <p id="geminiMainFileHelp" class="fine-print">上からMOV/MP4を選択してください。</p>
       <label for="geminiMainAccess">アクセスコード</label>
@@ -74,7 +74,6 @@
       <label class="gemini-consent"><input id="geminiMainConsent" type="checkbox" />
         <span>試合中の会話・声を含む音声データがGoogleへ送信されることを了承します。</span>
       </label>
-      <button id="geminiMainRun" class="main-button gemini-main-run" type="button" disabled>Geminiで音声解析する →</button>
       <div id="geminiStayNotice" class="gemini-stay-notice" role="note" hidden>
         <span class="gemini-stay-icon" aria-hidden="true">!</span>
         <div>
@@ -82,6 +81,7 @@
           <p id="geminiStayDescription">LINEなど他のアプリへ切り替えたり、画面をロックすると解析が止まる場合があります。</p>
         </div>
       </div>
+      <button id="geminiMainRun" class="main-button gemini-main-run" type="button" disabled>Geminiで音声解析する →</button>
       <button id="geminiMainForce" class="whisper-run" type="button" hidden>Geminiで再解析（追加料金が発生する場合があります）</button>
       <div id="geminiProgress" class="gemini-progress" role="progressbar" aria-label="Gemini音声解析の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
         <div class="gemini-progress-top"><strong id="geminiProgressLabel">解析の準備中…</strong><output id="geminiProgressPercent">0%</output></div>
