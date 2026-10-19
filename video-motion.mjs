@@ -4,7 +4,7 @@
  * Input: low-resolution luminance frames sampled from a user's local video.
  * No network calls, model downloads or image upload.
  */
-export const VIDEO_SCAN_ALGORITHM='camera-motion-v1';
+export const VIDEO_SCAN_ALGORITHM='camera-motion-v2-relative-residual';
 const clamp=(v,min=0,max=1)=>Math.max(min,Math.min(max,Number.isFinite(v)?v:min));
 const abs=Math.abs;
 
@@ -81,10 +81,13 @@ export function compareVideoFrames(before,after){
   const compensated=best.error;
   const improvement=clamp((zero-compensated)/Math.max(5,zero));
   const textureConfidence=clamp((texture-2)/14);
-  const panConfident=textureConfidence>.25&&improvement>.07;
-  // A large residual can mean players or ball movement, or parallax,
-  // lighting change, occlusion and blur. Never label it a shot alone.
-  const residual=clamp(compensated/38)*textureConfidence;
+  // If best match touches the shift-search limits it may be an inaccurate
+  // estimate of a larger hand-held pan. Never treat that as a confident turn.
+  const alignmentLimited=abs(best.dx)>=xBound-1||abs(best.dy)>=yBound-1;
+  const panConfident=!alignmentLimited&&textureConfidence>.25&&improvement>.07;
+  // Preserve unsaturated luminance error. An adaptive relative transform is
+  // applied AFTER comparing all video frames; fixed /38 saturated real MOVs.
+  const residual=Math.max(0,compensated);
   return {
     time:after.time,elapsed,
     cameraDx:best.dx,cameraDy:best.dy,
@@ -96,7 +99,9 @@ export function compareVideoFrames(before,after){
     texture:+texture.toFixed(3),
     improvement:+improvement.toFixed(4),
     cameraConfidence:+(panConfident?textureConfidence*improvement:0).toFixed(4),
-    confidence:panConfident?'推定可':'低い',
+    alignmentLimited,
+    cameraSearchX:xBound,cameraSearchY:yBound,
+    confidence:alignmentLimited?'移動補正の範囲外の可能性':panConfident?'推定可':'低い',
     sceneScore:0
   };
 }
@@ -145,25 +150,51 @@ export function discoverVideoMotionCandidates(frames,options={}){
     const visualScore=clamp(.60*foreground+.19*panTurn+.12*motion+.09*foregroundJump);
     features.push({...now,panTurn:+panTurn.toFixed(4),visualScore:+visualScore.toFixed(4)});
   }
+  // Per-video normalization is essential. The previous fixed /38 clip
+  // collapsed eleven of twelve real-world feedback examples to exactly 1.
+  // This does NOT make it a semantic shot detector; it only restores contrast.
+  const errors=features.map(x=>x.compensatedDifference).sort((a,b)=>a-b);
+  const quantile=p=>errors[Math.min(errors.length-1,Math.floor((errors.length-1)*p))]||0;
+  const q25=quantile(.25),q90=quantile(.90);
+  const relativeScale=Math.max(8,q90-q25);
+  const normalizeResidual=x=>clamp((x.compensatedDifference-q25)/relativeScale);
   const timeline=features.map((f,i)=>{
     const next=features[Math.min(features.length-1,i+1)];
     const prev=features[Math.max(0,i-1)];
     // Camera operator reaction may come a frame after the kick.
-    const temporal=Math.max(f.visualScore,.45*next.visualScore+.55*f.visualScore,
-       .35*prev.visualScore+.65*f.visualScore);
+    const reliability=f.alignmentLimited?0:clamp(f.cameraConfidence);
+    const normalized=normalizeResidual(f);
+    // When camera alignment is uncertain, keep some visual evidence for
+    // recall, but lower its contribution rather than falsely claiming a
+    // reliably camera-corrected moving object.
+    const foreground=normalized*(.72+.28*reliability);
+    const nextNormalized=normalizeResidual(next);
+    const previousNormalized=normalizeResidual(prev);
+    const change=clamp((normalized-previousNormalized)/.4);
+    const panTurn=f.panTurn*(f.alignmentLimited?.15:1);
+    const motion=clamp(f.panSpeed/13)*reliability;
+    const visualScore=clamp(.67*foreground+.16*panTurn+.08*motion+.09*change);
+    const adjacent=Math.max(nextNormalized,previousNormalized);
+    const temporal=Math.max(visualScore,.85*visualScore+.15*adjacent*.67);
     const score=clamp(temporal);
     return {
       id:'video-motion-'+Math.round(f.time*1000),
       peakSeconds:f.time,
       time:Math.max(0,Math.floor(f.time-7)),
       score:+score.toFixed(4),
-      visualScore:f.visualScore,
+      visualScore:+visualScore.toFixed(4),
       detail:{
-        residual:f.residual,
+        residual:+normalized.toFixed(4),
+        rawResidual:f.residual,
+        relativeResidual:+normalized.toFixed(4),
+        alignmentLimited:f.alignmentLimited,
+        cameraSearchX:f.cameraSearchX,
+        cameraSearchY:f.cameraSearchY,
         cameraDx:f.cameraDx,cameraDy:f.cameraDy,
         panSpeed:+f.panSpeed.toFixed(3),
         panTurn:f.panTurn,
         cameraConfidence:f.cameraConfidence,
+        confidence:f.confidence,
         texture:f.texture,
         rawDifference:f.uncorrectedDifference,
         compensatedDifference:f.compensatedDifference,
@@ -178,14 +209,22 @@ export function discoverVideoMotionCandidates(frames,options={}){
     candidates:chosen,
     measurements:features.map(x=>({
       time:x.time,dx:x.cameraDx,dy:x.cameraDy,
-      residual:x.residual,panTurn:x.panTurn,visualScore:x.visualScore,
-      confidence:x.cameraConfidence
+      rawResidual:x.residual,
+      relativeResidual:+normalizeResidual(x).toFixed(4),
+      panTurn:x.panTurn,visualScore:+(.67*normalizeResidual(x)).toFixed(4),
+      confidence:x.cameraConfidence,
+      alignmentLimited:x.alignmentLimited
     })),
     summary:{
       frames:ordered.length,compared:features.length,possible:timeline.filter(x=>x.score>=.16).length,
       selected:chosen.length,
       confidentPans:features.filter(f=>f.cameraConfidence>0).length,
-      avgResidual:+(features.reduce((s,x)=>s+x.residual,0)/features.length).toFixed(4)
+      avgResidual:+(features.reduce((s,x)=>s+x.residual,0)/features.length).toFixed(4),
+      residualQ25:+q25.toFixed(3),
+      residualQ90:+q90.toFixed(3),
+      residualScale:+relativeScale.toFixed(3),
+      alignmentLimitedPairs:features.filter(x=>x.alignmentLimited).length,
+      lowConfidencePairs:features.filter(x=>x.cameraConfidence<.15).length
     }
   };
 }
