@@ -116,7 +116,14 @@
         </div>
         <div class="cloud-audio-steps">
           <p><strong>② Geminiで音声解析</strong>（初回はAPIキー不要）</p>
-          <button id="cloudAudioCopyPrompt" type="button" class="whisper-run" disabled>Geminiへの解析指示をコピー</button>
+          <button id="cloudAudioCopyPrompt" type="button" class="whisper-run" disabled>Geminiへの解析指示を表示・コピー</button>
+          <div id="cloudAudioPromptArea" class="cloud-audio-prompt-area" hidden>
+            <label for="cloudAudioPromptText">Geminiへ貼り付ける解析指示（コピーできない場合もここから取得できます）</label>
+            <textarea id="cloudAudioPromptText" rows="8" readonly spellcheck="false" aria-label="Geminiへの解析指示"></textarea>
+            <button id="cloudAudioSelectPrompt" type="button" class="whisper-run">↑ 指示文を全選択する</button>
+            <p id="cloudAudioCopyStatus" class="whisper-status" role="status" aria-live="polite"></p>
+            <small class="whisper-disclaimer">iPhoneで自動コピーできない場合は「指示文を全選択する」を押し、表示されたテキストを長押しして「コピー」を選んでください。指示文は常にこの欄に残ります。</small>
+          </div>
           <a class="whisper-run cloud-audio-open" href="https://aistudio.google.com/prompts/new_chat" target="_blank" rel="noopener noreferrer">Google AI Studioを開く ↗</a>
           <a class="cloud-audio-open-alt" href="https://gemini.google.com/app" target="_blank" rel="noopener noreferrer">AI StudioがiPhoneで使えない場合：Geminiを開く ↗</a>
           <small class="whisper-disclaimer">Google AI StudioでGemini 2.5 Flashなどの音声対応モデルを選び、保存したM4A音声をアップロードして、コピーした指示を貼り付けて実行。GeminiのJSON回答をコピーします。</small>
