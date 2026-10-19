@@ -752,3 +752,8 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 @media(prefers-reduced-motion:reduce){
  .gemini-progress.is-running .gemini-progress-track::after{animation:none;display:none}
 }
+
+@media(max-width:480px){
+ .topbar .local-pill{display:none}
+ .topbar .header-help{margin-left:auto}
+}
