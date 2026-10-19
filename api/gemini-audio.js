@@ -32,7 +32,12 @@ function prompt(duration){
   'For each event, quote only clearly audible words (else empty string) and briefly explain audible_clue.',
   'Set suggested_clip_start_seconds to about 8 seconds before the reaction and suggested_clip_end_seconds to about 5 seconds afterward. Clamp both to recording length.',
   'If nothing noteworthy is audible, events must be empty. No fabricated example events.',
-  'The limitations field must state that audio reactions cannot verify the video plays.'
+  'The limitations field must state that audio reactions cannot verify the video plays.',
+  'Return VALID JSON text only, not Markdown and not an explanation.',
+  'The top-level JSON keys MUST be exactly duration_seconds, events, limitations.',
+  'duration_seconds is a number. limitations is a string. events is an array.',
+  'Each object in events MUST contain numeric reaction_time_seconds, string type, string confidence, string quote, string audible_clue, numeric suggested_clip_start_seconds and numeric suggested_clip_end_seconds.',
+  'If there are no valid scenes, return this structure: {"duration_seconds":'+Math.round(duration)+',"events":[],"limitations":"Audio-only; no visual verification."}.'
  ].join('\n');
 }
 const trimError=message=>String(message||'')
