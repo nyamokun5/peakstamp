@@ -31,12 +31,12 @@ export function initFirstRunGuide({storage=window.localStorage,hasPriorAnalysis=
  const close=({navigate=false}={})=>{
   root.hidden=true;
   write();
+  lastFocus?.focus?.();
   if(navigate){
-   const step=steps[index];
-   const target=document.getElementById(step.target);
+   // At the end of the tour, begin the real flow from the first step.
+   const target=document.getElementById(steps[0].target);
    if(target&&!target.hidden)target.scrollIntoView({behavior:'smooth',block:'start'});
   }
-  lastFocus?.focus?.();
  };
  const open=()=>{
   lastFocus=document.activeElement;
