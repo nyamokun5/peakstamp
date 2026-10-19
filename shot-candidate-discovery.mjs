@@ -59,10 +59,11 @@ export function findAcousticShotProbes(bins,options={}){
     if(low!==null&&low>.84 && crest<3.0)continue; // dominant rumble
     const firstAfter=Math.min(amplitude.length-1,i+reactionStart);
     const lastAfter=Math.min(amplitude.length-1,i+reactionEnd);
-    let reaction=0,spikes=0;
+    let reaction=0,spikes=0,reactionAt=i,reactionTotal=0,reactionCount=0;
     for(let j=firstAfter;j<=lastAfter;j++){
       const v=amplitude[j];
-      reaction=Math.max(reaction,v);
+      if(v>reaction){reaction=v;reactionAt=j;}
+      reactionTotal+=v;reactionCount++;
       if(v>=baseline*1.5)spikes++;
     }
     const reactionRatio=reaction/baseline;
@@ -82,6 +83,27 @@ export function findAcousticShotProbes(bins,options={}){
       score:+weight.toFixed(3),
       strength:+strike.toFixed(3),
       reaction:+clamp((reactionRatio-1)/3).toFixed(3),
+      // Keep the old saturated field for comparison, but export the uncapped
+      // measurements to diagnose false positives in real recorded matches.
+      probeFeatures:{
+        peakRms:+level.toFixed(5),
+        backgroundRms:+baseline.toFixed(5),
+        noiseMedianRms:+median.toFixed(5),
+        sharpnessRatio:+sharpness.toFixed(3),
+        contrastRatio:+contrast.toFixed(3),
+        crest:+crest.toFixed(3),
+        highBandShare:high===null?null:+high.toFixed(3),
+        lowBandShare:low===null?null:+low.toFixed(3),
+        reactionRatio:+reactionRatio.toFixed(3),
+        reactionPeakRms:+reaction.toFixed(5),
+        reactionMeanRms:+(reactionTotal/Math.max(1,reactionCount)).toFixed(5),
+        reactionDelaySeconds:+((reactionAt-i)*step).toFixed(2),
+        reactionActiveSeconds:+(spikes*step).toFixed(2),
+        sustainRatio:+(sustain/followCount).toFixed(3),
+        strikeEvidence:+strike.toFixed(4),
+        reactionBonus:+reactionBonus.toFixed(4),
+        sustainPenalty:+sustainPenalty.toFixed(4)
+      },
       evidence:['短い鋭い音',reactionBonus>.08?'数秒後の音量変化':'後続の反応は弱い'],
       id:'shot-probe-'+Math.round(time*1000),
       enabled:false,title:'シュート候補（未確認）'
