@@ -90,6 +90,7 @@ function busy(value) {
   refreshAIReview(state);
   refreshVideoExplore(state);
   refreshCloudAudioPilot(state);
+  refreshCloudAudioPilot(state);
 }
 function syncSources() {
   closeInlinePreview();
