@@ -4,16 +4,15 @@
  * sideline-phone recording. Phase 1 does NOT recognize ball, goal, or shots.
  */
 import { discoverVideoMotionCandidates, VIDEO_SCAN_ALGORITHM } from './video-motion.mjs?v=3';
-import { fileIdentity, parseShotTime, prettyShotTime, evaluateManualShots } from './shot-evaluation.mjs?v=1';
+import { prettyShotTime } from './shot-evaluation.mjs?v=1';
 import { discoverScenePool } from './ai-candidate-discovery.mjs?v=2';
 
 const $=id=>document.getElementById(id);
 const LABEL_KEY='peakstamp_video_motion_labels_v1';
-const TRUTH_KEY='peakstamp_manual_shot_times_v1';
 const FRAME_WIDTH=96;
-let feedback={},knownShots={},selectedIndex=0,working=false,interrupt=null,activeScanSource=null,lastScan=null,activePreview=null;
+let feedback={},selectedIndex=0,working=false,interrupt=null,activeScanSource=null,lastScan=null,activePreview=null;
 function readLocal(key){try{const item=JSON.parse(localStorage.getItem(key)||'{}');return item&&typeof item==='object'&&!Array.isArray(item)?item:{};}catch(_){return {};}}
-feedback=readLocal(LABEL_KEY);knownShots=readLocal(TRUTH_KEY);
+feedback=readLocal(LABEL_KEY);
 function save(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch(_){/* Safari storage disabled */}}
 function node(tag,text){const element=document.createElement(tag);element.textContent=text||'';return element;}
 function formatTime(t){return prettyShotTime(t);}
@@ -197,47 +196,13 @@ function makeCard(candidate,index,oldPool){
 }
 function updateSummary(){
  const el=$('videoExploreMetrics');
- if(!el)return;
- if(!lastScan){el.textContent='映像をスキャンすると候補と比較結果が表示されます。';return;}
- const annotated=lastScan.candidates.filter(x=>feedback[x.key]&&feedback[x.key]!=='unreviewed');
- const actual=annotated.filter(x=>['shot','goal','save'].includes(feedback[x.key])).length;
- const reviewed=annotated.filter(x=>feedback[x.key]!=='not-visible').length;
- const source=lastScan.source;
- const times=knownShots[fileIdentity(source.file)]||[];
- const broad=discoverScenePool([source],{limit:20}).entries;
- const truth=evaluateManualShots([source],{[fileIdentity(source.file)]:times},
-   lastScan.candidates.map(x=>({...x,sourceId:source.id})),
-   broad.map(x=>({...x,sourceId:source.id})),5);
- el.textContent='映像候補の評価：'+annotated.length+'件入力・うちシュート／ゴール／セーブ '+actual+
-   '件（判断可能 '+reviewed+'件）。手入力の実際のシュート '+truth.summary.annotated+
-   '件のうち、映像探索と±5秒一致 '+truth.summary.wideFound+
-   '件、音声広域探索と一致 '+truth.summary.impulseFound+'件。'+
-   (truth.summary.annotated?' ※これは時刻の近さによる比較です。':'');
-}
-function renderGroundTruth(source){
- const form=$('videoGroundTruth');
- const list=$('videoGroundTruthList');
- if(!form||!list)return;
- form.hidden=!source;
- list.replaceChildren();
- if(!source)return;
- const times=[...(knownShots[fileIdentity(source.file)]||[])].sort((a,b)=>a-b);
- if(!times.length){list.append(node('p','実際のシュート時刻を入力すると、見逃しの比較ができます。'));return;}
- for(const t of times){
-  const row=node('div');
-  row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0';
-  row.append(node('span','⚽ '+formatTime(t)));
-  const del=node('button','削除');
-  del.type='button';
-  del.style.cssText='padding:6px 9px;border-radius:6px;border:1px solid #56788a;background:#17364b;color:#fff';
-  del.addEventListener('click',()=>{
-    const key=fileIdentity(source.file);
-    knownShots[key]=(knownShots[key]||[]).filter(x=>x!==t);
-    save(TRUTH_KEY,knownShots);
-    renderGroundTruth(source);updateSummary();
-  });
-  row.append(del);list.append(row);
- }
+ if(!el||!lastScan)return;
+ const reviewed=lastScan.candidates.filter(x=>feedback[x.key]&&feedback[x.key]!=='unreviewed'&&feedback[x.key]!=='not-visible');
+ const shots=reviewed.filter(x=>['shot','goal','save'].includes(feedback[x.key]));
+ const good=reviewed.filter(x=>feedback[x.key]==='good').length;
+ el.textContent='映像候補 '+lastScan.candidates.length+'件中、評価済み '+reviewed.length+
+   '件 ／ シュート・ゴール・GKセーブ '+shots.length+'件 ／ その他の好プレー '+good+
+   '件。動画全体の見逃し率は、この評価だけでは分かりません。';
 }
 function renderResults(){
  const target=$('videoExploreResults');
@@ -271,7 +236,7 @@ function renderResults(){
   for(let i=5;i<candidates.length;i++)more.append(makeCard(candidates[i],i,original));
   target.append(more);
  }
- const saveButton=node('button','映像探索と正解時刻をJSONで保存');
+ const saveButton=node('button','映像探索の評価データをJSONで保存');
  saveButton.type='button';
  saveButton.style.cssText='width:100%;padding:12px;margin:10px 0;border-radius:8px;background:#195e52;color:#fff;border:1px solid #76cbb6';
  saveButton.addEventListener('click',exportResults);
@@ -295,7 +260,6 @@ function exportResults(){
     timeSeconds:x.peakSeconds,score:x.score,detail:x.detail,
     userLabel:feedback[x.key]||'unreviewed'
   })),
-  manuallyMarkedShotTimes:knownShots[fileIdentity(source.file)]||[],
   note:'動画の実データはJSONに含まれない'
  };
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
@@ -329,7 +293,6 @@ export function refreshVideoExplore(state){
  if(lastScan&&(!source||source.objectUrl!==lastScan.source.objectUrl)){
    lastScan=null;renderResults();
  }
- renderGroundTruth(source);
  updateSummary();
 }
 export function initVideoExplore(state){
@@ -340,24 +303,6 @@ export function initVideoExplore(state){
   refreshVideoExplore(state);
  });
  cancel.addEventListener('click',()=>{if(interrupt)interrupt.cancelled=true;$('videoExploreStatus').textContent='停止処理中…';});
- $('videoGroundTruthSave').addEventListener('click',()=>{
-  const source=currentSource(state);
-  if(!source)return;
-  const input=$('videoGroundTruthInput');
-  const values=input.value.split(/[、,\n\s]+/u).map(x=>x.trim()).filter(Boolean);
-  const times=values.map(parseShotTime);
-  if(!values.length||times.some(x=>x===null||x>=source.duration)){
-    $('videoExploreStatus').textContent='時刻形式を確認してください。例：01:28, 04:39.5。動画の長さ以内で入力してください。';
-    return;
-  }
-  const key=fileIdentity(source.file);
-  const merged=[...(knownShots[key]||[]),...times];
-  knownShots[key]=[...new Set(merged)].sort((a,b)=>a-b).slice(0,100);
-  save(TRUTH_KEY,knownShots);
-  input.value='';
-  renderGroundTruth(source);updateSummary();
-  $('videoExploreStatus').textContent='実際のシュート時刻 '+times.length+'件を保存しました。';
- });
  button.addEventListener('click',async()=>{
   const source=currentSource(state);
   if(working||state.working||state.exporting||!source)return;
