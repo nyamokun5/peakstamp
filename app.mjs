@@ -16,6 +16,7 @@ import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
 import { createSceneReplayMedia } from './scene-replay-media.mjs?v=1';
 import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
+import { toggleScenePreviewPlayback } from './scene-preview-playback.mjs?v=1';
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 
 const $ = id => document.getElementById(id);
@@ -752,23 +753,15 @@ function row(item, index) {
       updateVolumeUI();
     });
     pauseResumeButton.addEventListener('click',()=>{
-      if(!replayVideo)return;
       const player=replayVideo;
-      if(!player.paused){
-        player.pause();
-        updatePauseResume();
-        return;
-      }
+      if(!player)return;
       const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
-      if(player.currentTime>=bounds.end-.08 || player.currentTime<bounds.start-.1){
-        restartReplay();
-        return;
-      }
-      void scenePreviewAudio.wake();
-      try{
-        Promise.resolve(player.play()).catch(()=>
-          {if(replayVideo===player)setReplayStatus('再生できませんでした。もう一度お試しください。');});
-      }catch(_){setReplayStatus('再生できませんでした。もう一度お試しください。');}
+      toggleScenePreviewPlayback(player,bounds,{
+        restart:restartReplay,
+        onBeforePlay:()=>{void scenePreviewAudio.wake();},
+        onError:()=>{if(replayVideo===player)
+          setReplayStatus('再生できませんでした。もう一度お試しください。');}
+      });
       updatePauseResume();
     });
     updateVolumeUI();
