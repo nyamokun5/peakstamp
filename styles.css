@@ -559,3 +559,20 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 #cloudAudioPanel .whisper-run{cursor:pointer;touch-action:manipulation}
 #cloudAudioPanel .whisper-run:disabled{opacity:.4}
 #cloudAudioPanel audio{width:100%;max-width:100%}
+
+/* Cloud audio pilot: visible prompt copy fallback on iOS Safari. */
+#cloudAudioPanel .cloud-audio-prompt-area{
+  margin:10px 0 14px;padding:12px;border:1px solid #79bcbd;border-radius:10px;
+  background:#16384b;
+}
+#cloudAudioPanel .cloud-audio-prompt-area[hidden]{display:none}
+#cloudAudioPanel #cloudAudioPromptText{
+  min-height:180px;max-height:300px;resize:vertical;
+  -webkit-user-select:text;user-select:text;
+  background:#f4fafc;color:#142b3e;
+  font-size:13px;line-height:1.55;
+}
+#cloudAudioPanel #cloudAudioSelectPrompt{
+  background:#346470;border-color:#8bd0c9;margin-top:8px;
+}
+#cloudAudioPanel #cloudAudioCopyStatus{color:#d8f2eb;margin:9px 0}
