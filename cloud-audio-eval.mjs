@@ -21,15 +21,69 @@ export function makeAudioAnalysisPrompt(seconds){
  'IMPORTANT: The example event at 123.4 seconds is fictional, only a schema example. Do NOT copy it unless actually detected.'
  ].join('\n');
 }
-export function parseAudioEvents(text,durationSeconds){
- if(typeof text!=='string')throw Error('GeminiのJSONを貼り付けてください。');
- const cleaned=text.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
- if(cleaned.length>120000)throw Error('JSON回答が長すぎます。');
- let data;
- try{data=JSON.parse(cleaned)}catch(e){
-  const i=cleaned.indexOf('{'),j=cleaned.lastIndexOf('}');
-  try{data=JSON.parse(cleaned.slice(i,j+1))}catch(_){throw Error('JSON形式で読み取れません。GeminiにJSONのみ再出力させてください。')}
+/**
+ * Gemini sometimes inserts literal newlines inside JSON string values.
+ * Repair control characters ONLY while inside a quoted string.
+ */
+export function repairJsonStringNewlines(input){
+ let inside=false,escaped=false,count=0;
+ const output=[];
+ for(let i=0;i<input.length;i++){
+  const char=input[i];
+  if(!inside){
+   output.push(char);
+   if(char==='"')inside=true;
+   continue;
+  }
+  if(escaped){
+   output.push(char);
+   escaped=false;
+   continue;
+  }
+  if(char==='\\'){
+   output.push(char);
+   escaped=true;
+   continue;
+  }
+  if(char==='"'){
+   output.push(char);
+   inside=false;
+   continue;
+  }
+  if(char==='\r'||char==='\n'){
+   if(char==='\r'&&input[i+1]==='\n')i++;
+   output.push(' ');
+   count++;
+   continue;
+  }
+  if(char.charCodeAt(0)<32){
+   output.push(' ');
+   count++;
+   continue;
+  }
+  output.push(char);
  }
+ return {text:output.join(''),repairedCount:count};
+}
+function decodeGeminiJson(input){
+ const cleaned=input.trim().replace(/^\x60{3}(?:json)?\s*/i,'').replace(/\s*\x60{3}$/,'');
+ const candidates=[cleaned];
+ const i=cleaned.indexOf('{'),j=cleaned.lastIndexOf('}');
+ if(i>=0&&j>i&&!(i===0&&j===cleaned.length-1))
+  candidates.push(cleaned.slice(i,j+1));
+ for(const text of candidates){
+  try{return {data:JSON.parse(text),repairedCount:0};}catch(_){}
+  const fixed=repairJsonStringNewlines(text);
+  if(fixed.repairedCount>0){
+   try{return {data:JSON.parse(fixed.text),repairedCount:fixed.repairedCount};}catch(_){}
+  }
+ }
+ throw Error('JSON形式を読み取れませんでした。今回は改行の自動補正も試しました。JSON全体が閉じているか確認してください。');
+}
+export function parseAudioEvents(text,durationSeconds){
+ if(typeof text!=='string'||!text.trim())throw Error('GeminiのJSONを貼り付けてください。');
+ if(text.length>120000)throw Error('JSON回答が長すぎます。');
+ const {data,repairedCount}=decodeGeminiJson(text);
  if(!data||!Array.isArray(data.events))throw Error('JSONのevents配列がありません。');
  if(data.events.length>60)throw Error('イベントは最大60件です。');
  const duration=Number(durationSeconds);
@@ -55,7 +109,7 @@ export function parseAudioEvents(text,durationSeconds){
   if(prev&&v.timeSeconds-prev.timeSeconds<1.5){if(v.confidence==='high'&&prev.confidence!=='high')events[events.length-1]=v}
   else events.push(v);
  }
- return {events:events.slice(0,40),returnedCount:data.events.length,discardedCount:data.events.length-events.length};
+ return {events:events.slice(0,40),returnedCount:data.events.length,discardedCount:data.events.length-events.length,repairedNewlines:repairedCount};
 }
 export function compareAudioCandidates(events,normalCandidates,broadCandidates,toleranceSeconds=7){
  const tol=clamp(Number(toleranceSeconds)||7,1,20);
