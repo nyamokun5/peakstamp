@@ -16,6 +16,7 @@ let selected=0,sourceReady=null,exportedAudio=null,objectUrl=null;
 let busy=false,jobId=0,result=null,ratings={};
 let reviewPlayer=null,reviewSource=null,reviewEventSignature='';
 const RATING_STORE='peakstamp_cloud_audio_ratings_v1';
+const JSON_STORE='peakstamp_cloud_audio_ai_responses_v1';
 const ratingKey=source=>[source?.file?.name||'',source?.file?.size||0,
  source?.file?.lastModified||0,Math.round((source?.duration||0)*1000)].join('|');
 const ratedEventKey=event=>event.timeSeconds.toFixed(1)+'|'+event.type;
@@ -43,6 +44,22 @@ function saveRatings(source,events,labels){
   const keys=Object.keys(all);
   if(keys.length>30)for(const stale of keys.slice(0,keys.length-30))delete all[stale];
   localStorage.setItem(RATING_STORE,JSON.stringify(all));
+ }catch(_){}
+}
+function readCachedGeminiJson(source){
+ try{
+  const all=JSON.parse(localStorage.getItem(JSON_STORE)||'{}');
+  return String(all[ratingKey(source)]||'').slice(0,120000);
+ }catch(_){return '';}
+}
+function saveCachedGeminiJson(source,text){
+ if(typeof text!=='string'||!text||text.length>120000)return;
+ try{
+  const all=JSON.parse(localStorage.getItem(JSON_STORE)||'{}');
+  all[ratingKey(source)]=text;
+  const keys=Object.keys(all);
+  if(keys.length>15)for(const old of keys.slice(0,keys.length-15))delete all[old];
+  localStorage.setItem(JSON_STORE,JSON.stringify(all));
  }catch(_){}
 }
 function discardReviewPlayer(){
@@ -86,6 +103,11 @@ export function refreshCloudAudioPilot(state){
  run.textContent=busy?'音声を抽出中…':'① 音声だけ取り出す';
  compare.disabled=busy||!src;
  copy.disabled=busy||!src;
+ const pasted=$('cloudAudioPaste');
+ if(src&&pasted&&!pasted.value.trim()){
+  const previous=readCachedGeminiJson(src);
+  if(previous)pasted.value=previous;
+ }
 }
 async function clipboard(text,host){
  try{
@@ -282,6 +304,7 @@ function compare(state){
  if(!source){sayCompare('動画を読み込んで音声解析してください。');return;}
  try{
   const parsed=parseAudioEvents($('cloudAudioPaste').value,source.duration);
+  saveCachedGeminiJson(source,$('cloudAudioPaste').value);
   const broad=discoverScenePool([source],{limit:20}).entries;
   result=compareAudioCandidates(parsed.events,source.candidates||[],broad,7);
   const sameSource=reviewSource?.file===source.file;
