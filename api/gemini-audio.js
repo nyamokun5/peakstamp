@@ -2,7 +2,7 @@
 import { timingSafeEqual } from 'node:crypto';
 
 const MAX_BYTES=2900000;
-const MODEL='gemini-2.5-flash';
+const MODEL='gemini-3.8-flash';
 const SAFE_ORIGIN='https://nyamokun5.github.io';
 const allowedOrigins=()=>[SAFE_ORIGIN,...String(process.env.PEAKSTAMP_ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean)];
 const send=(res,status,message)=>res.status(status).json({error:message});
@@ -46,8 +46,24 @@ export default async function handler(req,res){
  if(!safeEqual(req.headers['x-peakstamp-access'],access))return send(res,401,'アクセスコードが違います。');
  // Authenticated, zero-cost readiness probe. Never forwards data to Gemini.
  // Verifies endpoint, access code and presence of env secrets, not Google key validity.
- if(req.body?.probe===true)
-  return res.status(200).json({ok:true,service:'PeakStamp Gemini audio',ready:true,googleKeyVerified:false});
+ if(req.body?.probe===true){
+  // A free metadata GET verifies both API key validity and model availability,
+  // without transmitting media or consuming generation tokens.
+  let modelResponse;
+  try{
+   modelResponse=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+MODEL,{
+    method:'GET',headers:{'x-goog-api-key':key},signal:AbortSignal.timeout(15000)
+   });
+  }catch(_){return send(res,504,'Googleのモデル情報を確認できませんでした。時間をおいて再試行してください。');}
+  if(modelResponse.status===401||modelResponse.status===403)
+   return send(res,502,'Google側でAPIキーが拒否されました。AI Studioのキーと利用設定を確認してください。');
+  if(modelResponse.status===404)
+   return send(res,502,'このAPIキーから'+MODEL+'を利用できません。Google AI Studioのモデルアクセスを確認してください。');
+  if(modelResponse.status===429)return send(res,429,'Google APIの利用制限に達しました。しばらくして再試行してください。');
+  if(!modelResponse.ok)return send(res,502,'Googleのモデル確認に失敗しました（HTTP '+modelResponse.status+'）。');
+  return res.status(200).json({ok:true,service:'PeakStamp Gemini audio',
+   ready:true,model:MODEL,googleKeyVerified:true,modelAvailable:true});
+ }
  const body=req.body;
  if(!body||typeof body!=='object'||Array.isArray(body))return send(res,400,'JSONリクエストを送ってください。');
  const seconds=Number(body.durationSeconds),base64=body.audioBase64;
@@ -63,15 +79,17 @@ export default async function handler(req,res){
   upstream=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+MODEL+':generateContent',{
    method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
    body:JSON.stringify({
-    contents:[{role:'user',parts:[{text:prompt(seconds)},{inline_data:{mime_type:'audio/mp4',data:base64}}]}],
-    generationConfig:{responseMimeType:'application/json',temperature:0.15,maxOutputTokens:4096}
+    contents:[{role:'user',parts:[{text:prompt(seconds)},{inline_data:{mime_type:'audio/m4a',data:base64}}]}],
+    generationConfig:{responseMimeType:'application/json',maxOutputTokens:8192}
    }),signal:AbortSignal.timeout(120000)
   });
  }catch(e){return send(res,504,'Geminiに接続できませんでした。時間を置いて再試行してください。');}
  if(!upstream.ok){
   if(upstream.status===429)return send(res,429,'Geminiの利用上限に達しました。');
   if(upstream.status===401||upstream.status===403)return send(res,502,'Gemini APIの認証・請求設定を確認してください。');
-  return send(res,502,'Gemini APIがエラーを返しました (HTTP '+upstream.status+')。');
+  if(upstream.status===404)return send(res,502,'Googleがモデル '+MODEL+' を見つけられません。接続テストでモデルの利用可否を確認してください（Google HTTP 404）。');
+  if(upstream.status===400)return send(res,502,'Geminiが音声リクエストを受け付けませんでした。M4A音声・API形式を確認してください（Google HTTP 400）。');
+  return send(res,502,'Gemini APIがエラーを返しました (Google HTTP '+upstream.status+')。');
  }
  let google;
  try{google=await upstream.json();}catch(_){return send(res,502,'Geminiの応答がJSONではありません。');}
