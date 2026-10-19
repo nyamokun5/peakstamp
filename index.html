@@ -74,7 +74,7 @@
       <button id="geminiMainForce" class="whisper-run" type="button" hidden>Geminiで再解析（追加料金が発生する場合があります）</button>
       <button id="geminiMainCancel" class="cancel-button" type="button" hidden>Gemini解析を中止</button>
       <p id="geminiMainStatus" role="status" aria-live="polite" class="gemini-main-status"></p>
-      <small class="fine-print">元動画から音声だけを抽出し、iPhone内で16kHzのWAVに変換して約70秒ごとに送信します。解析済みの区間は端末に保存して再利用可能。無料・完全オフラインの旧音声解析は下の予備メニューから使えます。Gemini API利用料や通信料が発生することがあります。</small>
+      <small class="fine-print">元動画から音声だけを抽出し、iPhone内で16kHzのWAVに変換して約70秒ごとに送信します。最大2区間を並行解析して待ち時間を短縮。成功した区間は端末に保存し、途中で止まっても再利用できます。iPhoneで別アプリへ切り替えるとSafariの処理が中断される場合があります。無料・完全オフラインの旧音声解析は下の予備メニューから使えます。Gemini API利用料や通信料が発生することがあります。</small>
     </section>
 
     <details class="legacy-audio-details">
@@ -361,6 +361,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=gemini-api26"></script>
+  <script type="module" src="app.mjs?v=gemini-api27"></script>
 </body>
 </html>
