@@ -4,7 +4,7 @@
  */
 import { discoverScenePool } from './ai-candidate-discovery.mjs?v=audio-pilot1';
 import { extractAudioOnly,formatFileSize } from './cloud-audio-export.mjs?v=1';
-import { makeAudioAnalysisPrompt,parseAudioEvents,compareAudioCandidates,AUDIO_PROMPT_VERSION } from './cloud-audio-eval.mjs?v=1';
+import { makeAudioAnalysisPrompt,parseAudioEvents,compareAudioCandidates,AUDIO_PROMPT_VERSION } from './cloud-audio-eval.mjs?v=2';
 
 const $=id=>document.getElementById(id);
 const node=(tag,txt)=>{const el=document.createElement(tag);if(txt!==undefined)el.textContent=txt;return el;};
