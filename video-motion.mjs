@@ -1,0 +1,191 @@
+/**
+ * PeakStamp Video Explore beta: low-resolution camera motion compensation.
+ * This is NOT ball, goal, player or actual shot recognition.
+ * Input: low-resolution luminance frames sampled from a user's local video.
+ * No network calls, model downloads or image upload.
+ */
+export const VIDEO_SCAN_ALGORITHM='camera-motion-v1';
+const clamp=(v,min=0,max=1)=>Math.max(min,Math.min(max,Number.isFinite(v)?v:min));
+const abs=Math.abs;
+
+function frameCheck(frame){
+  if(!frame||!Number.isFinite(frame.time)||!Number.isInteger(frame.width)||
+     !Number.isInteger(frame.height)||frame.width<32||frame.height<24||
+     !(frame.luma instanceof Uint8Array)||
+     frame.luma.length!==frame.width*frame.height)throw Error('映像フレーム形式が不正です');
+}
+
+function imageTexture(luma,width,height){
+  let total=0,count=0;
+  for(let y=3;y<height-3;y+=4){
+    for(let x=3;x<width-3;x+=4){
+      const p=y*width+x;
+      const d=abs(luma[p]-luma[p+2])+abs(luma[p]-luma[p+width*2]);
+      total+=d;
+      count++;
+    }
+  }
+  return total/Math.max(1,count);
+}
+function mismatch(previous,current,width,height,dx,dy,step=4){
+  // Static pitch features (lines, goal posts, boundary boards) appear
+  // translated between frames as the operator pans. Skip borders to avoid
+  // evaluating out-of-frame regions.
+  let weighted=0,weights=0;
+  const marginX=24,marginY=9;
+  for(let y=marginY;y<height-marginY;y+=step){
+    const prevY=y+dy;
+    if(prevY<2||prevY>=height-2)continue;
+    for(let x=marginX;x<width-marginX;x+=step){
+      const prevX=x+dx;
+      if(prevX<2||prevX>=width-2)continue;
+      const p=y*width+x,q=prevY*width+prevX;
+      // Edges get a slightly higher weight, but uniform grass still counts
+      // so a bright foreground object cannot set the whole pan estimate.
+      const edge=abs(previous[q+1]-previous[q-1])+
+                 abs(previous[q+width]-previous[q-width]);
+      const weight=1+Math.min(2,edge/28);
+      weighted+=abs(current[p]-previous[q])*weight;
+      weights+=weight;
+    }
+  }
+  return weights?weighted/weights:255;
+}
+export function compareVideoFrames(before,after){
+  frameCheck(before);frameCheck(after);
+  if(before.width!==after.width||before.height!==after.height)throw Error('映像のサイズが一致していません');
+  const {width,height}=before;
+  const elapsed=Math.max(.1,after.time-before.time);
+  const texture=imageTexture(before.luma,width,height);
+  const zero=mismatch(before.luma,after.luma,width,height,0,0);
+  const xBound=Math.min(22,Math.floor(width*.23));
+  const yBound=Math.min(6,Math.floor(height*.14));
+  let best={dx:0,dy:0,error:zero};
+  // Coarse global translation search; no external computer vision library.
+  for(let dy=-yBound;dy<=yBound;dy+=2){
+    for(let dx=-xBound;dx<=xBound;dx+=2){
+      const error=mismatch(before.luma,after.luma,width,height,dx,dy);
+      if(error<best.error){best={dx,dy,error};}
+    }
+  }
+  // Refine x/y by one pixel around coarse match.
+  const coarse={...best};
+  for(let dy=coarse.dy-1;dy<=coarse.dy+1;dy++){
+    if(abs(dy)>yBound)continue;
+    for(let dx=coarse.dx-1;dx<=coarse.dx+1;dx++){
+      if(abs(dx)>xBound)continue;
+      const error=mismatch(before.luma,after.luma,width,height,dx,dy);
+      if(error<best.error)best={dx,dy,error};
+    }
+  }
+  const compensated=best.error;
+  const improvement=clamp((zero-compensated)/Math.max(5,zero));
+  const textureConfidence=clamp((texture-2)/14);
+  const panConfident=textureConfidence>.25&&improvement>.07;
+  // A large residual can mean players or ball movement, or parallax,
+  // lighting change, occlusion and blur. Never label it a shot alone.
+  const residual=clamp(compensated/38)*textureConfidence;
+  return {
+    time:after.time,elapsed,
+    cameraDx:best.dx,cameraDy:best.dy,
+    panPixels:Math.hypot(best.dx,best.dy),
+    panSpeed:Math.hypot(best.dx,best.dy)/elapsed,
+    compensatedDifference:+compensated.toFixed(3),
+    uncorrectedDifference:+zero.toFixed(3),
+    residual:+residual.toFixed(4),
+    texture:+texture.toFixed(3),
+    improvement:+improvement.toFixed(4),
+    cameraConfidence:+(panConfident?textureConfidence*improvement:0).toFixed(4),
+    confidence:panConfident?'推定可':'低い',
+    sceneScore:0
+  };
+}
+
+function findPeaks(signal,minimumSpacing,maxResults){
+  return signal.filter(x=>x.score>=.16)
+    .sort((a,b)=>b.score-a.score||a.peakSeconds-b.peakSeconds)
+    .reduce((selected,item)=>{
+      if(selected.length<maxResults&&selected.every(x=>abs(x.peakSeconds-item.peakSeconds)>=minimumSpacing)){
+        selected.push(item);
+      }
+      return selected;
+    },[]).sort((a,b)=>a.peakSeconds-b.peakSeconds);
+}
+
+/**
+ * More inclusive first-stage video candidates:
+ * - movement after compensating for horizontal/vertical camera follow
+ * - camera braking/turning
+ * - repeated strong scene changes within a short attack sequence
+ * This does not decide whether a shot or goalkeeper is actually visible.
+ */
+export function discoverVideoMotionCandidates(frames,options={}){
+  const maxResults=Math.max(1,Math.min(30,Math.floor(Number(options.maxResults)||12)));
+  const spacing=Math.max(4,Math.min(20,Number(options.minGapSeconds)||10));
+  const features=[];
+  if(!Array.isArray(frames)||frames.length<3)return {candidates:[],measurements:[],summary:{frames:frames?.length||0}};
+  const ordered=[...frames].sort((a,b)=>a.time-b.time);
+  for(let i=1;i<ordered.length;i++){
+    const now=compareVideoFrames(ordered[i-1],ordered[i]);
+    const prior=features[features.length-1];
+    const currentPan=now.cameraConfidence>0?now.cameraDx:0;
+    const prevPan=prior?.cameraConfidence>0?prior.cameraDx:0;
+    // Braking or reversing the pan often happens when play reaches a target,
+    // but also when the operator simply adjusts framing.
+    const brake=prior?.cameraConfidence>0?
+      clamp((abs(prevPan)-abs(currentPan))/Math.max(6,now.elapsed*8)):0;
+    const reverse=prior?.cameraConfidence>0&&currentPan*prevPan<0?
+      clamp(Math.min(abs(currentPan),abs(prevPan))/10):0;
+    const panTurn=clamp(brake*.7+reverse*.5);
+    const foreground=now.residual;
+    const motion=clamp(now.panSpeed/13)*(now.cameraConfidence>0?.7:.25);
+    const foregroundJump=clamp((foreground-(prior?.residual||0))/.28);
+    // Keep a significant portion of score independent of camera speed:
+    // shots while camera is stationary must not be automatically excluded.
+    const visualScore=clamp(.60*foreground+.19*panTurn+.12*motion+.09*foregroundJump);
+    features.push({...now,panTurn:+panTurn.toFixed(4),visualScore:+visualScore.toFixed(4)});
+  }
+  const timeline=features.map((f,i)=>{
+    const next=features[Math.min(features.length-1,i+1)];
+    const prev=features[Math.max(0,i-1)];
+    // Camera operator reaction may come a frame after the kick.
+    const temporal=Math.max(f.visualScore,.45*next.visualScore+.55*f.visualScore,
+       .35*prev.visualScore+.65*f.visualScore);
+    const score=clamp(temporal);
+    return {
+      id:'video-motion-'+Math.round(f.time*1000),
+      peakSeconds:f.time,
+      time:Math.max(0,Math.floor(f.time-7)),
+      score:+score.toFixed(4),
+      visualScore:f.visualScore,
+      detail:{
+        residual:f.residual,
+        cameraDx:f.cameraDx,cameraDy:f.cameraDy,
+        panSpeed:+f.panSpeed.toFixed(3),
+        panTurn:f.panTurn,
+        cameraConfidence:f.cameraConfidence,
+        texture:f.texture,
+        rawDifference:f.uncorrectedDifference,
+        compensatedDifference:f.compensatedDifference,
+        frameInterval:f.elapsed
+      },
+      evidence:'カメラ移動補正後の映像変化（シュート未確定）',
+      discovery:'video-motion'
+    };
+  });
+  const chosen=findPeaks(timeline,spacing,maxResults);
+  return {
+    candidates:chosen,
+    measurements:features.map(x=>({
+      time:x.time,dx:x.cameraDx,dy:x.cameraDy,
+      residual:x.residual,panTurn:x.panTurn,visualScore:x.visualScore,
+      confidence:x.cameraConfidence
+    })),
+    summary:{
+      frames:ordered.length,compared:features.length,possible:timeline.filter(x=>x.score>=.16).length,
+      selected:chosen.length,
+      confidentPans:features.filter(f=>f.cameraConfidence>0).length,
+      avgResidual:+(features.reduce((s,x)=>s+x.residual,0)/features.length).toFixed(4)
+    }
+  };
+}
