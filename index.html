@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=gemini-primary18" />
+  <link rel="stylesheet" href="styles.css?v=gemini-api19" />
 </head>
 <body>
   <header class="topbar">
@@ -64,7 +64,8 @@
       <p id="geminiMainFileHelp" class="fine-print">上からMOV/MP4を選択してください。</p>
       <label for="geminiMainAccess">APIアクセスコード（サーバーの利用制限用）</label>
       <input id="geminiMainAccess" type="password" autocomplete="off" autocapitalize="off"
-             spellcheck="false" placeholder="管理者から受け取ったアクセスコード" />
+             spellcheck="false" placeholder="Vercelに登録したアクセスコード" />
+      <button id="geminiMainCheck" class="whisper-run gemini-check-button" type="button">API接続テスト（課金なし）</button>
       <label class="gemini-consent"><input id="geminiMainConsent" type="checkbox" />
         <span>試合中の会話・声を含む音声データがGoogleへ送信されることを了承します。</span>
       </label>
@@ -359,6 +360,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=gemini-primary18"></script>
+  <script type="module" src="app.mjs?v=gemini-api19"></script>
 </body>
 </html>
