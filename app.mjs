@@ -3,6 +3,8 @@ import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experime
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=1';
+import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
@@ -90,7 +92,7 @@ function busy(value) {
   refreshAIReview(state);
   refreshVideoExplore(state);
   refreshCloudAudioPilot(state);
-  refreshCloudAudioPilot(state);
+  refreshGeminiPrimary(state);
 }
 function syncSources() {
   closeInlinePreview();
@@ -114,6 +116,8 @@ function syncSources() {
   refreshWhisperTargets(state);
   refreshAIReview(state);
   refreshVideoExplore(state);
+  refreshGeminiPrimary(state);
+  refreshCloudAudioPilot(state);
   if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
   $('stickyBar').hidden = !state.bins;
   $('resultsPanel').hidden = !state.bins;
@@ -349,6 +353,29 @@ async function decodeSmallAudio(file, update, check) {
   } finally { await ctx.close(); }
 }
 
+async function commitGeminiResults({source,parsed,audio,decoded}) {
+  if(!state.sources.includes(source))throw Error('この動画は既に削除されました。');
+  const duration=Number(audio.durationSeconds)||Number(decoded.duration);
+  if(!(duration>0)||!Array.isArray(decoded.bins)||!decoded.bins.length)
+    throw Error('確認用の音声波形を準備できませんでした。');
+  const previous=source.candidates||[];
+  const conversion=geminiEventsToCandidates(parsed.events,source.id,duration,previous);
+  // Honor already reviewed offline scenes, while avoiding near-duplicate footage.
+  const preserved=previous.filter(item=>
+    (item.enabled===true||item.rejected===true) &&
+    !conversion.items.some(candidate=>Math.abs(candidate.peakSeconds-item.peakSeconds)<=4));
+  source.duration=duration;
+  source.bins=decoded.bins;
+  source.candidates=[...conversion.items,...preserved]
+    .sort((a,b)=>a.peakSeconds-b.peakSeconds);
+  source.analysisEngine='gemini';
+  source.error='';
+  syncSources();
+  $('resultsPanel').hidden=false;
+  $('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
+  return {candidates:conversion.items.length,merged:conversion.mergedCount};
+}
+
 $('cancelButton').addEventListener('click', () => { state.cancelled = true; });
 $('analyzeButton').addEventListener('click', async () => {
   if (!state.sources.length || state.working || state.exporting) return;
@@ -405,7 +432,7 @@ $('analyzeButton').addEventListener('click', async () => {
 function rebuild() {
   if (!state.sources.some(s => s.bins)) return;
   for (const source of state.sources) {
-    if (!source.bins) continue;
+    if (!source.bins || source.analysisEngine==='gemini') continue;
     const earlier=new Map(source.candidates.map(c=>[c.id,c]));
     source.candidates = detectHighlights(source.bins, {
       sensitivity: state.sensitivity, leadSeconds: state.leadSeconds,
@@ -662,7 +689,10 @@ function row(item, index) {
     }
   });
   timeRow.append(number, badge);
-  const score = make('span','score', 'ピーク ' + Math.round(item.peakSeconds) + '秒 / ' + item.db + 'dBFS');
+  const score = make('span','score',item.origin==='gemini'
+    ? 'Gemini音声候補 · '+formatTime(item.peakSeconds)
+      +(item.geminiQuote?' · 「'+item.geminiQuote+'」':'')
+    : 'ピーク ' + Math.round(item.peakSeconds) + '秒 / ' + item.db + 'dBFS');
   const titleGroup=make('div','play-label-group');
   const titleLabel=make('label','play-label-caption','プレイ内容');
   const titleSelect=make('select','play-label-select');
@@ -1135,3 +1165,4 @@ initWhisperExperiment(state);
 initAIReview(state);
 initVideoExplore(state);
 initCloudAudioPilot(state);
+initGeminiPrimary(state,{decodeAudio:decodeStreaming,commitResults:commitGeminiResults});
