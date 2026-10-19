@@ -250,39 +250,136 @@ function renderResults(){
   for(let i=5;i<candidates.length;i++)more.append(makeCard(candidates[i],i,original));
   target.append(more);
  }
- const saveButton=node('button','映像探索の評価データをJSONで保存');
- saveButton.type='button';
- saveButton.style.cssText='width:100%;padding:12px;margin:10px 0;border-radius:8px;background:#195e52;color:#fff;border:1px solid #76cbb6';
- saveButton.addEventListener('click',exportResults);
- target.append(saveButton);
+ const exportPanel=node('div');
+ exportPanel.style.cssText='margin-top:14px;padding:12px;background:#173649;border:1px solid #436d7b;border-radius:10px';
+ const exportTitle=node('strong','評価結果を保存・共有');
+ exportTitle.style.cssText='display:block;font-size:14px;color:#a0eddb;margin:0 0 8px';
+ exportPanel.append(exportTitle);
+ const hint=node('p','iPhoneは「共有してファイルに保存」がおすすめ。難しい場合はJSONをコピーして、このチャットに貼り付けられます。');
+ hint.style.cssText='font-size:12px;line-height:1.6;color:#d0e2ee';
+ exportPanel.append(hint);
+ const actions=[
+  ['↑ 共有して「ファイルに保存」',shareResults,'#1b6557'],
+  ['↓ JSONをダウンロード',downloadResults,'#295371'],
+  ['📋 JSONをコピー',copyResults,'#3e436d']
+ ];
+ for(const [label,callback,color] of actions){
+  const button=node('button',label);
+  button.type='button';
+  button.style.cssText='display:block;width:100%;min-height:44px;padding:10px;margin:8px 0;border-radius:8px;background:'+color+';color:#fff;border:1px solid #6995a1;text-align:center';
+  button.addEventListener('click',callback);
+  exportPanel.append(button);
+ }
+ const exportStatus=node('p');exportStatus.id='videoExportStatus';
+ exportStatus.setAttribute('role','status');
+ exportStatus.style.cssText='font-size:12px;line-height:1.6;color:#bce8d9;white-space:pre-wrap';
+ exportPanel.append(exportStatus);
+ const exportFallback=node('div');exportFallback.id='videoExportFallback';
+ exportPanel.append(exportFallback);
+ target.append(exportPanel);
  updateSummary();
 }
-function exportResults(){
- if(!lastScan)return;
+function exportStatus(message){
+ const el=$('videoExportStatus');if(el)el.textContent=message;
+}
+function exportFallback(){
+ const el=$('videoExportFallback');if(el)el.replaceChildren();return el;
+}
+function buildExportPayload(){
+ if(!lastScan)throw Error('映像探索がまだ完了していません。');
  const {source,candidates,metadata}=lastScan;
- const payload={
+ return {
   tool:'PeakStamp Video Explore β',
   exportedAt:new Date().toISOString(),
   algorithm:VIDEO_SCAN_ALGORITHM,
   warning:'ヒトが評価する映像変化候補。ボール・ゴール・シュートの視覚認識モデルではない。',
   video:{name:source.file.name,size:source.file.size,duration:source.duration,
-    mode:metadata.mode,frames:metadata.frames,interval:metadata.interval,
-    videoWidth:metadata.videoWidth,videoHeight:metadata.videoHeight},
+   mode:metadata.mode,frames:metadata.frames,interval:metadata.interval,
+   videoWidth:metadata.videoWidth,videoHeight:metadata.videoHeight},
   motionSummary:metadata.motionSummary||{},
   motionTimeline:metadata.motionTimeline||[],
   candidates:candidates.map(x=>({
-    timeSeconds:x.peakSeconds,score:x.score,detail:x.detail,
-    userLabel:feedback[x.key]||'unreviewed'
+   timeSeconds:x.peakSeconds,score:x.score,detail:x.detail,
+   userLabel:feedback[x.key]||'unreviewed'
   })),
   previousReviewComparison:comparePriorShots(lastScan.priorShotMarkers,candidates),
   note:'動画の実データはJSONに含まれない。過去候補との一致は見逃し率ではない。'
  };
- const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
- const url=URL.createObjectURL(blob);
- const a=document.createElement('a');
- a.href=url;a.download='PeakStamp-Video-Explore.json';
- document.body.append(a);a.click();a.remove();
- setTimeout(()=>URL.revokeObjectURL(url),15000);
+}
+function makeExport(){
+ const payload=buildExportPayload();
+ const json=JSON.stringify(payload,null,2);
+ const name=(payload.video.name||'match').replace(/\.[^.]+$/,'')
+  .replace(/[^A-Za-z0-9_-]+/g,'-').slice(0,40);
+ const filename='PeakStamp-'+(name||'match')+'-review.json';
+ return {json,filename,blob:new Blob([json],{type:'application/json;charset=utf-8'})};
+}
+async function shareResults(){
+ try{
+  const {json,filename}=makeExport();
+  // Must call navigator.share on this click, before any await.
+  if(typeof navigator.share!=='function'||typeof File!=='function'){
+   exportStatus('このブラウザではファイル共有が使えません。「JSONをコピー」か「ダウンロード」をお試しください。');
+   return;
+  }
+  const file=new File([json],filename,{type:'application/json'});
+  if(typeof navigator.canShare==='function'&&!navigator.canShare({files:[file]})){
+   exportStatus('このブラウザはJSONファイルの共有に対応していません。「JSONをコピー」を使ってください。');
+   return;
+  }
+  await navigator.share({files:[file],title:'PeakStamp 映像探索の評価'});
+  exportStatus('共有画面を閉じました。「ファイルに保存」を選んだ場合はiPhoneのファイルアプリで確認してください。');
+ }catch(e){
+  if(e?.name==='AbortError')exportStatus('共有がキャンセルされました。保存したい場合は、もう一度お試しください。');
+  else exportStatus('共有できませんでした：'+(e?.message||String(e))+'。JSONコピーも利用できます。');
+ }
+}
+function downloadResults(){
+ try{
+  const {filename,blob}=makeExport();
+  const url=URL.createObjectURL(blob);
+  // iOS Safari can ignore a synthetic blob download, so keep a visible
+  // manual fallback link rather than immediately revoking/removing it.
+  const fallback=exportFallback();
+  const link=document.createElement('a');
+  link.href=url;link.download=filename;
+  link.textContent='保存されない場合：ここを長押ししてリンク先を保存';
+  link.style.cssText='display:block;min-height:44px;padding:11px;margin:10px 0;border:1px solid #7ca2b4;border-radius:8px;background:#25475a;color:#e3f6ff;overflow-wrap:anywhere';
+  if(fallback)fallback.append(link);
+  link.click();
+  exportStatus('JSONのダウンロードを試みました。Safariのダウンロード一覧と、ファイルアプリ内の「ダウンロード」を確認してください。何も起こらない場合は「共有」か「コピー」を使ってください。');
+  // Small JSON object URLs are safe to retain while the page is open.
+  // Revoke only on navigation, not before a user can tap the manual link.
+  window.addEventListener('pagehide',()=>URL.revokeObjectURL(url),{once:true});
+ }catch(e){
+  exportStatus('JSONダウンロード処理に失敗：'+(e?.message||String(e))+'。JSONコピーを使ってください。');
+ }
+}
+async function copyResults(){
+ let json;
+ try{json=makeExport().json;}catch(e){exportStatus('JSON作成に失敗：'+(e?.message||String(e)));return;}
+ try{
+  if(!navigator.clipboard?.writeText)throw Error('Clipboard APIを利用できません');
+  await navigator.clipboard.writeText(json);
+  exportStatus('JSONをコピーしました。このチャットにそのまま貼り付けられます。');
+  return;
+ }catch(_){
+  // In-app iOS browsers can deny clipboard APIs; leave a selectable field.
+  const fallback=exportFallback();
+  if(!fallback){exportStatus('コピーが許可されませんでした。Safariで開いてお試しください。');return;}
+  const textarea=document.createElement('textarea');
+  textarea.value=json;textarea.readOnly=true;textarea.rows=4;
+  textarea.setAttribute('aria-label','評価JSONの内容');
+  textarea.style.cssText='display:block;width:100%;max-width:100%;box-sizing:border-box;border-radius:8px;padding:9px;color:#112e45;background:#f2f7fa';
+  fallback.append(textarea);
+  textarea.focus();textarea.select();
+  try{textarea.setSelectionRange(0,json.length);}catch(_){}
+  let copied=false;
+  try{copied=!!document.execCommand?.('copy');}catch(_){}
+  exportStatus(copied
+   ?'JSONをコピーしました。このチャットに貼り付けてください。'
+   :'自動コピーが許可されませんでした。下のJSONテキストを長押ししてコピーしてください。');
+ }
 }
 export function refreshVideoExplore(state){
  const sources=(state.sources||[]).filter(s=>s?.bins?.length && s?.objectUrl && s.duration>0);
