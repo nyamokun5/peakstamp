@@ -58,7 +58,7 @@
 
     <section class="panel gemini-primary-panel" id="geminiPrimaryPanel" aria-label="Geminiで音声を解析">
       <div class="panel-label"><span class="number">02</span><h2>Geminiでハイライトを見つける</h2></div>
-      <p>動画はiPhoneに残したまま、<strong>音声だけを圧縮してGoogle Geminiに送信</strong>します。Whisperや従来の音量ピーク解析は必要ありません。</p>
+      <p>動画はiPhoneに残したまま、<strong>音声だけをWAV形式で分割してGoogle Geminiに送信</strong>します。Whisperや従来の音量ピーク解析は必要ありません。</p>
       <label for="geminiMainSource">解析する動画（1回1本ずつ）</label>
       <select id="geminiMainSource" disabled aria-label="Geminiで解析する動画"></select>
       <p id="geminiMainFileHelp" class="fine-print">上からMOV/MP4を選択してください。</p>
@@ -74,7 +74,7 @@
       <button id="geminiMainForce" class="whisper-run" type="button" hidden>Geminiで再解析（追加料金が発生する場合があります）</button>
       <button id="geminiMainCancel" class="cancel-button" type="button" hidden>Gemini解析を中止</button>
       <p id="geminiMainStatus" role="status" aria-live="polite" class="gemini-main-status"></p>
-      <small class="fine-print">音声のみを約40kbpsのM4Aに圧縮し、必要な場合はさらに小さくします。解析結果はiPhone内に保存して再利用可能。無料・完全オフラインの旧音声解析は下の予備メニューから使えます。Gemini API利用料や通信料が発生することがあります。</small>
+      <small class="fine-print">元動画から音声だけを抽出し、iPhone内で16kHzのWAVに変換して約70秒ごとに送信します。解析済みの区間は端末に保存して再利用可能。無料・完全オフラインの旧音声解析は下の予備メニューから使えます。Gemini API利用料や通信料が発生することがあります。</small>
     </section>
 
     <details class="legacy-audio-details">
