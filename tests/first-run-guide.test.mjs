@@ -29,7 +29,7 @@ test('new visitors are guided once and can reopen voluntarily',()=>{
  assert.match(nodes.guideTitle.textContent,/キープ/);
  nodes.guideNext.click();
  assert.equal(nodes.firstRunOverlay.hidden,true);
- assert.equal(nodes.resultsPanel.scrolled,true);
+ assert.equal(nodes.uploadZone.scrolled,true);
  assert.equal(saved.get('gemini-results'),'never-touch');
  nodes.openGuide.click();
  assert.equal(nodes.firstRunOverlay.hidden,false);
