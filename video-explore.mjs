@@ -5,6 +5,7 @@
  */
 import { discoverVideoMotionCandidates, VIDEO_SCAN_ALGORITHM } from './video-motion.mjs?v=3';
 import { prettyShotTime } from './shot-evaluation.mjs?v=1';
+import { priorShotLabels, comparePriorShots } from './video-review-history.mjs?v=1';
 import { discoverScenePool } from './ai-candidate-discovery.mjs?v=2';
 
 const $=id=>document.getElementById(id);
@@ -202,7 +203,7 @@ function updateSummary(){
  const good=reviewed.filter(x=>feedback[x.key]==='good').length;
  el.textContent='映像候補 '+lastScan.candidates.length+'件中、評価済み '+reviewed.length+
    '件 ／ シュート・ゴール・GKセーブ '+shots.length+'件 ／ その他の好プレー '+good+
-   '件。動画全体の見逃し率は、この評価だけでは分かりません。';
+   '件。'+ (lastScan.priorShotMarkers?.length ? ' 以前のシュート評価のうち今回も候補に近い時刻があるのは '+comparePriorShots(lastScan.priorShotMarkers,lastScan.candidates).rediscovered+'/'+lastScan.priorShotMarkers.length+'件。':'')+' 動画全体の見逃し率は、この評価だけでは分かりません。';
 }
 function renderResults(){
  const target=$('videoExploreResults');
@@ -225,6 +226,19 @@ function renderResults(){
  metrics.style.cssText='font-size:13px;color:#cfe9eb;padding:8px;background:#163d4f;border-radius:8px';
  target.append(metrics);
  const original=discoverScenePool([source],{limit:20}).entries;
+ const past=comparePriorShots(lastScan.priorShotMarkers,candidates);
+ if(past.previouslyLabeledShots){
+   const group=node('details');
+   group.style.cssText='border:1px solid #456878;border-radius:9px;padding:10px;margin:10px 0';
+   group.append(node('summary','以前シュートだった候補との比較 '+past.rediscovered+'/'+past.previouslyLabeledShots+'件'));
+   group.append(node('p','過去の評価から自動照合しました。時刻の手入力は不要です。これは動画全体の見逃し率ではありません。'));
+   for(const item of past.rows){
+     const row=node('p',formatTime(item.timeSeconds)+' '+(item.previousLabels?.includes('goal')?'ゴール':item.previousLabels?.includes('save')?'GKセーブ':'シュート')+(item.newCandidateNear?'：今回も候補あり':'：今回の候補外'));
+     row.style.cssText='font-size:12px;padding:5px;color:#cae4e7';
+     group.append(row);
+   }
+   target.append(group);
+ }
  if(!candidates.length){
   target.append(node('p','目立つカメラ・映像変化は検出されませんでした。映像が静かなシュートは見逃す場合があります。'));
  }
@@ -260,7 +274,8 @@ function exportResults(){
     timeSeconds:x.peakSeconds,score:x.score,detail:x.detail,
     userLabel:feedback[x.key]||'unreviewed'
   })),
-  note:'動画の実データはJSONに含まれない'
+  previousReviewComparison:comparePriorShots(lastScan.priorShotMarkers,candidates),
+  note:'動画の実データはJSONに含まれない。過去候補との一致は見逃し率ではない。'
  };
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
  const url=URL.createObjectURL(blob);
@@ -308,6 +323,7 @@ export function initVideoExplore(state){
   if(working||state.working||state.exporting||!source)return;
   working=true;interrupt={cancelled:false};activeScanSource=source;
   const token=interrupt;
+  const previousMarkers=priorShotLabels(feedback,source);
   lastScan=null;renderResults();refreshVideoExplore(state);
   const mode=$('videoExploreMode').value==='detail'?'detail':'standard';
   $('videoExploreStatus').textContent='映像を読み込んでいます。iPhoneで初回は時間がかかる場合があります。';
@@ -323,7 +339,7 @@ export function initVideoExplore(state){
       key:[source.file.name,source.file.size,source.file.lastModified,
         Math.round(item.peakSeconds*1000),'video-motion'].join('::')
     }));
-    lastScan={source,candidates,metadata:{
+    lastScan={source,candidates,priorShotMarkers:previousMarkers,metadata:{
       frames:metadata.frames,interval:metadata.interval,
       videoWidth:metadata.videoWidth,videoHeight:metadata.videoHeight,
       duration:metadata.duration,mode,
