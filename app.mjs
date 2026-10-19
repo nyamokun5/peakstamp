@@ -1,7 +1,7 @@
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audio12';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
-import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=4';
+import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
