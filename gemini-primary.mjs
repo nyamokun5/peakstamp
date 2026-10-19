@@ -5,8 +5,8 @@
 import { extractAudioOnly, formatFileSize } from './cloud-audio-export.mjs?v=2';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
 
-// Set only after deployment URL and ownership are verified; never guess a host.
-const API_ENDPOINT = '';
+// Verified owner project: Vercel production domain for nyamokun5/peakstamp.
+const API_ENDPOINT = 'https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
 const MAX_AUDIO_BYTES = 2_900_000;
 const CACHE_KEY = 'peakstamp_gemini_primary_json_v1';
 const $ = id => document.getElementById(id);
@@ -106,6 +106,49 @@ async function callApi(audio,duration,access,signal) {
 }
 export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
  if(!$('geminiMainRun')||typeof decodeAudio!=='function'||typeof commitResults!=='function')return;
+ const checkConnection=$('geminiMainCheck');
+ if(checkConnection)checkConnection.addEventListener('click',async()=>{
+  const access=$('geminiMainAccess').value.trim();
+  if(!access){
+   status('まずVercelのPEAKSTAMP_ACCESS_CODEに登録したアクセスコードを入力してください。');
+   $('geminiMainAccess').focus();
+   return;
+  }
+  const previousLabel=checkConnection.textContent;
+  checkConnection.disabled=true;
+  checkConnection.textContent='接続確認中…';
+  status('VercelのAPIサーバーとアクセスコードを確認中。音声送信・Gemini課金はありません。');
+  try{
+   const controller=new AbortController();
+   const timeout=setTimeout(()=>controller.abort(),18000);
+   let response;
+   try{
+    response=await fetch(API_ENDPOINT,{method:'POST',mode:'cors',signal:controller.signal,
+     headers:{'Content-Type':'application/json','X-PeakStamp-Access':access},
+     body:'{}'});
+   }finally{clearTimeout(timeout);}
+   let body={};
+   try{body=await response.json();}catch(_){}
+   const error=String(body?.error||'');
+   if(response.status===400 && error.includes('JSONリクエスト')){
+    status('API接続成功！VercelのアクセスコードとGemini APIキーの設定を確認できました。動画を選んで解析してください。');
+   }else if(response.status===401){
+    status('APIには到達しましたが、アクセスコードが一致しません。Vercelに設定したPEAKSTAMP_ACCESS_CODEを確認してください。');
+   }else if(response.status===503){
+    status('APIには到達しましたが、GEMINI_API_KEYかPEAKSTAMP_ACCESS_CODEがサーバーに反映されていません。Vercelで再デプロイしてください。');
+   }else if(response.status===404){
+    status('APIの公開先が見つかりません。Vercelのデプロイと/api/gemini-audioの配置を確認してください。');
+   }else{
+    status('API接続確認でHTTP '+response.status+'。'+(error||'APIサーバーの設定を確認してください。'));
+   }
+  }catch(e){
+   status('APIに接続できません：'+(e?.name==='AbortError'?'時間切れです。':
+    '通信またはCORSで拒否されました。')+' VercelのDeployment Protectionやデプロイ状態を確認してください。');
+  }finally{
+   checkConnection.disabled=false;
+   checkConnection.textContent=previousLabel;
+  }
+ });
  $('geminiMainSource').addEventListener('change',()=>{
   selected=Number($('geminiMainSource').value)||0;
   refreshGeminiPrimary(state);
