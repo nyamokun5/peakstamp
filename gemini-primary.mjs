@@ -131,7 +131,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    try{body=await response.json();}catch(_){}
    const error=String(body?.error||'');
    if(response.status===400 && error.includes('JSONリクエスト')){
-    status('API接続成功！VercelのアクセスコードとGemini APIキーの設定を確認できました。動画を選んで解析してください。');
+    status('API接続成功！Vercelへの到達、アクセスコード認証、Gemini APIキーの環境変数登録を確認しました。Google側のキー有効性は最初の音声解析で確認します。');
    }else if(response.status===401){
     status('APIには到達しましたが、アクセスコードが一致しません。Vercelに設定したPEAKSTAMP_ACCESS_CODEを確認してください。');
    }else if(response.status===503){
