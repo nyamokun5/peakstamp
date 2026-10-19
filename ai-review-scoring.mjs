@@ -1,13 +1,16 @@
 /**
- * PeakStamp AI re-evaluation scorer, v3 (heuristic only).
+ * PeakStamp AI re-evaluation scorer, v4 (heuristic only).
  * Two independent cues: actual acoustic event strength and credible soccer shouts.
  * Do not infer a goal from speech alone. Never override the user's keep/reject.
  * Audio scores and ASR text are both unreliable in isolation.
  */
-const GROUPS = [
-  {kind:'ゴール反応',bonus:14,words:['ナイスシュート','ゴール','入った','決まった','決めた','やった']},
-  {kind:'好プレー反応',bonus:11,words:['ナイスパス','ナイスセーブ','ナイスプレー','ナイス','上手い','うまい','すごい','すげえ','最高']},
-  {kind:'惜しい反応',bonus:11,words:['惜しい','おしい','危ない','あぶない']}
+export const GROUPS = [
+  {kind:'ゴール反応',strength:'強',bonus:18,words:['ゴール','ごーる','入った','はいった','決まった','きまった']},
+  {kind:'ナイシュー（ナイスシュート）',strength:'強',bonus:17,words:['ナイシュー','ナイシュ','ないしゅー','ないしゅ','ナイスシュー','ナイスシュート']},
+  {kind:'ナイスキー（ナイスキーパー）',strength:'強',bonus:17,words:['ナイスキー','ナイスキ','ないすきー','ないすき','ナイスキーパー','ナイスセーブ']},
+  {kind:'惜しい反応',strength:'強',bonus:15,words:['惜しい','おしい','おしー','おっしー']},
+  {kind:'うまい反応',strength:'強',bonus:14,words:['うまい','上手い','上手','うまっ','うめえ','うめぇ']},
+  {kind:'その他のポジティブ反応',strength:'弱',bonus:5,words:['ナイスパス','ナイス','すごい','すげえ']}
 ];
 export const LABELS = Object.freeze([
   {value:'unreviewed',text:'未評価',positive:null},
@@ -41,15 +44,30 @@ export function plausibleSpeech(text, seconds=4) {
 /** Recognize only narrow, explicit soccer shout pronunciation variants.
  * Does NOT do generic fuzzy matching: it would turn background chatter into goals.
  */
+function isSportShout(text,word,group){
+  const raw=prepare(text).replace(/[！!。．、,？?\s]+$/gu,'');
+  if(raw.length>22)return false;
+  const i=raw.indexOf(prepare(word));
+  if(i<0)return false;
+  const after=raw.slice(i+prepare(word).length);
+  // Do not mistake soccer terminology or conversation for a goal celebration.
+  if(group.kind==='ゴール反応'){
+    if(/^(?:キック|ライン|前|近|の|に|を|から|まで|する|したら)/u.test(after))return false;
+    if(after&&!/^(?:だ+|だね|だよ|ねぇ?|よ+|ー+|っ+|すごい)$/u.test(after))return false;
+  }
+  // 'ナイス' is weaker than a dedicated shot/save shout.
+  if(word==='ナイス'&&/ナイシュー|ナイスシュート|ナイスキー|ナイスキーパー|ナイスパス|ナイスセーブ/u.test(raw))return false;
+  return raw.length<=18;
+}
 function phoneticReaction(transcript) {
   const t=prepare(transcript);
   // e.g. "おーしー！" (candidate for 惜しい), but not arbitrary "おし" in a sentence.
   if(/^(?:おー?しー+|おしい+|おっしー+|惜しー+)(?:[！!？?。、\s]|$)/u.test(t) ||
      /^(?:おー?しー+|おしい+|おっしー+|惜しー+)$/u.test(t))
-    return {kind:'惜しい反応（発音近似・要確認）',bonus:8,phrases:['惜しい？'],matchType:'発音近似'};
-  // e.g. "ナイシーです..." could be "ナイス" shouted from the pitch.
-  if(/^ないし(?:ー+|い+)|^ナイシ(?:ー+|い+)/u.test(t))
-    return {kind:'好プレー反応（発音近似・要確認）',bonus:7,phrases:['ナイス？'],matchType:'発音近似'};
+    return {kind:'惜しい反応（発音近似・要確認）',strength:'弱',bonus:8,phrases:['惜しい？'],matchType:'発音近似'};
+  // Only near-isolated shouts are allowed as pronunciation-based evidence.
+  if(/^(?:ないしー+|ナイシー+)[！!？?\s]*$/u.test(t))
+    return {kind:'好プレー反応（発音近似・要確認）',strength:'弱',bonus:5,phrases:['ナイス？'],matchType:'発音近似'};
   return null;
 }
 
@@ -71,9 +89,9 @@ export function classifyEvidence(transcripts=[],speechDetected=false,peakSeconds
   for(const segment of usable){
     const s=strip(segment.text);
     for(const group of GROUPS){
-      const hits=group.words.filter(word=>s.includes(strip(word)));
+      const hits=group.words.filter(word=>isSportShout(segment.text,word,group));
       if(hits.length){
-        const candidate={kind:group.kind,bonus:group.bonus,phrases:hits.slice(0,3),
+        const candidate={kind:group.kind,strength:group.strength,bonus:group.bonus,phrases:hits.slice(0,3),
           matchType:'直接一致',hasUsableSpeech:true};
         if(!best||candidate.bonus>best.bonus)best=candidate;
       }
