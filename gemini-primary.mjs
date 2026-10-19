@@ -104,6 +104,9 @@ export function refreshGeminiPrimary(state) {
  const source=sources[selected]||null;
  const cache=source&&cachedResult(source);
  picker.disabled=processing||sources.length<2;
+ picker.hidden=sources.length<2;
+ const pickerLabel=$('geminiSourceLabel');
+ if(pickerLabel)pickerLabel.hidden=sources.length<2;
  button.disabled=processing||!source||state.working||state.exporting||(!cache && !API_ENDPOINT);
  second.disabled=button.disabled;
  button.textContent=processing?'Gemini処理中…':cache?'保存済みのGemini結果を復元':(!API_ENDPOINT?'Gemini APIサーバー接続待ち':'Geminiで音声解析する →');
