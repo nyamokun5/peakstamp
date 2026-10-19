@@ -87,13 +87,13 @@
       <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
 
       <section id="aiRerankPanel" class="whisper-experiment" aria-label="AIハイライト再評価の実験">
-        <div class="whisper-experiment-head"><strong>β AI再評価 — 実際のシーンと比較</strong><span>任意・無料</span></div>
-        <p>まずは音響上位5件だけ、VAD発話検出＋Whisper Base＋サッカー掛け声辞書で参考順位を作成。動画を見ながら実際の結果を評価できます。元の候補順位・採用状態・動画書き出しは変更しません。</p>
-        <button id="aiRerankButton" class="whisper-run" type="button" disabled>音響上位5件をAIで再評価</button>
-        <small id="aiRerankHelp" class="whisper-disclaimer">先に音声を解析してハイライト候補を作成してください。</small>
+        <div class="whisper-experiment-head"><strong>β AI広域探索 — 新しいシーンを発見</strong><span>任意・無料</span></div>
+        <p>従来の上位5件の並べ替えではなく、音声データから最大20件の候補を探索。通常より高感度な音響検出と短い間隔のピーク検出を使い、従来の候補外の場面も探します。</p>
+        <button id="aiRerankButton" class="whisper-run" type="button" disabled>最大20件の見どころを広域探索</button>
+        <small id="aiRerankHelp" class="whisper-disclaimer">先に音声を解析して候補を作成してください。初回は追加モデルの取得が必要です。iPhoneでは時間がかかる場合があります。</small>
         <p id="aiRerankStatus" class="whisper-status" role="status" aria-live="polite"></p>
         <div id="aiRerankResults" class="whisper-output" hidden></div>
-        <small class="whisper-disclaimer">参考順位は推定であり、ゴールや選手の映像を直接認識した結果ではありません。比較結果と人による評価はこの端末内に保存。モデルデータの取得には通信が必要ですが、元動画・音声のサーバー送信は行いません。初回は時間がかかる場合があります。</small>
+        <small class="whisper-disclaimer">新しく探した候補は通常のシーン一覧に自動追加しません。上位5件に加え、その他の候補も展開して再生・評価できます。Whisperは最大10件、声の検査は最大20件を対象にします。モデル取得以外で元動画・音声は送信せず、評価はこの端末内に保存されます。映像自体をAIで認識する機能ではありません。</small>
       </section>
       <section id="whisperExperiment" class="whisper-experiment" aria-label="AI文字起こしの実験">
         <div class="whisper-experiment-head"><strong>β AI文字起こし（実験）</strong><span>任意・無料</span></div>
@@ -275,6 +275,6 @@
       </div>
     </div>
   </aside>
-  <script type="module" src="app.mjs?v=ai-review5"></script>
+  <script type="module" src="app.mjs?v=ai-explore6"></script>
 </body>
 </html>
