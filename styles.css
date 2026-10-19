@@ -851,7 +851,7 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
    margin-inline:9px;
  }
  .highlight-entry.preview-active .range-editor{
-   margin-top:0;margin-bottom:11px;
+   margin:0 0 11px;
    padding:12px 10px;
    border-radius:10px;
  }
