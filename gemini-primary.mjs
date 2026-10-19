@@ -1,10 +1,10 @@
 /**
- * Primary Gemini-only workflow: local MOV -> compressed M4A -> authenticated API
+ * Primary Gemini-only workflow: local MOV -> streamed PCM WAV -> authenticated API
  * -> on-device scene review. Never calls Whisper or acoustic peak detection.
  */
-import { extractAudioOnly, formatFileSize } from './cloud-audio-export.mjs?v=2';
+import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=1';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
-import { openWavSegmenter, mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=1';
+import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=2';
 
 // Verified owner project: Vercel production domain for nyamokun5/peakstamp.
 const API_ENDPOINT = 'https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
@@ -246,32 +246,19 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
   };
   refreshGeminiPrimary(state);
   try{
-   status('iPhone内で音声だけを圧縮しています。元動画はアップロードしません。');
-   let audio=await extractAudioOnly(source.file,{
-    mode:'api',isCancelled:()=>signal.aborted||id!==generation,
-    onProgress:percent=>{if(id===generation)status('音声を圧縮中… '+percent+'%');}
-   });
-   alive();
-   if(audio.bytes>MAX_AUDIO_BYTES){
-    status('音声が2.9MBを超えたため、さらに圧縮しています…');
-    audio=await extractAudioOnly(source.file,{mode:'api-low',
-     isCancelled:()=>signal.aborted||id!==generation});
-    alive();
-   }
-   if(audio.bytes>MAX_AUDIO_BYTES)throw Error('音声が2.9MBを超えました。動画を短く分割してください。');
-   const duration=Number(audio.durationSeconds);
-   if(!(duration>0)||duration>600)throw Error('10分を超える動画は現在のAPIモードに対応していません。');
+   let duration=Number(cache?.duration_seconds);
    let answer;
    if(cache){
     answer=cache;
     status('保存済みのGemini結果を復元しています。APIへの再送信はありません。');
    }else{
-    status('M4Aの音声をiPhone内でWAVに変換し、約70秒ごとに分割しています…');
-    const segmenter=await openWavSegmenter(audio.blob,{
+    status('元動画から音声を直接WAVに変換しています（M4A変換なし）…');
+    const segmenter=await openVideoWavSegmenter(source.file,{
      isCancelled:()=>signal.aborted||id!==generation
     });
     try{
      alive();
+     duration=segmenter.durationSeconds;
      const ranges=segmenter.ranges;
      const previous=getSavedChunks(source);
      const responses=[];
@@ -286,7 +273,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
        status('Gemini '+(i+1)+'/'+ranges.length+'：'+
         Math.round(range.startSeconds)+'〜'+Math.round(range.endSeconds)+
         '秒のWAV音声だけを送信しています…');
-       const wav=segmenter.makeSegment(range);
+       const wav=await segmenter.makeSegment(range);
        try{
         segmentResponse=await callApi(wav,range.durationSeconds,access,signal,'wav');
        }catch(err){
@@ -308,11 +295,11 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    const parsed=parseAudioEvents(JSON.stringify(answer),duration);
    alive();
    status('Gemini候補'+parsed.events.length+'件。確認用の音声波形をiPhone内で準備しています…');
-   const decoded=await decodeAudio(audio.file,
+   const decoded=source.bins?.length?{bins:source.bins,duration:source.duration}:await decodeAudio(source.file,
     (label,progress)=>{if(id===generation)status('確認用波形を準備中… '+Math.round(progress)+'%');},
     alive);
    alive();
-   const summary=await commitResults({source,parsed,audio,decoded,answer,fromCache:!!cache});
+   const summary=await commitResults({source,parsed,audio:{durationSeconds:duration},decoded,answer,fromCache:!!cache});
    alive();
    status('Gemini解析完了：'+summary.candidates+'件の候補（'+summary.merged+'件の近接反応を統合）。'+
     (cache?'保存済みのAI結果を利用。':'WAV音声を '+(answer.meta?.segments||'?')+' 区間に分けて解析。')+
