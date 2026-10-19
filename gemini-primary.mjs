@@ -83,6 +83,9 @@ export function refreshGeminiPrimary(state) {
  $('geminiMainFileHelp').textContent=source
    ?'選択中：'+source.file.name+'。元動画は送信せず、約40kbpsの音声だけをGoogleへ送ります。'
    :'まず上の「動画を選ぶ」からMOV/MP4を選択してください。';
+ if(!API_ENDPOINT && !cache && !processing){
+  status('現在はAPIサーバーのデプロイ権限とGemini APIキーの設定待ちです。手動解析は「旧Gemini手動比較」から継続できます。');
+ }
 }
 async function callApi(audio,duration,access,signal) {
  if(audio.bytes>MAX_AUDIO_BYTES)
