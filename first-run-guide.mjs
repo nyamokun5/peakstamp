@@ -3,7 +3,7 @@ const GUIDE_KEY='peakstamp_first_run_guide_v1';
 const steps=[
   {title:'動画を選ぶ',body:'まず試合のMOV / MP4を選択。長い動画は1本ずつがおすすめ。',target:'uploadZone'},
   {title:'Geminiで見どころを探す',body:'アクセスコードを入力し、音声送信に同意して解析。完了区間がバーで分かります。',target:'geminiPrimaryPanel'},
-  {title:'キープして動画にする',body:'「▶ リプレイ」で確認。指で拡大したり、開始・終了を調整し、良いシーンをキープ。',target:'resultsPanel'}
+  {title:'キープして動画にする',body:'「▶ リプレイ」で確認。再生・一時停止、音量、拡大、切り取り位置を調整してキープ。',target:'resultsPanel'}
 ];
 export function initFirstRunGuide({storage=window.localStorage,hasPriorAnalysis=()=>false}={}){
  const root=document.getElementById('firstRunOverlay');
