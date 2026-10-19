@@ -37,7 +37,7 @@ export function refreshCloudAudioPilot(state){
  const oldSource=sourceReady;
  const oldValue=picker.value;
  picker.replaceChildren();
- for(const s of sources){const option=node('option',s.file.name+'（'+mmss(s.duration)+'）');picker.append(option);}
+ for(const [i,s] of sources.entries()){const option=node('option',s.file.name+'（'+mmss(s.duration)+'）');option.value=String(i);picker.append(option);}
  selected=sources.length?Math.min(selected,sources.length-1):0;
  // The calling app also refreshes this panel after each upload.
  if(oldValue!==''&&Number.isInteger(Number(oldValue))&&Number(oldValue)<sources.length)selected=Number(oldValue);
@@ -106,12 +106,58 @@ function downloadAudio(){
  a.click();
  say('M4Aのダウンロードを試みました。保存できない場合は「ファイルに保存」の共有をお試しください。');
 }
-async function copyPrompt(state){
+function selectPromptField(){
+ const field=$('cloudAudioPromptText');
+ const area=$('cloudAudioPromptArea');
+ if(!field||!area||area.hidden||!field.value)return false;
+ field.focus();
+ field.select();
+ try{field.setSelectionRange(0,field.value.length);}catch(_){}
+ return true;
+}
+function copyPrompt(state){
+ const area=$('cloudAudioPromptArea'),field=$('cloudAudioPromptText');
+ const status=$('cloudAudioCopyStatus');
  const source=currentSource(state);
- if(!source)return;
- const text=makeAudioAnalysisPrompt(source.duration);
- const ok=await clipboard(text,$('cloudAudioPanel'));
- say(ok?'Geminiへの解析指示をコピーしました。AI Studioで音声ファイルと一緒に貼り付けてください。':'自動コピーできません。画面に表示したテキストを長押ししてコピーしてください。');
+ if(!area||!field||!status)return;
+ if(!source){
+  area.hidden=false;
+  status.textContent='まず動画を選び、通常の音声解析を実行してください。';
+  return;
+ }
+ try{
+  // The prompt is displayed and remains available regardless of clipboard permissions.
+  // Do not await any async work before opening the fallback, especially on iOS Safari.
+  field.value=makeAudioAnalysisPrompt(source.duration);
+  area.hidden=false;
+  status.textContent='解析指示を表示しました。コピーを試みています…';
+  selectPromptField();
+  // Legacy copy must run immediately during the trusted click gesture.
+  let legacyCopied=false;
+  try{legacyCopied=!!document.execCommand?.('copy');}catch(_){}
+  if(legacyCopied){
+   status.textContent='解析指示をコピーしました。Google AI Studioに貼り付けてください。';
+   return;
+  }
+  // Also invoke modern Clipboard API directly in the click callback, not after an await.
+  if(typeof navigator.clipboard?.writeText==='function'){
+   let operation;
+   try{operation=navigator.clipboard.writeText(field.value);}
+   catch(_){operation=null;}
+   if(operation&&typeof operation.then==='function'){
+    operation.then(()=>{
+     status.textContent='解析指示をコピーしました。Google AI Studioに貼り付けてください。';
+    },()=>{
+     status.textContent='iPhoneで自動コピーが許可されませんでした。すぐ上の指示文を長押ししてコピーしてください。「指示文を全選択する」も使えます。';
+    });
+    return;
+   }
+  }
+  status.textContent='このブラウザでは自動コピーが利用できません。指示文を長押ししてコピーしてください。';
+ }catch(e){
+  area.hidden=false;
+  status.textContent='指示文の準備に失敗：'+(e?.message||String(e));
+ }
 }
 function showVideoPreview(source,time,host){
  let box=$('cloudAudioVideoPreview');
@@ -217,6 +263,11 @@ export function initCloudAudioPilot(state){
  $('cloudAudioShare').addEventListener('click',shareAudio);
  $('cloudAudioDownload').addEventListener('click',downloadAudio);
  $('cloudAudioCopyPrompt').addEventListener('click',()=>copyPrompt(state));
+ $('cloudAudioSelectPrompt').addEventListener('click',()=>{
+  if(!selectPromptField())return;
+  const status=$('cloudAudioCopyStatus');
+  if(status)status.textContent='指示文を全選択しました。iPhoneでは選択部分を長押しして「コピー」を選んでください。';
+ });
  $('cloudAudioCompare').addEventListener('click',()=>compare(state));
  refreshCloudAudioPilot(state);
 }
