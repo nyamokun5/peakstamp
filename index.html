@@ -238,15 +238,15 @@
 
     <section class="panel montage-panel" id="montagePanel" hidden>
       <div class="panel-label"><span class="number">04</span><h2>ハイライト動画を作成</h2></div>
-      <p class="list-help">「キープ済み」のシーンだけを自動結合。冒頭は最初のシーンを最大3秒早く再生してタイトルを重ねます。従来の5秒イントロにも切り替えられます。</p>
+      <p class="list-help">キープしたシーンをつなげて、1本の動画に。</p>
 
       <fieldset class="intro-presentation-picker">
         <legend>タイトルの見せ方</legend>
         <label><input type="radio" name="introPresentation" value="overlay" checked />
-          <span><strong>最初のシーンに重ねる（おすすめ）</strong><small>最初のシーンを最大3秒早く再生。元の試合音声も再生し、独立したイントロは挿入しません。</small></span>
+          <span><strong>最初のシーンに重ねる</strong><small>おすすめ · 試合音声をそのまま使用</small></span>
         </label>
         <label><input type="radio" name="introPresentation" value="card" />
-          <span><strong>独立した5秒イントロ（従来）</strong><small>背景画像・動画を選び、5秒間のタイトルを挿入できます。</small></span>
+          <span><strong>5秒イントロを入れる</strong><small>画像・動画も設定可能</small></span>
         </label>
       </fieldset>
       <label class="montage-label" for="montageTitle">タイトル文字</label>
@@ -320,7 +320,7 @@
           <label class="montage-label" for="introOverlayScale">PNGのサイズ <strong id="introScaleValue">60%</strong></label>
           <input class="montage-slider" id="introOverlayScale" type="range" min="20" max="100" step="5" value="60" />
         </div>
-        <p class="intro-help">PNGがある場合はPNGがタイトルの代わりに表示されます。PNGを外すと従来の文字タイトルに戻ります。</p>
+        <p class="intro-help">PNGを使うと文字タイトルの代わりに表示されます。</p>
       </section>
 
       <div class="montage-cut-mode" role="group" aria-label="シーン終了の決め方">
