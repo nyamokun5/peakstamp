@@ -3,6 +3,7 @@
  * PeakStamp uploads NOTHING; the user may manually upload exported M4A to AI Studio.
  */
 import { discoverScenePool } from './ai-candidate-discovery.mjs?v=audio-pilot1';
+import { createCloudAudioReviewPlayer } from './cloud-audio-review-player.mjs?v=1';
 import { extractAudioOnly,formatFileSize } from './cloud-audio-export.mjs?v=1';
 import { makeAudioAnalysisPrompt,parseAudioEvents,compareAudioCandidates,AUDIO_PROMPT_VERSION } from './cloud-audio-eval.mjs?v=3';
 
@@ -13,12 +14,48 @@ const LABELS=[['unreviewed','未評価'],['shot','シュート'],['goal','ゴー
 const TYPE_NAMES={goal_reaction:'ゴールへの反応',shot_reaction:'シュートへの反応',save_reaction:'GKセーブへの反応',excited_reaction:'盛り上がり',other:'その他の音',uncertain:'判定保留'};
 let selected=0,sourceReady=null,exportedAudio=null,objectUrl=null;
 let busy=false,jobId=0,result=null,ratings={};
+let reviewPlayer=null,reviewSource=null,reviewEventSignature='';
+const RATING_STORE='peakstamp_cloud_audio_ratings_v1';
+const ratingKey=source=>[source?.file?.name||'',source?.file?.size||0,
+ source?.file?.lastModified||0,Math.round((source?.duration||0)*1000)].join('|');
+const ratedEventKey=event=>event.timeSeconds.toFixed(1)+'|'+event.type;
+function readRatings(source,events){
+ const restored={};
+ try{
+  const all=JSON.parse(localStorage.getItem(RATING_STORE)||'{}');
+  const saved=all[ratingKey(source)]||{};
+  for(const [i,event] of events.entries()){
+   const value=saved[ratedEventKey(event)];
+   if(LABELS.some(([label])=>label===value))restored[i]=value;
+  }
+ }catch(_){}
+ return restored;
+}
+function saveRatings(source,events,labels){
+ try{
+  const all=JSON.parse(localStorage.getItem(RATING_STORE)||'{}');
+  const key=ratingKey(source),saved=all[key]||{};
+  for(const [i,event] of events.entries()){
+   const value=labels[i];
+   if(LABELS.some(([label])=>label===value))saved[ratedEventKey(event)]=value;
+  }
+  all[key]=saved;
+  const keys=Object.keys(all);
+  if(keys.length>30)for(const stale of keys.slice(0,keys.length-30))delete all[stale];
+  localStorage.setItem(RATING_STORE,JSON.stringify(all));
+ }catch(_){}
+}
+function discardReviewPlayer(){
+ if(reviewPlayer){reviewPlayer.dispose();reviewPlayer=null;}
+ reviewSource=null;reviewEventSignature='';
+}
 function available(state){return (state?.sources||[]).filter(x=>x?.file&&x?.objectUrl&&x?.bins?.length&&x?.duration>0);}
 function currentSource(state){return available(state)[selected]||null;}
 function say(message){const el=$('cloudAudioStatus');if(el)el.textContent=message;}
 function sayCompare(message){const el=$('cloudAudioCompareStatus');if(el)el.textContent=message;}
 function resetAudio(){
  jobId++;
+ discardReviewPlayer();
  if(objectUrl){URL.revokeObjectURL(objectUrl);objectUrl=null;}
  sourceReady=null;exportedAudio=null;result=null;ratings={};
  const ready=$('cloudAudioReady'),results=$('cloudAudioResults'),audio=$('cloudAudioPlayback');
@@ -43,7 +80,7 @@ export function refreshCloudAudioPilot(state){
  if(oldValue!==''&&Number.isInteger(Number(oldValue))&&Number(oldValue)<sources.length)selected=Number(oldValue);
  picker.value=String(selected);
  const src=sources[selected]||null;
- if(oldSource && (!src||src.file!==oldSource.file)){resetAudio();say('動画が変わったため、音声を選び直してください。');}
+ if((oldSource && (!src||src.file!==oldSource.file)) || (reviewSource && (!src||src.file!==reviewSource.file))){resetAudio();say('動画が変わったため、音声を選び直してください。');}
  picker.disabled=busy||!sources.length;
  run.disabled=busy||state.working||state.exporting||!src;
  run.textContent=busy?'音声を抽出中…':'① 音声だけ取り出す';
@@ -158,17 +195,6 @@ function copyPrompt(state){
   area.hidden=false;
   status.textContent='指示文の準備に失敗：'+(e?.message||String(e));
  }
-}
-function showVideoPreview(source,time,host){
- let box=$('cloudAudioVideoPreview');
- if(box)box.remove();
- box=node('video');box.id='cloudAudioVideoPreview';box.controls=true;box.playsInline=true;
- box.preload='metadata';box.src=source.objectUrl;box.style.cssText='display:block;width:100%;max-height:260px;border-radius:8px;margin:10px 0';
- const jump=()=>{try{box.currentTime=Math.max(0,time-8)}catch(_){}};
- box.addEventListener('loadedmetadata',jump,{once:true});
- host.append(box);box.load();
- jump();
- try{box.play().catch(()=>{})}catch(_){}
 }
 function summarizeRatings(){
  const selected=Object.values(ratings);
