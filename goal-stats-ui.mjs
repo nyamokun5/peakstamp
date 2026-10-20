@@ -176,9 +176,20 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false}
    minus.addEventListener('click',()=>changeTime(Math.max(0,actualGoalTime(item)-1)));
    plus.addEventListener('click',()=>changeTime(actualGoalTime(item)+1));
    at.addEventListener('change',()=>changeTime(at.value));
+   const mark=make('button','goal-review-mark-button','⏱ 再生中の位置をゴール時刻に設定');
+   mark.type='button';
+   mark.addEventListener('click',()=>{
+    if(currentVideoSourceKey!==goalSourceKey(source)||video.readyState<1||
+       !Number.isFinite(video.currentTime)){
+     setStatus('先に「このゴールを映像で確認」で動画を開いてください。');return;
+    }
+    video.pause();
+    changeTime(video.currentTime);
+    setStatus('動画の再生位置 '+preciseTime(video.currentTime)+' をゴール時刻に設定しました。確定ボタンで保存してください。');
+   });
    const timingHint=make('small','',
     '実況は得点から約5秒後。映像でプレーを見て、時刻を微調整してください。');
-   timing.append(timingTitle,minus,at,plus,timingHint);
+   timing.append(timingTitle,minus,at,plus,mark,timingHint);
    card.append(timing);
    field(inputs,'得点者',item.scorer,v=>set('scorer',v),{placeholder:'例：若さん'});
    const assistField=make('label','goal-review-field');
