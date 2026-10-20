@@ -75,6 +75,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false}
     });
    }
    video.currentTime=Math.max(0,Number(time)-6);
+   video.scrollIntoView({behavior:'smooth',block:'center'});
    await video.play();
   }catch(e){setStatus('再生に失敗：'+(e?.message||String(e))+'。動画の再生ボタンをお試しください。');}
  }
