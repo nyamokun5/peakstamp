@@ -1035,3 +1035,6 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .goal-review-keep-clip{background:#1d5c49;color:white;border:1px solid #6fb99a;
  padding:9px;border-radius:8px;font-size:13px;font-weight:800;min-height:42px}
 .goal-review-keep-clip:disabled{opacity:.5}
+
+.goal-review-mark-button{flex:1 0 100%;min-height:44px;background:#254f5a;
+ border:1px solid #77a7ad;color:#effffb;border-radius:8px;font-size:13px;font-weight:800}
