@@ -2,7 +2,7 @@
  * This is an explicit action; recording a goal never automatically keeps a clip.
  * The regular PeakStamp / HS edit data formats stay unchanged.
  */
-import {actualGoalTime} from './goal-stats.mjs?v=39';
+import {actualGoalTime} from './goal-stats.mjs?v=40';
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 export function keepGoalClip(source,goal){
  if(!source?.bins||!(Number(source.duration)>0)||!Array.isArray(source.candidates)||!goal)return null;
