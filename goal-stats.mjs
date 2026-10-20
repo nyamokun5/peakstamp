@@ -62,7 +62,8 @@ export function createGoalDrafts(source,storage){
  const prior=readJson(storage,GOAL_STORE_PREFIX+key);
  const items=(Array.isArray(prior?.items)?prior.items:[])
   .filter(x=>x&&typeof x.id==='string'&&validTime(x.timeSeconds))
-  .map(x=>({...x},
+  .map(x=>({
+   ...x,
    // Old v38 records used timeSeconds for the spoken call: never overwrite it.
    goalTimeSeconds:actualGoalTime(x),
    goalTimeVerified:x.goalTimeVerified===true
