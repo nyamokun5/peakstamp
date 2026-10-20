@@ -1361,6 +1361,9 @@ const goalReview=initGoalStatsReview(state,{
   onUpdate:()=>{},
   onBeforePlay:()=>{
     closeInlinePreview();
+    // Free the competing decoder before playing large local iPhone MOV files.
+    // Goal review owns one persistent player and reuses it for every goal.
+    sceneReplayMedia.dispose();
     $('preview').pause();
   },
   onKeepClip:(source,item)=>{
