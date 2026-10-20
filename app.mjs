@@ -139,6 +139,7 @@ function syncSources() {
   if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
   $('stickyBar').hidden = !state.bins;
   $('resultsPanel').hidden = !state.bins && !goalReview?.hasRecords();
+  $('standardReviewArea').hidden = !state.bins;
   $('multiWaveNotice').hidden = state.sources.length <= 1;
   $('commentHelp').hidden = state.sources.length <= 1;
   $('commentHeading').textContent = '動画ごとのYouTubeタイムスタンプ';
@@ -1372,13 +1373,12 @@ const goalReview=initGoalStatsReview(state,{
     return true;
   }
 });
-$('openGoalStats').addEventListener('click',()=>{
-  const source=state.sources.find(s=>s?.file);
-  if(source)goalReview.openAt(source,0);
-});
 const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
   onResultsChange:()=>{
     goalReview.refresh();
     if(state.bins)drawResults();
-    else $('resultsPanel').hidden=!goalReview.hasRecords();
+    else{
+      $('resultsPanel').hidden=!goalReview.hasRecords();
+      $('standardReviewArea').hidden=true;
+    }
   }});
