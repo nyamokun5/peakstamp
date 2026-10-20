@@ -6,7 +6,7 @@ import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=batch33';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=batch33';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
 import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
