@@ -107,6 +107,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
  function focusActive(entry,{autoplay=false,scroll=true}={}){
   if(!entry)return;
   activeKey=entry.key;
+  manualSource.value=goalSourceKey(entry.source);
   render();
   seekTo(entry,{autoplay});
   if(scroll)viewer.scrollIntoView({behavior:'auto',block:'start'});
@@ -217,7 +218,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
     focusActive(next,{autoplay:true});
     say('ゴールを確定しました。次の未確定候補に進みました。');
    }else{
-    video.pause();activeKey='';render();
+    video.pause();activeKey='__all_done__';render();
     summary.scrollIntoView({behavior:'auto',block:'start'});
     say('ゴールを確定しました。未確定候補はありません。');
    }
