@@ -40,7 +40,7 @@ function prompt(duration){
   'If there are no valid scenes, return this structure: {"duration_seconds":'+Math.round(duration)+',"events":[],"limitations":"Audio-only; no visual verification."}.'
  ].join('\n');
 }
-function calloutPrompt(duration){
+export function calloutPrompt(duration){
  return [
   'This is a TRANSCRIPTION EXPERIMENT, completely separate from highlight detection.',
   'You hear AUDIO ONLY from a Japanese amateur football/futsal match, up to '+Math.round(duration)+' seconds.',
