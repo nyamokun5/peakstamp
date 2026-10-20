@@ -7,7 +7,7 @@ import { mergeCalloutSegments, formatCalloutTime } from './gemini-callouts.mjs?v
 import { WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=2';
 
 const ENDPOINT='https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
-const CACHE_PREFIX='peakstamp_callout_pilot_v1:';
+const CACHE_PREFIX='peakstamp_callout_pilot_v2:';
 const $=id=>document.getElementById(id);
 const signature=s=>[s?.file?.name||'',s?.file?.size||0,s?.file?.lastModified||0].join('::');
 const cacheKey=(source,scope)=>CACHE_PREFIX+signature(source)+'::'+scope;

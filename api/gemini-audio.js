@@ -40,14 +40,23 @@ function prompt(duration){
   'If there are no valid scenes, return this structure: {"duration_seconds":'+Math.round(duration)+',"events":[],"limitations":"Audio-only; no visual verification."}.'
  ].join('\n');
 }
-function calloutPrompt(duration){
+export function calloutPrompt(duration){
  return [
   'This is a TRANSCRIPTION EXPERIMENT, completely separate from highlight detection.',
   'You hear AUDIO ONLY from a Japanese amateur football/futsal match, up to '+Math.round(duration)+' seconds.',
   'Find ONLY clearly spoken (A) MATCH START announcements and (B) EXPLICIT GOAL announcements.',
-  'For (A), listen for 第1試合開始, 1対2, 1番対2番, チーム1対チーム2, 赤対青, one versus two and similar actual start calls.',
-  'Important: a phrase like 1対2 in a start announcement often identifies the competing teams; NEVER silently reinterpret it as a 1–2 score.',
-  'For (B), listen for 山田さんゴール, ゴール！佐藤さん, ○○が決めた, 得点は○○, and explicitly mentioned assist names.',
+  'For (A), match announcements identify WHO PLAYS WHOM; they can be short and may omit the word 開始 or スタート.',
+  'Recognize naturally spoken Japanese number pairs including 1対2, 1と2, 一と二, いちとに, 1・2, 1、2, 1番と2番, 1番対2番, 1チームと2チーム, チーム1対チーム2, 1と2の試合, 1対2で始めます, 1と2です, 1番2番お願いします, ワンとツー, and English one and two / one versus two / team one against team two.',
+  'These are PHRASE EXAMPLES only. The same patterns apply to ANY team numbers: 1と3, 2と4, 3対5, 4番と6番, etc. Never restrict extraction to numbers 1 and 2.',
+  'Also recognize color and team-name pairs: 赤対青, 赤と青, 青対黄色, レッド対ブルー, チームAとB, A対B, and spoken names in X対Y / XとY / X vs Y form, when describing match participants.',
+  'A compact call like 「1と2」 near a match start can be a matchup announcement even without a verb. Capture its exact audible phrase in quote and match_label, using confidence low if context is weak.',
+  'Crucially, a number pair is NOT automatically a score: distinguish spoken matchup introductions from scores, counting (「1、2、3、はい」), jersey numbers, tactical instructions, numbered set names, and casual unrelated conversations.',
+  'Use explicit start cues (開始, スタート, 次の試合, 対戦, お願いします, 行きます, vs), location in the surrounding audio, and conversational context to decide. Do NOT infer a matchup based on numbers or a video timestamp alone.',
+  'A mid-game score report like 「いま1対2です」 or 「1点対2点」 is NOT a match_start; do not return it in this experiment.',
+  'If two teams were clearly announced, set match_label to their spoken matchup phrase verbatim, not a canonical 1-2 score. team_a and team_b are the team labels as heard; do not invent members or teams.',
+  'For (B), listen for spoken goal announcements in natural variants: 山田さんゴール, ゴール！佐藤さん, 佐藤さんのゴール, 山田が決めた, 田中さん決めました, 得点は○○さん, 今の○○さんのゴール, ○○さん入れた, ゴールしたのは○○さん, and their clear English equivalents.',
+  'Extract assists ONLY when spoken explicitly: 佐藤さんアシスト, アシスト佐藤さん, パスを出したのは佐藤さん, and similar. Do not interpret just a pass or ナイスパス as a confirmed assist.',
+  'Do not confuse future predictions (○○が決めそう), negations (○○さんゴールじゃない), missed shots, or cheers without explicit goal claims with an actual spoken goal announcement.',
   'Ignore ナイス, ナイシュー, 惜しい, GKセーブ and other generic reactions unless explicitly declaring a goal.',
   'Return concise verbatim speech in quote, with local start-of-audio time_seconds. Only quote what was actually intelligible.',
   'kind is match_start or goal_call. For match_start store literal spoken matchup phrase in match_label, and team_a/team_b only if actually intelligible.',
