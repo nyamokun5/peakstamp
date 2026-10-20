@@ -5,7 +5,8 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=eta34';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal38';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal39';
+import { keepGoalClip } from './goal-video-clip.mjs?v=39';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=batch33';
@@ -137,7 +138,7 @@ function syncSources() {
   calloutPilot?.refresh();
   if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
   $('stickyBar').hidden = !state.bins;
-  $('resultsPanel').hidden = !state.bins;
+  $('resultsPanel').hidden = !state.bins && !goalReview?.hasRecords();
   $('multiWaveNotice').hidden = state.sources.length <= 1;
   $('commentHelp').hidden = state.sources.length <= 1;
   $('commentHeading').textContent = '動画ごとのYouTubeタイムスタンプ';
@@ -1352,7 +1353,18 @@ initAIReview(state);
 initVideoExplore(state);
 initCloudAudioPilot(state);
 initGeminiPrimary(state,{decodeAudio:decodeStreaming,commitResults:commitGeminiResults});
-const goalReview=initGoalStatsReview(state);
+const goalReview=initGoalStatsReview(state,{
+  onUpdate:()=>{if(state.bins)drawResults();},
+  onKeepClip:(source,item)=>{
+    if(!source?.bins)return false;
+    const added=keepGoalClip(source,item);
+    if(!added)return false;
+    syncSources();
+    reviewTab='kept';
+    drawResults();
+    return true;
+  }
+});
 $('openGoalStats').addEventListener('click',()=>{
   const source=state.sources.find(s=>s?.file);
   if(source)goalReview.openAt(source,0);
@@ -1361,4 +1373,5 @@ const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
   onResultsChange:()=>{
     goalReview.refresh();
     if(state.bins)drawResults();
+    else $('resultsPanel').hidden=!goalReview.hasRecords();
   }});
