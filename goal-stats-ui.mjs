@@ -30,7 +30,7 @@ const preciseTime=value=>{
 
 export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false}={}){
  const panel=$('goalStatsPanel');
- if(!panel)return {refresh:()=>{},nearby:()=>[],openAt:()=>{}};
+ if(!panel)return {refresh:()=>{},nearby:()=>[],openAt:()=>{},hasRecords:()=>false};
  const list=$('goalStatsList');
  const summary=$('goalStatsSummary');
  const status=$('goalStatsStatus');
@@ -79,6 +79,10 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false}
   }catch(e){setStatus('再生に失敗：'+(e?.message||String(e))+'。動画の再生ボタンをお試しください。');}
  }
  function allFor(source){return createGoalDrafts(source,store());}
+ function hasRecords(){return sources().some(source=>{
+  const data=allFor(source);
+  return Boolean(data.transcript)||data.items.length>0;
+ });}
  function write(source,items){
   if(!saveGoalDrafts(source,store(),items))setStatus('端末の保存容量などにより自動保存できませんでした。JSONのコピーもご利用ください。');
   onUpdate();
@@ -281,5 +285,5 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false}
   (card||panel).scrollIntoView({behavior:'smooth',block:'center'});
  }
  render();
- return {refresh:render,nearby,openAt};
+ return {refresh:render,nearby,openAt,hasRecords};
 }
