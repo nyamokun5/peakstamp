@@ -961,3 +961,55 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;
  line-height:1.5;padding:9px;overflow:auto;-webkit-user-select:text;user-select:text
 }
+
+
+/* v38: PS goal/assist verification stays separate from highlight decisions */
+.goal-stats-panel{margin-top:14px}
+.goal-stats-panel>label{display:block;font-size:13px;font-weight:800;margin:12px 0 7px}
+#goalStatsSource{width:100%;min-height:45px;padding:9px;background:#183b49;color:#eaf8ff;
+ border:1px solid #4d7280;border-radius:9px;font-size:14px}
+.goal-review-summary{font-size:13px;font-weight:750;color:#b1f0d6;margin:12px 0}
+#goalStatsPreview{display:block;width:100%;max-height:340px;margin:12px 0;
+ background:#061923;border-radius:11px}
+#goalStatsPreview[hidden]{display:none}
+.goal-review-list{display:grid;gap:13px;margin:12px 0}
+.goal-review-meta{color:#acc8d0;line-height:1.6;font-size:12px;overflow-wrap:anywhere}
+.goal-review-card{border:1px solid #486c76;background:#0d2a36;border-radius:12px;
+ padding:13px;display:flex;flex-direction:column;gap:12px}
+.goal-review-head{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap}
+.goal-review-head strong{font-size:14px}
+.goal-review-status{border-radius:99px;background:#41515a;padding:5px 9px;font-size:11px;font-weight:800;color:#fff}
+.goal-review-status.confirmed{background:#1d6450;color:#d9ffec}
+.goal-review-status.excluded{background:#594545;color:#fde0e0}
+.goal-review-quote{font-size:14px;color:#e0f2f4;overflow-wrap:anywhere}
+.goal-review-play{background:#143f4a;border:1px solid #587d85;border-radius:8px;
+ padding:9px;color:#d1f5f8;font-size:13px;min-height:42px;width:100%}
+.goal-review-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.goal-review-field{display:flex;flex-direction:column;gap:6px;min-width:0;
+ font-size:12px;color:#bed7dc;font-weight:750}
+.goal-review-field input,.goal-review-field select{
+ width:100%;min-width:0;box-sizing:border-box;border:1px solid #567983;
+ border-radius:8px;min-height:42px;background:#123743;color:#f1fbff;
+ padding:8px;font-size:14px
+}
+.goal-review-actions{display:flex;flex-wrap:wrap;gap:8px}
+.goal-review-actions button{flex:1;min-width:145px;padding:10px;border-radius:8px;min-height:43px}
+.goal-review-confirm{background:#23644c;color:#fff;border:1px solid #60a58a;font-weight:800}
+.goal-review-confirm:disabled{opacity:.5}
+.goal-review-exclude{background:#273e4a;color:#d7e2e7;border:1px solid #64828e}
+.scene-goal-note{display:block;width:100%;margin-top:10px;text-align:left;
+ min-height:39px;border-radius:8px;background:#153f3f;color:#dbfff3;
+ border:1px solid #5b9687;font-size:12px;padding:9px;font-weight:700}
+.goal-review-export{border-top:1px solid #456572;margin-top:16px;padding-top:15px;
+ display:flex;flex-direction:column;gap:10px}
+.goal-review-export>button{width:100%;margin:0;min-height:43px}
+#goalStatsAdd{width:100%;margin-top:8px}
+#goalStatsJsonArea{padding:10px;background:#09232f;border:1px solid #517681;border-radius:8px}
+#goalStatsJsonArea label{display:block;font-size:12px;margin-bottom:9px;color:#d0edf4}
+#goalStatsJson{display:block;width:100%;box-sizing:border-box;min-height:160px;
+ font:12px/1.5 ui-monospace,SFMono-Regular,monospace;
+ color:#f0fcff;background:#071621;border:1px solid #4b6773;
+ -webkit-user-select:text;user-select:text}
+@media(max-width:560px){.goal-review-fields{grid-template-columns:1fr}}
+
+.goal-review-open{display:block;width:100%;margin:10px 0 15px;min-height:43px;font-weight:800;text-align:center}
