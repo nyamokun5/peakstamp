@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=goal39" />
+  <link rel="stylesheet" href="styles.css?v=goal40" />
 </head>
 <body>
   <header class="topbar">
@@ -179,13 +179,23 @@
       <div class="panel-label"><span class="number">03</span><h2>確認してキープ</h2></div>
     <section class="panel goal-stats-panel" id="goalStatsPanel" aria-label="PeakStamp内でゴールとアシストを確定" hidden>
       <div class="panel-label"><span class="number">⚽</span><h2>最優先：ゴールシーン候補</h2></div>
-      <p class="fine-print">実況で見つかったゴールを<strong>他の見どころより先に確認</strong>できます。プレー時刻は実況の約5秒前で仮表示し、映像で調整できます。「得点記録の確定」と「動画へのキープ」は別操作です。SSアプリへは未送信です。</p>
-      <label for="goalStatsSource">確認する動画</label>
-      <select id="goalStatsSource" aria-label="ゴールとアシストを確定する動画"></select>
+      <p class="fine-print">実況から約10秒前をプレー位置として仮設定。<strong>すべての動画のゴール候補を一括表示</strong>し、確認・確定すると次の未確定ゴールに移ります。ハイライト採用と得点確定は別です。</p>
       <p id="goalStatsSummary" class="goal-review-summary" aria-live="polite"></p>
-      <video id="goalStatsPreview" controls playsinline preload="none" hidden aria-label="ゴールを確認する元動画"></video>
+      <div id="goalStatsViewer" class="goal-review-viewer" hidden>
+        <strong id="goalStatsPlayingLabel"></strong>
+        <video id="goalStatsPreview" controls playsinline preload="metadata" hidden aria-label="ゴール候補を確認する共通動画プレーヤー"></video>
+        <p id="goalStatsVideoStatus" class="fine-print" role="status" aria-live="polite"></p>
+      </div>
+      <div id="goalStatsEditor" class="goal-review-editor"></div>
+      <div class="goal-review-queue-head"><strong>すべてのゴール候補</strong><small>どの動画もここから直接選択できます</small></div>
       <div id="goalStatsList" class="goal-review-list"></div>
-      <button id="goalStatsAdd" class="whisper-run" type="button">＋ 検出されなかったゴールを手動追加</button>
+      <div class="goal-review-manual-add">
+        <div id="goalStatsManualWrap" hidden>
+          <label for="goalStatsManualSource">手動追加先の動画</label>
+          <select id="goalStatsManualSource"></select>
+        </div>
+        <button id="goalStatsAdd" class="whisper-run" type="button">＋ 見逃したゴールを手動追加</button>
+      </div>
       <div class="goal-review-export">
         <strong>確定したゴールを書き出す</strong>
         <p class="fine-print">複数動画から確定したゴール・アシスト情報をまとめます。試合番号は任意ですが、SSアプリに取り込む前には確定が必要です。選手名は現段階では自由入力です。</p>
@@ -201,6 +211,30 @@
     </section>
       <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
 
+      <p id="multiWaveNotice" class="fine-print" hidden>波形は全動画をつなげた表示です。オレンジ線は各動画の検出位置を示します。</p>
+      <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
+      <div id="emptyResults" class="empty-results" hidden>指定した感度では見どころを検出できませんでした。「多めに拾う」に切り替えて再解析するか、音声が入っているかご確認ください。</div>
+      <p class="list-help">▶ リプレイで確認 → 画角・長さを調整 → キープ。</p>
+      <div class="selected-overview">
+        <strong>採用するシーン：<span id="selectedCount">0</span>件</strong>
+        <div id="selectedSummary" class="selected-summary" hidden></div>
+      </div>
+      <div class="edit-transfer-actions">
+        <button id="exportEditData" type="button" class="main-button" disabled>HS向け編集データを書き出す（JSON）</button>
+        <p class="fine-print">キープ済みシーンの確定した開始・終了秒数を保存します。動画ファイル自体は含まれません。</p>
+        <p id="exportEditStatus" role="status" aria-live="polite"></p>
+      </div>
+      <button id="openGoalStats" type="button" class="whisper-run goal-review-open">🎙 ゴール・アシストを確認する（動画のキープとは独立）</button>
+      <div class="review-tabs" role="group" aria-label="シーンの表示切り替え">
+        <button id="tabAll" type="button" class="review-tab active" data-review-tab="all" aria-pressed="true">未判断 <span id="tabAllCount">0</span></button>
+        <button id="tabKept" type="button" class="review-tab" data-review-tab="kept" aria-pressed="false">キープ済み <span id="tabKeptCount">0</span></button>
+      </div>
+      <p id="reviewProgress" class="review-progress" role="status" aria-live="polite"></p>
+      <p id="reviewEmpty" class="empty-results" hidden>キープしたシーンはまだありません。「未判断」タブから選んでください。</p>
+      <div id="highlightList" class="highlight-list"></div>
+      <details class="extra-analysis-tools">
+        <summary>その他の実験ツール（詳細を開く）</summary>
+        <p class="fine-print">以前のAI再評価・映像探索・Whisperなどを使う場合に開いてください。</p>
       <section id="aiRerankPanel" class="whisper-experiment" aria-label="AIハイライト再評価の実験">
         <div class="whisper-experiment-head"><strong>β AI広域探索 — 新しいシーンを発見</strong><span>任意・無料</span></div>
         <p>従来の上位5件の並べ替えではなく、音声データから最大20件の候補を探索。通常より高感度な音響検出と短い間隔のピーク検出を使い、従来の候補外の場面も探します。</p>
@@ -281,27 +315,8 @@
         <div id="whisperOutput" class="whisper-output" hidden></div>
         <small class="whisper-disclaimer">初回のみAIモデル（大きなデータ）をダウンロードします。Wi-Fi推奨。動画・音声は送信しません。認識結果は誤認識の可能性があり、歓声のみは検出できない場合があります。iPhone Safariでの動作は検証中です。</small>
       </section>
-      <p id="multiWaveNotice" class="fine-print" hidden>波形は全動画をつなげた表示です。オレンジ線は各動画の検出位置を示します。</p>
-      <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
-      <div id="emptyResults" class="empty-results" hidden>指定した感度では見どころを検出できませんでした。「多めに拾う」に切り替えて再解析するか、音声が入っているかご確認ください。</div>
-      <p class="list-help">▶ リプレイで確認 → 画角・長さを調整 → キープ。</p>
-      <div class="selected-overview">
-        <strong>採用するシーン：<span id="selectedCount">0</span>件</strong>
-        <div id="selectedSummary" class="selected-summary" hidden></div>
-      </div>
-      <div class="edit-transfer-actions">
-        <button id="exportEditData" type="button" class="main-button" disabled>HS向け編集データを書き出す（JSON）</button>
-        <p class="fine-print">キープ済みシーンの確定した開始・終了秒数を保存します。動画ファイル自体は含まれません。</p>
-        <p id="exportEditStatus" role="status" aria-live="polite"></p>
-      </div>
-      <button id="openGoalStats" type="button" class="whisper-run goal-review-open">🎙 ゴール・アシストを確認する（動画のキープとは独立）</button>
-      <div class="review-tabs" role="group" aria-label="シーンの表示切り替え">
-        <button id="tabAll" type="button" class="review-tab active" data-review-tab="all" aria-pressed="true">未判断 <span id="tabAllCount">0</span></button>
-        <button id="tabKept" type="button" class="review-tab" data-review-tab="kept" aria-pressed="false">キープ済み <span id="tabKeptCount">0</span></button>
-      </div>
-      <p id="reviewProgress" class="review-progress" role="status" aria-live="polite"></p>
-      <p id="reviewEmpty" class="empty-results" hidden>キープしたシーンはまだありません。「未判断」タブから選んでください。</p>
-      <div id="highlightList" class="highlight-list"></div>
+
+      </details>
       <div class="comment-section" hidden aria-hidden="true">
         <div class="comment-heading"><strong id="commentHeading">YouTubeコメント用</strong><span>そのまま貼り付け</span></div>
         <p id="commentHelp" class="fine-print" hidden>各動画の元の時刻を表示します。動画ごとに「この動画の時刻をコピー」も使えます。</p>
@@ -472,6 +487,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api39"></script>
+  <script type="module" src="app.mjs?v=gemini-api40"></script>
 </body>
 </html>
