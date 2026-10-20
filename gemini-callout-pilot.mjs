@@ -5,6 +5,7 @@
 import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=1';
 import { mergeCalloutSegments, formatCalloutTime } from './gemini-callouts.mjs?v=1';
 import { WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=2';
+import { calloutExportText, calloutExportFilename, shareCalloutJson, copyCalloutJson } from './callout-export.mjs?v=37';
 
 const ENDPOINT='https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
 const CACHE_PREFIX='peakstamp_callout_pilot_v2:';
@@ -43,8 +44,8 @@ function setProgress(index,total){
  $('calloutProgress').hidden=false;
  $('calloutProgress').textContent='音声区間 '+index+' / '+total+' を確認中';
 }
-function downloadJson(payload,filename){
- const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+function downloadJson(text,filename){
+ const blob=new Blob([text],{type:'application/json'});
  const url=URL.createObjectURL(blob),link=document.createElement('a');
  link.href=url;link.download=filename;
  document.body.append(link);link.click();link.remove();
@@ -61,6 +62,11 @@ export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{}}={}){
  const rerunButton=$('calloutRerun');
  const stopButton=$('calloutStop');
  const exportButton=$('calloutExport');
+ const copyButton=$('calloutCopy');
+ const showButton=$('calloutShow');
+ const downloadButton=$('calloutDownload');
+ const rawArea=$('calloutJsonArea');
+ const rawText=$('calloutRawJson');
  const list=$('calloutList');
  const preview=$('calloutPreview');
  const selection=()=>state.sources.filter(s=>s?.file&&s?.objectUrl);
@@ -75,6 +81,8 @@ export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{}}={}){
  };
  function showResults(result,source,mode){
   list.replaceChildren();
+  rawArea.hidden=true;
+  rawText.value='';
   const savedRatings=result.ratings&&typeof result.ratings==='object'?result.ratings:{};
   const rows=result.utterances||[];
   if(!rows.length){
@@ -133,6 +141,9 @@ export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{}}={}){
   $('calloutMissed').value=result.missed||'';
   $('calloutResultArea').hidden=false;
   exportButton.disabled=false;
+  copyButton.disabled=false;
+  showButton.disabled=false;
+  downloadButton.disabled=false;
  }
  function refresh(){
   const sources=selection();
@@ -162,6 +173,11 @@ export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{}}={}){
     $('calloutResultArea').hidden=true;
     $('calloutProgress').hidden=true;
     exportButton.disabled=true;
+    copyButton.disabled=true;
+    showButton.disabled=true;
+    downloadButton.disabled=true;
+    rawArea.hidden=true;
+    rawText.value='';
     status('');
    }
   }
@@ -263,14 +279,60 @@ export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{}}={}){
   activeResult.missed=$('calloutMissed').value.slice(0,3000);
   saveCache(source,scope(),activeResult);
  });
- exportButton.addEventListener('click',()=>{
+ function snapshot(){
   const source=picked();
-  if(!source||!activeResult)return;
+  if(!source||!activeResult)return null;
   activeResult.missed=$('calloutMissed').value.slice(0,3000);
   saveCache(source,scope(),activeResult);
-  downloadJson({...activeResult,source:{name:source.file.name,size:source.file.size,lastModified:source.file.lastModified}},
-   'PeakStamp_Callout_Test_'+new Date().toISOString().slice(0,10)+'.json');
-  status('音声の書き起こしと評価をJSONで保存しました。SSアプリには登録していません。');
+  const text=calloutExportText(activeResult,source,activeResult.missed);
+  return {text,filename:calloutExportFilename()};
+ }
+ function reveal(text,select=false){
+  rawArea.hidden=false;
+  rawText.value=text;
+  showButton.textContent='JSONの中身を閉じる';
+  if(select){rawText.focus();rawText.select();}
+ }
+ exportButton.addEventListener('click',async()=>{
+  const data=snapshot();
+  if(!data)return;
+  // Sharing must start inside this click handler: iOS blocks delayed share().
+  try{
+   const result=await shareCalloutJson(data.text,data.filename);
+   if(result==='completed')
+    status('共有操作が完了しました。「ファイルに保存」を選んだ場合はファイルアプリで確認してください。SSアプリには送信していません。');
+   else if(result==='cancelled')
+    status('共有をキャンセルしました。解析結果はPSに残っています。');
+   else{
+    reveal(data.text);
+    status('このブラウザではJSONファイルの共有を利用できません。下にJSONを表示しました。「JSONをコピー」、またはPCでダウンロードをお試しください。');
+   }
+  }catch(e){
+   reveal(data.text);
+   status('共有できませんでした：'+(e?.message||String(e))+'。下にJSONを表示しました。「JSONをコピー」をお試しください。');
+  }
+ });
+ copyButton.addEventListener('click',async()=>{
+  const data=snapshot();
+  if(!data)return;
+  reveal(data.text);
+  const ok=await copyCalloutJson(data.text,{textarea:rawText});
+  if(ok)status('JSON全体をコピーしました。このチャットに貼り付けられます。');
+  else status('自動コピーできないためJSONを下に表示しました。テキスト欄を長押しして「すべてを選択」→「コピー」をお試しください。');
+ });
+ showButton.addEventListener('click',()=>{
+  const data=snapshot();
+  if(!data)return;
+  if(!rawArea.hidden){rawArea.hidden=true;showButton.textContent='JSONの中身を表示';status('JSON表示を閉じました。結果はPSに残っています。');}
+  else{reveal(data.text);showButton.textContent='JSONの中身を閉じる';status('結果をJSONテキストで表示しています。長押ししてコピーできます。');}
+ });
+ downloadButton.addEventListener('click',()=>{
+  const data=snapshot();
+  if(!data)return;
+  try{
+   downloadJson(data.text,data.filename);
+   status('JSONのダウンロードを開始しました。iPhoneでblob:ページが表示される場合は「共有して保存」または「JSONをコピー」を使ってください。');
+  }catch(e){reveal(data.text);status('ダウンロードできませんでした：'+(e?.message||String(e))+'。JSONを画面に表示しました。');}
  });
  window.addEventListener('gemini-processing-state',refresh);
  refresh();

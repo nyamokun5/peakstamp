@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=callout35" />
+  <link rel="stylesheet" href="styles.css?v=callout37" />
 </head>
 <body>
   <header class="topbar">
@@ -131,8 +131,17 @@
         <div id="calloutList" class="callout-list"></div>
         <label for="calloutMissed">聞き逃し・未検出の発言（任意メモ）</label>
         <textarea id="calloutMissed" rows="3" maxlength="3000" placeholder="例：04:35 山田さんゴール、Geminiは検出できず"></textarea>
-        <button id="calloutExport" class="whisper-run" type="button" disabled>結果と評価をJSON保存</button>
-        <p class="fine-print">保存されるのは発言・時刻・評価だけで、動画や音声そのものは含みません。</p>
+        <div class="callout-export-options">
+          <button id="calloutExport" class="main-button" type="button" disabled>iPhone：共有してファイル保存</button>
+          <button id="calloutCopy" class="whisper-run" type="button" disabled>JSONをコピー（ChatGPTに貼り付け）</button>
+          <button id="calloutShow" class="whisper-run" type="button" disabled>JSONの中身を表示</button>
+          <button id="calloutDownload" class="whisper-run" type="button" disabled>PC：JSONをダウンロード</button>
+        </div>
+        <div id="calloutJsonArea" class="callout-json-area" hidden>
+          <label for="calloutRawJson">JSONテキスト（長押しで「すべてを選択」→「コピー」できます）</label>
+          <textarea id="calloutRawJson" rows="8" readonly spellcheck="false" aria-label="実況解析結果のJSONテキスト"></textarea>
+        </div>
+        <p class="fine-print">iPhoneでは「共有してファイル保存」→共有メニューの「ファイルに保存」を選んでください。保存できない場合は「JSONをコピー」が使えます。動画・音声そのものは含みません。</p>
       </div>
     </details>
 
@@ -440,6 +449,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api36"></script>
+  <script type="module" src="app.mjs?v=gemini-api37"></script>
 </body>
 </html>
