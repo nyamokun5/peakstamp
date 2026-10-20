@@ -1013,3 +1013,25 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 @media(max-width:560px){.goal-review-fields{grid-template-columns:1fr}}
 
 .goal-review-open{display:block;width:100%;margin:10px 0 15px;min-height:43px;font-weight:800;text-align:center}
+
+
+/* v39: priority goal scene review embedded in existing review section */
+.results-panel>.goal-stats-panel{margin:12px 0 18px;padding:16px;border:1px solid #548f81;
+ background:#0d3038;border-radius:14px}
+.results-panel>.goal-stats-panel[hidden]{display:none}
+.goal-review-time-adjust{display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+ padding:12px;border:1px solid #537780;border-radius:9px;background:#102f3d}
+.goal-review-time-adjust>strong{flex:1 0 100%;font-size:13px}
+.goal-review-time-adjust>small{flex:1 0 100%;color:#abcfd1;font-size:12px}
+.goal-review-time-input{max-width:100px;width:100px;min-height:44px;
+ background:#10242f;color:#f1fff9;border:1px solid #6e9998;border-radius:8px;
+ text-align:center;font-size:15px;font-variant-numeric:tabular-nums;padding:6px}
+.goal-review-adjust-button{min-width:68px;min-height:42px;border:1px solid #658f8c;
+ border-radius:8px;color:#e4faf7;background:#1b4a52;font-weight:750}
+.goal-review-timing{font-size:12px;color:#d3fae4;background:#18433f;
+ padding:9px 11px;border-radius:8px;line-height:1.6}
+.goal-review-controls{display:flex;flex-wrap:wrap;gap:8px}
+.goal-review-controls>button{flex:1 1 200px}
+.goal-review-keep-clip{background:#1d5c49;color:white;border:1px solid #6fb99a;
+ padding:9px;border-radius:8px;font-size:13px;font-weight:800;min-height:42px}
+.goal-review-keep-clip:disabled{opacity:.5}
