@@ -34,7 +34,7 @@ function saveChunk(source,range,answer){
 }
 const $ = id => document.getElementById(id);
 let selected = 0, processing = false, generation = 0, abortController = null;
-let activeBatchStep = null;
+let activeBatchStep = null, lastBatchSources = '';
 const fileKey = source => [
  source?.file?.name || '', source?.file?.size || 0, source?.file?.lastModified || 0
 ].join('::');
@@ -103,6 +103,12 @@ export function refreshGeminiPrimary(state) {
  const second=$('geminiMainForce');
  if(!picker||!button||!second)return;
  const sources=candidates(state);
+ const signature=sources.map(fileKey).join('|');
+ if(signature!==lastBatchSources){
+  lastBatchSources=signature;
+  const batchProgress=$('geminiBatchProgress');
+  if(batchProgress)batchProgress.hidden=true;
+ }
  updateGeminiScreenNotice({
   panel:$('geminiPrimaryPanel'),
   warning:$('geminiStayNotice'),
@@ -407,6 +413,8 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    return;
   }
   const id=++generation;
+  const previousBatch=$('geminiBatchProgress');
+  if(previousBatch)previousBatch.hidden=true;
   abortController=new AbortController();
   setGeminiWorking(true);
   try{
