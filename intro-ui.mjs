@@ -21,8 +21,8 @@ function info(){
   $('introCardBackgroundSettings').hidden=overlay;
   $('introDurationLabel').textContent=overlay?'先行再生＋タイトル3秒':'独立した5秒イントロ';
   $('introPreviewHelp').textContent=overlay
-    ? '最初のシーンを最大3秒早く再生してタイトルを重ねます。プレビューはミュートですが、完成MP4では試合音声も再生されます。'
-    : 'タイトルはドラッグして位置変更できます。背景動画の音声は使用しません。';
+    ? 'プレビュー上の文字・ロゴを指でドラッグできます。完成動画には試合音声が入ります。'
+    : 'プレビュー上の文字・ロゴを指でドラッグできます。背景動画の音声は使用しません。';
   for(const radio of document.querySelectorAll('input[name="introPresentation"]'))
     radio.checked=radio.value===state.presentation;
   $('introBackgroundName').textContent=state.mode==='default'?'デフォルトの背景を使用':
