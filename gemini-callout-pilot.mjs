@@ -290,6 +290,7 @@ export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{}}={}){
  function reveal(text,select=false){
   rawArea.hidden=false;
   rawText.value=text;
+  showButton.textContent='JSONの中身を閉じる';
   if(select){rawText.focus();rawText.select();}
  }
  exportButton.addEventListener('click',async()=>{
