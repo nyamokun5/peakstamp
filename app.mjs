@@ -3,10 +3,10 @@ import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experime
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=11';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=batch33';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=batch33';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
 import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
@@ -44,7 +44,7 @@ const make = (tag, cls, text) => {
 const state = {
   file: null, objectUrl: null, duration: 0, bins: null, candidates: [], sources: [],
   sensitivity: 'normal', leadSeconds: 7, maxResults: 8,
-  working: false, cancelled: false, exporting: false
+  working: false, cancelled: false, exporting: false, geminiProcessing: false
 };
 const guide=initFirstRunGuide({hasPriorAnalysis:()=>{
   try {return Object.keys(JSON.parse(localStorage.getItem('peakstamp_gemini_primary_json_v1')||'{}')).length>0;}
@@ -96,10 +96,10 @@ function showIncompleteFilePick() {
 $('fileInput').addEventListener('cancel', showIncompleteFilePick);
 function busy(value) {
   state.working = value;
-  $('fileInput').disabled = value || state.exporting;
-  $('changeFile').disabled = value || state.exporting;
-  $('addFiles').disabled = value || state.exporting;
-  $('analyzeButton').disabled = value || !state.sources.length;
+  $('fileInput').disabled = value || state.exporting || state.geminiProcessing;
+  $('changeFile').disabled = value || state.exporting || state.geminiProcessing;
+  $('addFiles').disabled = value || state.exporting || state.geminiProcessing;
+  $('analyzeButton').disabled = value || state.geminiProcessing || !state.sources.length;
   $('analyzeButton').textContent = value ? '音声を解析中…' : '⌁　音声を解析する　→';
   $('cancelButton').hidden = !value;
   refreshAIReview(state);
@@ -152,7 +152,7 @@ function renderSourceList() {
   $('fileName').textContent = sources.length + '本の動画を選択中';
   const megabytes = sources.reduce((n,s) => n + s.file.size,0)/1048576;
   $('fileSize').textContent = megabytes.toFixed(1) + ' MB 合計';
-  $('analyzeButton').disabled = !sources.length || state.working || state.exporting;
+  $('analyzeButton').disabled = !sources.length || state.working || state.exporting || state.geminiProcessing;
   const preview = $('preview');
   const previewButton = $('loadPreview');
   const first = sources[0];
@@ -197,7 +197,7 @@ function renderSourceList() {
     const move = (label,diff) => {
       const button = make('button','source-control',label);
       button.type = 'button';
-      button.disabled = state.working || state.exporting || i + diff < 0 || i + diff >= sources.length;
+      button.disabled = state.working || state.exporting || state.geminiProcessing || i + diff < 0 || i + diff >= sources.length;
       button.addEventListener('click', () => {
         const other = i + diff;
         [sources[i],sources[other]]=[sources[other],sources[i]];
@@ -208,7 +208,7 @@ function renderSourceList() {
     move('↑',-1); move('↓',1);
     const del = make('button','source-control source-remove','×');
     del.type = 'button';
-    del.disabled = state.working || state.exporting;
+    del.disabled = state.working || state.exporting || state.geminiProcessing;
     del.setAttribute('aria-label',source.file.name+' を削除');
     del.addEventListener('click', () => {
       closeInlinePreview();
@@ -225,7 +225,7 @@ function renderSourceList() {
   }));
 }
 function chooseFiles(files, append = false) {
-  if (state.working || state.exporting || !files?.length) return;
+  if (state.working || state.exporting || state.geminiProcessing || !files?.length) return;
   const incoming = Array.from(files).filter(file => /\.(mp4|mov|m4v)$/i.test(file.name) ||
     /^video\//.test(file.type));
   if (!incoming.length) {
@@ -374,7 +374,7 @@ async function decodeSmallAudio(file, update, check) {
   } finally { await ctx.close(); }
 }
 
-async function commitGeminiResults({source,parsed,audio,decoded}) {
+async function commitGeminiResults({source,parsed,audio,decoded,batch=false}) {
   if(!state.sources.includes(source))throw Error('この動画は既に削除されました。');
   const duration=Number(audio.durationSeconds)||Number(decoded.duration);
   if(!(duration>0)||!Array.isArray(decoded.bins)||!decoded.bins.length)
@@ -393,7 +393,7 @@ async function commitGeminiResults({source,parsed,audio,decoded}) {
   source.error='';
   syncSources();
   $('resultsPanel').hidden=false;
-  $('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
+  if(!batch)$('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
   return {candidates:conversion.items.length,merged:conversion.mergedCount};
 }
 
@@ -1097,7 +1097,7 @@ function row(item, index) {
 }
 function refreshComment() {
   const selected = state.candidates.filter(item => item.enabled);
-  $('exportEditData').disabled = !buildMultiClipPlan(state.sources,currentClipOptions()).length || state.working || state.exporting;
+  $('exportEditData').disabled = !buildMultiClipPlan(state.sources,currentClipOptions()).length || state.working || state.exporting || state.geminiProcessing;
   const isMulti = state.sources.length > 1;
   const perSource=sourceTimestampComments(state.sources);
   $('commentText').value = perSource.filter(x=>x.text).map(x=>x.text).join('\n\n');
@@ -1125,7 +1125,7 @@ function updateStickyBar() {
   $('stickyDuration').textContent=blocked
     ? '3分超：シーンを減らしてください'
     : '完成予想 '+formatTime(Math.ceil(estimate));
-  $('stickyExport').disabled = !plan.length || blocked || state.working || state.exporting;
+  $('stickyExport').disabled = !plan.length || blocked || state.working || state.exporting || state.geminiProcessing;
   $('stickyExport').textContent=state.exporting?'書き出し中…':'動画を作成する →';
 }
 function drawResults() {
@@ -1274,12 +1274,21 @@ $('copyButton').addEventListener('click', async () => {
 });
 
 
+window.addEventListener('gemini-processing-state',()=>{
+  const locked=state.geminiProcessing||state.working||state.exporting;
+  $('fileInput').disabled=locked;
+  $('changeFile').disabled=locked;
+  $('addFiles').disabled=locked;
+  $('analyzeButton').disabled=locked||!state.sources.length;
+  renderSourceList();
+  refreshComment();
+});
 window.addEventListener('montage-export-state', event => {
   state.exporting = !!event.detail?.working;
-  $('fileInput').disabled = state.exporting || state.working;
-  $('changeFile').disabled = state.exporting || state.working;
-  $('addFiles').disabled = state.exporting || state.working;
-  $('analyzeButton').disabled = state.exporting || state.working || !state.sources.length;
+  $('fileInput').disabled = state.exporting || state.working || state.geminiProcessing;
+  $('changeFile').disabled = state.exporting || state.working || state.geminiProcessing;
+  $('addFiles').disabled = state.exporting || state.working || state.geminiProcessing;
+  $('analyzeButton').disabled = state.exporting || state.working || state.geminiProcessing || !state.sources.length;
   renderSourceList();
   updateStickyBar();
   refreshAIReview(state);
