@@ -136,7 +136,7 @@ export function refreshGeminiPrimary(state) {
   const finished=sources.filter(s=>s.analysisEngine==='gemini'&&s.bins?.length).length;
   const pending=sources.length-finished;
   batchButton.hidden=sources.length<2;
-  batchButton.disabled=processing||state.working||state.exporting||pending===0;
+  batchButton.disabled=processing||state.working||state.exporting||state.geminiProcessing||pending===0;
   batchButton.textContent=processing?'まとめて解析中…':
    pending===0?'すべて解析済み（'+sources.length+'本）':
     '全'+sources.length+'本をまとめて解析 →';
@@ -145,7 +145,7 @@ export function refreshGeminiPrimary(state) {
  picker.hidden=sources.length<2;
  const pickerLabel=$('geminiSourceLabel');
  if(pickerLabel)pickerLabel.hidden=sources.length<2;
- button.disabled=processing||!source||state.working||state.exporting||(!cache && !API_ENDPOINT);
+ button.disabled=processing||!source||state.working||state.exporting||state.geminiProcessing||(!cache && !API_ENDPOINT);
  button.classList.toggle('is-secondary',sources.length>1);
  second.disabled=button.disabled;
  button.textContent=processing?'Gemini処理中…':cache?'保存済みのGemini結果を復元':
@@ -442,7 +442,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
  };
  const run=async force=>{
   const source=selectedSource(state);
-  if(!source||processing||state.working||state.exporting)return;
+  if(!source||processing||state.working||state.exporting||state.geminiProcessing)return;
   const access=force?$('geminiMainAccess').value.trim():verifyAccess([source]);
   if(access===null)return;
   // Force refresh requires network access even if the old answer is cached.
@@ -477,7 +477,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
  const runBatch=async()=>{
   const videos=candidates(state).slice();
   if(videos.length<2)return run(false);
-  if(processing||state.working||state.exporting)return;
+  if(processing||state.working||state.exporting||state.geminiProcessing)return;
   const pending=videos.filter(src=>!(src.analysisEngine==='gemini'&&src.bins?.length));
   if(!pending.length){
    status('選んだ動画はすべてGemini解析済みです。');
