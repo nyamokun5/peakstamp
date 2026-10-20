@@ -104,7 +104,7 @@ export function updateMontageEditor(state) {
   const quality = document.querySelector('input[name="exportQuality"]:checked')?.value || 'high';
   $('montageSizeEstimate').textContent = plan.length
     ? '約' + estimateMontageMB(seconds,quality).toFixed(1) + ' MB' : '—';
-  $('montageExport').disabled = working || !plan.length;
+  $('montageExport').disabled = working || state.geminiProcessing || !plan.length;
 }
 function makeShareFile() {
   if (!lastBlob || !lastName || typeof File !== 'function') return null;
@@ -175,7 +175,7 @@ export function initMontageEditor(state) {
     $('montageSaveStatus').textContent = 'Safariで保存されない場合は「iPhoneに保存・共有」から「ファイルに保存」を選択してください。';
   });
   $('montageExport').addEventListener('click', async () => {
-    if (working || !activeState?.file) return;
+    if (working || activeState?.geminiProcessing || !activeState?.file) return;
     const plan = buildMultiClipPlan(activeState.sources, clipOptions());
     if (!plan.length) {
       displayError('まずシーンにチェックを入れてください。');
