@@ -416,14 +416,17 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .intro-preview-frame video[hidden],.intro-customizer [hidden]{display:none!important}
 .intro-help{font-size:11px;color:#a9c4cc;line-height:1.55;margin:8px 0}
 .intro-error{font-size:12px;color:#ffbdad;line-height:1.5;padding:6px 0}
-.intro-position-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:9px 0 14px}
-.intro-position-grid button{min-width:0;min-height:43px;border:1px solid #4c7082;background:#1b3d50;border-radius:9px;color:#d0e7eb;font-weight:800;font-size:12px}
-.intro-position-grid button.active{background:#276b5b;border:2px solid #a1f1ce;color:#f5fff9}
+.intro-placement-controls{
+ display:flex;align-items:center;justify-content:space-between;gap:10px;
+ margin:9px 0 13px;
+}
+#introPositionLabel{font-size:12px;color:#bcdbdf;line-height:1.5}
+#introCenterPosition{flex:none;min-height:38px;padding:8px 11px}
+#introCenterPosition:disabled{opacity:.38}
 #introOverlayScale{width:100%;accent-color:#91ead0}
 @media(max-width:390px){
   .intro-customizer{padding:11px 10px}
-  .intro-position-grid{gap:4px}
-  .intro-position-grid button{font-size:11px;min-height:41px}
+  #introPositionLabel{font-size:11px}
 }
 
 

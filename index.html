@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=focus30" />
+  <link rel="stylesheet" href="styles.css?v=position31" />
 </head>
 <body>
   <header class="topbar">
@@ -300,19 +300,9 @@
         </div>
         <p class="intro-help" id="introPreviewHelp">最初のシーンにタイトルを重ねます。ドラッグで位置を変更できます。プレビューはミュートですが、完成MP4では試合音声も再生されます。</p>
         <p class="intro-error" id="introError" role="alert" hidden></p>
-        <div id="introPlacementControls">
-          <p class="montage-label" id="introPositionLabel">タイトルの位置（9か所・または指で自由に移動）</p>
-          <div class="intro-position-grid" id="introPositionGrid" role="group" aria-label="タイトルまたはPNGの配置位置">
-            <button type="button" data-intro-position="0">左上</button>
-            <button type="button" data-intro-position="1">上中央</button>
-            <button type="button" data-intro-position="2">右上</button>
-            <button type="button" data-intro-position="3">左中央</button>
-            <button type="button" data-intro-position="4" class="active">中央</button>
-            <button type="button" data-intro-position="5">右中央</button>
-            <button type="button" data-intro-position="6">左下</button>
-            <button type="button" data-intro-position="7">下中央</button>
-            <button type="button" data-intro-position="8">右下</button>
-          </div>
+        <div id="introPlacementControls" class="intro-placement-controls">
+          <span id="introPositionLabel">文字を指でドラッグして位置を調整</span>
+          <button type="button" id="introCenterPosition" class="intro-small-button">中央に戻す</button>
         </div>
         <div id="introOverlayControls" hidden>
           <label class="montage-label" for="introOverlayScale">PNGのサイズ <strong id="introScaleValue">60%</strong></label>
@@ -405,6 +395,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api30"></script>
+  <script type="module" src="app.mjs?v=gemini-api31"></script>
 </body>
 </html>
