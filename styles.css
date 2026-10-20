@@ -1011,3 +1011,5 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  color:#f0fcff;background:#071621;border:1px solid #4b6773;
  -webkit-user-select:text;user-select:text}
 @media(max-width:560px){.goal-review-fields{grid-template-columns:1fr}}
+
+.goal-review-open{display:block;width:100%;margin:10px 0 15px;min-height:43px;font-weight:800;text-align:center}
