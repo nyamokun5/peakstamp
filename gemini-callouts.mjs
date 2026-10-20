@@ -11,7 +11,8 @@ export function normalizeCallouts(rows,duration){
  const seconds=Number(duration);
  if(!Number.isFinite(seconds)||seconds<=0||!Array.isArray(rows))return [];
  return rows.slice(0,30).flatMap(row=>{
-  const time=Number(row?.time_seconds);
+  if(row?.time_seconds===null||row?.time_seconds===undefined||row?.time_seconds==='')return [];
+  const time=Number(row.time_seconds);
   const quote=clean(row?.quote);
   if(!TYPES.has(row?.kind)||!Number.isFinite(time)||time<0||time>seconds+1||!quote)return [];
   return [{time_seconds:+limit(time,0,seconds).toFixed(1),kind:row.kind,quote,
