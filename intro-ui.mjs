@@ -1,6 +1,6 @@
 import { drawIntro, introTitleRect } from './exporter.mjs?v=pinch18';
 import { zoomDrawRect } from './editing-rules.mjs?v=pinch18';
-import { introPreset, overlayRect, normalizeIntroPoint, imageDimensions, prepareIntroPlan, introOverlayOpacity } from './intro-layout.mjs?v=scene15';
+import { overlayRect, normalizeIntroPoint, imageDimensions, prepareIntroPlan, introOverlayOpacity } from './intro-layout.mjs?v=scene15';
 
 const $=id=>document.getElementById(id);
 const fileSignature=f=>f?[f.name,f.size,f.lastModified]:null;
@@ -32,8 +32,10 @@ function info(){
   $('introOverlayClear').hidden=!state.overlayFile;
   $('introOverlayControls').hidden=!state.overlayImage;
   $('introPositionLabel').textContent=state.overlayImage
-    ? 'PNGの位置（9か所・または指で自由に移動）'
-    : 'タイトルの位置（9か所・または指で自由に移動）';
+    ? 'ロゴを指でドラッグして位置を調整'
+    : '文字を指でドラッグして位置を調整';
+  const reset=$('introCenterPosition');
+  if(reset)reset.disabled=isBusy()||(Math.abs(state.position.x-.5)<.001&&Math.abs(state.position.y-.5)<.001);
   $('introImagePicker').hidden=state.mode!=='image';
   $('introVideoPicker').hidden=state.mode!=='video';
   $('introPlay').hidden=!overlay&&state.mode!=='video';
@@ -226,12 +228,9 @@ function chooseVideo(file){
 }
 function applyPosition(point,commit=true){
   state.position=normalizeIntroPoint(point);
-  for(const btn of document.querySelectorAll('[data-intro-position]')){
-    const at=introPreset(Number(btn.dataset.introPosition));
-    const selected=Math.abs(at.x-state.position.x)<.001&&Math.abs(at.y-state.position.y)<.001;
-    btn.classList.toggle('active',selected);
-    btn.setAttribute('aria-pressed',String(selected));
-  }
+  const reset=$('introCenterPosition');
+  if(reset)reset.disabled=isBusy()||
+    (Math.abs(state.position.x-.5)<.001&&Math.abs(state.position.y-.5)<.001);
   renderIntroPreview();
   if(commit)markChanged();
 }
@@ -301,7 +300,8 @@ export function setIntroWorking(busy){
     $(id).disabled=busy;
   for(const el of document.querySelectorAll('input[name="introBackgroundMode"], input[name="introPresentation"]'))
     el.disabled=busy;
-  for(const el of document.querySelectorAll('[data-intro-position]'))el.disabled=busy;
+  $('introCenterPosition').disabled=busy||
+    (Math.abs(state.position.x-.5)<.001&&Math.abs(state.position.y-.5)<.001);
 }
 export function initIntroEditor(callback,busy){
   onChange=callback||(()=>{});
@@ -337,9 +337,9 @@ export function initIntroEditor(callback,busy){
     $('introOverlayFile').value='';
     info();renderIntroPreview();markChanged();
   });
-  for(const btn of document.querySelectorAll('[data-intro-position]')){
-    btn.addEventListener('click',()=>{if(!isBusy())applyPosition(introPreset(Number(btn.dataset.introPosition)));});
-  }
+  $('introCenterPosition').addEventListener('click',()=>{
+    if(!isBusy())applyPosition({x:.5,y:.5});
+  });
   $('introOverlayScale').addEventListener('input',()=>{
     state.overlayScale=Number($('introOverlayScale').value)/100;
     $('introScaleValue').textContent=$('introOverlayScale').value+'%';
