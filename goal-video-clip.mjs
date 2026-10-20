@@ -10,9 +10,13 @@ export function keepGoalClip(source,goal){
  const goalTime=clamp(actualGoalTime(goal),0,duration);
  const start=Math.max(0,Math.round((goalTime-8)*10)/10);
  const end=Math.min(duration,Math.round((goalTime+10)*10)/10);
+ const proximity=c=>Math.min(
+   Math.abs(Number(c.peakSeconds)-goalTime),
+   goal.origin==='audio'?Math.abs(Number(c.peakSeconds)-Number(goal.timeSeconds)):Infinity);
  const match=(source.candidates||[]).find(c=>c.goalRecordId===goal.id)||
-  source.candidates.filter(c=>Math.abs(Number(c.peakSeconds)-goalTime)<=6)
-   .sort((a,b)=>Math.abs(Number(a.peakSeconds)-goalTime)-Math.abs(Number(b.peakSeconds)-goalTime))[0];
+  source.candidates.filter(c=>Math.abs(Number(c.peakSeconds)-goalTime)<=6||
+    (goal.origin==='audio'&&Math.abs(Number(c.peakSeconds)-Number(goal.timeSeconds))<=4))
+   .sort((a,b)=>proximity(a)-proximity(b))[0];
  if(match){
   // Do not override intentionally edited already-kept scenes, just mark as kept.
   if(match.enabled!==true){
