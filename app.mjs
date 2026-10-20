@@ -5,7 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=eta34';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal39';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal40';
 import { keepGoalClip } from './goal-video-clip.mjs?v=39';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
@@ -680,6 +680,7 @@ function row(item, index) {
       return;
     }
     closeInlinePreview();
+    goalReview?.pausePlayback();
     $('preview').pause();
     const {video,sourceChanged}=sceneReplayMedia.acquire(source.id,source.objectUrl);
     replayVideo=video;
@@ -1354,7 +1355,13 @@ initVideoExplore(state);
 initCloudAudioPilot(state);
 initGeminiPrimary(state,{decodeAudio:decodeStreaming,commitResults:commitGeminiResults});
 const goalReview=initGoalStatsReview(state,{
-  onUpdate:()=>{if(state.bins)drawResults();},
+  // Avoid rebuilding every regular scene (and interrupting its video decoder)
+  // when the organizer edits a name or verifies a goal.
+  onUpdate:()=>{},
+  onBeforePlay:()=>{
+    closeInlinePreview();
+    $('preview').pause();
+  },
   onKeepClip:(source,item)=>{
     if(!source?.bins)return false;
     const added=keepGoalClip(source,item);
