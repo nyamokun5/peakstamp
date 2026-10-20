@@ -40,6 +40,26 @@ function prompt(duration){
   'If there are no valid scenes, return this structure: {"duration_seconds":'+Math.round(duration)+',"events":[],"limitations":"Audio-only; no visual verification."}.'
  ].join('\n');
 }
+function calloutPrompt(duration){
+ return [
+  'This is a TRANSCRIPTION EXPERIMENT, completely separate from highlight detection.',
+  'You hear AUDIO ONLY from a Japanese amateur football/futsal match, up to '+Math.round(duration)+' seconds.',
+  'Find ONLY clearly spoken (A) MATCH START announcements and (B) EXPLICIT GOAL announcements.',
+  'For (A), listen for 第1試合開始, 1対2, 1番対2番, チーム1対チーム2, 赤対青, one versus two and similar actual start calls.',
+  'Important: a phrase like 1対2 in a start announcement often identifies the competing teams; NEVER silently reinterpret it as a 1–2 score.',
+  'For (B), listen for 山田さんゴール, ゴール！佐藤さん, ○○が決めた, 得点は○○, and explicitly mentioned assist names.',
+  'Ignore ナイス, ナイシュー, 惜しい, GKセーブ and other generic reactions unless explicitly declaring a goal.',
+  'Return concise verbatim speech in quote, with local start-of-audio time_seconds. Only quote what was actually intelligible.',
+  'kind is match_start or goal_call. For match_start store literal spoken matchup phrase in match_label, and team_a/team_b only if actually intelligible.',
+  'For goal_call, scorer is the spoken player name if clearly audible; assist only if explicitly spoken. Use null for missing or ambiguous names. Do not guess from similar-sounding names.',
+  'Do not infer goals, players, teams or score from emotion or loudness. Do not make up words, times or examples. An empty list is correct.',
+  'Set confidence high/medium/low for transcription clarity (NOT probability that a real goal occurred).',
+  'Maximum 20 utterances per audio segment, ordered by time. Do not split one short announcement into multiple utterances.',
+  'Return VALID JSON text only: {"utterances":[{"time_seconds":12.3,"kind":"match_start","quote":"1対2で開始","match_label":"1対2","team_a":null,"team_b":null,"scorer":null,"assist":null,"confidence":"medium"}]}.',
+  'That JSON is SCHEMA ONLY, not an observed utterance. Never copy fictional example text or its time.',
+  'Top-level JSON must contain utterances array; no extra prose.'
+ ].join('\\n');
+}
 const trimError=message=>String(message||'')
  .replace(/AIza[0-9A-Za-z_-]{15,}/g,'[API_KEY]')
  .replace(/(?:key|api[_-]?key|token|authorization)\s*[:=]\s*\S+/ig,'[SECRET]')
@@ -65,7 +85,8 @@ async function googleError(response){
  *  2. Core generateContent API as a fallback only on HTTP 400 or 404.
  * This avoids multiple paid successful generations for one video.
  */
-async function requestGemini(base64,seconds,key,format='m4a'){
+async function requestGemini(base64,seconds,key,format='m4a',mode='highlights'){
+ const requestPrompt=mode==='callout-test'?calloutPrompt(seconds):prompt(seconds);
  const mimeType=format==='wav'?'audio/wav':'audio/m4a';
  const inputs=[
   {
@@ -73,7 +94,7 @@ async function requestGemini(base64,seconds,key,format='m4a'){
    url:'https://generativelanguage.googleapis.com/v1beta/interactions',
    body:{
     model:MODEL,
-    input:[{type:'text',text:prompt(seconds)},{type:'audio',data:base64,mime_type:mimeType}],
+    input:[{type:'text',text:requestPrompt},{type:'audio',data:base64,mime_type:mimeType}],
     store:false
    }
   },
@@ -82,7 +103,7 @@ async function requestGemini(base64,seconds,key,format='m4a'){
    url:'https://generativelanguage.googleapis.com/v1beta/models/'+MODEL+':generateContent',
    body:{
     contents:[{role:'user',parts:[
-      {text:prompt(seconds)},
+      {text:requestPrompt},
       {inlineData:{mimeType,data:base64}}
     ]}],
     generationConfig:{maxOutputTokens:8192}
@@ -236,6 +257,8 @@ export default async function handler(req,res){
 
  const body=req.body;
  if(!body||typeof body!=='object'||Array.isArray(body))return reply(res,400,'JSONリクエストを送ってください。');
+ const mode=body.mode===undefined?'highlights':body.mode;
+ if(!['highlights','callout-test'].includes(mode))return reply(res,400,'不明な解析モードです。');
  const seconds=Number(body.durationSeconds);
  const base64=body.audioBase64;
  const format=body.audioFormat==='wav'?'wav':'m4a';
@@ -262,7 +285,7 @@ export default async function handler(req,res){
  }else if(audio.toString('ascii',4,8)!=='ftyp'){
   return reply(res,400,'抽出した音声が正常なM4Aコンテナではありません。音声を再抽出してください。');
  }
- const result=await requestGemini(base64,seconds,key,format);
+ const result=await requestGemini(base64,seconds,key,format,mode);
  if(result.error)return reply(res,result.code,result.error);
  const google=result.data;
  if(result.api==='interactions'&&google.status&&google.status!=='completed')
@@ -281,6 +304,25 @@ export default async function handler(req,res){
  let parsed;
  try{parsed=parseModelJson(answer);}
  catch(_){return reply(res,502,'Geminiの回答に有効なJSONがありません。解析結果の保存前に停止しました。');}
+ if(mode==='callout-test'){
+  if(!Array.isArray(parsed?.utterances))return reply(res,502,'実況テストの回答にutterances配列がありません。');
+  const utterances=[];
+  for(const row of parsed.utterances.slice(0,30)){
+   const time=Number(row?.time_seconds);
+   const kind=row?.kind;
+   const quote=typeof row?.quote==='string'?row.quote.trim().slice(0,160):'';
+   if(!Number.isFinite(time)||time<0||time>seconds+1||
+      !['match_start','goal_call'].includes(kind)||!quote)continue;
+   const field=name=>typeof row?.[name]==='string'?(row[name].trim().slice(0,100)||null):null;
+   utterances.push({time_seconds:round(Math.min(seconds,time)),kind,quote,
+    match_label:field('match_label'),team_a:field('team_a'),team_b:field('team_b'),
+    scorer:field('scorer'),assist:field('assist'),
+    confidence:['high','medium','low'].includes(row.confidence)?row.confidence:'low'});
+  }
+  return res.status(200).json({duration_seconds:seconds,utterances,
+   limitations:'Audio-only transcription; speech may be misheard and does not verify an actual goal.',
+   meta:{model:MODEL,api:result.api,mode:'callout-test'}});
+ }
  if(!Array.isArray(parsed?.events))return reply(res,502,'Geminiの回答にevents配列がありません。');
  const validTypes=new Set(['goal_reaction','shot_reaction','save_reaction','excited_reaction','other','uncertain']);
  const clamp=n=>Math.max(0,Math.min(seconds,n));
