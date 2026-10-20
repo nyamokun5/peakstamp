@@ -4,7 +4,7 @@
  * Storage is keyed to the full file fingerprint (name, size, lastModified).
  */
 export const GOAL_STORE_PREFIX='peakstamp_confirmed_goals_v1:';
-export const DEFAULT_GOAL_COMMENT_LAG_SECONDS=5;
+export const DEFAULT_GOAL_COMMENT_LAG_SECONDS=10;
 // Preserve the recorded voice timestamp, while tracking the actual goal separately.
 const roundTime=time=>Math.round(Number(time)*10)/10;
 export function estimateGoalTime(commentSeconds,lag=DEFAULT_GOAL_COMMENT_LAG_SECONDS){
@@ -62,12 +62,18 @@ export function createGoalDrafts(source,storage){
  const prior=readJson(storage,GOAL_STORE_PREFIX+key);
  const items=(Array.isArray(prior?.items)?prior.items:[])
   .filter(x=>x&&typeof x.id==='string'&&validTime(x.timeSeconds))
-  .map(x=>({
-   ...x,
-   // Old v38 records used timeSeconds for the spoken call: never overwrite it.
-   goalTimeSeconds:actualGoalTime(x),
-   goalTimeVerified:x.goalTimeVerified===true
-  }));
+  .map(x=>{
+   // v38 had no goalTimeSeconds. v39 estimated speech-5s. Upgrade only
+   // an UNVERIFIED automatic -5s proposal; never shift any hand-edited
+   // or previously confirmed goal time.
+   const oldTime=actualGoalTime(x);
+   const isOldAutoFive=x.origin==='audio'&&x.goalTimeVerified!==true&&
+    x.goalTimeEdited!==true&&x.status!=='confirmed'&&
+    Math.abs(oldTime-estimateGoalTime(x.timeSeconds,5))<.051;
+   return {...x,goalTimeSeconds:isOldAutoFive
+     ?estimateGoalTime(x.timeSeconds):oldTime,
+    goalTimeVerified:x.goalTimeVerified===true};
+  });
  const events=transcript?.data?.utterances||[];
  for(const event of events){
   if(event?.kind!=='goal_call'||!validTime(event.time_seconds))continue;
@@ -79,7 +85,7 @@ export function createGoalDrafts(source,storage){
   if(already)continue;
   const match=matchContext(events,time);
   items.push({id,origin:'audio',timeSeconds:time,
-   goalTimeSeconds:estimateGoalTime(time),goalTimeVerified:false,
+   goalTimeSeconds:estimateGoalTime(time),goalTimeVerified:false,goalTimeEdited:false,
    quote:clip(event.quote,240),
    scorer:clip(event.scorer),assist:clip(event.assist),
    assistStatus:clip(event.assist)?'named':'unknown',
@@ -102,7 +108,7 @@ export function makeManualGoal(time,source,storage){
  const rows=readGoalTranscript(source,storage)?.data?.utterances||[];
  const match=matchContext(rows,t);
  return {id:'manual-'+String(Date.now())+'-'+Math.random().toString(36).slice(2,9),
-  origin:'manual',timeSeconds:t,goalTimeSeconds:t,goalTimeVerified:false,
+  origin:'manual',timeSeconds:t,goalTimeSeconds:t,goalTimeVerified:false,goalTimeEdited:false,
   quote:'手動で追加',
   scorer:'',assist:'',assistStatus:'unknown',matchSeq:'',
   matchLabel:match?.label||'',teamA:match?.teamA||'',teamB:match?.teamB||'',
@@ -133,7 +139,7 @@ export function confirmedGoalExport(sources,storage){
     goalTimeSeconds:actualGoalTime(x),
     reactionTimeSeconds:x.origin==='audio'?Number(x.timeSeconds):null,
     goalTimeVerified:x.goalTimeVerified===true,
-    timingMethod:x.origin==='audio'?(x.goalTimeVerified===true?'video-reviewed':'comment-minus-5s'):'manual',
+    timingMethod:x.origin==='audio'?(x.goalTimeVerified===true?'video-reviewed':'comment-minus-10s'):'manual',
     quote:clip(x.quote,240),scorer:clip(x.scorer),
     assistStatus:x.assistStatus,
     assist:x.assistStatus==='named'?clip(x.assist):null,
@@ -142,7 +148,7 @@ export function confirmedGoalExport(sources,storage){
     confirmedAt:x.confirmedAt||null,note:clip(x.note,400)});
   }
  }
- return {kind:'peakstamp-confirmed-goals',version:2,
+ return {kind:'peakstamp-confirmed-goals',version:3,
   exportedAt:new Date().toISOString(),status:'local-confirmed-not-uploaded',
   needsMatchSeq:rows.filter(x=>x.matchSeq===null).length,
   goals:rows};
