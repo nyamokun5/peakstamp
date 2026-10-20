@@ -875,3 +875,26 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  .page>.panel>.panel-label>.number{display:none}
  .source-board .fine-print{display:none}
 }
+
+
+/* v33: multi-file Gemini analysis — a second action only for multi-file selection */
+.gemini-primary-panel .gemini-batch-run{
+ display:block;width:100%;min-height:49px;margin:9px 0 7px;
+ border:1px solid #89d6c9;border-radius:10px;
+ background:#1b4d50;color:#e3fff5;font-size:14px;font-weight:850;
+}
+.gemini-primary-panel .gemini-batch-run:disabled{opacity:.45}
+.gemini-primary-panel .gemini-batch-run[hidden],
+.gemini-primary-panel .gemini-batch-progress[hidden]{display:none!important}
+.gemini-batch-progress{
+ margin:12px 0 10px;padding:11px 12px;
+ border:1px solid #527f85;background:#0d2936;border-radius:10px
+}
+.gemini-batch-head{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.gemini-batch-head strong{font-size:12px;color:#ddfff6;line-height:1.5;min-width:0;overflow-wrap:anywhere}
+.gemini-batch-head output{flex:none;color:#89ead0;font-weight:900;font-size:18px;font-variant-numeric:tabular-nums}
+.gemini-batch-track{height:7px;margin:9px 0 6px;border-radius:20px;background:#29485b;overflow:hidden}
+#geminiBatchBar{height:100%;width:0;background:#75d9c0;border-radius:20px;transition:width .2s ease}
+#geminiBatchDetail{display:block;color:#a7cbd0;font-size:11px;line-height:1.5}
+.gemini-batch-progress.has-failures{border-color:#a77b58}
+@media(prefers-reduced-motion:reduce){#geminiBatchBar{transition:none}}
