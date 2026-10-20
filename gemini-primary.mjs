@@ -5,6 +5,7 @@
 import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=1';
 import { runGeminiFastPipeline } from './gemini-fast-pipeline.mjs?v=1';
 import { runGeminiVideoBatch } from './gemini-video-batch.mjs?v=1';
+import { createGeminiEta, formatGeminiEta } from './gemini-eta.mjs?v=1';
 import { createGeminiFastWaveform } from './gemini-fast-waveform.mjs?v=1';
 import { createGeminiProgressUI } from './gemini-progress-ui.mjs?v=1';
 import { updateGeminiScreenNotice } from './gemini-screen-notice.mjs?v=1';
@@ -181,6 +182,27 @@ async function callApi(audio,duration,access,signal,format='m4a') {
 export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
  if(!$('geminiMainRun')||typeof decodeAudio!=='function'||typeof commitResults!=='function')return;
  const progressUI=createGeminiProgressUI();
+ const eta=createGeminiEta();
+ let inBatch=false;
+ const renderEta=()=>{
+  const estimate=eta.estimate();
+  const current=$('geminiCurrentEta');
+  if(current){
+   current.textContent=estimate.isFinishing
+     ?'残り時間：シーンを準備中'
+     :estimate.currentSeconds===null
+       ?'推定残り時間：計測中'
+       :'推定残り時間：約'+formatGeminiEta(estimate.currentSeconds);
+  }
+  const overall=$('geminiBatchEta');
+  if(overall&&inBatch){
+   overall.textContent=estimate.remainingFiles===0
+     ?'すべての動画の処理が終了しました'
+     :estimate.totalSeconds===null
+       ?'全体の推定残り時間：計測中'
+       :'全体の推定残り時間：約'+formatGeminiEta(estimate.totalSeconds);
+  }
+ };
  const checkConnection=$('geminiMainCheck');
  if(checkConnection)checkConnection.addEventListener('click',async()=>{
   const access=$('geminiMainAccess').value.trim();
@@ -329,6 +351,8 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
      duration=segmenter.durationSeconds;
      const previous=getSavedChunks(source);
      progressUI.segments(0,segmenter.ranges.length);
+     eta.chunks(0,segmenter.ranges.length);
+     renderEta();
      const waveform=createGeminiFastWaveform(duration);
      let waveformFailed=false;
      const completed=await runGeminiFastPipeline({
@@ -357,6 +381,8 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
       onProgress:({index,phase,done,total,reused,inFlight})=>{
        if(id!==generation)return;
        progressUI.segments(done,total,inFlight);
+       eta.chunks(done,total);
+       renderEta();
        const location=' 区間 '+(index+1)+'/'+total;
        if(phase==='decoding')status('音声をWAVに変換中：'+location+' / 完了 '+done+'/'+total);
        else if(phase==='submitted')status('Geminiへ並列送信中：完了 '+done+'/'+total+' / 処理中 '+inFlight+' 区間');
@@ -377,6 +403,8 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    alive();
    const waveformStarted=performance.now();
    progressUI.waveform(0);
+   eta.finishing();
+   renderEta();
    status('Gemini候補'+parsed.events.length+'件。確認用の音声波形を準備しています…');
    // Existing waveform wins, then the one reused from streamed WAV segments.
    // Partial chunk caches may still need the legacy local-only decoder.
@@ -413,6 +441,10 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    return;
   }
   const id=++generation;
+  inBatch=false;
+  eta.start([source],{cached:src=>!force&&!!cachedResult(src)});
+  eta.begin(source);
+  renderEta();
   const previousBatch=$('geminiBatchProgress');
   if(previousBatch)previousBatch.hidden=true;
   abortController=new AbortController();
@@ -428,6 +460,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    activeBatchStep=null;
    setGeminiWorking(false);
    abortController=null;
+   eta.clear();
   }
  };
  const runBatch=async()=>{
@@ -443,6 +476,11 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
   if(access===null)return;
   const id=++generation;
   const cancelled=()=>id!==generation;
+  inBatch=true;
+  eta.start(videos,{
+   finished:src=>src.analysisEngine==='gemini'&&!!src.bins?.length,
+   cached:src=>!!cachedResult(src)
+  });
   setGeminiWorking(true);
   refreshBatchProgress({total:videos.length});
   try{
@@ -458,7 +496,13 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
      activeBatchStep=progress.phase==='starting'?{
       index:progress.index,total:progress.total,name:progress.video?.file?.name||'動画'
      }:activeBatchStep;
+     if(progress.phase==='starting')eta.begin(progress.video);
+     else if(['complete','failed','skipped'].includes(progress.phase))
+       eta.end(progress.video,{
+        skipped:progress.phase==='skipped',failed:progress.phase==='failed'
+       });
      refreshBatchProgress(progress);
+     renderEta();
      if(progress.phase==='starting')status('解析を開始しています…');
     }
    });
@@ -481,6 +525,8 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    activeBatchStep=null;
    setGeminiWorking(false);
    abortController=null;
+   inBatch=false;
+   eta.clear();
   }
  };
  $('geminiMainRun').addEventListener('click',()=>run(false));
