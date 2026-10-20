@@ -4,12 +4,25 @@
  */
 import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=1';
 import { mergeCalloutSegments, formatCalloutTime } from './gemini-callouts.mjs?v=1';
+import { WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=2';
 
 const ENDPOINT='https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
 const CACHE_PREFIX='peakstamp_callout_pilot_v1:';
 const $=id=>document.getElementById(id);
 const signature=s=>[s?.file?.name||'',s?.file?.size||0,s?.file?.lastModified||0].join('::');
 const cacheKey=(source,scope)=>CACHE_PREFIX+signature(source)+'::'+scope;
+const chunkKey=(source,range)=>CACHE_PREFIX+'chunks:'+signature(source)+
+ '::'+WAV_SEGMENT_VERSION+'::'+range.startSeconds+':'+range.durationSeconds;
+function readChunk(source,range){
+ try{
+  const saved=JSON.parse(localStorage.getItem(chunkKey(source,range))||'null');
+  return Array.isArray(saved?.utterances)?saved:null;
+ }catch{return null;}
+}
+function saveChunk(source,range,response){
+ try{localStorage.setItem(chunkKey(source,range),
+  JSON.stringify({utterances:response.utterances}));}catch(_){}
+}
 function readCache(source,scope){
  try{const data=JSON.parse(localStorage.getItem(cacheKey(source,scope))||'null');
   return Array.isArray(data?.utterances)?data:null;
@@ -190,6 +203,12 @@ export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{}}={}){
    for(const [i,range] of ranges.entries()){
     if(signal.aborted)throw Error('中止しました。');
     setProgress(i+1,ranges.length);
+    const previous=force?null:readChunk(source,range);
+    if(previous){
+     status('保存済み区間を再利用しています：'+(i+1)+'/'+ranges.length+' 区間');
+     responses.push({...previous,startSeconds:range.startSeconds,durationSeconds:range.durationSeconds});
+     continue;
+    }
     status('試合開始とゴール宣言を文字起こししています：'+(i+1)+'/'+ranges.length+' 区間');
     const wav=await segmenter.makeSegment(range);
     if(signal.aborted)throw Error('中止しました。');
@@ -208,6 +227,8 @@ export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{}}={}){
     const result=await response.json().catch(()=>null);
     if(!response.ok)throw Error(result?.error||'API応答エラー '+response.status);
     if(!Array.isArray(result?.utterances))throw Error('実況文字起こしの形式を読み取れませんでした。');
+    if(signal.aborted)throw Error('中止しました。');
+    saveChunk(source,range,result);
     responses.push({...result,startSeconds:range.startSeconds,durationSeconds:range.durationSeconds});
    }
    if(signal.aborted)throw Error('中止しました。');
