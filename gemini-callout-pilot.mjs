@@ -52,7 +52,7 @@ function downloadJson(text,filename){
  setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 
-export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{}}={}){
+export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{},onResultsChange=()=>{}}={}){
  const panel=$('geminiCalloutPanel');
  if(!panel)return;
  let running=false,controller=null,activeSource=null,lastKey='',activeResult=null;
@@ -144,6 +144,7 @@ export function initGeminiCalloutPilot(state,{refreshGeminiPrimary=()=>{}}={}){
   copyButton.disabled=false;
   showButton.disabled=false;
   downloadButton.disabled=false;
+  onResultsChange();
  }
  function refresh(){
   const sources=selection();
