@@ -14,8 +14,8 @@ const transcript=[{kind:'match_start',time_seconds:3.8,quote:'3と4',match_label
 const put=(source,store)=>store.setItem('peakstamp_callout_pilot_v2:'+
  goalSourceKey(source)+'::whole',JSON.stringify({utterances:transcript}));
 
-test('commentary time is 5sec after actual goal, clamped to zero near beginning',()=>{
- assert.equal(estimateGoalTime(379.2),374.2);
+test('commentary is estimated 10sec after goal, clamped to zero near beginning',()=>{
+ assert.equal(estimateGoalTime(379.2),369.2);
  assert.equal(estimateGoalTime(3.4),0);
 });
 test('existing v38 confirmed data preserves voice time and human confirmation when upgraded',()=>{
@@ -27,7 +27,7 @@ test('existing v38 confirmed data preserves voice time and human confirmation wh
  const upgraded=createGoalDrafts(source,store).items[0];
  assert.equal(upgraded.status,'confirmed');
  assert.equal(upgraded.timeSeconds,379.2);
- assert.equal(actualGoalTime(upgraded),374.2);
+ assert.equal(actualGoalTime(upgraded),369.2);
  assert.equal(upgraded.scorer,'若さん');
  assert.equal(upgraded.assist,'野田さん');
 });
@@ -39,7 +39,7 @@ test('human-adjusted goal time survives reload and exports actual play and spoke
  const restored=createGoalDrafts(source,store).items[0];
  assert.equal(restored.goalTimeSeconds,373.6);
  const output=confirmedGoalExport([source],store);
- assert.equal(output.version,2);
+ assert.equal(output.version,3);
  assert.equal(output.goals.length,1);
  assert.equal(output.goals[0].timeSeconds,373.6);
  assert.equal(output.goals[0].goalTimeSeconds,373.6);
@@ -61,9 +61,9 @@ test('one click keeps the goal in video with 8sec lead and 10sec post-goal',()=>
  const source=src(),store=makeStore();put(source,store);
  const goal=createGoalDrafts(source,store).items[0];
  const candidate=keepGoalClip(source,goal);
- assert.equal(candidate.time,366.2);
- assert.equal(candidate.peakSeconds,374.2);
- assert.equal(candidate.manualEnd,384.2);
+ assert.equal(candidate.time,361.2);
+ assert.equal(candidate.peakSeconds,369.2);
+ assert.equal(candidate.manualEnd,379.2);
  assert.equal(candidate.enabled,true);
  assert.equal(source.candidates.length,1);
  assert.equal(keepGoalClip(source,goal),candidate);
@@ -78,8 +78,9 @@ test('normal scene matching goal is reused instead of duplicating clip',()=>{
  assert.equal(candidate.id,'gemini-1');
  assert.equal(candidate.enabled,true);
  assert.equal(candidate.rejected,false);
- assert.equal(candidate.time,366.2);
- assert.equal(candidate.manualEnd,384.2);
+ assert.equal(candidate.time,361.2);
+ // Reused scene already extends 2.8 seconds beyond the new target; do not trim it.
+ assert.equal(candidate.manualEnd,382);
 });
 test('no waveform never adds empty clips; goal review still exists',()=>{
  const source=src(),store=makeStore();put(source,store);
