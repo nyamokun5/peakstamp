@@ -919,3 +919,32 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .gemini-progress .gemini-time-remaining{
  color:#a5e6d2!important;
 }
+
+
+/* Commentary transcript pilot: separate from main Gemini highlight detection */
+.gemini-callout-panel{margin-top:12px}
+.gemini-callout-panel>summary{font-size:14px;font-weight:800;cursor:pointer;padding:4px 0;line-height:1.5}
+.gemini-callout-panel>p{margin-top:10px}
+.gemini-callout-panel .callout-input-row{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin:14px 0 8px}
+.callout-input-row label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;min-width:0}
+.callout-input-row select,.callout-rating{
+ max-width:100%;width:100%;min-height:40px;padding:8px;
+ background:#163444;color:#e8f8ff;border:1px solid #527181;border-radius:8px;
+ font-size:13px
+}
+#calloutRun{width:100%;margin:8px 0}
+#calloutRerun,#calloutStop,#calloutExport{margin:6px 0}
+#calloutResultArea{margin-top:15px}
+#calloutPreview{width:100%;max-height:270px;margin:10px 0;border-radius:9px;background:#071520}
+.callout-list{display:grid;gap:10px;margin:12px 0 15px}
+.callout-utterance{border:1px solid #4b6a76;background:#102a37;padding:12px;border-radius:10px}
+.callout-utterance-head{display:flex;gap:9px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.callout-utterance-head strong{color:#e6fff3;font-size:13px}
+.callout-play{color:#b2e8d9;border:1px solid #638b89;border-radius:8px;background:#173e47;min-height:35px;padding:6px 10px;font-size:12px}
+.callout-quote{color:#f0f6fa;font-size:14px;line-height:1.55;margin:9px 0 5px;overflow-wrap:anywhere}
+.callout-fields{color:#afd3ce;display:block;font-size:12px;line-height:1.6}
+.callout-check{margin-top:10px}
+.callout-check label{display:flex;align-items:center;gap:12px;font-size:12px;color:#c3d9dd}
+.callout-check select{width:auto;min-width:120px}
+#calloutMissed{display:block;width:100%;margin:8px 0 10px;min-height:76px;resize:vertical}
+@media(max-width:520px){.gemini-callout-panel .callout-input-row{grid-template-columns:1fr}}
