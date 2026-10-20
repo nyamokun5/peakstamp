@@ -184,6 +184,14 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
  const progressUI=createGeminiProgressUI();
  const eta=createGeminiEta();
  let inBatch=false;
+ const approx=seconds=>{
+  const rounded=formatGeminiEta(seconds);
+  return rounded==='1分未満'?rounded:'約'+rounded;
+ };
+ const setCurrentEta=text=>{
+  const target=$('geminiCurrentEta');
+  if(target)target.textContent=text;
+ };
  const renderEta=()=>{
   const estimate=eta.estimate();
   const current=$('geminiCurrentEta');
@@ -192,7 +200,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
      ?'残り時間：シーンを準備中'
      :estimate.currentSeconds===null
        ?'推定残り時間：計測中'
-       :'推定残り時間：約'+formatGeminiEta(estimate.currentSeconds);
+       :'推定残り時間：'+approx(estimate.currentSeconds);
   }
   const overall=$('geminiBatchEta');
   if(overall&&inBatch){
@@ -200,7 +208,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
      ?'すべての動画の処理が終了しました'
      :estimate.totalSeconds===null
        ?'全体の推定残り時間：計測中'
-       :'全体の推定残り時間：約'+formatGeminiEta(estimate.totalSeconds);
+       :'全体の推定残り時間：'+approx(estimate.totalSeconds);
   }
  };
  const checkConnection=$('geminiMainCheck');
@@ -294,6 +302,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
   generation++;
   abortController?.abort();
   progressUI.fail('解析を中止しました');
+  setCurrentEta('解析を中止しました');
   status('解析を中止しました。完了済み区間は次回再利用します。');
   // The running operation cleans up before a new run is permitted.
  });
@@ -421,6 +430,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    const summary=await commitResults({source,parsed,audio:{durationSeconds:duration},decoded,answer,fromCache:!!cache,batch});
    alive();
    progressUI.complete();
+   setCurrentEta('この動画の解析は完了しました');
    status('Gemini解析完了：'+summary.candidates+'件の候補（'+summary.merged+'件の近接反応を統合）。'+
     (cache?'保存済みのAI結果を利用。':'WAV音声を '+(answer.meta?.segments||'?')+' 区間に分けて並列解析。')+
     ' API方式：'+(answer.meta?.api||'不明')+'。'+
@@ -455,6 +465,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    if(id===generation){
     status('Gemini解析エラー：'+(e?.message||String(e)));
     progressUI.fail('解析が完了しませんでした');
+    setCurrentEta('残り時間の推定を終了しました');
    }
   }finally{
    activeBatchStep=null;
@@ -503,6 +514,8 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
        });
      refreshBatchProgress(progress);
      renderEta();
+     if(progress.phase==='failed')setCurrentEta('この動画は解析できませんでした');
+     if(progress.phase==='skipped')setCurrentEta('解析済みの動画を再利用しました');
      if(progress.phase==='starting')status('解析を開始しています…');
     }
    });
