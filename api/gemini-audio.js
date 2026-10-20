@@ -308,7 +308,8 @@ export default async function handler(req,res){
   if(!Array.isArray(parsed?.utterances))return reply(res,502,'実況テストの回答にutterances配列がありません。');
   const utterances=[];
   for(const row of parsed.utterances.slice(0,30)){
-   const time=Number(row?.time_seconds);
+   if(row?.time_seconds===null||row?.time_seconds===undefined||row?.time_seconds==='')continue;
+   const time=Number(row.time_seconds);
    const kind=row?.kind;
    const quote=typeof row?.quote==='string'?row.quote.trim().slice(0,160):'';
    if(!Number.isFinite(time)||time<0||time>seconds+1||
