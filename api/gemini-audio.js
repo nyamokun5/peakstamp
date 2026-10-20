@@ -58,7 +58,7 @@ function calloutPrompt(duration){
   'Return VALID JSON text only: {"utterances":[{"time_seconds":12.3,"kind":"match_start","quote":"1対2で開始","match_label":"1対2","team_a":null,"team_b":null,"scorer":null,"assist":null,"confidence":"medium"}]}.',
   'That JSON is SCHEMA ONLY, not an observed utterance. Never copy fictional example text or its time.',
   'Top-level JSON must contain utterances array; no extra prose.'
- ].join('\\n');
+ ].join('\n');
 }
 const trimError=message=>String(message||'')
  .replace(/AIza[0-9A-Za-z_-]{15,}/g,'[API_KEY]')
