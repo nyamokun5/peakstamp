@@ -79,7 +79,8 @@ test('normal scene matching goal is reused instead of duplicating clip',()=>{
  assert.equal(candidate.enabled,true);
  assert.equal(candidate.rejected,false);
  assert.equal(candidate.time,361.2);
- assert.equal(candidate.manualEnd,379.2);
+ // Reused scene already extends 2.8 seconds beyond the new target; do not trim it.
+ assert.equal(candidate.manualEnd,382);
 });
 test('no waveform never adds empty clips; goal review still exists',()=>{
  const source=src(),store=makeStore();put(source,store);
