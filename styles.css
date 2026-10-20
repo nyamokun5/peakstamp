@@ -881,7 +881,7 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .gemini-primary-panel .gemini-batch-run{
  display:block;width:100%;min-height:49px;margin:9px 0 7px;
  border:1px solid #89d6c9;border-radius:10px;
- background:#1b4d50;color:#e3fff5;font-size:14px;font-weight:850;
+ background:#77dfc4;color:#092d35;font-size:14px;font-weight:900;
 }
 .gemini-primary-panel .gemini-batch-run:disabled{opacity:.45}
 .gemini-primary-panel .gemini-batch-run[hidden],
@@ -898,3 +898,9 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 #geminiBatchDetail{display:block;color:#a7cbd0;font-size:11px;line-height:1.5}
 .gemini-batch-progress.has-failures{border-color:#a77b58}
 @media(prefers-reduced-motion:reduce){#geminiBatchBar{transition:none}}
+
+.gemini-primary-panel .gemini-main-run.is-secondary{
+ min-height:42px;margin:4px 0 0;
+ border:1px solid #3f7180;background:transparent;
+ color:#abd4d8;font-size:12px;font-weight:700;
+}
