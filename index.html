@@ -218,6 +218,11 @@
         <strong>採用するシーン：<span id="selectedCount">0</span>件</strong>
         <div id="selectedSummary" class="selected-summary" hidden></div>
       </div>
+      <div class="edit-transfer-actions">
+        <button id="exportEditData" type="button" class="main-button" disabled>HS向け編集データを書き出す（JSON）</button>
+        <p class="fine-print">キープ済みシーンの確定した開始・終了秒数を保存します。動画ファイル自体は含まれません。</p>
+        <p id="exportEditStatus" role="status" aria-live="polite"></p>
+      </div>
       <div class="review-tabs" role="group" aria-label="シーンの表示切り替え">
         <button id="tabAll" type="button" class="review-tab active" data-review-tab="all" aria-pressed="true">未判断 <span id="tabAllCount">0</span></button>
         <button id="tabKept" type="button" class="review-tab" data-review-tab="kept" aria-pressed="false">キープ済み <span id="tabKeptCount">0</span></button>
@@ -395,6 +400,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api31"></script>
+  <script type="module" src="app.mjs?v=gemini-api32"></script>
 </body>
 </html>

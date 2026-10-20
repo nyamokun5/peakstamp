@@ -8,6 +8,7 @@ import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=pinch18';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
+import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
 import { attachScenePinchEditor } from './scene-gesture.mjs?v=pinch28';
 import { montageSeconds } from './exporter.mjs?v=pinch18';
@@ -1096,6 +1097,7 @@ function row(item, index) {
 }
 function refreshComment() {
   const selected = state.candidates.filter(item => item.enabled);
+  $('exportEditData').disabled = !buildMultiClipPlan(state.sources,currentClipOptions()).length || state.working || state.exporting;
   const isMulti = state.sources.length > 1;
   const perSource=sourceTimestampComments(state.sources);
   $('commentText').value = perSource.filter(x=>x.text).map(x=>x.text).join('\n\n');
@@ -1299,6 +1301,25 @@ $('lineShareCopy').addEventListener('click',async()=>{
     fallback.select();
     $('lineShareStatus').textContent='URLを選択しました。コピーしてLINEに貼り付けてください。';
   }
+});
+
+$('exportEditData').addEventListener('click',()=>{
+  const status=$('exportEditStatus');
+  status.textContent='';
+  try {
+    const plan=buildMultiClipPlan(state.sources,currentClipOptions());
+    const payload=createEditTransfer(state.sources,plan);
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;
+    link.download='PeakStamp_Edit_'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    status.textContent=plan.length+'シーンの編集データを書き出しました（元動画は含まれません）。';
+  } catch(e) { status.textContent='書き出し失敗：'+(e?.message||String(e)); }
 });
 
 initMontageEditor(state);
