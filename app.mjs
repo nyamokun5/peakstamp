@@ -1353,6 +1353,10 @@ initVideoExplore(state);
 initCloudAudioPilot(state);
 initGeminiPrimary(state,{decodeAudio:decodeStreaming,commitResults:commitGeminiResults});
 const goalReview=initGoalStatsReview(state);
+$('openGoalStats').addEventListener('click',()=>{
+  const source=state.sources.find(s=>s?.file);
+  if(source)goalReview.openAt(source,0);
+});
 const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
   onResultsChange:()=>{
     goalReview.refresh();
