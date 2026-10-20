@@ -139,8 +139,11 @@ export function refreshGeminiPrimary(state) {
  const pickerLabel=$('geminiSourceLabel');
  if(pickerLabel)pickerLabel.hidden=sources.length<2;
  button.disabled=processing||!source||state.working||state.exporting||(!cache && !API_ENDPOINT);
+ button.classList.toggle('is-secondary',sources.length>1);
  second.disabled=button.disabled;
- button.textContent=processing?'Gemini処理中…':cache?'保存済みのGemini結果を復元':(!API_ENDPOINT?'Gemini APIサーバー接続待ち':'Geminiで音声解析する →');
+ button.textContent=processing?'Gemini処理中…':cache?'保存済みのGemini結果を復元':
+   (!API_ENDPOINT?'Gemini APIサーバー接続待ち':
+    sources.length>1?'選択中の1本だけ解析':'Geminiで音声解析する →');
  second.hidden=!cache||processing||!API_ENDPOINT;
  $('geminiMainCancel').hidden=!processing;
  const sourceHelp=$('geminiMainFileHelp');
