@@ -948,3 +948,16 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .callout-check select{width:auto;min-width:120px}
 #calloutMissed{display:block;width:100%;margin:8px 0 10px;min-height:76px;resize:vertical}
 @media(max-width:520px){.gemini-callout-panel .callout-input-row{grid-template-columns:1fr}}
+
+
+/* v37: accessible iOS file-share / plain-text fallback for callout JSON */
+.callout-export-options{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin:12px 0}
+.callout-export-options button{width:100%;min-height:44px;margin:0!important;line-height:1.4;white-space:normal}
+.callout-json-area{margin:12px 0;border:1px solid #55747b;border-radius:10px;background:#0d2733;padding:12px}
+.callout-json-area label{display:block;font-size:12px;font-weight:700;color:#d1e8e8;margin-bottom:8px}
+.callout-json-area textarea{
+ width:100%;min-height:175px;max-height:360px;resize:vertical;box-sizing:border-box;
+ border-radius:7px;border:1px solid #6c8b95;background:#071b25;color:#f3f8ff;
+ font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;
+ line-height:1.5;padding:9px;overflow:auto;-webkit-user-select:text;user-select:text
+}
