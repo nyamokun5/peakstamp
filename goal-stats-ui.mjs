@@ -258,7 +258,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
    '件  ·  確定 '+confirmed+'件'+(excluded?'  ·  除外 '+excluded+'件':'');
   exportButton.disabled=copyButton.disabled=showButton.disabled=confirmed===0;
   const previous=entries.find(row=>row.key===activeKey);
-  // Do not auto-open new goals over an intentionally completed queue.
+  // Keep the completion state until a genuinely new unconfirmed goal appears.
+  if(activeKey==='__all_done__'&&pending>0)
+   activeKey=entries.find(row=>row.item.status==='draft').key;
   if(!previous && !activeKey)activeKey=(entries.find(row=>row.item.status==='draft')||entries[0])?.key||'';
   const active=entries.find(row=>row.key===activeKey);
   if(!active){viewer.hidden=true;video.pause();}
