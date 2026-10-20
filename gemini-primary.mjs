@@ -4,6 +4,7 @@
  */
 import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=1';
 import { runGeminiFastPipeline } from './gemini-fast-pipeline.mjs?v=1';
+import { runGeminiVideoBatch } from './gemini-video-batch.mjs?v=1';
 import { createGeminiFastWaveform } from './gemini-fast-waveform.mjs?v=1';
 import { createGeminiProgressUI } from './gemini-progress-ui.mjs?v=1';
 import { updateGeminiScreenNotice } from './gemini-screen-notice.mjs?v=1';
@@ -33,6 +34,7 @@ function saveChunk(source,range,answer){
 }
 const $ = id => document.getElementById(id);
 let selected = 0, processing = false, generation = 0, abortController = null;
+let activeBatchStep = null;
 const fileKey = source => [
  source?.file?.name || '', source?.file?.size || 0, source?.file?.lastModified || 0
 ].join('::');
@@ -54,7 +56,26 @@ function saveResult(source, response) {
 }
 function status(message) {
  const el = $('geminiMainStatus');
- if (el) el.textContent = message;
+ if (el) el.textContent = activeBatchStep && message
+   ? '動画 '+(activeBatchStep.index+1)+'/'+activeBatchStep.total+
+     ' · '+activeBatchStep.name+' — '+message : message;
+}
+function refreshBatchProgress({processed=0,total=0,index=0,video=null,phase='starting',
+ success=0,skipped=0,failures=0}={}) {
+ const root=$('geminiBatchProgress');
+ if(!root)return;
+ root.hidden=false;
+ const percentage=total?Math.round(100*processed/total):0;
+ $('geminiBatchPercent').textContent=percentage+'%';
+ $('geminiBatchBar').style.width=percentage+'%';
+ root.setAttribute('aria-valuenow',String(percentage));
+ const name=video?.file?.name||'動画';
+ $('geminiBatchLabel').textContent=phase==='starting'
+   ? '動画 '+(index+1)+'/'+total+' を解析中 · '+name
+   : '処理済み '+processed+'/'+total+' 本';
+ $('geminiBatchDetail').textContent=
+   '解析成功 '+success+'本 · 解析済み '+skipped+'本 · 失敗 '+failures+'本';
+ root.classList.toggle('has-failures',failures>0);
 }
 function candidates(state) {
  return (state?.sources || []).filter(s=>s?.file && s?.objectUrl);
@@ -103,6 +124,16 @@ export function refreshGeminiPrimary(state) {
  picker.value=sources.length?String(selected):'';
  const source=sources[selected]||null;
  const cache=source&&cachedResult(source);
+ const batchButton=$('geminiMainBatch');
+ if(batchButton){
+  const finished=sources.filter(s=>s.analysisEngine==='gemini'&&s.bins?.length).length;
+  const pending=sources.length-finished;
+  batchButton.hidden=sources.length<2;
+  batchButton.disabled=processing||state.working||state.exporting||pending===0;
+  batchButton.textContent=processing?'まとめて解析中…':
+   pending===0?'すべて解析済み（'+sources.length+'本）':
+    '全'+sources.length+'本をまとめて解析 →';
+ }
  picker.disabled=processing||sources.length<2;
  picker.hidden=sources.length<2;
  const pickerLabel=$('geminiSourceLabel');
@@ -235,36 +266,38 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
   status('解析を中止しました。完了済み区間は次回再利用します。');
   // The running operation cleans up before a new run is permitted.
  });
- const run=async force=>{
-  const source=selectedSource(state);
-  if(!source||processing||state.working||state.exporting)return;
-  const cache=force?null:cachedResult(source);
-  const access=$('geminiMainAccess').value.trim();
-  if(!cache && !API_ENDPOINT){
-   status('APIサーバーの公開先が未設定です。Vercelでサーバーをデプロイしてから使用できます。');
-   return;
+ const setGeminiWorking=busy=>{
+  processing=busy;
+  state.geminiProcessing=busy;
+  window.dispatchEvent(new Event('gemini-processing-state'));
+  refreshGeminiPrimary(state);
+ };
+ const verifyAccess=videos=>{
+  const needsApi=videos.some(video=>!cachedResult(video));
+  if(needsApi && !API_ENDPOINT){
+   status('Gemini APIサーバーが未設定です。');
+   return null;
   }
-  if(!cache && !access){
+  const access=$('geminiMainAccess').value.trim();
+  if(needsApi && !access){
    status('Gemini APIアクセスコードを入力してください。コードは端末に保存しません。');
    $('geminiMainAccess').focus();
-   return;
+   return null;
   }
-  if(!cache && !$('geminiMainConsent').checked){
-   status('音声をGoogleに送信することへの同意をチェックしてください。元動画は送信されません。');
-   return;
+  if(needsApi && !$('geminiMainConsent').checked){
+   status('音声をGoogleへ送信することへの同意をチェックしてください。');
+   return null;
   }
+  return access;
+ };
+ const analyzeOne=async({source,access,id,signal,force=false,batch=false})=>{
+  const cache=force?null:cachedResult(source);
   const started=performance.now();
-  const id=++generation;
-  processing=true;
-  progressUI.start(cache?'保存済み結果を復元中':'音声を準備中…');
-  abortController=new AbortController();
-  const signal=abortController.signal;
   const alive=()=>{
    if(signal.aborted||id!==generation)throw Error('解析を中止しました。');
    if(!state.sources.includes(source))throw Error('動画が削除されたため解析を中止しました。');
   };
-  refreshGeminiPrimary(state);
-  try{
+  progressUI.start(cache?'保存済み結果を復元中':'音声を準備中…');
    let duration=Number(cache?.duration_seconds);
    let answer;
    let decodedDuringGemini=null;
@@ -348,7 +381,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    waveformSeconds=(performance.now()-waveformStarted)/1000;
    alive();
    progressUI.finalizing();
-   const summary=await commitResults({source,parsed,audio:{durationSeconds:duration},decoded,answer,fromCache:!!cache});
+   const summary=await commitResults({source,parsed,audio:{durationSeconds:duration},decoded,answer,fromCache:!!cache,batch});
    alive();
    progressUI.complete();
    status('Gemini解析完了：'+summary.candidates+'件の候補（'+summary.merged+'件の近接反応を統合）。'+
@@ -357,21 +390,90 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
     ' 所要 '+elapsed(started)+'（区間処理 '+geminiSeconds.toFixed(1)+'秒、WAV変換 '+wavSeconds.toFixed(1)+'秒、'+
     'Gemini API待ち延べ '+apiWaitSum.toFixed(1)+'秒、波形 '+waveformSeconds.toFixed(1)+'秒）。'+
     ' 下の「確認してキープ」で再生できます。');
+
+  return true;
+ };
+ const run=async force=>{
+  const source=selectedSource(state);
+  if(!source||processing||state.working||state.exporting)return;
+  const access=force?$('geminiMainAccess').value.trim():verifyAccess([source]);
+  if(access===null)return;
+  // Force refresh requires network access even if the old answer is cached.
+  if(force && (!API_ENDPOINT||!access||!$('geminiMainConsent').checked)){
+   status('再解析にはAPIアクセスコードと音声送信の同意が必要です。');
+   return;
+  }
+  const id=++generation;
+  abortController=new AbortController();
+  setGeminiWorking(true);
+  try{
+   await analyzeOne({source,access,id,signal:abortController.signal,force});
   }catch(e){
    if(id===generation){
     status('Gemini解析エラー：'+(e?.message||String(e)));
     progressUI.fail('解析が完了しませんでした');
    }
   }finally{
-   // Cancel increments generation; still release the busy state so the user
-   // can safely resume with the already-saved per-chunk cache.
-   if(id===generation||signal.aborted){
-    processing=false;abortController=null;
-    refreshGeminiPrimary(state);
+   activeBatchStep=null;
+   setGeminiWorking(false);
+   abortController=null;
+  }
+ };
+ const runBatch=async()=>{
+  const videos=candidates(state).slice();
+  if(videos.length<2)return run(false);
+  if(processing||state.working||state.exporting)return;
+  const pending=videos.filter(src=>!(src.analysisEngine==='gemini'&&src.bins?.length));
+  if(!pending.length){
+   status('選んだ動画はすべてGemini解析済みです。');
+   return;
+  }
+  const access=verifyAccess(pending);
+  if(access===null)return;
+  const id=++generation;
+  const cancelled=()=>id!==generation;
+  setGeminiWorking(true);
+  refreshBatchProgress({total:videos.length});
+  try{
+   const result=await runGeminiVideoBatch({
+    videos,
+    isAlreadyAnalyzed:src=>src.analysisEngine==='gemini'&&!!src.bins?.length,
+    isCancelled:cancelled,
+    processVideo:async src=>{
+     abortController=new AbortController();
+     return analyzeOne({source:src,access,id,signal:abortController.signal,batch:true});
+    },
+    onProgress:progress=>{
+     activeBatchStep=progress.phase==='starting'?{
+      index:progress.index,total:progress.total,name:progress.video?.file?.name||'動画'
+     }:activeBatchStep;
+     refreshBatchProgress(progress);
+     if(progress.phase==='starting')status('解析を開始しています…');
+    }
+   });
+   activeBatchStep=null;
+   if(result.cancelled){
+    status('一括解析を中止しました。'+result.processed+'/'+result.total+
+      '本は処理済みです。成功区間は再利用できます。');
+    progressUI.fail('一括解析を中止しました');
+   }else{
+    status('一括解析が終了しました。解析成功 '+result.success+
+     '本／解析済みを再利用 '+result.skipped+'本／失敗 '+result.failures.length+'本。'+
+     (result.failures.length
+       ?' 失敗：'+result.failures.map(f=>f.name+'（'+f.error+'）').join(' ／ ')
+       :' 下の「確認してキープ」でシーンを編集できます。'));
+    if(result.success+result.skipped>0 && state.bins){
+     $('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
+    }
    }
+  }finally{
+   activeBatchStep=null;
+   setGeminiWorking(false);
+   abortController=null;
   }
  };
  $('geminiMainRun').addEventListener('click',()=>run(false));
+ $('geminiMainBatch')?.addEventListener('click',runBatch);
  $('geminiMainForce').addEventListener('click',()=>run(true));
  refreshGeminiPrimary(state);
 }
