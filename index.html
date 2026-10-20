@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=batch33" />
+  <link rel="stylesheet" href="styles.css?v=eta34" />
 </head>
 <body>
   <header class="topbar">
@@ -87,12 +87,14 @@
         <div class="gemini-batch-head"><strong id="geminiBatchLabel">まとめて解析する動画を準備中</strong><output id="geminiBatchPercent">0%</output></div>
         <div class="gemini-batch-track"><div id="geminiBatchBar"></div></div>
         <small id="geminiBatchDetail">動画を1本ずつ自動処理します</small>
+        <p id="geminiBatchEta" class="gemini-time-remaining" aria-live="off">推定残り時間：計測中</p>
       </div>
       <button id="geminiMainForce" class="whisper-run" type="button" hidden>Geminiで再解析（追加料金が発生する場合があります）</button>
       <div id="geminiProgress" class="gemini-progress" role="progressbar" aria-label="Gemini音声解析の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
         <div class="gemini-progress-top"><strong id="geminiProgressLabel">解析の準備中…</strong><output id="geminiProgressPercent">0%</output></div>
         <div class="gemini-progress-track"><div id="geminiProgressBar"></div></div>
         <small id="geminiProgressDetail">区間完了数に基づく進捗です</small>
+        <p id="geminiCurrentEta" class="gemini-time-remaining" aria-live="off">推定残り時間：計測中</p>
       </div>
       <button id="geminiMainCancel" class="cancel-button" type="button" hidden>解析を中止</button>
       <p id="geminiMainStatus" role="status" aria-live="polite" class="gemini-main-status"></p>
@@ -406,6 +408,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api33"></script>
+  <script type="module" src="app.mjs?v=gemini-api34"></script>
 </body>
 </html>

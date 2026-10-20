@@ -904,3 +904,18 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  border:1px solid #3f7180;background:transparent;
  color:#abd4d8;font-size:12px;font-weight:700;
 }
+
+
+/* v34: transparent, measurement-based time remaining estimates */
+.gemini-time-remaining{
+ font-size:12px!important;font-weight:750;line-height:1.55;
+ color:#b7f0db!important;margin:8px 0 0!important;
+ font-variant-numeric:tabular-nums;
+}
+.gemini-batch-progress .gemini-time-remaining{
+ color:#acf3d5!important;padding-top:8px;
+ border-top:1px solid #335965;
+}
+.gemini-progress .gemini-time-remaining{
+ color:#a5e6d2!important;
+}
