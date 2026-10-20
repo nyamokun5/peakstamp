@@ -5,6 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=eta34';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout37';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal38';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=batch33';
@@ -132,6 +133,7 @@ function syncSources() {
   refreshVideoExplore(state);
   refreshGeminiPrimary(state);
   refreshCloudAudioPilot(state);
+  goalReview?.refresh();
   calloutPilot?.refresh();
   if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
   $('stickyBar').hidden = !state.bins;
@@ -1092,6 +1094,17 @@ function row(item, index) {
   actions.append(play,keep,reject);
   timeRow.append(remove);
   wrap.append(fields,actions);
+  const nearbyGoals=goalReview?.nearby(source,item.peakSeconds,item.time,
+    getCandidateEnd(source,item,currentClipOptions()))||[];
+  if(nearbyGoals.length){
+    const annotated=nearbyGoals.filter(goal=>goal.origin==='audio'||goal.origin==='manual');
+    const goalBadge=make('button','scene-goal-note',
+      '🎙 近くのゴール記録 '+annotated.length+'件 — '+annotated
+      .map(x=>x.scorer||'得点者未確定').join('／')+'（タップして確認）');
+    goalBadge.type='button';
+    goalBadge.addEventListener('click',()=>goalReview.openAt(source,nearbyGoals[0].timeSeconds));
+    wrap.append(goalBadge);
+  }
   // Three review actions share one row immediately above the inline video.
   entry.append(wrap,inline,rangeEditor);
   applySelection();
@@ -1339,4 +1352,9 @@ initAIReview(state);
 initVideoExplore(state);
 initCloudAudioPilot(state);
 initGeminiPrimary(state,{decodeAudio:decodeStreaming,commitResults:commitGeminiResults});
-const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary});
+const goalReview=initGoalStatsReview(state);
+const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
+  onResultsChange:()=>{
+    goalReview.refresh();
+    if(state.bins)drawResults();
+  }});
