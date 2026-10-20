@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=eta34" />
+  <link rel="stylesheet" href="styles.css?v=callout35" />
 </head>
 <body>
   <header class="topbar">
@@ -103,6 +103,38 @@
         <p class="fine-print">元動画は端末内に残ります。約70秒ごとに音声だけをGoogleへ送信。成功した区間は再利用できます。API利用料や通信料が発生することがあります。Safariを離れると解析が中断される場合があります。</p>
       </details>
     </section>
+
+    <details class="panel gemini-callout-panel" id="geminiCalloutPanel" hidden>
+      <summary>🧪 実験：試合開始・「○○さんゴール」を文字で拾う</summary>
+      <p class="fine-print">既存のゴール・シュート候補検出とは別の音声解析です。撮影者が「1対2」「青対赤」などの対戦宣言や「山田さんゴール！」と話したかを、発言時刻と原文で確認します。SSアプリへの登録は行いません。</p>
+      <div class="callout-input-row">
+        <label>調べる動画
+          <select id="calloutSource" aria-label="実況文字起こしの対象動画"></select>
+        </label>
+        <label>解析する範囲
+          <select id="calloutScope">
+            <option value="first">動画の冒頭70秒（まず試す）</option>
+            <option value="whole">動画全体（最大10分・追加料金）</option>
+          </select>
+        </label>
+      </div>
+      <p class="fine-print">上のGeminiアクセスコードと「音声をGoogleへ送信する」同意を利用します。別途Gemini APIリクエストが発生し、API利用料がかかる場合があります。元動画は送らず音声だけを送信します。</p>
+      <button id="calloutRun" class="main-button" type="button" disabled>実況を文字で拾う（API料金あり）</button>
+      <button id="calloutRerun" class="whisper-run" type="button" hidden>再解析する（追加料金）</button>
+      <button id="calloutStop" class="cancel-button" type="button" hidden>実況テストを中止</button>
+      <p id="calloutProgress" role="status" class="fine-print" hidden></p>
+      <p id="calloutStatus" role="status" class="gemini-main-status"></p>
+      <div id="calloutResultArea" hidden>
+        <strong id="calloutCount">検出 0件</strong>
+        <p class="fine-print">音声の書き起こしは誤る場合があります。「1対2」は得点結果とは限りません。実際の音声を聞いて評価してください。</p>
+        <video id="calloutPreview" controls playsinline preload="none" hidden aria-label="文字起こし位置を確認する元動画"></video>
+        <div id="calloutList" class="callout-list"></div>
+        <label for="calloutMissed">聞き逃し・未検出の発言（任意メモ）</label>
+        <textarea id="calloutMissed" rows="3" maxlength="3000" placeholder="例：04:35 山田さんゴール、Geminiは検出できず"></textarea>
+        <button id="calloutExport" class="whisper-run" type="button" disabled>結果と評価をJSON保存</button>
+        <p class="fine-print">保存されるのは発言・時刻・評価だけで、動画や音声そのものは含みません。</p>
+      </div>
+    </details>
 
     <details class="legacy-audio-details">
       <summary>予備：無料の音量解析を使う（Geminiを使わない場合）</summary>
@@ -408,6 +440,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api34"></script>
+  <script type="module" src="app.mjs?v=gemini-api35"></script>
 </body>
 </html>
