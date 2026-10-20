@@ -2,7 +2,7 @@
  * Browser UI for manually verifying recorded goals before any SS sync.
  * Goal confirmation is independent of Keep/Reject and any MP4 export.
  */
-import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,confirmedGoalExport,goalSourceKey} from './goal-stats.mjs?v=38';
+import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=39';
 import {formatCalloutTime} from './gemini-callouts.mjs?v=1';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 
@@ -22,8 +22,13 @@ function field(parent,name,value,onChange,{type='text',placeholder='',maxLength=
  return input;
 }
 const safeJsonFilename=()=> 'PeakStamp_Confirmed_Goals_'+new Date().toISOString().slice(0,10)+'.json';
+const preciseTime=value=>{
+ const ticks=Math.round(Math.max(0,Number(value)||0)*10);
+ const seconds=Math.floor(ticks/10);
+ return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0')+'.'+(ticks%10);
+};
 
-export function initGoalStatsReview(state,{onUpdate=()=>{}}={}){
+export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false}={}){
  const panel=$('goalStatsPanel');
  if(!panel)return {refresh:()=>{},nearby:()=>[],openAt:()=>{}};
  const list=$('goalStatsList');
@@ -69,7 +74,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{}}={}){
      video.load();
     });
    }
-   video.currentTime=Math.max(0,Number(time)-8);
+   video.currentTime=Math.max(0,Number(time)-6);
    await video.play();
   }catch(e){setStatus('再生に失敗：'+(e?.message||String(e))+'。動画の再生ボタンをお試しください。');}
  }
@@ -111,22 +116,66 @@ export function initGoalStatsReview(state,{onUpdate=()=>{}}={}){
    const card=make('article','goal-review-card');
    card.dataset.goalId=item.id;
    const headline=make('div','goal-review-head');
-   headline.append(make('strong','',formatCalloutTime(item.timeSeconds)+' · '+
-     (item.origin==='audio'?'実況から抽出':'手動追加')));
+   headline.append(make('strong','',
+     '⚽ ゴール候補 '+preciseTime(actualGoalTime(item))+' · '+
+     (item.origin==='audio'?'実況解析':'手動追加')));
    const stateText=item.status==='confirmed'?'✓ 確定済み':item.status==='excluded'?'除外':'未確定';
    headline.append(make('span','goal-review-status '+item.status,stateText));
    card.append(headline);
    card.append(make('p','goal-review-quote',item.quote||''));
+   if(item.origin==='audio'){
+    const lag=Math.round((Number(item.timeSeconds)-actualGoalTime(item))*10)/10;
+    card.append(make('p','goal-review-timing',
+      '実況 '+preciseTime(item.timeSeconds)+' → 推定・確認ゴール '+preciseTime(actualGoalTime(item))+
+      '（実況の約'+lag+'秒前）'+(item.goalTimeVerified?' · 時刻確認済み':' · 仮設定')));
+   }else card.append(make('p','goal-review-timing',
+     'ゴール時刻 '+preciseTime(actualGoalTime(item))+(item.goalTimeVerified?' · 確認済み':' · 仮設定')));
    const controls=make('div','goal-review-controls');
    const play=make('button','goal-review-play','▶ このゴールを映像で確認');
-   play.type='button';play.addEventListener('click',()=>{void playAt(source,item.timeSeconds);});
-   controls.append(play);card.append(controls);
+   play.type='button';play.addEventListener('click',()=>{void playAt(source,actualGoalTime(item));});
+   controls.append(play);
+   const keepClip=make('button','goal-review-keep-clip',
+     '＋ このゴールを動画にキープ');
+   keepClip.type='button';keepClip.disabled=!source.bins;
+   keepClip.title=source.bins?'選択したゴールを通常のハイライト編集にも追加します':'通常のGemini見どころ解析の後に利用できます';
+   keepClip.addEventListener('click',()=>{
+    const added=onKeepClip(source,item);
+    if(added)setStatus('ゴールシーンを動画のキープ済みに追加しました。ゴールの公式記録とは独立しています。');
+   });
+   controls.append(keepClip);card.append(controls);
    const inputs=make('div','goal-review-fields');
    const set=(fieldName,value)=>{
+    if(String(item[fieldName]??'')===String(value??''))return;
     item[fieldName]=value;
+    if(fieldName==='goalTimeSeconds')item.goalTimeVerified=false;
     if(item.status==='confirmed'){item.status='draft';item.confirmedAt=null;}
     write(source,items);render();
    };
+   const timing=make('div','goal-review-time-adjust');
+   const timingTitle=make('strong','', 'ゴール時刻を映像に合わせる');
+   const minus=make('button','goal-review-adjust-button','−1秒');
+   const plus=make('button','goal-review-adjust-button','＋1秒');
+   const at=make('input','goal-review-time-input');
+   at.type='number';at.step='0.1';at.min='0';
+   at.value=String(actualGoalTime(item));at.setAttribute('aria-label','動画内のゴール時刻（秒）');
+   const changeTime=val=>{
+    const n=Number(val);
+    if(!Number.isFinite(n)||String(val).trim()===''||n<0||(Number(source.duration)>0&&n>source.duration)){
+     setStatus('動画内の有効なゴール時刻を入力してください。');return;
+    }
+    item.goalTimeSeconds=Math.round(n*10)/10;
+    item.goalTimeVerified=false;
+    if(item.status==='confirmed'){item.status='draft';item.confirmedAt=null;}
+    write(source,items);render();
+   };
+   minus.type=plus.type='button';
+   minus.addEventListener('click',()=>changeTime(Math.max(0,actualGoalTime(item)-1)));
+   plus.addEventListener('click',()=>changeTime(actualGoalTime(item)+1));
+   at.addEventListener('change',()=>changeTime(at.value));
+   const timingHint=make('small','',
+    '実況は得点から約5秒後。映像でプレーを見て、時刻を微調整してください。');
+   timing.append(timingTitle,minus,at,plus,timingHint);
+   card.append(timing);
    field(inputs,'得点者',item.scorer,v=>set('scorer',v),{placeholder:'例：若さん'});
    const assistField=make('label','goal-review-field');
    assistField.append(make('span','','アシストの状態'));
@@ -150,7 +199,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{}}={}){
    confirm.addEventListener('click',()=>{
     const error=validateGoal(item);
     if(error){setStatus('確定できません：'+error);return;}
-    item.status='confirmed';item.confirmedAt=new Date().toISOString();
+    item.status='confirmed';item.goalTimeVerified=true;
+    item.confirmedAt=new Date().toISOString();
     write(source,items);render();setStatus('ゴールをPS内に確定・保存しました。SSアプリへはまだ登録していません。');
    });
    const exclude=make('button','goal-review-exclude',
@@ -216,8 +266,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{}}={}){
  });
  function nearby(source,time,start,end){
   const events=allFor(source).items.filter(x=>x.status!=='excluded');
-  return events.filter(item=>Math.abs(Number(item.timeSeconds)-Number(time))<=12 ||
-    (Number(item.timeSeconds)>=Number(start)-2&&Number(item.timeSeconds)<=Number(end)+2));
+  return events.filter(item=>Math.abs(actualGoalTime(item)-Number(time))<=12 ||
+    (actualGoalTime(item)>=Number(start)-2&&actualGoalTime(item)<=Number(end)+2));
  }
  function openAt(source,time){
   if(!source)return;
@@ -225,7 +275,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{}}={}){
   render();
   panel.open=true;
   const target=allFor(source).items
-    .filter(x=>x.status!=='excluded').sort((a,b)=>Math.abs(Number(a.timeSeconds)-time)-Math.abs(Number(b.timeSeconds)-time))[0];
+    .filter(x=>x.status!=='excluded').sort((a,b)=>Math.abs(actualGoalTime(a)-time)-Math.abs(actualGoalTime(b)-time))[0];
   const cards=[...list.querySelectorAll('.goal-review-card')];
   const card=cards.find(x=>x.dataset.goalId===target?.id);
   (card||panel).scrollIntoView({behavior:'smooth',block:'center'});
