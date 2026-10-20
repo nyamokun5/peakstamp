@@ -4,6 +4,18 @@
  * Storage is keyed to the full file fingerprint (name, size, lastModified).
  */
 export const GOAL_STORE_PREFIX='peakstamp_confirmed_goals_v1:';
+export const DEFAULT_GOAL_COMMENT_LAG_SECONDS=5;
+// Preserve the recorded voice timestamp, while tracking the actual goal separately.
+const roundTime=time=>Math.round(Number(time)*10)/10;
+export function estimateGoalTime(commentSeconds,lag=DEFAULT_GOAL_COMMENT_LAG_SECONDS){
+ return roundTime(Math.max(0,Number(commentSeconds)-lag));
+}
+export function actualGoalTime(item){
+ if(item&&item.goalTimeSeconds!==undefined&&item.goalTimeSeconds!==null&&
+    item.goalTimeSeconds!==''&&Number.isFinite(Number(item.goalTimeSeconds)))
+   return roundTime(Number(item.goalTimeSeconds));
+ return item?.origin==='manual'?Number(item.timeSeconds):estimateGoalTime(item?.timeSeconds||0);
+}
 const TRANSCRIPT_PREFIXES=['peakstamp_callout_pilot_v2:','peakstamp_callout_pilot_v1:'];
 const clip=(value,max=120)=>typeof value==='string'?value.trim().slice(0,max):'';
 const validTime=x=>Number.isFinite(Number(x))&&x!==''&&x!==null&&x!==undefined&&Number(x)>=0;
@@ -50,7 +62,11 @@ export function createGoalDrafts(source,storage){
  const prior=readJson(storage,GOAL_STORE_PREFIX+key);
  const items=(Array.isArray(prior?.items)?prior.items:[])
   .filter(x=>x&&typeof x.id==='string'&&validTime(x.timeSeconds))
-  .map(x=>({...x}));
+  .map(x=>({...x},
+   // Old v38 records used timeSeconds for the spoken call: never overwrite it.
+   goalTimeSeconds:actualGoalTime(x),
+   goalTimeVerified:x.goalTimeVerified===true
+  }));
  const events=transcript?.data?.utterances||[];
  for(const event of events){
   if(event?.kind!=='goal_call'||!validTime(event.time_seconds))continue;
@@ -61,7 +77,9 @@ export function createGoalDrafts(source,storage){
    clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase()));
   if(already)continue;
   const match=matchContext(events,time);
-  items.push({id,origin:'audio',timeSeconds:time,quote:clip(event.quote,240),
+  items.push({id,origin:'audio',timeSeconds:time,
+   goalTimeSeconds:estimateGoalTime(time),goalTimeVerified:false,
+   quote:clip(event.quote,240),
    scorer:clip(event.scorer),assist:clip(event.assist),
    assistStatus:clip(event.assist)?'named':'unknown',
    matchLabel:match?.label||'',teamA:match?.teamA||'',teamB:match?.teamB||'',
@@ -83,13 +101,17 @@ export function makeManualGoal(time,source,storage){
  const rows=readGoalTranscript(source,storage)?.data?.utterances||[];
  const match=matchContext(rows,t);
  return {id:'manual-'+String(Date.now())+'-'+Math.random().toString(36).slice(2,9),
-  origin:'manual',timeSeconds:t,quote:'手動で追加',
+  origin:'manual',timeSeconds:t,goalTimeSeconds:t,goalTimeVerified:false,
+  quote:'手動で追加',
   scorer:'',assist:'',assistStatus:'unknown',matchSeq:'',
   matchLabel:match?.label||'',teamA:match?.teamA||'',teamB:match?.teamB||'',
   status:'draft',confirmedAt:null,note:''};
 }
 export function validateGoal(goal){
- if(!validTime(goal?.timeSeconds))return 'ゴールの時刻が不正です。';
+ if(!validTime(goal?.timeSeconds))return '実況の時刻が不正です。';
+ if(!validTime(actualGoalTime(goal))||actualGoalTime(goal)<0)return 'ゴールの時刻が不正です。';
+ if(goal?.goalTimeSeconds!==undefined&&!validTime(goal.goalTimeSeconds))
+  return 'ゴールの時刻が不正です。';
  if(!clip(goal?.scorer))return '得点者を入力してください。';
  if(!['named','none','unknown'].includes(goal?.assistStatus))return 'アシストの状態を選択してください。';
  if(goal.assistStatus==='named'&&!clip(goal.assist))return 'アシスト者を入力してください。';
@@ -104,7 +126,13 @@ export function confirmedGoalExport(sources,storage){
   for(const x of payload.items.filter(item=>item.status==='confirmed')){
    const problem=validateGoal(x);
    if(problem)continue;
-   rows.push({id:x.id,source:goalSourceInfo(source),timeSeconds:Number(x.timeSeconds),
+   rows.push({id:x.id,source:goalSourceInfo(source),
+    // v2: timeSeconds is now the estimated or reviewed PLAY time.
+    timeSeconds:actualGoalTime(x),
+    goalTimeSeconds:actualGoalTime(x),
+    reactionTimeSeconds:x.origin==='audio'?Number(x.timeSeconds):null,
+    goalTimeVerified:x.goalTimeVerified===true,
+    timingMethod:x.origin==='audio'?(x.goalTimeVerified===true?'video-reviewed':'comment-minus-5s'):'manual',
     quote:clip(x.quote,240),scorer:clip(x.scorer),
     assistStatus:x.assistStatus,
     assist:x.assistStatus==='named'?clip(x.assist):null,
@@ -113,7 +141,7 @@ export function confirmedGoalExport(sources,storage){
     confirmedAt:x.confirmedAt||null,note:clip(x.note,400)});
   }
  }
- return {kind:'peakstamp-confirmed-goals',version:1,
+ return {kind:'peakstamp-confirmed-goals',version:2,
   exportedAt:new Date().toISOString(),status:'local-confirmed-not-uploaded',
   needsMatchSeq:rows.filter(x=>x.matchSeq===null).length,
   goals:rows};
