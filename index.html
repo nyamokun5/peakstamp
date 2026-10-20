@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=callout37" />
+  <link rel="stylesheet" href="styles.css?v=goal38" />
 </head>
 <body>
   <header class="topbar">
@@ -144,6 +144,29 @@
         <p class="fine-print">iPhoneでは「共有してファイル保存」→共有メニューの「ファイルに保存」を選んでください。保存できない場合は「JSONをコピー」が使えます。動画・音声そのものは含みません。</p>
       </div>
     </details>
+
+    <section class="panel goal-stats-panel" id="goalStatsPanel" aria-label="PeakStamp内でゴールとアシストを確定" hidden>
+      <div class="panel-label"><span class="number">GOAL</span><h2>ゴール・アシストを確定</h2></div>
+      <p class="fine-print">実況で拾ったゴールを<strong>映像で確認</strong>し、得点者・アシスト者をPS内で確定します。動画の「キープ／不採用」とは独立しています。SSアプリへの登録・送信はまだ行いません。</p>
+      <label for="goalStatsSource">確認する動画</label>
+      <select id="goalStatsSource" aria-label="ゴールとアシストを確定する動画"></select>
+      <p id="goalStatsSummary" class="goal-review-summary" aria-live="polite"></p>
+      <video id="goalStatsPreview" controls playsinline preload="none" hidden aria-label="ゴールを確認する元動画"></video>
+      <div id="goalStatsList" class="goal-review-list"></div>
+      <button id="goalStatsAdd" class="whisper-run" type="button">＋ 検出されなかったゴールを手動追加</button>
+      <div class="goal-review-export">
+        <strong>確定したゴールを書き出す</strong>
+        <p class="fine-print">複数動画から確定したゴール・アシスト情報をまとめます。試合番号は任意ですが、SSアプリに取り込む前には確定が必要です。選手名は現段階では自由入力です。</p>
+        <button id="goalStatsExport" class="main-button" type="button" disabled>iPhone：確定JSONを共有・保存</button>
+        <button id="goalStatsCopy" class="whisper-run" type="button" disabled>確定JSONをコピー</button>
+        <button id="goalStatsShow" class="whisper-run" type="button" disabled>JSONを表示</button>
+        <div id="goalStatsJsonArea" hidden>
+          <label for="goalStatsJson">確認済みゴール情報のJSON（長押しでコピー可能）</label>
+          <textarea id="goalStatsJson" rows="8" readonly spellcheck="false"></textarea>
+        </div>
+        <p id="goalStatsStatus" role="status" aria-live="polite" class="gemini-main-status"></p>
+      </div>
+    </section>
 
     <details class="legacy-audio-details">
       <summary>予備：無料の音量解析を使う（Geminiを使わない場合）</summary>
@@ -449,6 +472,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api37"></script>
+  <script type="module" src="app.mjs?v=gemini-api38"></script>
 </body>
 </html>
