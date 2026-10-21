@@ -114,7 +114,14 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  video.addEventListener('pause',()=>{
   record('pause');
   if(wantsPlayback&&seekingOwnJump)expectResume=true;
+  else if(wantsPlayback&&!pendingSeek&&!denied)
+   report('再生が一時停止しました。動画画面の▶、または「先頭から通常再生」をお試しください。');
  });
+ video.addEventListener('ended',()=>{
+  record('ended');
+  report('動画が最後まで再生されました。別のゴール候補を選ぶか、再生ボタンで戻れます。');
+ });
+ video.addEventListener('suspend',()=>record('suspend'));
  video.addEventListener('waiting',()=>{record('waiting');report('動画の読み込み中…');});
  video.addEventListener('stalled',()=>{record('stalled');report('読み込みが一時停止しています。下の「先頭から再生」も試せます。');});
  video.addEventListener('error',()=>{
