@@ -15,7 +15,7 @@ import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
 import { attachScenePinchEditor } from './scene-gesture.mjs?v=compact49';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
-import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
+import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds, reviewUndoClearance } from './review-flow.mjs?v=undo50';
 import { createSceneReplayMedia } from './scene-replay-media.mjs?v=1';
 import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
 import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=scrub48';
@@ -547,6 +547,15 @@ function nextSceneAfter(current) {
     }
     requestAnimationFrame(()=>{
       element.scrollIntoView({behavior:'auto',block:'start'});
+      // A rejected clip briefly shows a bottom Undo toast. If it would
+      // cover the next card's Replay/Keep/Reject row, nudge the card up.
+      requestAnimationFrame(()=>{
+        const toast=$('undoReview');
+        const actions=element.querySelector('.review-decision-actions');
+        if(toast.hidden||!actions)return;
+        const clearance=reviewUndoClearance(actions.getBoundingClientRect(),toast.getBoundingClientRect());
+        if(clearance>0)window.scrollBy({top:clearance,behavior:'auto'});
+      });
     });
   });
 }
