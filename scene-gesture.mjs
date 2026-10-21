@@ -58,7 +58,7 @@ export function attachScenePinchEditor({viewport,video,read,write,commit,resetBu
     video.style.transformOrigin='center center';
     video.style.transform='translate('+tx+'px, '+ty+'px) scale('+z+')';
     readout.textContent=z.toFixed(2).replace(/0$/,'').replace(/\.$/,'')+'倍';
-    resetButton.disabled=z===1;
+    if(resetButton)resetButton.disabled=z===1;
   };
   const resizeVideo=()=>{
     if(video.videoWidth>0&&video.videoHeight>0){
@@ -155,7 +155,7 @@ export function attachScenePinchEditor({viewport,video,read,write,commit,resetBu
   viewport.addEventListener('lostpointercapture',up);
   viewport.addEventListener('wheel',wheel,{passive:false});
   viewport.addEventListener('keydown',keyboard);
-  resetButton.addEventListener('click',reset);
+  resetButton?.addEventListener('click',reset);
   video.addEventListener('loadedmetadata',resizeVideo);
   const observer=typeof ResizeObserver==='function'?new ResizeObserver(render):null;
   observer?.observe(viewport);
@@ -168,11 +168,11 @@ export function attachScenePinchEditor({viewport,video,read,write,commit,resetBu
     for(const [ev,fn] of [['pointerdown',down],['pointermove',move],['pointerup',up],
       ['pointercancel',up],['lostpointercapture',up],['wheel',wheel],['keydown',keyboard]])
       viewport.removeEventListener(ev,fn);
-    resetButton.removeEventListener('click',reset);
+    resetButton?.removeEventListener('click',reset);
     video.removeEventListener('loadedmetadata',resizeVideo);
   };
-  // The + / - buttons use exactly the same zoom state and export framing
-  // as finger pinch. Avoid a second, incompatible zoom implementation.
+  // Keep programmatic zoom/reset support for keyboard and older callers;
+  // the mobile preview uses pinch/pan without extra on-screen buttons.
   destroy.zoomBy=(factor)=>{
     if(closed)return;
     const state=read();
