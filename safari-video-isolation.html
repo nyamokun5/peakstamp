@@ -22,7 +22,7 @@ textarea{display:block;width:100%;height:150px;font-size:12px;background:#081522
 </head>
 <body>
 <a href="./?v=gemini-api46">← PeakStampに戻る</a>
-<h1>iPhone Safari 動画単独テスト（v46）</h1>
+<h1>iPhone Safari 動画単独テスト（v47）</h1>
 <p>PeakStamp本体の動画プレーヤー・Gemini解析・保存データを一切使わず、iPhone標準の動画要素だけで再生停止を検証します。同じ動画内時刻で止まるか、アプリ固有の問題かを切り分けるためのページです。</p>
 <div class="box">
 <label for="file"><strong>① 問題のMOV/MP4を1本選択</strong></label>
@@ -50,17 +50,17 @@ textarea{display:block;width:100%;height:150px;font-size:12px;background:#081522
 <details><summary>診断結果を表示（コピーできない場合もここから選択）</summary><textarea id="output" readonly spellcheck="false" aria-label="診断結果JSON"></textarea></details>
 <details><summary>最近のイベントを表示</summary><pre id="events"></pre></details>
 </div>
-<p>大容量MOVやHEVC動画に起因する停止の場合、この最小構成でも再現する可能性があります。写真アプリでも同じ位置が止まるか、別の短いH.264 MP4でも止まるかを比較してください。このページは動画をアップロードせず、診断結果も自動送信しません。</p>
+<p>大容量MOVやHEVC動画に起因する停止の場合、この最小構成でも再現する可能性があります。写真アプリでも同じ位置が止まるか、別の短いH.264 MP4でも止まるかを比較してください。<strong>「このiPhone内」に保存済みのファイルでも、Safariで選択した動画は blob: URL で再生されるため、写真アプリでの再生とは条件が違います。</strong> このページは動画をアップロードせず、診断結果も自動送信しません。</p>
 <script>
 (() => {
 "use strict";
 const $=id=>document.getElementById(id);
 const video=$("player"),file=$("file"),target=$("target");
 let url="",chosen=null,attempt=0,lastFrameAt=null,lastMediaTime=null,frameCount=0;
-let detected=null,fullScreen=false,latestTime=0;
+let detected=null,fullScreen=false,attemptStartedAt=null;
 const history=[],events=[];
 const now=()=>performance.now();
-const round=n=>Number.isFinite(Number(n))?Math.round(Number(n)*10)/10:null;
+const round=n=>n===null||n===undefined||n===""?null:Number.isFinite(Number(n))?Math.round(Number(n)*10)/10:null;
 const setStatus=s=>{$("status").textContent=s;};
 const record=(kind,extra={})=>{
  events.push({event:kind,attempt,time:round(video.currentTime),at:Math.round(now()),...extra});
@@ -74,7 +74,7 @@ const closeStall=(reason)=>{
 };
 function newAttempt(label){
  closeStall("another-attempt");
- attempt++;lastFrameAt=null;lastMediaTime=null;frameCount=0;latestTime=Number(video.currentTime)||0;
+ attempt++;attemptStartedAt=now();lastFrameAt=null;lastMediaTime=null;frameCount=0;
  record("attempt:"+label);
 }
 function seekAndPlay(seconds,label){
@@ -90,7 +90,7 @@ function seekAndPlay(seconds,label){
  }catch(e){record("play-error",{error:String(e)});setStatus("再生できません。動画上の▶をお試しください。");}
 }
 function info(){
- return {page:"PeakStamp isolated Safari video test v46",
+ return {page:"PeakStamp isolated Safari video test v47",
   file:chosen?{name:chosen.name,sizeBytes:chosen.size,type:chosen.type,lastModified:chosen.lastModified}:null,
   userAgent:navigator.userAgent,
   currentTime:round(video.currentTime),duration:round(video.duration),
@@ -101,6 +101,7 @@ function info(){
   frameCallbackSupported:typeof video.requestVideoFrameCallback==="function",
   videoFramesObserved:frameCount,lastPresentedMediaTime:round(lastMediaTime),
   millisecondsSinceFrame:lastFrameAt===null?null:Math.round(now()-lastFrameAt),
+  millisecondsSinceAttemptStart:attemptStartedAt===null?null:Math.round(now()-attemptStartedAt),
   attempt,stallActive:!!detected,stallHistory:history,events:events.slice(-45)};
 }
 function publish(){
@@ -155,10 +156,11 @@ for(const name of ["loadedmetadata","play","playing","pause","seeking","seeked",
    if(Number(video.duration)<Number(target.value))target.value=String(Math.max(0,Math.round((video.duration-20)*10)/10));
   }
   if(name==="error")setStatus("動画読み込みエラー。写真アプリでは再生できるか確認してください。");
+  if(name==="pause"||name==="ended"||name==="seeking")closeStall(name);
   publish();
  });
 }
-video.addEventListener("webkitbeginfullscreen",()=>{fullScreen=true;record("enter-native-fullscreen");});
+video.addEventListener("webkitbeginfullscreen",()=>{fullScreen=true;closeStall("native-fullscreen");record("enter-native-fullscreen");});
 video.addEventListener("webkitendfullscreen",()=>{fullScreen=false;record("exit-native-fullscreen");});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState!=="visible")closeStall("page-hidden");record("visibility:"+document.visibilityState);});
 if(typeof video.requestVideoFrameCallback==="function"){
@@ -172,17 +174,25 @@ if(typeof video.requestVideoFrameCallback==="function"){
  };
  video.requestVideoFrameCallback(onFrame);
 }
-let baselineTime=0;
 setInterval(()=>{
  const t=now(),media=Number(video.currentTime)||0;
- if(!video.paused&&!video.seeking&&document.visibilityState==="visible"&&!fullScreen&&
-    lastFrameAt!==null&&t-lastFrameAt>3000&&media-baselineTime>.4&&!detected){
-   detected={attempt,lastRenderedMediaTime:round(lastMediaTime),clockPosition:round(media),detectedAt:Math.round(t),endedBy:null};
+ const frameAge=lastFrameAt===null?
+  (attemptStartedAt===null?null:t-attemptStartedAt):t-lastFrameAt;
+ if(chosen&&attempt>0&&!video.paused&&!video.seeking&&!video.ended&&
+    document.visibilityState==="visible"&&!fullScreen&&
+    frameAge!==null&&frameAge>=(lastFrameAt===null?5000:3000)&&!detected){
+   const clockGap=lastMediaTime===null?null:media-lastMediaTime;
+   const reason=lastFrameAt===null?"no-first-rendered-frame":
+     clockGap!==null&&clockGap>0.4?"clock-advanced-without-video-frames":"video-clock-and-frames-stalled";
+   detected={attempt,reason,lastRenderedMediaTime:round(lastMediaTime),clockPosition:round(media),
+    frameAgeMs:Math.round(frameAge),clockGapSec:round(clockGap),
+    readyState:video.readyState,networkState:video.networkState,
+    detectedAt:Math.round(t),endedBy:null};
    history.push(detected);
    if(history.length>30)history.shift();
-   record("suspected-frame-stall",{lastRenderedMediaTime:round(lastMediaTime)});
+   record("suspected-playback-stall",{reason,frameAgeMs:Math.round(frameAge)});
+   setStatus("映像の更新が "+Math.round(frameAge/1000)+" 秒以上停止しています。診断JSONをコピーしてください（原因は未確定です）。");
  }
- baselineTime=media;
  publish();
 },1200);
 window.addEventListener("pagehide",()=>{if(url)URL.revokeObjectURL(url);});
