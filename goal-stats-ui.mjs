@@ -59,6 +59,29 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   seekTo(entry,{autoplay:true,leadSeconds:30});
   $('goalStatsVideoStatus').textContent='ゴール30秒前からの比較再生中です。停止したら診断結果をコピーしてください。';
  });
+ $('goalStatsNativeFullscreen').addEventListener('click',()=>{
+  const entry=currentEntry();
+  if(!entry){say('まずゴール候補を選択してください。');return;}
+  // The file is already loaded in the shared player. Avoid extra Blob copies.
+  if(!player.currentSourceKey()){
+   seekTo(entry,{autoplay:false});
+  }
+  viewer.hidden=false;
+  video.hidden=false;
+  try{
+   if(typeof video.webkitEnterFullscreen==='function' &&
+      video.webkitSupportsFullscreen!==false){
+    video.webkitEnterFullscreen();
+    say('iPhone標準のフルスクリーン再生を開きました。画面内再生と同じ位置で止まるか確認してください。');
+   }else if(typeof video.requestFullscreen==='function'){
+    const attempt=video.requestFullscreen();
+    if(attempt?.catch)attempt.catch(e=>say('フルスクリーンにできません：'+(e?.message||String(e))));
+   }else say('このブラウザでは標準フルスクリーンの呼び出しに対応していません。');
+  }catch(e){
+   say('標準フルスクリーンを開けません：'+(e?.message||String(e))+
+    '。動画の読み込み後、もう一度タップしてください。');
+  }
+ });
  $('goalStatsPrepare').addEventListener('click',()=>{
   const entry=currentEntry();if(!entry){say('まずゴール候補を選択してください。');return;}
   seekTo(entry,{autoplay:false});
