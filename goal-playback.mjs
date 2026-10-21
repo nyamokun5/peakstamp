@@ -32,6 +32,10 @@ export function createGoalPlaybackController(video,{
   suspectedFreeze={
    sourceKey:activeKey,attemptId:requestId,reason,
    detectedAt:timeNow(),playbackTime:Number(video.currentTime)||0,
+   // The displayed frame is more useful than the audio/media clock for
+   // identifying a repeatable decoding/keyframe boundary.
+   lastRenderedMediaTime:lastFrameMediaTime,
+   suspectedMediaPosition:lastFrameMediaTime??wantedTime,
    framesAtDetection:decodedFrames,timeAdvanceSeconds:clockAdvance,
    pageVisibility:typeof document!=='undefined'?document.visibilityState||'unknown':'unknown'
   };
@@ -311,6 +315,23 @@ export function createGoalPlaybackController(video,{
     out.push([round(x.start(i)),round(x.end(i))]);return out;}
   catch(_){return [];}
  }
+ function repeatFreezeLocations(){
+  const rows=[];
+  for(const freeze of freezeHistory){
+   const pos=Number(freeze.suspectedMediaPosition);
+   if(!Number.isFinite(pos)||pos<0)continue;
+   let group=rows.find(x=>x.sourceKey===freeze.sourceKey&&
+    Math.abs(x.approxPositionSeconds-pos)<=2);
+   if(!group){
+    group={sourceKey:freeze.sourceKey,approxPositionSeconds:Math.round(pos*10)/10,
+     attempts:[],records:0};rows.push(group);
+   }
+   group.records++;
+   if(!group.attempts.includes(freeze.attemptId))group.attempts.push(freeze.attemptId);
+  }
+  return rows.map(x=>({...x,repeatAcrossAttempts:x.attempts.length>=2}))
+   .sort((a,b)=>b.attempts.length-a.attempts.length);
+ }
  function diagnostic(){
   let quality=null;
   try{
@@ -340,10 +361,13 @@ export function createGoalPlaybackController(video,{
    },
    visibility:{changes:visibilityChanges,lastChangeAgeMs:lastVisibilityAt!==null?now-lastVisibilityAt:null},
    activeAttemptId:requestId,freezeCurrentlySuspected:!!suspectedFreeze,
+   repeatFreezeLocations:repeatFreezeLocations(),
    frameFreezeHistory:freezeHistory.map(x=>({
     sourceKey:x.sourceKey,attemptId:x.attemptId,reason:x.reason,
     endedReason:x.endedReason??null,detectedAt:x.detectedAt,
     playbackTime:Math.round(x.playbackTime*10)/10,
+    lastRenderedMediaTime:x.lastRenderedMediaTime??null,
+    suspectedMediaPosition:Math.round(x.suspectedMediaPosition*10)/10,
     framesAtDetection:x.framesAtDetection,timeAdvanceSeconds:Math.round(x.timeAdvanceSeconds*10)/10,
     pageVisibility:x.pageVisibility,
     recoveredAfterMs:x.recoveredAfterMs??null,
