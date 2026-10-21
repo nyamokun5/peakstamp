@@ -7,7 +7,8 @@ const ids=[
  'goalStatsPanel','goalStatsList','goalStatsEditor','goalStatsSummary','goalStatsStatus',
  'goalStatsPreview','goalStatsPlayingLabel','goalStatsViewer','goalStatsVideoStatus',
  'goalStatsAdd','goalStatsManualSource','goalStatsManualWrap','goalStatsExport',
- 'goalStatsCopy','goalStatsShow','goalStatsJson','goalStatsJsonArea'
+ 'goalStatsCopy','goalStatsShow','goalStatsJson','goalStatsJsonArea',
+ 'goalStatsPrepare','goalStatsPlayFromStart','goalStatsCopyDebug','goalStatsDebugOutput'
 ];
 function setup(){
  const stats={loads:0,plays:0,competingPaused:0};
