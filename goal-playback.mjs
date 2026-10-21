@@ -101,7 +101,9 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
    video.src=sourceUrl; // .src assignment initiates load; never double load().
    activeKey=sourceKey;activeUrl=sourceUrl;
   }
-  seek();
+  // On a new src, wait for its metadata: readyState may still describe
+  // the previous source during Safari's media-resource reset.
+  if(!switching)seek();
   if(autoplay){
    report('動画を準備しています…');
    startPlay(token,{userGesture:true});
