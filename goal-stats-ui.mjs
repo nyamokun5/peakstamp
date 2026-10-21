@@ -7,7 +7,7 @@ import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
  confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=40';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextPendingGoal} from './goal-review-queue.mjs?v=40';
-import {createGoalPlaybackController} from './goal-playback.mjs?v=41';
+import {createGoalPlaybackController} from './goal-playback.mjs?v=42';
 
 const $=id=>document.getElementById(id);
 const make=(tag,cls,text)=>{
@@ -51,6 +51,33 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
  const player=createGoalPlaybackController(video,{
   notify:s=>{$('goalStatsVideoStatus').textContent=s;},
   beforePlay:onBeforePlay
+ });
+ const debugOutput=$('goalStatsDebugOutput');
+ function currentEntry(){return queue().find(row=>row.key===activeKey)||null;}
+ $('goalStatsPrepare').addEventListener('click',()=>{
+  const entry=currentEntry();if(!entry){say('まずゴール候補を選択してください。');return;}
+  seekTo(entry,{autoplay:false});
+  $('goalStatsVideoStatus').textContent='ゴール位置に移動しています。移動後、動画画面の▶で再生してください。';
+ });
+ $('goalStatsPlayFromStart').addEventListener('click',()=>{
+  const entry=currentEntry();if(!entry){say('まずゴール候補を選択してください。');return;}
+  const source=entry.source;
+  viewer.hidden=false;
+  player.open({sourceKey:goalSourceKey(source),sourceUrl:source.objectUrl,
+   at:0,autoplay:true,fromStart:true});
+  $('goalStatsVideoStatus').textContent='先頭からの通常再生を試しています。再生できればゴール位置への移動が停止原因の可能性があります。';
+ });
+ $('goalStatsCopyDebug').addEventListener('click',async()=>{
+  const entry=currentEntry();
+  const diag={...player.diagnostic(),
+   selectedGoalTime:entry?actualGoalTime(entry.item):null,
+   selectedCommentTime:entry?.item.origin==='audio'?Number(entry.item.timeSeconds):null,
+   browser:typeof navigator!=='undefined'?navigator.userAgent:'unknown'};
+  const text=JSON.stringify(diag,null,2);
+  debugOutput.value=text;
+  const copied=await copyCalloutJson(text,{textarea:debugOutput});
+  say(copied?'動画の再生診断をコピーしました。チャットに貼り付けてください。':
+   '診断を表示しました。テキスト欄を長押ししてコピーできます。');
  });
  function pausePlayback(){player.pause();}
  function disposeVideo(){player.dispose();viewer.hidden=true;}
