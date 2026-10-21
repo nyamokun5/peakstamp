@@ -180,3 +180,79 @@ test('Safari playback-quality counters are copied into diagnostics when availabl
  assert.equal(d.frameDiagnostics.quality.totalVideoFrames,210);
  assert.equal(d.frameDiagnostics.quality.droppedVideoFrames,7);
 });
+
+
+function frameFixture(){
+ const calls={now:1000,watchdog:null,frames:new Map(),logs:[],id:0};
+ const listeners=new Map();
+ const video={
+  readyState:4,paused:true,seeking:false,currentTime:0,networkState:1,src:'',
+  setAttribute(){},removeAttribute(){},load(){},pause(){this.paused=true;},
+  play(){this.paused=false;return Promise.resolve();},
+  addEventListener(name,fn){listeners.set(name,fn)},
+  requestVideoFrameCallback(fn){
+   const id=++calls.id;calls.frames.set(id,fn);return id;
+  },
+  cancelVideoFrameCallback(id){calls.frames.delete(id);}
+ };
+ const controller=createGoalPlaybackController(video,{
+  notify:message=>calls.logs.push(message),now:()=>calls.now,
+  scheduleWatchdog:fn=>{
+   calls.watchdog=fn;return {unref(){}};
+  },
+  cancelWatchdog:()=>{calls.watchdog=null;}
+ });
+ const fire=(name)=>listeners.get(name)?.();
+ const deliverFrame=(mediaTime)=>{
+  const id=[...calls.frames.keys()][0];
+  assert.notEqual(id,undefined);
+  const callback=calls.frames.get(id);calls.frames.delete(id);
+  callback(0,{mediaTime,presentedFrames:100});
+ };
+ return {calls,video,controller,fire,deliverFrame};
+}
+test('a freeze from an earlier attempt must never be marked recovered on a new seek',async()=>{
+ const {calls,video,controller,fire,deliverFrame}=frameFixture();
+ controller.open({sourceKey:'same',sourceUrl:'blob:x',at:359.7,autoplay:true});
+ fire('playing');await tick();
+ video.currentTime=361.1;
+ calls.now+=4100;
+ calls.watchdog();
+ let diag=controller.diagnostic();
+ assert.equal(diag.frameFreezeHistory.length,1);
+ assert.equal(diag.frameFreezeHistory[0].recoveredAfterMs,null);
+ assert.equal(diag.freezeCurrentlySuspected,true);
+ const prevAttempt=diag.activeAttemptId;
+ controller.open({sourceKey:'same',sourceUrl:'blob:x',at:359.7,autoplay:true});
+ video.currentTime=359.7;
+ deliverFrame(359.7);
+ diag=controller.diagnostic();
+ assert.equal(diag.frameFreezeHistory[0].attemptId,prevAttempt);
+ assert.equal(diag.frameFreezeHistory[0].endedReason,'new-playback-attempt');
+ assert.equal(diag.frameFreezeHistory[0].recoveredAfterMs,null);
+ assert.equal(diag.freezeCurrentlySuspected,false);
+ assert.equal(diag.frameDiagnostics.decodedFrames,1);
+ controller.pause();
+});
+test('ongoing watchdog detects a fresh freeze after frames have already rendered',async()=>{
+ const {calls,video,controller,fire,deliverFrame}=frameFixture();
+ controller.open({sourceKey:'same',sourceUrl:'blob:y',at:300,autoplay:true});
+ fire('playing');await tick();
+ calls.now+=200;
+ video.currentTime=300.2;deliverFrame(300.2);
+ calls.now+=3600;video.currentTime=304.3;
+ calls.watchdog();
+ let diag=controller.diagnostic();
+ assert.equal(diag.frameFreezeHistory.length,1);
+ assert.equal(diag.frameFreezeHistory[0].reason,'frame-watchdog');
+ assert.equal(diag.frameFreezeHistory[0].framesAtDetection,1);
+ assert.equal(diag.freezeCurrentlySuspected,true);
+ calls.now+=450;
+ video.currentTime=304.7;deliverFrame(304.7);
+ diag=controller.diagnostic();
+ assert.equal(diag.frameFreezeHistory[0].endedReason,'frames-resumed');
+ assert.equal(diag.frameFreezeHistory[0].recoveredAfterMs,450);
+ assert.equal(diag.freezeCurrentlySuspected,false);
+ assert.equal(diag.frameDiagnostics.decodedFrames,2);
+ controller.pause();
+});
