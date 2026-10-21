@@ -7,7 +7,17 @@
 export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=>{}}={}){
  let activeKey='',activeUrl='',wantedTime=0,pendingSeek=false,wantsPlayback=false;
  let requestId=0,playPending=false,retryNeeded=false,denied=false,retries=0;
- const report=(message)=>notify(message);
+ let seekingOwnJump=false,expectResume=false,fromBeginning=false,progressWatch=0;
+ let lastProgress=0,lastEvent='init',lastMessage='',lastFailure='';
+ const eventLog=[];
+ const record=(name)=>{
+  lastEvent=name;
+  eventLog.push({event:name,time:Number(video.currentTime)||0,
+   readyState:video.readyState,networkState:video.networkState,
+   paused:video.paused,seeking:video.seeking});
+  if(eventLog.length>24)eventLog.shift();
+ };
+ const report=message=>{lastMessage=message;notify(message);};
  function mediaError(e){
   const name=e?.name||'';
   if(name==='NotAllowedError')return 'Safariが自動再生を制限しました。動画画面の▶を直接タップしてください。';
@@ -18,8 +28,13 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  function seek(){
   if(!pendingSeek||video.readyState<1)return false;
   try{
+   if(fromBeginning){pendingSeek=false;return true;}
+   seekingOwnJump=true;expectResume=wantsPlayback;
    video.currentTime=wantedTime;
    pendingSeek=false;
+   record('target-seek');
+   // Playing can stop even after play() has resolved when iOS starts seeking.
+   if(wantsPlayback)retryNeeded=true;
    if(!denied)report(video.seeking?'ゴール位置に移動中…':'');
    return true;
   }catch(_){report('動画の位置を調整しています…');return false;}
@@ -27,6 +42,7 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  function startPlay(token,{userGesture=false}={}){
   if(token!==requestId||!wantsPlayback||playPending||denied)return;
   if(userGesture)beforePlay();
+  record(userGesture?'user-play':'retry-play');
   // Keep the original gesture alive: call play synchronously before any awaits.
   let attempt;
   try{attempt=video.play();}
@@ -35,7 +51,9 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
    playPending=true;
    Promise.resolve(attempt).then(()=>{
     if(token!==requestId)return;
-    playPending=false;retryNeeded=false;
+    playPending=false;
+    if(!video.paused){retryNeeded=false;}
+    else if(expectResume&&wantsPlayback&&!denied){retryNeeded=true;retryWhenReady();}
    },error=>{
     if(token!==requestId)return;
     playPending=false;handlePlayFailure(token,error);
@@ -44,7 +62,8 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  }
  function handlePlayFailure(token,error){
   if(token!==requestId||!wantsPlayback)return;
-  const message=mediaError(error);
+  const message=mediaError(error);lastFailure=String(error?.name||error?.message||error);
+  record('play-error:'+lastFailure);
   if(error?.name==='AbortError'&&retries<2){
    retryNeeded=true;
    report('ゴール位置へ移動中… 読み込み後に再生を再試行します。');
@@ -58,21 +77,48 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  function retryWhenReady(){
   if(!retryNeeded||!wantsPlayback||denied||playPending||
     video.readyState<2||video.seeking||pendingSeek||retries>=2)return;
+  if(!video.paused){retryNeeded=false;expectResume=false;return;}
   retries++;
-  retryNeeded=false;
+  retryNeeded=false;expectResume=false;
   startPlay(requestId);
  }
  video.addEventListener('loadedmetadata',()=>{
-  seek();
-  retryWhenReady();
+  record('loadedmetadata');
+  seek();retryWhenReady();
  });
- video.addEventListener('loadeddata',retryWhenReady);
- video.addEventListener('canplay',retryWhenReady);
- video.addEventListener('seeked',()=>{retryWhenReady();if(!video.paused)report('');});
- video.addEventListener('playing',()=>{retryNeeded=false;report('');});
- video.addEventListener('waiting',()=>report('動画の読み込み中…'));
- video.addEventListener('stalled',()=>report('読み込みが一時停止しています。画面の▶で再開できます。'));
+ video.addEventListener('loadeddata',()=>{record('loadeddata');retryWhenReady();});
+ video.addEventListener('canplay',()=>{record('canplay');retryWhenReady();});
+ video.addEventListener('seeking',()=>{record('seeking');});
+ video.addEventListener('seeked',()=>{
+  record('seeked');
+  seekingOwnJump=false;
+  retryWhenReady();
+  if(!video.paused)report('');
+ });
+ video.addEventListener('playing',()=>{
+  record('playing');retryNeeded=false;lastProgress=Number(video.currentTime)||0;report('');
+  // A resolved play() promise can still leave an iOS video frozen on one frame.
+  if(progressWatch)clearTimeout(progressWatch);
+  const token=requestId,at=lastProgress;
+  progressWatch=setTimeout(()=>{
+   progressWatch=0;
+   if(token!==requestId||video.paused||video.seeking)return;
+   if(Math.abs((Number(video.currentTime)||0)-at)<.15)
+    report('再生状態ですが映像が進んでいません。下の「先頭から再生」を試し、診断結果をコピーしてください。');
+  },3000);
+ });
+ video.addEventListener('timeupdate',()=>{
+  const time=Number(video.currentTime)||0;
+  if(Math.abs(time-lastProgress)>.2){lastProgress=time;record('timeupdate');}
+ });
+ video.addEventListener('pause',()=>{
+  record('pause');
+  if(wantsPlayback&&seekingOwnJump)expectResume=true;
+ });
+ video.addEventListener('waiting',()=>{record('waiting');report('動画の読み込み中…');});
+ video.addEventListener('stalled',()=>{record('stalled');report('読み込みが一時停止しています。下の「先頭から再生」も試せます。');});
  video.addEventListener('error',()=>{
+  record('error');
   const code=video.error?.code;
   report(code===4
    ?'SafariがこのMOVの形式を再生できません。iPhoneの写真アプリで開けるか確認してください。'
@@ -81,13 +127,17 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
    :'動画を読み込めませんでした。ファイルを再選択してください。');
  });
 
- function open({sourceKey,sourceUrl,at,autoplay=false}){
+ function open({sourceKey,sourceUrl,at,autoplay=false,fromStart=false}){
   if(!sourceKey||!sourceUrl)return false;
   requestId++;
   const token=requestId;
-  wantedTime=Math.max(0,Number(at)||0);
-  pendingSeek=true;wantsPlayback=Boolean(autoplay);
+  if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
+  fromBeginning=Boolean(fromStart);
+  wantedTime=fromBeginning?0:Math.max(0,Number(at)||0);
+  pendingSeek=!fromBeginning;wantsPlayback=Boolean(autoplay);
+  seekingOwnJump=false;expectResume=false;
   playPending=false;retryNeeded=false;denied=false;retries=0;
+  record(fromBeginning?'open-from-start':'open-goal');
   // IMPORTANT: the containing player and <video> must be unhidden BEFORE
   // setting src or play() on Safari, otherwise decoding may remain suspended.
   video.hidden=false;
@@ -98,24 +148,52 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   if(switching){
    video.pause();
    video.preload='auto';
-   video.src=sourceUrl; // .src assignment initiates load; never double load().
+   video.src=sourceUrl; // src assignment initiates load; never double load().
    activeKey=sourceKey;activeUrl=sourceUrl;
+  }else if(fromBeginning && video.readyState>=1){
+   // Safari's safer fallback: no deep seek into a large local MOV.
+   try{video.currentTime=0;}catch(_){}
   }
   // On a new src, wait for its metadata: readyState may still describe
   // the previous source during Safari's media-resource reset.
-  if(!switching)seek();
+  if(!switching&&!fromBeginning)seek();
   if(autoplay){
    report('動画を準備しています…');
    startPlay(token,{userGesture:true});
   }else video.pause();
   return switching;
  }
- function pause(){wantsPlayback=false;retryNeeded=false;video.pause();}
+ function pause(){
+  wantsPlayback=false;retryNeeded=false;expectResume=false;
+  if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
+  video.pause();
+ }
  function dispose(){
   requestId++;wantsPlayback=false;retryNeeded=false;playPending=false;
+  if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
   video.pause();video.removeAttribute('src');video.load();
   video.hidden=true;activeKey='';activeUrl='';pendingSeek=false;
  }
  function currentSourceKey(){return activeKey;}
- return {open,pause,dispose,currentSourceKey};
+ const round=x=>Number.isFinite(Number(x))?Math.round(Number(x)*10)/10:null;
+ function range(x){
+  try{const out=[];for(let i=0;i<Math.min(x?.length||0,5);i++)
+    out.push([round(x.start(i)),round(x.end(i))]);return out;}
+  catch(_){return [];}
+ }
+ function diagnostic(){
+  return {
+   player:'PeakStamp goal playback v42',sourceKey:activeKey,
+   currentTime:round(video.currentTime),targetTime:round(wantedTime),
+   duration:round(video.duration),paused:video.paused,seeking:video.seeking,
+   readyState:video.readyState,networkState:video.networkState,
+   videoSize:[video.videoWidth||0,video.videoHeight||0],
+   buffered:range(video.buffered),seekable:range(video.seekable),
+   mediaError:video.error?{code:video.error.code,message:video.error.message||''}:null,
+   pageVisibility:typeof document!=='undefined'?document.visibilityState||'unknown':'unknown',
+   lastEvent,lastMessage,lastFailure,fromBeginning,retries,
+   events:eventLog.slice(-15)
+  };
+ }
+ return {open,pause,dispose,currentSourceKey,diagnostic};
 }
