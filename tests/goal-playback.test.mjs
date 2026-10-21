@@ -256,3 +256,39 @@ test('ongoing watchdog detects a fresh freeze after frames have already rendered
  assert.equal(diag.frameDiagnostics.decodedFrames,2);
  controller.pause();
 });
+
+test('repeat freeze position groups two independent attempts around the same decoded/keyframe boundary',async()=>{
+ const {calls,video,controller,fire,deliverFrame}=frameFixture();
+ for(let n=0;n<2;n++){
+  controller.open({sourceKey:'IMG_5292',sourceUrl:'blob:x',at:359.7,autoplay:true});
+  fire('playing');await tick();
+  video.currentTime=n===0?361.1:361.5;
+  calls.now+=4200;
+  calls.watchdog();
+ }
+ const diag=controller.diagnostic();
+ assert.equal(diag.frameFreezeHistory.length,2);
+ assert.equal(diag.frameFreezeHistory[0].recoveredAfterMs,null);
+ assert.equal(diag.frameFreezeHistory[0].endedReason,'new-playback-attempt');
+ assert.equal(diag.frameFreezeHistory[0].suspectedMediaPosition,359.7);
+ assert.equal(diag.frameFreezeHistory[1].suspectedMediaPosition,359.7);
+ assert.equal(diag.repeatFreezeLocations.length,1);
+ assert.equal(diag.repeatFreezeLocations[0].repeatAcrossAttempts,true);
+ assert.equal(diag.repeatFreezeLocations[0].attempts.length,2);
+ controller.pause();
+});
+test('freeze anchor tracks most recently displayed frame rather than progressing audio clock',async()=>{
+ const {calls,video,controller,fire,deliverFrame}=frameFixture();
+ controller.open({sourceKey:'IMG_5292',sourceUrl:'blob:x',at:359.7,autoplay:true});
+ fire('playing');await tick();
+ calls.now+=200;
+ video.currentTime=360.1;deliverFrame(360.1);
+ calls.now+=4000;video.currentTime=364.5;
+ calls.watchdog();
+ const diag=controller.diagnostic();
+ assert.equal(diag.frameFreezeHistory.length,1);
+ assert.equal(diag.frameFreezeHistory[0].lastRenderedMediaTime,360.1);
+ assert.equal(diag.frameFreezeHistory[0].suspectedMediaPosition,360.1);
+ assert.equal(diag.frameFreezeHistory[0].playbackTime,364.5);
+ controller.pause();
+});
