@@ -592,7 +592,6 @@ function row(item, index) {
   let replayStatus=null;
   let pauseResumeButton=null;
   let seekDrag=null;
-  let ignoreNextTrackClick=false;
   let playVersion=0;
   let replayListeners=[];
   const setReplayStatus=message=>{
@@ -618,7 +617,6 @@ function row(item, index) {
     replayStatus=null;
     pauseResumeButton=null;
     seekDrag=null;
-    ignoreNextTrackClick=false;
     inline.replaceChildren();
     inline.hidden=true;
     entry.classList.remove('preview-active');
@@ -923,13 +921,13 @@ function row(item, index) {
   const startBox=make('div','range-field');
   startBox.append(make('label','', '開始'));
   const endBox=make('div','range-field');
-  const endLabel=make('label','range-auto-label','終了（自動）');
+  const endLabel=make('label','range-auto-label','終了（初期16秒）');
   const endInput=make('input','range-time');
   endInput.type='text';
   endInput.inputMode='text';
   endInput.setAttribute('aria-label','切り取り終了時刻');
   endBox.append(endLabel);
-  const resetEnd=make('button','range-reset','自動に戻す');
+  const resetEnd=make('button','range-reset','初期16秒に戻す');
   resetEnd.type='button';
   resetEnd.addEventListener('click',()=>{
     item.manualEnd=null;
@@ -1063,7 +1061,6 @@ function row(item, index) {
     event.preventDefault();
     const target=seekDrag.previewTime;
     seekDrag=null;
-    ignoreNextTrackClick=true;
     try{track.releasePointerCapture?.(event.pointerId);}catch(_){}
     rangeHint.textContent='緑・紫＝切り抜き ／ 白＝再生位置（左右にドラッグ）';
     if(!cancelled)commitReplaySeek(target);
@@ -1071,12 +1068,6 @@ function row(item, index) {
   };
   track.addEventListener('pointerup',event=>finishReplaySeek(event));
   track.addEventListener('pointercancel',event=>finishReplaySeek(event,true));
-  track.addEventListener('click',event=>{
-    if(ignoreNextTrackClick){ignoreNextTrackClick=false;return;}
-    if(!replayVideo || event.target===startDot || event.target===endDot ||
-      dragging || seekDrag)return;
-    commitReplaySeek(replaySeekPosition(event.clientX));
-  });
   playhead.addEventListener('keydown',event=>{
     if(!['ArrowLeft','ArrowRight'].includes(event.key))return;
     event.preventDefault();
