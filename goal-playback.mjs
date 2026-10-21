@@ -9,12 +9,41 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  let requestId=0,playPending=false,retryNeeded=false,denied=false,retries=0;
  let seekingOwnJump=false,expectResume=false,fromBeginning=false,progressWatch=0;
  let lastProgress=0,lastEvent='init',lastMessage='',lastFailure='';
+ let frameCallbackId=null,decodedFrames=0,lastFrameAt=null,lastFrameMediaTime=null;
+ let lastFramePresentedCount=null,lastVisibilityAt=null,visibilityChanges=0;
+ let playbackOpenedAt=null,firstFrameDelayMs=null;
  const eventLog=[];
+ const timeNow=()=>Date.now();
+ const hasVideoFrames=typeof video.requestVideoFrameCallback==='function';
+ function cancelFrameWatch(){
+  if(frameCallbackId!==null&&typeof video.cancelVideoFrameCallback==='function')
+   try{video.cancelVideoFrameCallback(frameCallbackId);}catch(_){}
+  frameCallbackId=null;
+ }
+ function watchFrames(){
+  if(!hasVideoFrames||frameCallbackId!==null)return;
+  const token=requestId;
+  const onFrame=(_now,metadata)=>{
+   frameCallbackId=null;
+   if(token!==requestId||!wantsPlayback)return;
+   const first=decodedFrames===0;
+   decodedFrames++;
+   lastFrameAt=timeNow();
+   if(first&&playbackOpenedAt!==null)firstFrameDelayMs=lastFrameAt-playbackOpenedAt;
+   if(Number.isFinite(metadata?.mediaTime))lastFrameMediaTime=metadata.mediaTime;
+   if(Number.isFinite(metadata?.presentedFrames))lastFramePresentedCount=metadata.presentedFrames;
+   if(first)record('first-video-frame');
+   watchFrames();
+  };
+  try{frameCallbackId=video.requestVideoFrameCallback(onFrame);}
+  catch(_){frameCallbackId=null;}
+ }
  const record=(name)=>{
   lastEvent=name;
   eventLog.push({event:name,time:Number(video.currentTime)||0,
    readyState:video.readyState,networkState:video.networkState,
-   paused:video.paused,seeking:video.seeking});
+   paused:video.paused,seeking:video.seeking,
+   frameCount:decodedFrames});
   if(eventLog.length>24)eventLog.shift();
  };
  const report=message=>{lastMessage=message;notify(message);};
@@ -43,6 +72,7 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   if(token!==requestId||!wantsPlayback||playPending||denied)return;
   if(userGesture)beforePlay();
   record(userGesture?'user-play':'retry-play');
+  watchFrames();
   // Keep the original gesture alive: call play synchronously before any awaits.
   let attempt;
   try{attempt=video.play();}
@@ -99,12 +129,16 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   record('playing');retryNeeded=false;lastProgress=Number(video.currentTime)||0;report('');
   // A resolved play() promise can still leave an iOS video frozen on one frame.
   if(progressWatch)clearTimeout(progressWatch);
-  const token=requestId,at=lastProgress;
+  watchFrames();
+  const token=requestId,at=lastProgress,framesAtStart=decodedFrames;
   progressWatch=setTimeout(()=>{
    progressWatch=0;
    if(token!==requestId||video.paused||video.seeking)return;
-   if(Math.abs((Number(video.currentTime)||0)-at)<.15)
-    report('再生状態ですが映像が進んでいません。下の「先頭から再生」を試し、診断結果をコピーしてください。');
+   const audioClockAdvance=Math.abs((Number(video.currentTime)||0)-at);
+   if(audioClockAdvance<.15)
+    report('動画の時間が進んでいません。「先頭から再生」を試し、診断結果をコピーしてください。');
+   else if(hasVideoFrames&&decodedFrames===framesAtStart)
+    report('再生時刻は進んでいますが映像フレームが更新されていません。診断結果をコピーしてください。');
   },3000);
  });
  video.addEventListener('timeupdate',()=>{
@@ -122,6 +156,13 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   report('動画が最後まで再生されました。別のゴール候補を選ぶか、再生ボタンで戻れます。');
  });
  video.addEventListener('suspend',()=>record('suspend'));
+ // Returning to a backgrounded Safari tab may restart the compositor/decoder.
+ if(typeof document!=='undefined'&&typeof document.addEventListener==='function')
+  document.addEventListener('visibilitychange',()=>{
+   visibilityChanges++;lastVisibilityAt=timeNow();
+   record('visibility:'+String(document.visibilityState||'unknown'));
+   if(document.visibilityState==='visible'&&wantsPlayback)watchFrames();
+  });
  video.addEventListener('waiting',()=>{record('waiting');report('動画の読み込み中…');});
  video.addEventListener('stalled',()=>{record('stalled');report('読み込みが一時停止しています。下の「先頭から再生」も試せます。');});
  video.addEventListener('error',()=>{
@@ -139,6 +180,10 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   requestId++;
   const token=requestId;
   if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
+  cancelFrameWatch();
+  decodedFrames=0;lastFrameAt=null;lastFrameMediaTime=null;
+  lastFramePresentedCount=null;firstFrameDelayMs=null;
+  playbackOpenedAt=timeNow();
   fromBeginning=Boolean(fromStart);
   wantedTime=fromBeginning?0:Math.max(0,Number(at)||0);
   pendingSeek=!fromBeginning;wantsPlayback=Boolean(autoplay);
@@ -173,11 +218,13 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  function pause(){
   wantsPlayback=false;retryNeeded=false;expectResume=false;
   if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
+  cancelFrameWatch();
   video.pause();
  }
  function dispose(){
   requestId++;wantsPlayback=false;retryNeeded=false;playPending=false;
   if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
+  cancelFrameWatch();
   video.pause();video.removeAttribute('src');video.load();
   video.hidden=true;activeKey='';activeUrl='';pendingSeek=false;
  }
@@ -189,8 +236,17 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   catch(_){return [];}
  }
  function diagnostic(){
+  let quality=null;
+  try{
+   if(typeof video.getVideoPlaybackQuality==='function'){
+    const x=video.getVideoPlaybackQuality();
+    quality={totalVideoFrames:x.totalVideoFrames,droppedVideoFrames:x.droppedVideoFrames,
+     corruptedVideoFrames:x.corruptedVideoFrames??null};
+   }
+  }catch(_){}
+  const now=timeNow();
   return {
-   player:'PeakStamp goal playback v42',sourceKey:activeKey,
+   player:'PeakStamp goal playback v43',sourceKey:activeKey,
    currentTime:round(video.currentTime),targetTime:round(wantedTime),
    duration:round(video.duration),paused:video.paused,seeking:video.seeking,
    readyState:video.readyState,networkState:video.networkState,
@@ -199,6 +255,14 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
    mediaError:video.error?{code:video.error.code,message:video.error.message||''}:null,
    pageVisibility:typeof document!=='undefined'?document.visibilityState||'unknown':'unknown',
    lastEvent,lastMessage,lastFailure,fromBeginning,retries,
+   frameDiagnostics:{
+    supported:hasVideoFrames,decodedFrames,lastFrameMediaTime,
+    lastFramePresentedCount,
+    lastFrameAgeMs:lastFrameAt!==null?now-lastFrameAt:null,
+    firstFrameDelayMs,quality,
+    playbackElapsedMs:playbackOpenedAt!==null?now-playbackOpenedAt:null
+   },
+   visibility:{changes:visibilityChanges,lastChangeAgeMs:lastVisibilityAt!==null?now-lastVisibilityAt:null},
    events:eventLog.slice(-15)
   };
  }
