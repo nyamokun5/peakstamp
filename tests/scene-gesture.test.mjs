@@ -119,3 +119,33 @@ test('pointer listener supports a complete two-finger pinch and reset without sl
   assert.equal(viewport.handlers.pointerdown,undefined);
  }finally{globalThis.window=oldWindow;}
 });
+
+test('pinch framing works without a separate zoom-reset button',()=>{
+ const handlers={};
+ const viewport={style:{},
+  getBoundingClientRect:()=>({left:0,top:0,width:360,height:202}),
+  addEventListener:(name,fn)=>{handlers[name]=fn},
+  removeEventListener:(name)=>{delete handlers[name]},
+  setPointerCapture(){},releasePointerCapture(){}
+ };
+ const video={style:{},videoWidth:1920,videoHeight:1080,
+  addEventListener(){},removeEventListener(){}};
+ const oldWindow=globalThis.window;
+ let state={zoom:1,zoomX:.5,zoomY:.5},commits=0;
+ globalThis.window={addEventListener(){},removeEventListener(){}};
+ try{
+  const detach=attachScenePinchEditor({viewport,video,
+   read:()=>state,write:next=>{state=next},commit:()=>{commits++},
+   readout:{textContent:''}});
+  const ptr=(id,x)=>({pointerId:id,pointerType:'touch',clientX:x,clientY:105,preventDefault(){}});
+  handlers.pointerdown(ptr(1,120));
+  handlers.pointerdown(ptr(2,240));
+  handlers.pointermove(ptr(1,90));
+  handlers.pointermove(ptr(2,270));
+  handlers.pointerup(ptr(1,90));
+  handlers.pointerup(ptr(2,270));
+  assert.ok(state.zoom>1);
+  assert.equal(commits,1);
+  detach();
+ } finally{globalThis.window=oldWindow;}
+});
