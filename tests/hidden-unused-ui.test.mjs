@@ -32,7 +32,10 @@ test('kept scene summary no longer exposes play name',()=>{
 test('source start and end editors and Keep/Reject controls remain enabled',()=>{
   assert.match(app,/const rangeEditor=make\('div','range-editor'\)/);
   assert.match(app,/startBox\.append\(time\)/);
-  assert.match(app,/endBox\.append\(endInput,resetEnd\)/);
+  assert.match(app,/endBox\.append\(endInput\)/);
+  assert.doesNotMatch(app,/make\('button','range-reset'/);
+  assert.doesNotMatch(app,/make\('button','scene-zoom-action'/);
+  assert.doesNotMatch(app,/make\('button','scene-pinch-reset'/);
   assert.match(app,/actions\.append\(play,keep,reject\)/);
 });
 

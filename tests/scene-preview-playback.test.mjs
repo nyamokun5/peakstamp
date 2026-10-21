@@ -95,3 +95,12 @@ test('normal scene editing UI uses one combined draggable timeline and no quiet/
  assert.match(montage,/fixedSeconds:16/);
  assert.doesNotMatch(app,/make\('input','scene-seek-slider'\)/);
 });
+
+test('last review moves to final create-video button without auto-generating MP4',()=>{
+ const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
+ const tail=app.split('function nextSceneAfter(current) {')[1].split('function decideReview(')[0];
+ assert.match(tail,/if \(!next\)/);
+ assert.match(tail,/\$\('montageExport'\)/);
+ assert.match(tail,/scrollIntoView\(\{behavior:'smooth',block:'center'\}\)/);
+ assert.doesNotMatch(tail,/exportButton\.click\(/);
+});
