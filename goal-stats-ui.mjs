@@ -54,6 +54,11 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
  });
  const debugOutput=$('goalStatsDebugOutput');
  function currentEntry(){return queue().find(row=>row.key===activeKey)||null;}
+ $('goalStatsPlayEarlier').addEventListener('click',()=>{
+  const entry=currentEntry();if(!entry){say('まずゴール候補を選択してください。');return;}
+  seekTo(entry,{autoplay:true,leadSeconds:30});
+  $('goalStatsVideoStatus').textContent='ゴール30秒前からの比較再生中です。停止したら診断結果をコピーしてください。';
+ });
  $('goalStatsPrepare').addEventListener('click',()=>{
   const entry=currentEntry();if(!entry){say('まずゴール候補を選択してください。');return;}
   seekTo(entry,{autoplay:false});
@@ -81,7 +86,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
  });
  function pausePlayback(){player.pause();}
  function disposeVideo(){player.dispose();viewer.hidden=true;}
- function seekTo(entry,{autoplay=false}={}){
+ function seekTo(entry,{autoplay=false,leadSeconds=10}={}){
   if(!entry)return;
   const {source,item}=entry;
   // Safari suspends media loading while parent is display:none or hidden.
@@ -91,7 +96,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
    '（実況 '+(item.origin==='audio'?fmt(item.timeSeconds):'手動追加')+'）';
   player.open({
    sourceKey:goalSourceKey(source),sourceUrl:source.objectUrl,
-   at:Math.max(0,actualGoalTime(item)-10),autoplay
+   at:Math.max(0,actualGoalTime(item)-leadSeconds),autoplay
   });
  }
  function locate(key){

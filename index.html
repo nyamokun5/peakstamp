@@ -191,7 +191,8 @@
         </div>
         <details class="goal-video-debug" id="goalStatsDiagnostics">
           <summary>動画が止まる場合：再生状態を確認</summary>
-          <p class="fine-print">再生時刻と実際の表示フレームを別々に計測します。画面に戻ると急に動き出した場合も、停止と復帰の履歴を保持します。動き始めた後にコピーしても構いません。元動画・選手名・実況内容は自動送信しません。</p>
+          <p class="fine-print">同じ位置で止まる場合、開始位置を変えて比較できます。「ゴール30秒前から再生」を試して、止まる動画内時刻が同じか確認してください。再生時刻と実際の表示フレーム、停止・復帰の履歴を記録します。元動画・選手名・実況内容は自動送信しません。</p>
+          <button id="goalStatsPlayEarlier" type="button" class="whisper-run">▶ ゴール30秒前から再生（比較テスト）</button>
           <button id="goalStatsCopyDebug" type="button" class="whisper-run">診断結果をコピー</button>
           <textarea id="goalStatsDebugOutput" rows="7" readonly spellcheck="false" aria-label="再生状態の診断結果"></textarea>
         </details>
