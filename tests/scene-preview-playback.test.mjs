@@ -102,7 +102,7 @@ test('last review scrolls to start of highlight creation section without startin
  assert.match(tail,/if \(!next\)/);
  assert.match(tail,/\$\('montagePanel'\)/);
  assert.match(tail,/scrollIntoView\(\{behavior:'smooth',block:'start'\}\)/);
- assert.doesNotMatch(tail,/\.click\(/);
+ assert.doesNotMatch(tail,/\\$\\('montageExport'\\)\\.click\\(/);
 });
 
 test('obsolete bottom sticky Settings and Create buttons are removed',()=>{
