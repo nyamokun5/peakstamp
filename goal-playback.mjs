@@ -12,6 +12,8 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  let frameCallbackId=null,decodedFrames=0,lastFrameAt=null,lastFrameMediaTime=null;
  let lastFramePresentedCount=null,lastVisibilityAt=null,visibilityChanges=0;
  let playbackOpenedAt=null,firstFrameDelayMs=null;
+ let suspectedFreeze=null;
+ const freezeHistory=[];
  const eventLog=[];
  const timeNow=()=>Date.now();
  const hasVideoFrames=typeof video.requestVideoFrameCallback==='function';
@@ -29,6 +31,13 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
    const first=decodedFrames===0;
    decodedFrames++;
    lastFrameAt=timeNow();
+   if(suspectedFreeze){
+    suspectedFreeze.recoveredAfterMs=lastFrameAt-suspectedFreeze.detectedAt;
+    suspectedFreeze.recoveredAt=lastFrameAt;
+    record('video-frames-resumed');
+    report('映像フレームの更新が再開しました。');
+    suspectedFreeze=null;
+   }
    if(first&&playbackOpenedAt!==null)firstFrameDelayMs=lastFrameAt-playbackOpenedAt;
    if(Number.isFinite(metadata?.mediaTime))lastFrameMediaTime=metadata.mediaTime;
    if(Number.isFinite(metadata?.presentedFrames))lastFramePresentedCount=metadata.presentedFrames;
@@ -137,8 +146,20 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
    const audioClockAdvance=Math.abs((Number(video.currentTime)||0)-at);
    if(audioClockAdvance<.15)
     report('動画の時間が進んでいません。「先頭から再生」を試し、診断結果をコピーしてください。');
-   else if(hasVideoFrames&&decodedFrames===framesAtStart)
+   else if(hasVideoFrames&&decodedFrames===framesAtStart&&
+    (typeof document==='undefined'||document.visibilityState!=='hidden')){
+    if(!suspectedFreeze){
+     suspectedFreeze={
+      sourceKey:activeKey,detectedAt:timeNow(),playbackTime:Number(video.currentTime)||0,
+      framesAtDetection:decodedFrames,timeAdvanceSeconds:audioClockAdvance,
+      pageVisibility:typeof document!=='undefined'?document.visibilityState||'unknown':'unknown'
+     };
+     freezeHistory.push(suspectedFreeze);
+     if(freezeHistory.length>5)freezeHistory.shift();
+    }
+    record('video-frame-freeze-suspected');
     report('再生時刻は進んでいますが映像フレームが更新されていません。診断結果をコピーしてください。');
+   }
   },3000);
  });
  video.addEventListener('timeupdate',()=>{
@@ -263,6 +284,14 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
     playbackElapsedMs:playbackOpenedAt!==null?now-playbackOpenedAt:null
    },
    visibility:{changes:visibilityChanges,lastChangeAgeMs:lastVisibilityAt!==null?now-lastVisibilityAt:null},
+   frameFreezeHistory:freezeHistory.map(x=>({
+    sourceKey:x.sourceKey,detectedAt:x.detectedAt,
+    playbackTime:Math.round(x.playbackTime*10)/10,
+    framesAtDetection:x.framesAtDetection,timeAdvanceSeconds:Math.round(x.timeAdvanceSeconds*10)/10,
+    pageVisibility:x.pageVisibility,
+    recoveredAfterMs:x.recoveredAfterMs??null,
+    recoveredAt:x.recoveredAt??null
+   })),
    events:eventLog.slice(-15)
   };
  }
