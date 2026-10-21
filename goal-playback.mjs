@@ -145,14 +145,14 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   video.setAttribute('playsinline','');
   video.setAttribute('webkit-playsinline','');
   const switching=activeKey!==sourceKey||activeUrl!==sourceUrl;
-  if(switching){
+  const restartFromBeginning=fromBeginning&&!switching;
+  if(switching||restartFromBeginning){
    video.pause();
    video.preload='auto';
-   video.src=sourceUrl; // src assignment initiates load; never double load().
+   // For the explicit fallback, reassign the original blob URL to RESET
+   // the media pipeline at t=0 instead of seeking backward within a stalled MOV.
+   video.src=sourceUrl; // src initiates load; do not call load() twice.
    activeKey=sourceKey;activeUrl=sourceUrl;
-  }else if(fromBeginning && video.readyState>=1){
-   // Safari's safer fallback: no deep seek into a large local MOV.
-   try{video.currentTime=0;}catch(_){}
   }
   // On a new src, wait for its metadata: readyState may still describe
   // the previous source during Safari's media-resource reset.
