@@ -82,7 +82,7 @@ test('kept scene disappears from undecided list but remains in kept tab',()=>{
 test('last kept or rejected scene leaves no undecided successor for export',()=>{
  for(const outcome of ['kept','rejected']){
   const a=scene('a'),b=scene('b');
-  const sources=[{candidates:[a,b]}];
+  const sources=[source('one',[a,b])];
   judgeScene(a,'kept');
   judgeScene(b,outcome);
   assert.equal(nextUndecided(sources,b),null);
