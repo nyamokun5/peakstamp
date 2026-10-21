@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createScenePreviewAudio,previewVolume,isIOSVolumeRestricted} from '../scene-preview-audio.mjs';
-import {toggleScenePreviewPlayback} from '../scene-preview-playback.mjs';
+import {toggleScenePreviewPlayback,seekScenePreview} from '../scene-preview-playback.mjs';
 
 test('scene preview pauses and resumes at the same frame, without resetting',async()=>{
  const video={paused:false,currentTime:24,pauses:0,plays:0,
@@ -61,4 +62,36 @@ test('unsupported iOS volume slider is disabled but mute still works',()=>{
  control.setLevel(0);
  assert.equal(v.muted,true);
  assert.equal(isIOSVolumeRestricted({userAgent:'Mozilla/5.0 (iPhone)'}),true);
+});
+
+
+test('combined timeline commits only one seek when released and leaves clip boundaries untouched',()=>{
+ const video={currentTime:12.5,paused:false,sets:0,pauses:0,
+   pause(){this.paused=true;this.pauses++}};
+ let current=video.currentTime;
+ Object.defineProperty(video,'currentTime',{get(){return current},set(next){video.sets++;current=next}});
+ const bounds={start:10,end:26};
+ const pos=seekScenePreview(video,19.37,bounds);
+ assert.equal(pos,19.4);
+ assert.equal(video.currentTime,19.4);
+ assert.equal(video.sets,1);
+ assert.equal(video.pauses,1);
+ assert.deepEqual(bounds,{start:10,end:26});
+ assert.equal(seekScenePreview(video,99,bounds),26);
+ assert.equal(seekScenePreview(video,-5,bounds),10);
+ assert.equal(seekScenePreview(video,Number.NaN,bounds),null);
+});
+
+test('normal scene editing UI uses one combined draggable timeline and no quiet/fixed selector',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
+ const montage=readFileSync(new URL('../montage-ui.mjs',import.meta.url),'utf8');
+ assert.doesNotMatch(html,/name="cutMode"|id="tailSeconds"|id="clipDuration"/);
+ assert.match(app,/make\('button','range-playhead'\)/);
+ assert.match(app,/track\.addEventListener\('pointerdown'/);
+ assert.match(app,/track\.addEventListener\('pointerup'/);
+ assert.match(app,/seekScenePreview\(replayVideo,seconds,bounds\)/);
+ assert.match(app,/fixedSeconds:16/);
+ assert.match(montage,/fixedSeconds:16/);
+ assert.doesNotMatch(app,/make\('input','scene-seek-slider'\)/);
 });
