@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=goal40" />
+  <link rel="stylesheet" href="styles.css?v=goal42" />
 </head>
 <body>
   <header class="topbar">
@@ -185,6 +185,16 @@
         <strong id="goalStatsPlayingLabel"></strong>
         <video id="goalStatsPreview" controls playsinline preload="metadata" hidden aria-label="ゴール候補を確認する共通動画プレーヤー"></video>
         <p id="goalStatsVideoStatus" class="fine-print" role="status" aria-live="polite"></p>
+        <div class="goal-video-recovery">
+          <button id="goalStatsPrepare" type="button" class="whisper-run">ゴール位置に移動（再生せず）</button>
+          <button id="goalStatsPlayFromStart" type="button" class="whisper-run">▶ 先頭から通常再生</button>
+        </div>
+        <details class="goal-video-debug" id="goalStatsDiagnostics">
+          <summary>動画が止まる場合：再生状態を確認</summary>
+          <p class="fine-print">再生の原因調査用です。元動画・選手名・実況内容は送信しません。</p>
+          <button id="goalStatsCopyDebug" type="button" class="whisper-run">診断結果をコピー</button>
+          <textarea id="goalStatsDebugOutput" rows="7" readonly spellcheck="false" aria-label="再生状態の診断結果"></textarea>
+        </details>
       </div>
       <div id="goalStatsEditor" class="goal-review-editor"></div>
       <div class="goal-review-queue-head"><strong>すべてのゴール候補</strong><small>どの動画もここから直接選択できます</small></div>
@@ -488,6 +498,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api41"></script>
+  <script type="module" src="app.mjs?v=gemini-api42"></script>
 </body>
 </html>
