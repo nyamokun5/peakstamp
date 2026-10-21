@@ -182,21 +182,10 @@ footer{text-align:center;color:#7995a8;display:flex;align-items:center;flex-dire
 .range-adjust{display:flex;flex-wrap:wrap;gap:5px}
 .range-jog,.range-reset{min-height:30px;padding:6px 8px;border-radius:7px;border:1px solid #4d7283;background:#27465a;color:#dff3f4;font-weight:750;font-size:10px}
 .range-reset{border-color:#5a907b;color:#b5f5d8;background:#1e4b45}
-.sticky-review-bar{position:fixed;z-index:800;left:0;right:0;bottom:0;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,#071826 77%,#071826ed);border-top:1px solid #315f62;box-shadow:0 -12px 34px #061320a8}
-.sticky-review-inner{max-width:610px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:9px}
-.sticky-review-summary{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.sticky-review-summary strong{color:#8be6cc;font-size:13px}
-.sticky-review-summary span{color:#d0e7ee;font-size:12px;text-align:right}
-.sticky-review-actions{display:flex;gap:9px}
-.sticky-settings{width:27%;border:1px solid #608b92;color:#c4ebec;background:#143549;border-radius:10px;min-height:46px;font-size:13px;font-weight:800}
-.sticky-export{flex:1;min-height:46px;background:#7de3c8;color:#062f31;border:0;border-radius:10px;font-size:14px;font-weight:900}
-.sticky-export:disabled{opacity:.45}
-body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 @media(max-width:390px){
  .range-editor{margin:0 7px 8px;padding:10px 8px}
  .range-inputs{gap:7px}
  .range-jog,.range-reset{padding:6px 5px}
- .sticky-review-summary strong,.sticky-review-summary span{font-size:11px}
 }
 
 .range-inputs .time-input{width:100%;min-width:0}
@@ -243,7 +232,7 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .review-progress:empty{display:none}
 .review-undo-toast{
   position:fixed;z-index:850;left:50%;width:min(calc(100% - 24px),600px);
-  transform:translateX(-50%);bottom:calc(128px + env(safe-area-inset-bottom,0px));
+  transform:translateX(-50%);bottom:calc(8px + env(safe-area-inset-bottom,0px));
   border:1px solid #e9bd84;border-radius:12px;background:#2f3c40;
   box-shadow:0 8px 32px #0008;padding:12px;
   display:flex;align-items:center;justify-content:space-between;gap:9px;
@@ -258,7 +247,7 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
   .highlight-entry .play-btn{font-size:14px}
   .play-label-select{font-size:16px}
   .review-decision-actions{padding:0 7px 11px}
-  .review-undo-toast{bottom:calc(137px + env(safe-area-inset-bottom,0px))}
+
 }
 
 
@@ -1252,15 +1241,29 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  .highlight-entry.preview-active .review-decision-actions .play-btn{
    min-height:44px;font-size:13px;
  }
- /* Keep the persistent export action, but free vertical room while editing. */
- body:has(.highlight-entry.preview-active) .sticky-review-summary{display:none;}
- body:has(.highlight-entry.preview-active) .sticky-review-inner{gap:0;}
- body:has(.highlight-entry.preview-active) .sticky-review-bar{
-   padding:5px 10px calc(5px + env(safe-area-inset-bottom,0px));
- }
- body:has(.highlight-entry.preview-active) .sticky-settings,
- body:has(.highlight-entry.preview-active) .sticky-export{min-height:42px;}
+
 }
 
 /* Hidden audio volume control must remain hidden despite display:flex. */
 .scene-volume-label[hidden]{display:none!important}
+
+/* v50: bottom-only undo toast. No permanent export toolbar. */
+.review-undo-toast{
+ z-index:850;
+ padding:7px 10px;
+ min-height:50px;
+ width:min(calc(100vw - 20px),520px);
+ border-radius:11px;
+ box-sizing:border-box;
+}
+.review-undo-toast button{
+ min-height:36px;
+ padding:7px 12px;
+}
+@media(max-width:640px){
+ .review-undo-toast{font-size:11px;gap:7px;}
+}
+/* Room below the page only while the temporary Undo is visible. */
+body:has(#undoReview:not([hidden])) .page{
+ padding-bottom:calc(65px + env(safe-area-inset-bottom,0px));
+}

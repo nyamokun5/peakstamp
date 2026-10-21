@@ -14,10 +14,8 @@ import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=
 import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
 import { attachScenePinchEditor } from './scene-gesture.mjs?v=compact49';
-import { montageSeconds } from './exporter.mjs?v=pinch18';
-import { getIntroConfiguration } from './intro-ui.mjs?v=drag31';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
-import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds } from './review-flow.mjs?v=storage8';
+import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds, reviewUndoClearance } from './review-flow.mjs?v=undo50';
 import { createSceneReplayMedia } from './scene-replay-media.mjs?v=1';
 import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
 import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=scrub48';
@@ -137,7 +135,6 @@ function syncSources() {
   goalReview?.refresh();
   calloutPilot?.refresh();
   if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
-  $('stickyBar').hidden = !state.bins;
   $('resultsPanel').hidden = !state.bins && !goalReview?.hasRecords();
   $('standardReviewArea').hidden = !state.bins;
   $('multiWaveNotice').hidden = state.sources.length <= 1;
@@ -525,12 +522,12 @@ function nextSceneAfter(current) {
     $('reviewProgress').textContent=kept
       ?'すべての候補を確認しました。ハイライト動画の作成へ進みます。'
       :'すべての候補を確認しました。動画を作成するにはシーンをキープしてください。';
-    // drawResults synchronously updates export eligibility. Do not start MP4
-    // automatically; take the user directly to the final create-video button.
+    // The final decision completes review; navigate to the START of the
+    // highlight-creation section, never directly to its export button.
+    // Keep export as a separate explicit user action.
     requestAnimationFrame(()=>{
-      const exportButton=$('montageExport');
-      if(!$('montagePanel').hidden && exportButton)
-        exportButton.scrollIntoView({behavior:'smooth',block:'center'});
+      const section=$('montagePanel');
+      if(!section.hidden)section.scrollIntoView({behavior:'smooth',block:'start'});
     });
     return;
   }
@@ -550,6 +547,15 @@ function nextSceneAfter(current) {
     }
     requestAnimationFrame(()=>{
       element.scrollIntoView({behavior:'auto',block:'start'});
+      // A rejected clip briefly shows a bottom Undo toast. If it would
+      // cover the next card's Replay/Keep/Reject row, nudge the card up.
+      requestAnimationFrame(()=>{
+        const toast=$('undoReview');
+        const actions=element.querySelector('.review-decision-actions');
+        if(toast.hidden||!actions)return;
+        const clearance=reviewUndoClearance(actions.getBoundingClientRect(),toast.getBoundingClientRect());
+        if(clearance>0)window.scrollBy({top:clearance,behavior:'auto'});
+      });
     });
   });
 }
@@ -1169,22 +1175,6 @@ function refreshComment() {
   }));
   summary.hidden = selected.length === 0;
   updateMontageEditor(state);
-  updateStickyBar();
-}
-function updateStickyBar() {
-  const visible=Boolean(state.bins);
-  $('stickyBar').hidden=!visible;
-  if(!visible) return;
-  const count=state.candidates.filter(item=>item.enabled).length;
-  const plan=buildMultiClipPlan(state.sources,currentClipOptions());
-  const estimate=montageSeconds(plan,getIntroConfiguration());
-  const blocked=estimate>185;
-  $('stickyCount').textContent=String(count);
-  $('stickyDuration').textContent=blocked
-    ? '3分超：シーンを減らしてください'
-    : '完成予想 '+formatTime(Math.ceil(estimate));
-  $('stickyExport').disabled = !plan.length || blocked || state.working || state.exporting || state.geminiProcessing;
-  $('stickyExport').textContent=state.exporting?'書き出し中…':'動画を作成する →';
 }
 function drawResults() {
   closeInlinePreview();
@@ -1301,14 +1291,6 @@ document.querySelectorAll('[data-review-tab]').forEach(button=>{
     if(state.bins)drawResults();
   });
 });
-$('stickySettings').addEventListener('click',()=>{
-  $('montagePanel').scrollIntoView({behavior:'smooth',block:'start'});
-});
-$('stickyExport').addEventListener('click',()=>{
-  if($('stickyExport').disabled || $('montageExport').disabled)return;
-  $('montagePanel').scrollIntoView({behavior:'smooth',block:'start'});
-  $('montageExport').click();
-});
 $('copyButton').addEventListener('click', async () => {
   const comment = $('commentText').value;
   if (!comment.trim()) {
@@ -1348,7 +1330,6 @@ window.addEventListener('montage-export-state', event => {
   $('addFiles').disabled = state.exporting || state.working || state.geminiProcessing;
   $('analyzeButton').disabled = state.exporting || state.working || state.geminiProcessing || !state.sources.length;
   renderSourceList();
-  updateStickyBar();
   refreshAIReview(state);
 });
 

@@ -54,3 +54,12 @@ export function replayBounds(source, item, getEnd) {
   const end = Math.max(start, Math.min(duration, Number(getEnd(source, item)) || 0));
   return { start, end };
 }
+
+/** Pixel distance needed to keep review buttons clear of the transient undo toast. */
+export function reviewUndoClearance(actionRect,undoRect,padding=12){
+ if(!actionRect||!undoRect)return 0;
+ const overlapVertical=actionRect.bottom>undoRect.top&&actionRect.top<undoRect.bottom;
+ const overlapHorizontal=actionRect.right>undoRect.left&&actionRect.left<undoRect.right;
+ if(!overlapVertical||!overlapHorizontal)return 0;
+ return Math.max(0,Math.ceil(actionRect.bottom-undoRect.top+padding));
+}

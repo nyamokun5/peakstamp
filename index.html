@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=compact49" />
+  <link rel="stylesheet" href="styles.css?v=undo50" />
 </head>
 <body>
   <header class="topbar">
@@ -454,18 +454,6 @@
     <span id="undoReviewText">シーンを不採用にしました</span>
     <button id="undoReviewButton" type="button">元に戻す</button>
   </aside>
-  <aside id="stickyBar" class="sticky-review-bar" aria-label="動画作成の確認" hidden>
-    <div class="sticky-review-inner">
-      <div class="sticky-review-summary">
-        <strong><span id="stickyCount">0</span>シーンをキープ</strong>
-        <span id="stickyDuration">完成予想 00:05</span>
-      </div>
-      <div class="sticky-review-actions">
-        <button id="stickySettings" type="button" class="sticky-settings">設定</button>
-        <button id="stickyExport" type="button" class="sticky-export" disabled>動画を作成する <span aria-hidden="true">→</span></button>
-      </div>
-    </div>
-  </aside>
   <div id="firstRunOverlay" class="first-run-overlay" role="dialog" aria-modal="true" aria-labelledby="guideTitle" aria-describedby="guideDescription" hidden>
     <div class="first-run-card">
       <div class="first-run-top"><span>PEAKSTAMP GUIDE</span><span id="guideCounter">1 / 3</span></div>
@@ -481,6 +469,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=compact49"></script>
+  <script type="module" src="app.mjs?v=undo50"></script>
 </body>
 </html>

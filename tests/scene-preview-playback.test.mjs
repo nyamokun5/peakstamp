@@ -96,11 +96,25 @@ test('normal scene editing UI uses one combined draggable timeline and no quiet/
  assert.doesNotMatch(app,/make\('input','scene-seek-slider'\)/);
 });
 
-test('last review moves to final create-video button without auto-generating MP4',()=>{
+test('last review scrolls to start of highlight creation section without starting MP4',()=>{
  const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
  const tail=app.split('function nextSceneAfter(current) {')[1].split('function decideReview(')[0];
  assert.match(tail,/if \(!next\)/);
- assert.match(tail,/\$\('montageExport'\)/);
- assert.match(tail,/scrollIntoView\(\{behavior:'smooth',block:'center'\}\)/);
- assert.doesNotMatch(tail,/exportButton\.click\(/);
+ assert.match(tail,/\$\('montagePanel'\)/);
+ assert.match(tail,/scrollIntoView\(\{behavior:'smooth',block:'start'\}\)/);
+ assert.equal(tail.includes("montageExport').click("),false);
+});
+
+test('obsolete bottom sticky Settings and Create buttons are removed',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../styles.css',import.meta.url),'utf8');
+ const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
+ assert.equal(html.includes('id="stickyBar"'),false);
+ assert.equal(html.includes('id="stickySettings"'),false);
+ assert.equal(html.includes('id="stickyExport"'),false);
+ assert.doesNotMatch(app,/stickyBar|stickySettings|stickyExport|updateStickyBar/);
+ assert.equal(css.includes('sticky-review-bar'),false);
+ assert.equal(css.includes('body:has(.sticky-review'),false);
+ assert.match(html,/id="montageExport"/);
+ assert.ok(css.includes('bottom:calc(8px + env(safe-area-inset-bottom,0px))'));
 });
