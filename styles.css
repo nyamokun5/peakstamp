@@ -1157,3 +1157,107 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  box-shadow:0 7px 16px rgba(0,0,0,.22)}
 .goal-review-viewer:not([hidden]) #goalStatsPreview{max-height:min(30vh,240px)}
 @media(min-width:700px){.goal-review-viewer:not([hidden]) #goalStatsPreview{max-height:380px}}
+
+/* v49: compact iPhone scene review. No second scrub bar or extra zoom buttons. */
+.scene-pinch-toolbar{
+ display:flex;flex-wrap:nowrap;align-items:center;gap:8px;
+ margin:4px 0;padding:8px 10px;
+ border:1px solid #4cae9a;border-radius:9px;
+ background:#123a42;
+}
+.scene-pinch-hint{
+ flex:1;flex-basis:auto;min-width:0!important;
+ color:#ccfff0!important;font-size:12px!important;font-weight:850;line-height:1.3;
+}
+.scene-pinch-value{
+ flex:none;min-width:40px;text-align:right;
+ font-size:13px;font-variant-numeric:tabular-nums;
+}
+@media (max-width:640px){
+ /* Video → shared trim/playhead → actions, all kept inside the same card. */
+ .highlight-entry.preview-active{display:flex;flex-direction:column;}
+ .highlight-entry.preview-active .inline-preview{
+   order:1;margin:0;padding:0 0 2px;
+ }
+ .highlight-entry.preview-active .range-editor{
+   order:2;margin:0!important;padding:6px 8px 6px;
+ }
+ .highlight-entry.preview-active .highlight-item{
+   order:3;margin:0;padding:3px 8px 7px;gap:4px;
+   border:0;
+ }
+ .highlight-entry.preview-active .zoom-video-viewport{
+   border-radius:6px;margin:0 auto;
+ }
+ .highlight-entry.preview-active .scene-pinch-toolbar{
+   margin:4px 7px 2px;
+   padding:7px 9px;
+ }
+ .highlight-entry.preview-active .scene-pinch-hint{
+   flex-basis:auto;min-width:0!important;
+   font-size:clamp(11px,3.1vw,12px)!important;
+ }
+ .highlight-entry.preview-active .scene-playback-controls{
+   margin:2px 7px 1px;
+   padding:1px 0;
+   gap:5px;flex-wrap:nowrap;
+ }
+ .highlight-entry.preview-active .scene-pause-button{
+   min-height:40px;min-width:92px;padding:6px 8px;font-size:12px;
+ }
+ .highlight-entry.preview-active .scene-mute-button{
+   min-height:40px;min-width:40px;padding:4px;font-size:17px;
+ }
+ .highlight-entry.preview-active .scene-volume-label{
+   min-width:0;gap:4px;font-size:10px;
+ }
+ .highlight-entry.preview-active .scene-volume-slider{min-width:45px;min-height:36px;}
+ .highlight-entry.preview-active .scene-volume-value{min-width:29px;font-size:11px;}
+ .highlight-entry.preview-active .range-heading{margin-bottom:3px;}
+ .highlight-entry.preview-active .range-title{margin:0;font-size:12px;}
+ .highlight-entry.preview-active .range-current{font-size:11px;}
+ .highlight-entry.preview-active .range-legend{margin-bottom:1px;gap:3px;}
+ .highlight-entry.preview-active .range-track.interactive-range{
+   height:42px;margin:3px 12px 4px;
+ }
+ .highlight-entry.preview-active .range-track .range-handle{
+   top:5px;height:30px;
+ }
+ .highlight-entry.preview-active .range-track .range-playhead{
+   top:-7px;height:54px;
+ }
+ .highlight-entry.preview-active .range-hint{
+   margin:0 2px 4px;
+   min-height:0;
+   font-size:10px;line-height:1.35;
+ }
+ .highlight-entry.preview-active .range-inputs{gap:8px;}
+ .highlight-entry.preview-active .range-field{gap:2px;}
+ .highlight-entry.preview-active .range-field label{font-size:10px;}
+ .highlight-entry.preview-active .range-field input{
+   min-height:38px;padding:5px 8px;
+   font-size:16px; /* iOS: avoid Safari zoom on editing time */
+ }
+ .highlight-entry.preview-active .time-row{gap:5px;flex-wrap:nowrap;}
+ .highlight-entry.preview-active .time-row .selection-label,
+ .highlight-entry.preview-active .time-row .scene-number{font-size:11px;}
+ .highlight-entry.preview-active .item-fields{min-width:0;}
+ .highlight-entry.preview-active .score{font-size:10px;}
+ .highlight-entry.preview-active .review-decision-actions{
+   gap:5px;padding:0;
+ }
+ .highlight-entry.preview-active .review-decision-actions button{
+   min-height:44px;padding:6px 3px;font-size:13px;
+ }
+ .highlight-entry.preview-active .review-decision-actions .play-btn{
+   min-height:44px;font-size:13px;
+ }
+ /* Keep the persistent export action, but free vertical room while editing. */
+ body:has(.highlight-entry.preview-active) .sticky-review-summary{display:none;}
+ body:has(.highlight-entry.preview-active) .sticky-review-inner{gap:0;}
+ body:has(.highlight-entry.preview-active) .sticky-review-bar{
+   padding:5px 10px calc(5px + env(safe-area-inset-bottom,0px));
+ }
+ body:has(.highlight-entry.preview-active) .sticky-settings,
+ body:has(.highlight-entry.preview-active) .sticky-export{min-height:42px;}
+}
