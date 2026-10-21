@@ -8,7 +8,7 @@ const ids=[
  'goalStatsPreview','goalStatsPlayingLabel','goalStatsViewer','goalStatsVideoStatus',
  'goalStatsAdd','goalStatsManualSource','goalStatsManualWrap','goalStatsExport',
  'goalStatsCopy','goalStatsShow','goalStatsJson','goalStatsJsonArea',
- 'goalStatsPrepare','goalStatsPlayFromStart','goalStatsPlayEarlier','goalStatsCopyDebug','goalStatsDebugOutput'
+ 'goalStatsPrepare','goalStatsPlayFromStart','goalStatsPlayEarlier','goalStatsNativeFullscreen','goalStatsCopyDebug','goalStatsDebugOutput'
 ];
 function setup(){
  const stats={loads:0,plays:0,competingPaused:0};
@@ -39,6 +39,7 @@ function setup(){
   get src(){return this._src}
   load(){stats.loads++}
   play(){stats.plays++;this.paused=false;return Promise.resolve()}
+  webkitEnterFullscreen(){stats.nativeFullscreen=(stats.nativeFullscreen||0)+1}
  }
  const dom=Object.fromEntries(ids.map(id=>[id,new Element()]));
  dom.goalStatsViewer.hidden=true;
@@ -145,7 +146,7 @@ test('goal recovery UI can restart from beginning and expose copyable diagnostic
   const details=JSON.parse(dom.goalStatsDebugOutput.value);
   assert.equal(details.targetTime,0);
   assert.equal(details.fromBeginning,true);
-  assert.equal(details.player,'PeakStamp goal playback v44');
+  assert.equal(details.player,'PeakStamp goal playback v45');
   assert.equal(details.selectedCommentTime,379.2);
  }finally{restore()}
 });
@@ -165,5 +166,17 @@ test('compare same MOV from 30 seconds before goal to isolate a time-specific st
   await dom.goalStatsCopyDebug.events.click();
   const info=JSON.parse(dom.goalStatsDebugOutput.value);
   assert.equal(info.targetTime,339.2);
+ }finally{restore()}
+});
+
+test('native iPhone fullscreen video is available as an explicit user-tap comparison',async()=>{
+ const {dom,one,stats,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]});
+  dom.goalStatsList.children[0].events.click();
+  await Promise.resolve();
+  dom.goalStatsNativeFullscreen.events.click();
+  assert.equal(stats.nativeFullscreen,1);
+  assert.equal(stats.loads,1,'native fullscreen must reuse selected MOV without copying bytes');
  }finally{restore()}
 });
