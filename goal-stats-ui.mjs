@@ -78,9 +78,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
    video.pause();
    pendingSeek={sourceKey:key,time:seek,request:videoRequest};
    // Avoid multiple iOS decoder loads: set src/load ONCE per distinct file.
-   video.src=source.objectUrl;
+   // src assignment itself starts loading; a second load() restarts Safari decoding.
    video.preload='metadata';
-   video.load();
+   video.src=source.objectUrl;
    loadedSourceKey=key;
   }else if(video.readyState>=1){
    try{video.currentTime=seek;}catch(_){pendingSeek={sourceKey:key,time:seek,request:videoRequest};}
