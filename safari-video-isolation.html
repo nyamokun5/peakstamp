@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PeakStamp | Safari動画単独テスト</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;background:#0b1829;color:#f3f7fc}
+*{box-sizing:border-box}body{margin:0 auto;max-width:760px;padding:18px 16px 55px}
+a{color:#99caff}h1{font-size:1.45rem;margin:16px 0 8px}
+p,small{line-height:1.55;color:#b6c7dc} .box{padding:15px;border:1px solid #42536a;border-radius:12px;margin:15px 0;background:#13243a}
+video{display:block;width:100%;max-height:54vh;background:#000;border-radius:8px}
+input[type=file]{display:block;max-width:100%;margin:10px 0}
+input[type=number]{width:105px;padding:10px;background:#071626;border:1px solid #647891;color:white;font-size:16px;border-radius:8px}
+button{font-size:15px;font-weight:650;padding:11px;margin:5px 5px 5px 0;border:1px solid #7994af;border-radius:9px;color:#fff;background:#244565}
+button:disabled{opacity:.4}button.primary{background:#216c8b}
+.row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+#status{font-size:14px;min-height:2em;overflow-wrap:anywhere}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow-y:auto;font-size:12px}
+textarea{display:block;width:100%;height:150px;font-size:12px;background:#081522;color:#ddd}
+</style>
+</head>
+<body>
+<a href="./?v=gemini-api46">← PeakStampに戻る</a>
+<h1>iPhone Safari 動画単独テスト（v46）</h1>
+<p>PeakStamp本体の動画プレーヤー・Gemini解析・保存データを一切使わず、iPhone標準の動画要素だけで再生停止を検証します。同じ動画内時刻で止まるか、アプリ固有の問題かを切り分けるためのページです。</p>
+<div class="box">
+<label for="file"><strong>① 問題のMOV/MP4を1本選択</strong></label>
+<input id="file" type="file" accept="video/*,.mov,.mp4,.m4v">
+<div id="fileInfo" role="status">動画を選択してください（動画本体は送信されません）。</div>
+</div>
+<div class="box">
+<video id="player" controls playsinline webkit-playsinline preload="metadata"></video>
+<p id="status" role="status" aria-live="polite">準備中</p>
+<label for="target">② 再生したい動画内時刻（秒）</label>
+<input id="target" type="number" min="0" value="360" step="0.1">
+<div class="row">
+<button id="at" class="primary" type="button" disabled>▶ 指定時刻から再生</button>
+<button id="earlier" type="button" disabled>▶ 30秒前から再生</button>
+<button id="zero" type="button" disabled>▶ 先頭から再生</button>
+<button id="fresh" type="button" disabled>↺ 動画を読み直して再生</button>
+<button id="full" type="button" disabled>iPhone標準フルスクリーン</button>
+</div>
+<small>各ボタンを2回以上試して、停止する動画内時刻を比較してください。標準フルスクリーン中は表示フレーム診断が正確に取れない場合があります。再生に失敗した場合は動画上の▶を直接タップしてください。</small>
+</div>
+<div class="box">
+<strong>③ 再生結果</strong>
+<p id="live">フレーム診断：待機中</p>
+<button id="copy" type="button">診断JSONをコピー</button>
+<details><summary>診断結果を表示（コピーできない場合もここから選択）</summary><textarea id="output" readonly spellcheck="false" aria-label="診断結果JSON"></textarea></details>
+<details><summary>最近のイベントを表示</summary><pre id="events"></pre></details>
+</div>
+<p>大容量MOVやHEVC動画に起因する停止の場合、この最小構成でも再現する可能性があります。写真アプリでも同じ位置が止まるか、別の短いH.264 MP4でも止まるかを比較してください。このページは動画をアップロードせず、診断結果も自動送信しません。</p>
+<script>
+(() => {
+"use strict";
+const $=id=>document.getElementById(id);
+const video=$("player"),file=$("file"),target=$("target");
+let url="",chosen=null,attempt=0,lastFrameAt=null,lastMediaTime=null,frameCount=0;
+let detected=null,fullScreen=false,latestTime=0;
+const history=[],events=[];
+const now=()=>performance.now();
+const round=n=>Number.isFinite(Number(n))?Math.round(Number(n)*10)/10:null;
+const setStatus=s=>{$("status").textContent=s;};
+const record=(kind,extra={})=>{
+ events.push({event:kind,attempt,time:round(video.currentTime),at:Math.round(now()),...extra});
+ if(events.length>100)events.shift();
+ $("events").textContent=JSON.stringify(events.slice(-20),null,2);
+};
+const closeStall=(reason)=>{
+ if(!detected)return;
+ detected.endedBy=reason;
+ detected=null;
+};
+function newAttempt(label){
+ closeStall("another-attempt");
+ attempt++;lastFrameAt=null;lastMediaTime=null;frameCount=0;latestTime=Number(video.currentTime)||0;
+ record("attempt:"+label);
+}
+function seekAndPlay(seconds,label){
+ if(!chosen)return;
+ newAttempt(label);
+ const dest=Math.max(0,Math.min(Number(video.duration)||Infinity,Number(seconds)||0));
+ try{video.currentTime=dest;}catch(e){record("seek-error",{error:String(e)});}
+ setStatus("再生中・指定位置 "+round(dest)+" 秒。止まったら診断JSONをコピーしてください。");
+ try{
+  const promise=video.play();
+  if(promise&&typeof promise.catch==="function")
+   promise.catch(e=>{record("play-rejected",{error:e.name||String(e)});setStatus("再生が制限されました。動画上の▶を直接タップしてください。");});
+ }catch(e){record("play-error",{error:String(e)});setStatus("再生できません。動画上の▶をお試しください。");}
+}
+function info(){
+ return {page:"PeakStamp isolated Safari video test v46",
+  file:chosen?{name:chosen.name,sizeBytes:chosen.size,type:chosen.type,lastModified:chosen.lastModified}:null,
+  userAgent:navigator.userAgent,
+  currentTime:round(video.currentTime),duration:round(video.duration),
+  readyState:video.readyState,networkState:video.networkState,
+  paused:video.paused,seeking:video.seeking,fullscreen:fullScreen,
+  visible:document.visibilityState,mediaError:video.error?{code:video.error.code,message:video.error.message}:null,
+  videoSize:[video.videoWidth,video.videoHeight],
+  frameCallbackSupported:typeof video.requestVideoFrameCallback==="function",
+  videoFramesObserved:frameCount,lastPresentedMediaTime:round(lastMediaTime),
+  millisecondsSinceFrame:lastFrameAt===null?null:Math.round(now()-lastFrameAt),
+  attempt,stallActive:!!detected,stallHistory:history,events:events.slice(-45)};
+}
+function publish(){
+ $("live").textContent="時刻 "+round(video.currentTime)+" 秒 / 表示フレーム "+frameCount+
+  " / 最終フレーム "+round(lastMediaTime)+" 秒 / 検出した停止 "+history.length+" 件"+
+  (detected?"（現在停止疑い）":"");
+ $("output").value=JSON.stringify(info(),null,2);
+}
+file.addEventListener("change",()=>{
+ const selected=file.files&&file.files[0];if(!selected)return;
+ closeStall("new-file");attempt=0;history.length=0;events.length=0;
+ if(url){video.pause();video.removeAttribute("src");video.load();URL.revokeObjectURL(url);}
+ chosen=selected;url=URL.createObjectURL(selected);
+ video.src=url;
+ const mib=(selected.size/1048576).toFixed(1);
+ $("fileInfo").textContent=selected.name+" / "+mib+" MiB（端末内で再生）";
+ for(const id of ["at","earlier","zero","fresh","full"])$(id).disabled=false;
+ setStatus("動画のメタデータを読み込み中…");
+ record("file-selected",{bytes:selected.size});
+ publish();
+});
+$("at").addEventListener("click",()=>seekAndPlay(Number(target.value),"at-target"));
+$("earlier").addEventListener("click",()=>seekAndPlay(Number(target.value)-30,"thirty-seconds-earlier"));
+$("zero").addEventListener("click",()=>seekAndPlay(0,"from-start"));
+$("fresh").addEventListener("click",()=>{
+ if(!chosen)return;
+ newAttempt("reset-source");
+ video.pause();video.src=url; // Set source anew, do not duplicate load().
+ setStatus("ファイルを再読込しました。動画上の▶、または先頭から再生を押してください。");
+});
+$("full").addEventListener("click",()=>{
+ if(!chosen)return;
+ try{
+  if(typeof video.webkitEnterFullscreen==="function")video.webkitEnterFullscreen();
+  else if(typeof video.requestFullscreen==="function")video.requestFullscreen();
+  else setStatus("この環境では標準フルスクリーンを要求できません。");
+ }catch(e){record("fullscreen-error",{error:String(e)});setStatus("標準フルスクリーンに移行できませんでした。");}
+});
+$("copy").addEventListener("click",async()=>{
+ publish();
+ const out=$("output");
+ try{
+  await navigator.clipboard.writeText(out.value);
+  setStatus("診断JSONをコピーしました。動画本体は含まれません。");
+ }catch(e){out.parentElement.open=true;out.focus();out.select();setStatus("自動コピーが使えません。表示したJSONを手動でコピーしてください。");}
+});
+for(const name of ["loadedmetadata","play","playing","pause","seeking","seeked","waiting","stalled","suspend","error","ended"]){
+ video.addEventListener(name,()=>{
+  record(name);
+  if(name==="loadedmetadata"){
+   setStatus("準備完了。再生方法を選んでください。");
+   if(Number(video.duration)<Number(target.value))target.value=String(Math.max(0,Math.round((video.duration-20)*10)/10));
+  }
+  if(name==="error")setStatus("動画読み込みエラー。写真アプリでは再生できるか確認してください。");
+  publish();
+ });
+}
+video.addEventListener("webkitbeginfullscreen",()=>{fullScreen=true;record("enter-native-fullscreen");});
+video.addEventListener("webkitendfullscreen",()=>{fullScreen=false;record("exit-native-fullscreen");});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState!=="visible")closeStall("page-hidden");record("visibility:"+document.visibilityState);});
+if(typeof video.requestVideoFrameCallback==="function"){
+ const onFrame=(_time,metadata)=>{
+  const first=lastFrameAt===null;
+  lastFrameAt=now();frameCount++;
+  if(Number.isFinite(metadata.mediaTime))lastMediaTime=metadata.mediaTime;
+  if(detected){detected.endedBy="frames-resumed";detected.recoveryDelayMs=Math.round(lastFrameAt-detected.detectedAt);detected=null;record("frames-resumed");}
+  if(first)record("first-frame",{mediaTime:round(lastMediaTime)});
+  video.requestVideoFrameCallback(onFrame);
+ };
+ video.requestVideoFrameCallback(onFrame);
+}
+let baselineTime=0;
+setInterval(()=>{
+ const t=now(),media=Number(video.currentTime)||0;
+ if(!video.paused&&!video.seeking&&document.visibilityState==="visible"&&!fullScreen&&
+    lastFrameAt!==null&&t-lastFrameAt>3000&&media-baselineTime>.4&&!detected){
+   detected={attempt,lastRenderedMediaTime:round(lastMediaTime),clockPosition:round(media),detectedAt:Math.round(t),endedBy:null};
+   history.push(detected);
+   if(history.length>30)history.shift();
+   record("suspected-frame-stall",{lastRenderedMediaTime:round(lastMediaTime)});
+ }
+ baselineTime=media;
+ publish();
+},1200);
+window.addEventListener("pagehide",()=>{if(url)URL.revokeObjectURL(url);});
+})();
+</script>
+</body>
+</html>
