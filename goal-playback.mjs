@@ -4,7 +4,12 @@
  * iOS playback requires a synchronous .play() from the original tap.
  * The metadata/seek events can retry a transient AbortError afterwards.
  */
-export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=>{}}={}){
+export function createGoalPlaybackController(video,{
+ notify=()=>{},beforePlay=()=>{},
+ now=()=>Date.now(),
+ scheduleWatchdog=(fn,ms)=>setInterval(fn,ms),
+ cancelWatchdog=id=>clearInterval(id)
+}={}){
  let activeKey='',activeUrl='',wantedTime=0,pendingSeek=false,wantsPlayback=false;
  let requestId=0,playPending=false,retryNeeded=false,denied=false,retries=0;
  let seekingOwnJump=false,expectResume=false,fromBeginning=false,progressWatch=0;
@@ -16,10 +21,10 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  let lastWatchClock=null,lastWatchAt=null;
  const freezeHistory=[];
  const eventLog=[];
- const timeNow=()=>Date.now();
+ const timeNow=now;
  const visible=()=>typeof document==='undefined'||document.visibilityState!=='hidden';
  function stopWatchdog(){
-  if(watchdogId!==null)clearInterval(watchdogId);
+  if(watchdogId!==null)cancelWatchdog(watchdogId);
   watchdogId=null;lastWatchClock=null;lastWatchAt=null;
  }
  function markFreeze(reason,clockAdvance){
@@ -45,7 +50,7 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   if(!hasVideoFrames)return;
   lastWatchClock=Number(video.currentTime)||0;
   lastWatchAt=timeNow();
-  watchdogId=setInterval(()=>{
+  watchdogId=scheduleWatchdog(()=>{
    if(!wantsPlayback||video.paused||video.seeking||!visible()){
     lastWatchClock=Number(video.currentTime)||0;
     lastWatchAt=timeNow();
