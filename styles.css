@@ -359,6 +359,24 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
   border-radius:50%;background:#f4ffff;border:2px solid #2d6173;
 }
 .range-editor .interactive-range .range-playhead[hidden]{display:none!important}
+/* One combined timeline: draggable playhead and separate export trim handles. */
+.range-editor .interactive-range .range-playhead{
+  width:22px;height:54px;top:-5px;background:transparent;
+  border:0;box-shadow:none;cursor:ew-resize;pointer-events:auto;
+  touch-action:none;-webkit-user-select:none;z-index:6;
+}
+.range-editor .interactive-range .range-playhead::after{
+  content:'';position:absolute;left:calc(50% - 1.5px);top:0;
+  width:3px;height:54px;background:#fff;pointer-events:none;
+  box-shadow:0 0 0 1px #183d4f,0 0 9px #b7e7ff;
+}
+.range-editor .interactive-range .range-playhead::before{
+  left:calc(50% - 6px);top:-5px;z-index:1;pointer-events:none;
+}
+.range-editor .interactive-range .range-playhead:focus-visible{
+  outline:2px solid #fff;border-radius:4px;
+}
+
 .range-editor .range-hint{
   margin:4px 0 12px;font-size:11px;color:#b1cfda;
   min-height:16px;line-height:1.5;text-align:center;
