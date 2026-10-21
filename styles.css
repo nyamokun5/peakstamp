@@ -363,7 +363,7 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
 .range-editor .interactive-range .range-playhead{
   width:22px;height:54px;top:-5px;background:transparent;
   border:0;box-shadow:none;cursor:ew-resize;pointer-events:auto;
-  touch-action:none;-webkit-user-select:none;z-index:6;
+  touch-action:none;-webkit-user-select:none;z-index:4;
 }
 .range-editor .interactive-range .range-playhead::after{
   content:'';position:absolute;left:calc(50% - 1.5px);top:0;
