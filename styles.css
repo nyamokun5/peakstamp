@@ -1131,3 +1131,11 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  border-radius:8px;padding:8px;font-size:11px;line-height:1.5;
  background:#081f29;color:#e9f9ff;-webkit-user-select:text;user-select:text}
 @media(max-width:440px){.goal-video-recovery{grid-template-columns:1fr 1fr}}
+
+/* Keep the iPhone video visible while reviewing the scorer and assist fields.
+ * WebKit may suspend playback if the media element leaves the viewport. */
+.goal-review-viewer:not([hidden]){position:sticky;top:4px;z-index:8;
+ background:#0c2731;padding:6px 0 8px;border-radius:10px;
+ box-shadow:0 7px 16px rgba(0,0,0,.22)}
+.goal-review-viewer:not([hidden]) #goalStatsPreview{max-height:min(30vh,240px)}
+@media(min-width:700px){.goal-review-viewer:not([hidden]) #goalStatsPreview{max-height:380px}}
