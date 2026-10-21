@@ -29,6 +29,7 @@ function setup(){
   pause(){this.paused=true}
   set src(value){
    this._src=value;
+   this.currentTime=0; // Browser resets currentTime on media source replacement.
    stats.loads++;
    queueMicrotask(()=>{
     this.readyState=1;
@@ -125,5 +126,26 @@ test('editing scorer does not reload current video and requires reconfirmation',
   scoreInput.events.change();
   assert.equal(stats.loads,loads);
   assert.equal(createGoalDrafts(one,storage).items[0].scorer,'若さん（確認）');
+ }finally{restore()}
+});
+
+test('goal recovery UI can restart from beginning and expose copyable diagnostics',async()=>{
+ const {dom,one,stats,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]});
+  dom.goalStatsList.children[0].events.click();
+  await Promise.resolve();
+  assert.equal(dom.goalStatsPreview.currentTime,359.2);
+  assert.equal(stats.loads,1);
+  dom.goalStatsPlayFromStart.events.click();
+  await Promise.resolve();
+  assert.equal(dom.goalStatsPreview.currentTime,0,'fallback restarts at the beginning without deep seek');
+  assert.equal(stats.loads,2,'fallback intentionally resets only the active media resource');
+  await dom.goalStatsCopyDebug.events.click();
+  const details=JSON.parse(dom.goalStatsDebugOutput.value);
+  assert.equal(details.targetTime,0);
+  assert.equal(details.fromBeginning,true);
+  assert.equal(details.player,'PeakStamp goal playback v42');
+  assert.equal(details.selectedCommentTime,379.2);
  }finally{restore()}
 });
