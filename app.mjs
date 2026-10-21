@@ -13,7 +13,7 @@ import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=batch
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
 import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
-import { attachScenePinchEditor } from './scene-gesture.mjs?v=pinch28';
+import { attachScenePinchEditor } from './scene-gesture.mjs?v=compact49';
 import { montageSeconds } from './exporter.mjs?v=pinch18';
 import { getIntroConfiguration } from './intro-ui.mjs?v=drag31';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
