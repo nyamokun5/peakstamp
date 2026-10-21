@@ -1261,3 +1261,6 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  body:has(.highlight-entry.preview-active) .sticky-settings,
  body:has(.highlight-entry.preview-active) .sticky-export{min-height:42px;}
 }
+
+/* Hidden audio volume control must remain hidden despite display:flex. */
+.scene-volume-label[hidden]{display:none!important}
