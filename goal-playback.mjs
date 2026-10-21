@@ -20,7 +20,7 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   try{
    video.currentTime=wantedTime;
    pendingSeek=false;
-   report(video.seeking?'ゴール位置に移動中…':'');
+   if(!denied)report(video.seeking?'ゴール位置に移動中…':'');
    return true;
   }catch(_){report('動画の位置を調整しています…');return false;}
  }
