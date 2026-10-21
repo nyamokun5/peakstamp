@@ -94,3 +94,50 @@ test('file or codec problems show specific diagnostic instead of silent failure'
  assert.equal(calls.loads,1,'load is only used when clearing src');
  assert.equal(playback.currentSourceKey(),'');
 });
+
+
+test('a successful initial play still recovers if Safari pauses during deep seek',async()=>{
+ const {calls,video,playback,fire}=setup();
+ playback.open({sourceKey:'A',sourceUrl:'blob:a',at:359.2,autoplay:true});
+ await tick();
+ assert.equal(calls.plays,1);
+ video.readyState=1;video.seeking=true;
+ fire('loadedmetadata');
+ video.pause();
+ video.readyState=3;video.seeking=false;
+ fire('seeked');
+ assert.equal(calls.plays,2,'resume playback after Safari pauses during a deep seek');
+ assert.equal(playback.diagnostic().targetTime,359.2);
+});
+test('normal playback fallback skips deep seek and diagnostics describe browser state',async()=>{
+ const {calls,video,playback,fire}=setup();
+ playback.open({sourceKey:'A',sourceUrl:'blob:a',at:359.2,autoplay:true,fromStart:true});
+ assert.equal(calls.plays,1);
+ assert.equal(video.currentTime,0);
+ assert.equal(playback.diagnostic().fromBeginning,true);
+ assert.equal(playback.diagnostic().targetTime,0);
+ video.readyState=1;fire('loadedmetadata');
+ assert.equal(video.currentTime,0,'fallback must not jump into the long MOV');
+ video.readyState=3;
+ video.buffered={length:1,start:()=>0,end:()=>20};
+ video.seekable={length:1,start:()=>0,end:()=>450};
+ video.videoWidth=1920;video.videoHeight=1080;
+ fire('playing');
+ const out=playback.diagnostic();
+ assert.equal(out.videoSize[0],1920);
+ assert.equal(out.buffered[0][1],20);
+ assert.equal(out.seekable[0][1],450);
+ assert.equal(out.lastEvent,'playing');
+ playback.pause();
+});
+test('the diagnostic keeps a concise list of media events without copying video bytes',()=>{
+ const {playback,video,fire}=setup();
+ playback.open({sourceKey:'A',sourceUrl:'blob:a',at:30,autoplay:false});
+ fire('waiting');fire('stalled');
+ const data=playback.diagnostic();
+ assert.match(data.lastMessage,/先頭から再生/);
+ assert.equal(Array.isArray(data.events),true);
+ assert.equal(JSON.stringify(data).includes('blob:a'),false);
+ assert.equal(data.events.at(-1).event,'stalled');
+ playback.pause();
+});
