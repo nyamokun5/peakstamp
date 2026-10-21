@@ -10,7 +10,7 @@ export function buildMultiClipPlan(sources, options = 16) {
   // Numeric argument remains supported for the previous fixed-duration mode.
   const cfg = typeof options === 'number'
     ? { mode:'fixed', fixedSeconds:options }
-    : { mode:'quiet', fixedSeconds:16, tailSeconds:3, ...options };
+    : { mode:'fixed', fixedSeconds:16, ...options };
   const plan=[];
   for(const source of sources||[]){
     if(!source?.file || !source?.bins || !Number.isFinite(source.duration))continue;

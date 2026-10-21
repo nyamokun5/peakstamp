@@ -4,13 +4,7 @@ import { formatTime } from './detector.mjs';
 import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=drag31';
 
 const $ = id => document.getElementById(id);
-function clipOptions() {
-  return {
-    mode: document.querySelector('input[name="cutMode"]:checked')?.value || 'quiet',
-    fixedSeconds: Number($('clipDuration').value),
-    tailSeconds: Number($('tailSeconds').value),
-  };
-}
+function clipOptions(){return {mode:'fixed',fixedSeconds:16};}
 function updateTitlePreview() {
   // The interactive intro canvas is the only preview. Its font, size,
   // location and background match the MP4 composition code.
@@ -112,23 +106,12 @@ function makeShareFile() {
 }
 export function initMontageEditor(state) {
   activeState = state;
-  $('clipDuration').addEventListener('input', () => {
-    $('clipDurationValue').textContent = $('clipDuration').value + '秒';
-    settingChanged();
-  });
-  $('tailSeconds').addEventListener('input', () => {
-    $('tailSecondsValue').textContent = $('tailSeconds').value + '秒';
-    settingChanged();
-  });
   $('titleSize').addEventListener('input', () => {
     $('titleSizeValue').textContent = $('titleSize').value + '%';
     updateTitlePreview(); settingChanged();
   });
   $('titleFont').addEventListener('change', () => {
     updateTitlePreview(); settingChanged();
-  });
-  document.querySelectorAll('input[name="cutMode"]').forEach(radio => {
-    radio.addEventListener('change', settingChanged);
   });
   $('montageTitle').addEventListener('input', () => setTitle($('montageTitle').value));
   for (const button of document.querySelectorAll('[data-montage-title]')) {

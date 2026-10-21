@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=goal42" />
+  <link rel="stylesheet" href="styles.css?v=scrub48" />
 </head>
 <body>
   <header class="topbar">
@@ -404,14 +404,7 @@
         <p class="intro-help">PNGを使うと文字タイトルの代わりに表示されます。</p>
       </section>
 
-      <div class="montage-cut-mode" role="group" aria-label="シーン終了の決め方">
-        <label><input type="radio" name="cutMode" value="quiet" checked /> 静かになってから切る</label>
-        <label><input type="radio" name="cutMode" value="fixed" /> 固定秒数で切る</label>
-      </div>
-      <label class="montage-label" for="tailSeconds">静かになった後の余韻 <strong id="tailSecondsValue">3秒</strong></label>
-      <input id="tailSeconds" class="montage-slider" type="range" min="1" max="6" step="1" value="3" />
-      <label class="montage-label montage-length-control" for="clipDuration">固定秒数／静寂なしの場合 <strong id="clipDurationValue">16秒</strong></label>
-      <input class="montage-slider" id="clipDuration" type="range" min="8" max="30" step="1" value="16" />
+      <p class="fine-print">切り抜きは初期16秒。各シーンの共通タイムラインで開始・終了を直接調整できます。</p>
       <div class="montage-summary"><span id="montageSelected">0シーンを結合</span><span id="montageLength">完成：約00:05</span></div>
 
       <fieldset class="quality-picker">
@@ -488,6 +481,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api47"></script>
+  <script type="module" src="app.mjs?v=scrub48"></script>
 </body>
 </html>
