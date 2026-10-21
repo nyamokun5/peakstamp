@@ -20,3 +20,22 @@ export function toggleScenePreviewPlayback(video,bounds,{
    Promise.resolve(video.play()).catch(onError);
  } catch(e) {onError(e);}
 }
+
+
+/**
+ * Seek once when the user releases the preview progress slider.
+ * Avoid decoding on every thumb movement: long iPhone MOV files can stall
+ * when Safari receives a burst of deep seeks.
+ * This changes video playback only, not the saved clip boundaries.
+ */
+export function seekScenePreview(video,seconds,bounds){
+ if(!video || !Number.isFinite(Number(seconds)))return null;
+ const start=Math.max(0,Number(bounds?.start)||0);
+ const end=Math.max(start,Number(bounds?.end)||start);
+ const target=Math.round(Math.min(end,Math.max(start,Number(seconds)))*10)/10;
+ try {
+  video.pause();
+  video.currentTime=target;
+  return target;
+ } catch(_) {return null;}
+}
