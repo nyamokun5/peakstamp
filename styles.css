@@ -1117,3 +1117,17 @@ body:has(.sticky-review-bar:not([hidden])) .page{padding-bottom:160px}
  .goal-review-fields{grid-template-columns:1fr 1fr}
  .goal-queue-row{padding:10px}
 }
+
+
+/* v42: media recovery controls and copyable Safari diagnostics */
+.goal-video-recovery{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 10px}
+.goal-video-recovery button{min-height:43px;padding:10px 6px;margin:0!important;
+ font-size:12px;line-height:1.45;white-space:normal}
+.goal-video-debug{border:1px solid #476771;border-radius:9px;padding:9px 11px;margin:8px 0 12px}
+.goal-video-debug>summary{font-size:12px;font-weight:650;cursor:pointer;color:#c2e0e3}
+.goal-video-debug button{min-height:42px;width:100%;margin-top:9px}
+#goalStatsDebugOutput{width:100%;display:block;box-sizing:border-box;margin:9px 0 0;
+ min-height:120px;max-height:280px;resize:vertical;border:1px solid #4d6e78;
+ border-radius:8px;padding:8px;font-size:11px;line-height:1.5;
+ background:#081f29;color:#e9f9ff;-webkit-user-select:text;user-select:text}
+@media(max-width:440px){.goal-video-recovery{grid-template-columns:1fr 1fr}}
