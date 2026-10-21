@@ -12,10 +12,59 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  let frameCallbackId=null,decodedFrames=0,lastFrameAt=null,lastFrameMediaTime=null;
  let lastFramePresentedCount=null,lastVisibilityAt=null,visibilityChanges=0;
  let playbackOpenedAt=null,firstFrameDelayMs=null;
- let suspectedFreeze=null;
+ let suspectedFreeze=null,playingStartedAt=null,playingStartPosition=null,watchdogId=null;
+ let lastWatchClock=null,lastWatchAt=null;
  const freezeHistory=[];
  const eventLog=[];
  const timeNow=()=>Date.now();
+ const visible=()=>typeof document==='undefined'||document.visibilityState!=='hidden';
+ function stopWatchdog(){
+  if(watchdogId!==null)clearInterval(watchdogId);
+  watchdogId=null;lastWatchClock=null;lastWatchAt=null;
+ }
+ function markFreeze(reason,clockAdvance){
+  if(suspectedFreeze||!wantsPlayback||video.paused||video.seeking||!visible())return;
+  suspectedFreeze={
+   sourceKey:activeKey,attemptId:requestId,reason,
+   detectedAt:timeNow(),playbackTime:Number(video.currentTime)||0,
+   framesAtDetection:decodedFrames,timeAdvanceSeconds:clockAdvance,
+   pageVisibility:typeof document!=='undefined'?document.visibilityState||'unknown':'unknown'
+  };
+  freezeHistory.push(suspectedFreeze);
+  if(freezeHistory.length>5)freezeHistory.shift();
+  record('video-frame-freeze-suspected');
+  report('映像フレームが更新されていません。再生が後から始まった場合も診断結果をコピーしてください。');
+ }
+ function closeFreeze(reason){
+  if(!suspectedFreeze)return;
+  suspectedFreeze.endedReason=reason;
+  suspectedFreeze=null;
+ }
+ function startWatchdog(){
+  stopWatchdog();
+  if(!hasVideoFrames)return;
+  lastWatchClock=Number(video.currentTime)||0;
+  lastWatchAt=timeNow();
+  watchdogId=setInterval(()=>{
+   if(!wantsPlayback||video.paused||video.seeking||!visible()){
+    lastWatchClock=Number(video.currentTime)||0;
+    lastWatchAt=timeNow();
+    return;
+   }
+   const now=timeNow(),clock=Number(video.currentTime)||0;
+   const earliestFrame=lastFrameAt??playingStartedAt;
+   const stalledFor=earliestFrame===null?0:now-earliestFrame;
+   const advancedFromWatch=clock-(lastWatchClock??clock);
+   const advancedFromFrame=clock-(lastFrameMediaTime??playingStartPosition??clock);
+   // A progressing media clock is not proof of frame presentation.
+   if(stalledFor>=3000&&advancedFromFrame>=.5&&
+     (advancedFromWatch>=.15||clock>(playingStartPosition??clock)+.5))
+    markFreeze('frame-watchdog',Math.round(advancedFromFrame*10)/10);
+   lastWatchClock=clock;lastWatchAt=now;
+  },1200);
+  // In Node tests this background diagnostic must never keep the process alive.
+  if(typeof watchdogId?.unref==='function')watchdogId.unref();
+ }
  const hasVideoFrames=typeof video.requestVideoFrameCallback==='function';
  function cancelFrameWatch(){
   if(frameCallbackId!==null&&typeof video.cancelVideoFrameCallback==='function')
@@ -31,9 +80,10 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
    const first=decodedFrames===0;
    decodedFrames++;
    lastFrameAt=timeNow();
-   if(suspectedFreeze){
+   if(suspectedFreeze&&suspectedFreeze.attemptId===requestId){
     suspectedFreeze.recoveredAfterMs=lastFrameAt-suspectedFreeze.detectedAt;
     suspectedFreeze.recoveredAt=lastFrameAt;
+    suspectedFreeze.endedReason='frames-resumed';
     record('video-frames-resumed');
     report('映像フレームの更新が再開しました。');
     suspectedFreeze=null;
@@ -136,6 +186,8 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  });
  video.addEventListener('playing',()=>{
   record('playing');retryNeeded=false;lastProgress=Number(video.currentTime)||0;report('');
+  playingStartedAt=timeNow();playingStartPosition=Number(video.currentTime)||0;
+  startWatchdog();
   // A resolved play() promise can still leave an iOS video frozen on one frame.
   if(progressWatch)clearTimeout(progressWatch);
   watchFrames();
@@ -146,20 +198,8 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
    const audioClockAdvance=Math.abs((Number(video.currentTime)||0)-at);
    if(audioClockAdvance<.15)
     report('動画の時間が進んでいません。「先頭から再生」を試し、診断結果をコピーしてください。');
-   else if(hasVideoFrames&&decodedFrames===framesAtStart&&
-    (typeof document==='undefined'||document.visibilityState!=='hidden')){
-    if(!suspectedFreeze){
-     suspectedFreeze={
-      sourceKey:activeKey,detectedAt:timeNow(),playbackTime:Number(video.currentTime)||0,
-      framesAtDetection:decodedFrames,timeAdvanceSeconds:audioClockAdvance,
-      pageVisibility:typeof document!=='undefined'?document.visibilityState||'unknown':'unknown'
-     };
-     freezeHistory.push(suspectedFreeze);
-     if(freezeHistory.length>5)freezeHistory.shift();
-    }
-    record('video-frame-freeze-suspected');
-    report('再生時刻は進んでいますが映像フレームが更新されていません。診断結果をコピーしてください。');
-   }
+   else if(hasVideoFrames&&decodedFrames===framesAtStart&&visible())
+    markFreeze('initial-playing-no-frames',Math.round(audioClockAdvance*10)/10);
   },3000);
  });
  video.addEventListener('timeupdate',()=>{
@@ -168,12 +208,13 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  });
  video.addEventListener('pause',()=>{
   record('pause');
+  stopWatchdog();
   if(wantsPlayback&&seekingOwnJump)expectResume=true;
   else if(wantsPlayback&&!pendingSeek&&!denied)
    report('再生が一時停止しました。動画画面の▶、または「先頭から通常再生」をお試しください。');
  });
  video.addEventListener('ended',()=>{
-  record('ended');
+  record('ended');stopWatchdog();closeFreeze('video-ended');
   report('動画が最後まで再生されました。別のゴール候補を選ぶか、再生ボタンで戻れます。');
  });
  video.addEventListener('suspend',()=>record('suspend'));
@@ -182,7 +223,11 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   document.addEventListener('visibilitychange',()=>{
    visibilityChanges++;lastVisibilityAt=timeNow();
    record('visibility:'+String(document.visibilityState||'unknown'));
-   if(document.visibilityState==='visible'&&wantsPlayback)watchFrames();
+   if(document.visibilityState==='hidden'){
+    stopWatchdog();closeFreeze('page-hidden');
+   }else if(wantsPlayback){
+    watchFrames();if(!video.paused)startWatchdog();
+   }
   });
  video.addEventListener('waiting',()=>{record('waiting');report('動画の読み込み中…');});
  video.addEventListener('stalled',()=>{record('stalled');report('読み込みが一時停止しています。下の「先頭から再生」も試せます。');});
@@ -198,6 +243,8 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
 
  function open({sourceKey,sourceUrl,at,autoplay=false,fromStart=false}){
   if(!sourceKey||!sourceUrl)return false;
+  closeFreeze('new-playback-attempt');
+  stopWatchdog();
   requestId++;
   const token=requestId;
   if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
@@ -205,6 +252,7 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   decodedFrames=0;lastFrameAt=null;lastFrameMediaTime=null;
   lastFramePresentedCount=null;firstFrameDelayMs=null;
   playbackOpenedAt=timeNow();
+  playingStartedAt=null;playingStartPosition=null;
   fromBeginning=Boolean(fromStart);
   wantedTime=fromBeginning?0:Math.max(0,Number(at)||0);
   pendingSeek=!fromBeginning;wantsPlayback=Boolean(autoplay);
@@ -238,11 +286,13 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
  }
  function pause(){
   wantsPlayback=false;retryNeeded=false;expectResume=false;
+  closeFreeze('manual-pause');stopWatchdog();
   if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
   cancelFrameWatch();
   video.pause();
  }
  function dispose(){
+  closeFreeze('disposed');stopWatchdog();
   requestId++;wantsPlayback=false;retryNeeded=false;playPending=false;
   if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
   cancelFrameWatch();
@@ -267,7 +317,7 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
   }catch(_){}
   const now=timeNow();
   return {
-   player:'PeakStamp goal playback v43',sourceKey:activeKey,
+   player:'PeakStamp goal playback v44',sourceKey:activeKey,
    currentTime:round(video.currentTime),targetTime:round(wantedTime),
    duration:round(video.duration),paused:video.paused,seeking:video.seeking,
    readyState:video.readyState,networkState:video.networkState,
@@ -284,8 +334,10 @@ export function createGoalPlaybackController(video,{notify=()=>{},beforePlay=()=
     playbackElapsedMs:playbackOpenedAt!==null?now-playbackOpenedAt:null
    },
    visibility:{changes:visibilityChanges,lastChangeAgeMs:lastVisibilityAt!==null?now-lastVisibilityAt:null},
+   activeAttemptId:requestId,freezeCurrentlySuspected:!!suspectedFreeze,
    frameFreezeHistory:freezeHistory.map(x=>({
-    sourceKey:x.sourceKey,detectedAt:x.detectedAt,
+    sourceKey:x.sourceKey,attemptId:x.attemptId,reason:x.reason,
+    endedReason:x.endedReason??null,detectedAt:x.detectedAt,
     playbackTime:Math.round(x.playbackTime*10)/10,
     framesAtDetection:x.framesAtDetection,timeAdvanceSeconds:Math.round(x.timeAdvanceSeconds*10)/10,
     pageVisibility:x.pageVisibility,
