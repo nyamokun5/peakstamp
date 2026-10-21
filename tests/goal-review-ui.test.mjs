@@ -7,8 +7,7 @@ const ids=[
  'goalStatsPanel','goalStatsList','goalStatsEditor','goalStatsSummary','goalStatsStatus',
  'goalStatsPreview','goalStatsPlayingLabel','goalStatsViewer','goalStatsVideoStatus',
  'goalStatsAdd','goalStatsManualSource','goalStatsManualWrap','goalStatsExport',
- 'goalStatsCopy','goalStatsShow','goalStatsJson','goalStatsJsonArea',
- 'goalStatsPrepare','goalStatsPlayFromStart','goalStatsPlayEarlier','goalStatsNativeFullscreen','goalStatsCopyDebug','goalStatsDebugOutput'
+ 'goalStatsCopy','goalStatsShow','goalStatsJson','goalStatsJsonArea'
 ];
 function setup(){
  const stats={loads:0,plays:0,competingPaused:0};
@@ -130,7 +129,8 @@ test('editing scorer does not reload current video and requires reconfirmation',
  }finally{restore()}
 });
 
-test('goal recovery UI can restart from beginning and expose copyable diagnostics',async()=>{
+
+test('normal goal review keeps one standard player without debug controls',async()=>{
  const {dom,one,stats,restore}=setup();
  try{
   initGoalStatsReview({sources:[one]});
@@ -138,45 +138,9 @@ test('goal recovery UI can restart from beginning and expose copyable diagnostic
   await Promise.resolve();
   assert.equal(dom.goalStatsPreview.currentTime,359.2);
   assert.equal(stats.loads,1);
-  dom.goalStatsPlayFromStart.events.click();
+  find(dom.goalStatsEditor,'goal-review-play').events.click();
   await Promise.resolve();
-  assert.equal(dom.goalStatsPreview.currentTime,0,'fallback restarts at the beginning without deep seek');
-  assert.equal(stats.loads,2,'fallback intentionally resets only the active media resource');
-  await dom.goalStatsCopyDebug.events.click();
-  const details=JSON.parse(dom.goalStatsDebugOutput.value);
-  assert.equal(details.targetTime,0);
-  assert.equal(details.fromBeginning,true);
-  assert.equal(details.player,'PeakStamp goal playback v45');
-  assert.equal(details.selectedCommentTime,379.2);
- }finally{restore()}
-});
-
-test('compare same MOV from 30 seconds before goal to isolate a time-specific stall',async()=>{
- const {dom,one,stats,restore}=setup();
- try{
-  initGoalStatsReview({sources:[one]});
-  dom.goalStatsList.children[0].events.click();
-  await Promise.resolve();
-  assert.equal(dom.goalStatsPreview.currentTime,359.2);
   assert.equal(stats.loads,1);
-  dom.goalStatsPlayEarlier.events.click();
-  await Promise.resolve();
-  assert.equal(dom.goalStatsPreview.currentTime,339.2);
-  assert.equal(stats.loads,1,'same MOV comparison reuses the current player and source');
-  await dom.goalStatsCopyDebug.events.click();
-  const info=JSON.parse(dom.goalStatsDebugOutput.value);
-  assert.equal(info.targetTime,339.2);
- }finally{restore()}
-});
-
-test('native iPhone fullscreen video is available as an explicit user-tap comparison',async()=>{
- const {dom,one,stats,restore}=setup();
- try{
-  initGoalStatsReview({sources:[one]});
-  dom.goalStatsList.children[0].events.click();
-  await Promise.resolve();
-  dom.goalStatsNativeFullscreen.events.click();
-  assert.equal(stats.nativeFullscreen,1);
-  assert.equal(stats.loads,1,'native fullscreen must reuse selected MOV without copying bytes');
+  assert.equal(stats.plays,2);
  }finally{restore()}
 });
