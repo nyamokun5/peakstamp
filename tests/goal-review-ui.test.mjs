@@ -145,7 +145,7 @@ test('goal recovery UI can restart from beginning and expose copyable diagnostic
   const details=JSON.parse(dom.goalStatsDebugOutput.value);
   assert.equal(details.targetTime,0);
   assert.equal(details.fromBeginning,true);
-  assert.equal(details.player,'PeakStamp goal playback v42');
+  assert.equal(details.player,'PeakStamp goal playback v43');
   assert.equal(details.selectedCommentTime,379.2);
  }finally{restore()}
 });

@@ -141,3 +141,42 @@ test('the diagnostic keeps a concise list of media events without copying video 
  assert.equal(data.events.at(-1).event,'stalled');
  playback.pause();
 });
+
+test('actual frame presentation is tracked separately from media currentTime',async()=>{
+ const {video,playback,fire}=setup();
+ const callbacks=new Map();
+ let nextId=0;
+ video.requestVideoFrameCallback=cb=>{const id=++nextId;callbacks.set(id,cb);return id;};
+ video.cancelVideoFrameCallback=id=>callbacks.delete(id);
+ // Controller must be initialized AFTER requestVideoFrameCallback exists.
+ const controller=createGoalPlaybackController(video,{notify:()=>{}});
+ controller.open({sourceKey:'B',sourceUrl:'blob:b',at:359.7,autoplay:true});
+ await tick();
+ let diag=controller.diagnostic();
+ assert.equal(diag.frameDiagnostics.supported,true);
+ assert.equal(diag.frameDiagnostics.decodedFrames,0);
+ video.currentTime=366.3;
+ assert.equal(controller.diagnostic().frameDiagnostics.decodedFrames,0,
+  'media clock advancing does not prove a frame was presented');
+ const firstId=Math.min(...callbacks.keys());
+ const cb=callbacks.get(firstId);
+ callbacks.delete(firstId);
+ cb(1234,{mediaTime:366.3,presentedFrames:80});
+ diag=controller.diagnostic();
+ assert.equal(diag.frameDiagnostics.decodedFrames,1);
+ assert.equal(diag.frameDiagnostics.lastFrameMediaTime,366.3);
+ assert.equal(diag.frameDiagnostics.lastFramePresentedCount,80);
+ assert.equal(diag.frameDiagnostics.firstFrameDelayMs>=0,true);
+ assert.equal(callbacks.size,1);
+ controller.pause();
+ assert.equal(callbacks.size,0,'pause cancels video frame callbacks');
+});
+test('Safari playback-quality counters are copied into diagnostics when available',()=>{
+ const {video,playback}=setup();
+ video.getVideoPlaybackQuality=()=>({
+  totalVideoFrames:210,droppedVideoFrames:7,corruptedVideoFrames:0
+ });
+ const d=playback.diagnostic();
+ assert.equal(d.frameDiagnostics.quality.totalVideoFrames,210);
+ assert.equal(d.frameDiagnostics.quality.droppedVideoFrames,7);
+});
