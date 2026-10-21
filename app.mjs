@@ -521,7 +521,17 @@ function nextSceneAfter(current) {
   if (reviewTab === 'kept') reviewTab='all';
   drawResults();
   if (!next) {
-    $('reviewProgress').textContent='未判断のシーンはありません。キープ済みを確認できます。';
+    const kept=state.sources.some(source=>(source.candidates||[]).some(item=>item.enabled===true));
+    $('reviewProgress').textContent=kept
+      ?'すべての候補を確認しました。ハイライト動画の作成へ進みます。'
+      :'すべての候補を確認しました。動画を作成するにはシーンをキープしてください。';
+    // drawResults synchronously updates export eligibility. Do not start MP4
+    // automatically; take the user directly to the final create-video button.
+    requestAnimationFrame(()=>{
+      const exportButton=$('montageExport');
+      if(!$('montagePanel').hidden && exportButton)
+        exportButton.scrollIntoView({behavior:'smooth',block:'center'});
+    });
     return;
   }
   $('reviewProgress').textContent='次の未判断シーンへ移動しました。';
@@ -697,31 +707,21 @@ function row(item, index) {
     video.setAttribute('playsinline','');
     video.setAttribute('webkit-playsinline','');
     video.disablePictureInPicture=true;
-    const label=make('p','inline-caption',
-      formatTimelineTime(item.time)+' 〜 '+
-      formatTimelineTime(getCandidateEnd(source,item,currentClipOptions())));
     const viewport=make('div','zoom-video-viewport');
     viewport.setAttribute('tabindex','0');
     viewport.setAttribute('role','group');
-    viewport.setAttribute('aria-label','映像の画角調整：2本指で拡大縮小、拡大後は1本指で移動。キーボードのプラス・マイナスでも倍率変更可能');
+    viewport.setAttribute('aria-label','2本指で画角を拡大・縮小。拡大後は1本指で位置を移動');
     viewport.append(video);
-    const tip=make('span','pinch-overlay-tip','↔ 2本指で拡大');
+    const tip=make('span','pinch-overlay-tip','🤏 2本指で画角調整');
     tip.setAttribute('aria-hidden','true');
     const isZoomTipSeen=()=>{try{return localStorage.getItem('peakstamp_zoom_discovered_v1')==='yes';}catch{return false;}};
     const markZoomTipSeen=()=>{try{localStorage.setItem('peakstamp_zoom_discovered_v1','yes');}catch{}};
     tip.hidden=isZoomTipSeen()||normalizeSceneZoom(item.zoom)>1;
     viewport.append(tip);
     const zoomRow=make('div','scene-pinch-toolbar');
-    const zoomHint=make('span','scene-pinch-hint','画角調整 · 2本指でも拡大');
+    const zoomHint=make('span','scene-pinch-hint','🤏 2本指で画角調整 · 拡大後は1本指で移動');
     const zoomValue=make('output','scene-pinch-value');
-    const zoomOut=make('button','scene-zoom-action','−');
-    zoomOut.type='button';zoomOut.setAttribute('aria-label','映像を縮小');
-    const zoomIn=make('button','scene-zoom-action','＋');
-    zoomIn.type='button';zoomIn.setAttribute('aria-label','映像を拡大');
-    const zoomReset=make('button','scene-pinch-reset','戻す');
-    zoomReset.type='button';
-    zoomReset.setAttribute('aria-label','映像の拡大と位置を初期化');
-    zoomRow.append(zoomHint,zoomOut,zoomValue,zoomIn,zoomReset);
+    zoomRow.append(zoomHint,zoomValue);
     const playbackRow=make('div','scene-playback-controls');
     pauseResumeButton=make('button','scene-pause-button','⏸ 一時停止');
     pauseResumeButton.type='button';
@@ -738,10 +738,9 @@ function row(item, index) {
     const volumeValue=make('output','scene-volume-value',scenePreviewAudio.level+'%');
     volumeLabel.append(volumeSlider,volumeValue);
     playbackRow.append(pauseResumeButton,mute,volumeLabel);
-    const volumeNote=make('p','scene-volume-note',
-      audioMode.canAdjust?'確認時の音量 · 完成MP4には影響しません':
-       'このiPhoneでは本体の音量ボタンをご利用ください（ミュートは利用可）');
+    volumeLabel.hidden=!audioMode.canAdjust;
     volumeSlider.disabled=!audioMode.canAdjust;
+    mute.title='確認時の音声切り替え（完成MP4の音声は変わりません）';
     const updateVolumeUI=()=>{
       const v=scenePreviewAudio.level;
       volumeSlider.value=String(v);volumeValue.textContent=v+'%';
@@ -780,7 +779,7 @@ function row(item, index) {
     replayStatus=make('p','inline-caption','動画を準備しています…');
     replayStatus.setAttribute('role','status');
     replayStatus.setAttribute('aria-live','polite');
-    inline.replaceChildren(label,viewport,playbackRow,volumeNote,zoomRow,replayStatus);
+    inline.replaceChildren(viewport,zoomRow,playbackRow,replayStatus);
     teardownZoom=attachScenePinchEditor({
       viewport,video,read:()=>({
         zoom:normalizeSceneZoom(item.zoom),
@@ -788,17 +787,11 @@ function row(item, index) {
       }),
       write:next=>{
         item.zoom=next.zoom;item.zoomX=next.zoomX;item.zoomY=next.zoomY;
-        zoomOut.disabled=normalizeSceneZoom(item.zoom)<=1;
-        zoomIn.disabled=normalizeSceneZoom(item.zoom)>=3;
         if(normalizeSceneZoom(item.zoom)>1.02){markZoomTipSeen();tip.hidden=true;}
       },
       commit:()=>refreshComment(),
-      resetButton:zoomReset,readout:zoomValue
+      readout:zoomValue
     });
-    zoomOut.disabled=normalizeSceneZoom(item.zoom)<=1;
-    zoomIn.disabled=normalizeSceneZoom(item.zoom)>=3;
-    zoomOut.addEventListener('click',()=>teardownZoom?.zoomBy(.8));
-    zoomIn.addEventListener('click',()=>teardownZoom?.zoomBy(1.25));
     inline.hidden=false;
     entry.classList.add('preview-active');
     activeInlineClose=close;
@@ -927,15 +920,8 @@ function row(item, index) {
   endInput.inputMode='text';
   endInput.setAttribute('aria-label','切り取り終了時刻');
   endBox.append(endLabel);
-  const resetEnd=make('button','range-reset','初期16秒に戻す');
-  resetEnd.type='button';
-  resetEnd.addEventListener('click',()=>{
-    item.manualEnd=null;
-    renderRange();
-    refreshComment();
-  });
   startBox.append(time);
-  endBox.append(endInput,resetEnd);
+  endBox.append(endInput);
   rangeInputs.append(startBox,endBox);
   rangeEditor.append(rangeHeading,markerLegend,track,rangeHint,rangeInputs);
   let dragging=null;
@@ -1110,7 +1096,6 @@ function row(item, index) {
     time.value=formatTimelineTime(item.time);
     endInput.value=formatTimelineTime(end);
     endLabel.textContent=Number.isFinite(item.manualEnd)?'終了（手動）':'終了（初期16秒）';
-    resetEnd.hidden=!Number.isFinite(item.manualEnd);
     for(const [handle,now,min,max] of [
       [startDot,item.time,0,Math.max(0,end-.3)],
       [endDot,end,item.time+.3,source.duration]
