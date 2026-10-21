@@ -135,7 +135,7 @@ test('the diagnostic keeps a concise list of media events without copying video 
  playback.open({sourceKey:'A',sourceUrl:'blob:a',at:30,autoplay:false});
  fire('waiting');fire('stalled');
  const data=playback.diagnostic();
- assert.match(data.lastMessage,/先頭から再生/);
+ assert.match(data.lastMessage,/動画画面の▶で再開してください/);
  assert.equal(Array.isArray(data.events),true);
  assert.equal(JSON.stringify(data).includes('blob:a'),false);
  assert.equal(data.events.at(-1).event,'stalled');

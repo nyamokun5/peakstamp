@@ -42,7 +42,7 @@ export function createGoalPlaybackController(video,{
   freezeHistory.push(suspectedFreeze);
   if(freezeHistory.length>5)freezeHistory.shift();
   record('video-frame-freeze-suspected');
-  report('映像フレームが更新されていません。再生が後から始まった場合も診断結果をコピーしてください。');
+  report('動画の読み込みに時間がかかっています。動画画面の▶で再生をお試しください。');
  }
  function closeFreeze(reason){
   if(!suspectedFreeze)return;
@@ -206,7 +206,7 @@ export function createGoalPlaybackController(video,{
    if(token!==requestId||video.paused||video.seeking)return;
    const audioClockAdvance=Math.abs((Number(video.currentTime)||0)-at);
    if(audioClockAdvance<.15)
-    report('動画の時間が進んでいません。「先頭から再生」を試し、診断結果をコピーしてください。');
+    report('動画の再生が進んでいません。動画画面の▶で再生をお試しください。');
    else if(hasVideoFrames&&decodedFrames===framesAtStart&&visible())
     markFreeze('initial-playing-no-frames',Math.round(audioClockAdvance*10)/10);
   },3000);
@@ -220,7 +220,7 @@ export function createGoalPlaybackController(video,{
   stopWatchdog();
   if(wantsPlayback&&seekingOwnJump)expectResume=true;
   else if(wantsPlayback&&!pendingSeek&&!denied)
-   report('再生が一時停止しました。動画画面の▶、または「先頭から通常再生」をお試しください。');
+   report('再生が一時停止しました。動画画面の▶で再開してください。');
  });
  video.addEventListener('ended',()=>{
   record('ended');stopWatchdog();closeFreeze('video-ended');
@@ -239,7 +239,7 @@ export function createGoalPlaybackController(video,{
    }
   });
  video.addEventListener('waiting',()=>{record('waiting');report('動画の読み込み中…');});
- video.addEventListener('stalled',()=>{record('stalled');report('読み込みが一時停止しています。下の「先頭から再生」も試せます。');});
+ video.addEventListener('stalled',()=>{record('stalled');report('動画の読み込みが一時停止しています。動画画面の▶で再開してください。');});
  video.addEventListener('error',()=>{
   record('error');
   const code=video.error?.code;

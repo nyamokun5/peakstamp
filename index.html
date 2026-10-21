@@ -185,19 +185,6 @@
         <strong id="goalStatsPlayingLabel"></strong>
         <video id="goalStatsPreview" controls playsinline preload="metadata" hidden aria-label="ゴール候補を確認する共通動画プレーヤー"></video>
         <p id="goalStatsVideoStatus" class="fine-print" role="status" aria-live="polite"></p>
-        <div class="goal-video-recovery">
-          <button id="goalStatsPrepare" type="button" class="whisper-run">ゴール位置に移動（再生せず）</button>
-          <button id="goalStatsPlayFromStart" type="button" class="whisper-run">▶ 先頭から通常再生</button>
-        </div>
-        <details class="goal-video-debug" id="goalStatsDiagnostics">
-          <summary>動画が止まる場合：再生状態を確認</summary>
-          <p class="fine-print">同じ位置で止まる場合、開始位置を変えて比較できます。「ゴール30秒前から再生」を試して、止まる動画内時刻が同じか確認してください。再生時刻と実際の表示フレーム、停止・復帰の履歴を記録します。元動画・選手名・実況内容は自動送信しません。</p>
-          <button id="goalStatsPlayEarlier" type="button" class="whisper-run">▶ ゴール30秒前から再生（比較テスト）</button>
-          <button id="goalStatsNativeFullscreen" type="button" class="whisper-run">iPhone標準フルスクリーンで比較する</button>
-          <p class="fine-print"><a href="./safari-video-isolation.html?v=46" target="_blank" rel="noopener">iPhone Safari単独テスト（v46）を開く ↗</a><br>PeakStampの編集・解析を使わない別ページで同じMOVの再生を比較します。動画はこのページで再選択してください。</p>
-          <button id="goalStatsCopyDebug" type="button" class="whisper-run">診断結果をコピー</button>
-          <textarea id="goalStatsDebugOutput" rows="7" readonly spellcheck="false" aria-label="再生状態の診断結果"></textarea>
-        </details>
       </div>
       <div id="goalStatsEditor" class="goal-review-editor"></div>
       <div class="goal-review-queue-head"><strong>すべてのゴール候補</strong><small>どの動画もここから直接選択できます</small></div>
@@ -501,6 +488,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=gemini-api45"></script>
+  <script type="module" src="app.mjs?v=gemini-api47"></script>
 </body>
 </html>
