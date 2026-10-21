@@ -52,61 +52,6 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   notify:s=>{$('goalStatsVideoStatus').textContent=s;},
   beforePlay:onBeforePlay
  });
- const debugOutput=$('goalStatsDebugOutput');
- function currentEntry(){return queue().find(row=>row.key===activeKey)||null;}
- $('goalStatsPlayEarlier').addEventListener('click',()=>{
-  const entry=currentEntry();if(!entry){say('まずゴール候補を選択してください。');return;}
-  seekTo(entry,{autoplay:true,leadSeconds:30});
-  $('goalStatsVideoStatus').textContent='ゴール30秒前からの比較再生中です。停止したら診断結果をコピーしてください。';
- });
- $('goalStatsNativeFullscreen').addEventListener('click',()=>{
-  const entry=currentEntry();
-  if(!entry){say('まずゴール候補を選択してください。');return;}
-  // The file is already loaded in the shared player. Avoid extra Blob copies.
-  if(!player.currentSourceKey()){
-   seekTo(entry,{autoplay:false});
-  }
-  viewer.hidden=false;
-  video.hidden=false;
-  try{
-   if(typeof video.webkitEnterFullscreen==='function' &&
-      video.webkitSupportsFullscreen!==false){
-    video.webkitEnterFullscreen();
-    say('iPhone標準のフルスクリーン再生を開きました。画面内再生と同じ位置で止まるか確認してください。');
-   }else if(typeof video.requestFullscreen==='function'){
-    const attempt=video.requestFullscreen();
-    if(attempt?.catch)attempt.catch(e=>say('フルスクリーンにできません：'+(e?.message||String(e))));
-   }else say('このブラウザでは標準フルスクリーンの呼び出しに対応していません。');
-  }catch(e){
-   say('標準フルスクリーンを開けません：'+(e?.message||String(e))+
-    '。動画の読み込み後、もう一度タップしてください。');
-  }
- });
- $('goalStatsPrepare').addEventListener('click',()=>{
-  const entry=currentEntry();if(!entry){say('まずゴール候補を選択してください。');return;}
-  seekTo(entry,{autoplay:false});
-  $('goalStatsVideoStatus').textContent='ゴール位置に移動しています。移動後、動画画面の▶で再生してください。';
- });
- $('goalStatsPlayFromStart').addEventListener('click',()=>{
-  const entry=currentEntry();if(!entry){say('まずゴール候補を選択してください。');return;}
-  const source=entry.source;
-  viewer.hidden=false;
-  player.open({sourceKey:goalSourceKey(source),sourceUrl:source.objectUrl,
-   at:0,autoplay:true,fromStart:true});
-  $('goalStatsVideoStatus').textContent='先頭からの通常再生を試しています。再生できればゴール位置への移動が停止原因の可能性があります。';
- });
- $('goalStatsCopyDebug').addEventListener('click',async()=>{
-  const entry=currentEntry();
-  const diag={...player.diagnostic(),
-   selectedGoalTime:entry?actualGoalTime(entry.item):null,
-   selectedCommentTime:entry?.item.origin==='audio'?Number(entry.item.timeSeconds):null,
-   browser:typeof navigator!=='undefined'?navigator.userAgent:'unknown'};
-  const text=JSON.stringify(diag,null,2);
-  debugOutput.value=text;
-  const copied=await copyCalloutJson(text,{textarea:debugOutput});
-  say(copied?'動画の再生診断をコピーしました。チャットに貼り付けてください。':
-   '診断を表示しました。テキスト欄を長押ししてコピーできます。');
- });
  function pausePlayback(){player.pause();}
  function disposeVideo(){player.dispose();viewer.hidden=true;}
  function seekTo(entry,{autoplay=false,leadSeconds=10}={}){
