@@ -7,6 +7,7 @@ import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
  confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=40';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextPendingGoal} from './goal-review-queue.mjs?v=40';
+import {createGoalPlaybackController} from './goal-playback.mjs?v=41';
 
 const $=id=>document.getElementById(id);
 const make=(tag,cls,text)=>{
@@ -45,61 +46,26 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
  const sources=()=>state.sources.filter(s=>s?.file&&s?.objectUrl);
  const goalData=s=>createGoalDrafts(s,cache());
  const queue=()=>collectGoalQueue(sources(),cache());
- let activeKey='',loadedSourceKey='',pendingSeek=null,lastVideoError='',videoRequest=0;
+ let activeKey='';
  const say=s=>{status.textContent=s;};
- function pausePlayback(){video.pause();}
- function disposeVideo(){
-  videoRequest++;
-  video.pause();video.removeAttribute('src');video.load();
-  video.hidden=true;loadedSourceKey='';pendingSeek=null;
- }
- // Single metadata listener for the whole session; never installed per card.
- video.addEventListener('loadedmetadata',()=>{
-  if(pendingSeek&&pendingSeek.sourceKey===loadedSourceKey){
-   try{video.currentTime=pendingSeek.time;}catch(_){}
-   pendingSeek=null;
-  }
+ const player=createGoalPlaybackController(video,{
+  notify:s=>{$('goalStatsVideoStatus').textContent=s;},
+  beforePlay:onBeforePlay
  });
- video.addEventListener('error',()=>{
-  lastVideoError='元動画の読み込みに失敗しました。ファイルを再選択して再試行してください。';
-  say(lastVideoError);
- });
- video.addEventListener('waiting',()=>{$('goalStatsVideoStatus').textContent='映像を読み込み中…';});
- video.addEventListener('playing',()=>{$('goalStatsVideoStatus').textContent='';});
- video.addEventListener('seeked',()=>{$('goalStatsVideoStatus').textContent='';});
-
+ function pausePlayback(){player.pause();}
+ function disposeVideo(){player.dispose();viewer.hidden=true;}
  function seekTo(entry,{autoplay=false}={}){
   if(!entry)return;
-  const {source,item}=entry,key=goalSourceKey(source);
-  const seek=Math.max(0,actualGoalTime(item)-10);
-  const switching=loadedSourceKey!==key;
-  if(switching){
-   videoRequest++;
-   video.pause();
-   pendingSeek={sourceKey:key,time:seek,request:videoRequest};
-   // Avoid multiple iOS decoder loads: set src/load ONCE per distinct file.
-   // src assignment itself starts loading; a second load() restarts Safari decoding.
-   video.preload='metadata';
-   video.src=source.objectUrl;
-   loadedSourceKey=key;
-  }else if(video.readyState>=1){
-   try{video.currentTime=seek;}catch(_){pendingSeek={sourceKey:key,time:seek,request:videoRequest};}
-  }else{
-   pendingSeek={sourceKey:key,time:seek,request:videoRequest};
-  }
-  video.hidden=false;viewer.hidden=false;
+  const {source,item}=entry;
+  // Safari suspends media loading while parent is display:none or hidden.
+  // Unhide first, then set src and start playing from this user interaction.
+  viewer.hidden=false;
   label.textContent=source.file.name+' · ゴール '+fmt(actualGoalTime(item))+
    '（実況 '+(item.origin==='audio'?fmt(item.timeSeconds):'手動追加')+'）';
-  if(autoplay){
-   onBeforePlay();
-   try{
-    // Invoke play() synchronously from the originating click for iOS gesture permission.
-    const attempt=video.play();
-    if(attempt?.catch)attempt.catch(()=>{
-     $('goalStatsVideoStatus').textContent='再生を開始できませんでした。動画の▶をタップしてください。';
-    });
-   }catch(_){$('goalStatsVideoStatus').textContent='動画の▶をタップして再生してください。';}
-  }else video.pause();
+  player.open({
+   sourceKey:goalSourceKey(source),sourceUrl:source.objectUrl,
+   at:Math.max(0,actualGoalTime(item)-10),autoplay
+  });
  }
  function locate(key){
   return queue().find(row=>row.key===key)||null;
@@ -171,12 +137,12 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   const useVideo=make('button','goal-review-mark-button','⏱ 動画の停止位置をゴール時刻にする');
   useVideo.type='button';
   useVideo.addEventListener('click',()=>{
-   if(loadedSourceKey!==goalSourceKey(source)||video.readyState<1||
+   if(player.currentSourceKey()!==goalSourceKey(source)||video.readyState<1||
       !Number.isFinite(video.currentTime)){
     say('先にこのゴールの動画を再生してください。');return;
    }
    const at=Math.round(video.currentTime*10)/10;
-   video.pause();
+   player.pause();
    changeTime(at);
    say('ゴール時刻を '+fmt(at)+' に調整しました。');
   });
@@ -218,7 +184,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
     focusActive(next,{autoplay:true});
     say('ゴールを確定しました。次の未確定候補に進みました。');
    }else{
-    video.pause();activeKey='__all_done__';render();
+    player.pause();activeKey='__all_done__';render();
     summary.scrollIntoView({behavior:'auto',block:'start'});
     say('ゴールを確定しました。未確定候補はありません。');
    }
@@ -250,7 +216,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   if(!all.length){
    disposeVideo();list.replaceChildren();editor.replaceChildren();return;
   }
-  if(loadedSourceKey&&!all.some(s=>goalSourceKey(s)===loadedSourceKey))disposeVideo();
+  if(player.currentSourceKey()&&!all.some(s=>goalSourceKey(s)===player.currentSourceKey()))disposeVideo();
   const pending=entries.filter(row=>row.item.status==='draft').length;
   const confirmed=entries.filter(row=>row.item.status==='confirmed').length;
   const excluded=entries.filter(row=>row.item.status==='excluded').length;
@@ -263,7 +229,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
    activeKey=entries.find(row=>row.item.status==='draft').key;
   if(!previous && !activeKey)activeKey=(entries.find(row=>row.item.status==='draft')||entries[0])?.key||'';
   const active=entries.find(row=>row.key===activeKey);
-  if(!active){viewer.hidden=true;video.pause();}
+  if(!active){viewer.hidden=true;player.pause();}
   renderEditor(active);
   const cards=[];
   for(const [index,entry] of entries.entries()){
@@ -289,7 +255,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
    editor.replaceChildren();
    editor.append(make('p','goal-review-meta',
     'まだゴール候補がありません。音声の実況解析を実行するか、手動で追加してください。'));
-   viewer.hidden=true;video.pause();
+   viewer.hidden=true;player.pause();
   }
   // A single video stays mounted above the editor, even when many cards change.
   // Never reload the same MOV just because the summary or fields were edited.

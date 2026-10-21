@@ -1,0 +1,96 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createGoalPlaybackController} from '../goal-playback.mjs';
+
+function setup(){
+ const calls={plays:0,loads:0,paused:0,logs:[],before:0};
+ const events=new Map();
+ const video={
+  hidden:true,paused:true,seeking:false,readyState:0,currentTime:0,
+  error:null,preload:'metadata',src:'',
+  setAttribute(){},
+  addEventListener(name,fn){events.set(name,fn)},
+  pause(){this.paused=true;calls.paused++},
+  load(){calls.loads++},
+  removeAttribute(name){if(name==='src')this.src=''},
+  play(){
+   calls.plays++;
+   if(calls.nextFailure){
+    const e=calls.nextFailure;calls.nextFailure=null;
+    return Promise.reject(e);
+   }
+   this.paused=false;
+   return Promise.resolve();
+  }
+ };
+ const playback=createGoalPlaybackController(video,{
+  notify:x=>calls.logs.push(x),beforePlay:()=>calls.before++
+ });
+ return {calls,events,video,playback,fire:(type)=>events.get(type)?.()};
+}
+const tick=async()=>{await Promise.resolve();await Promise.resolve();await Promise.resolve()};
+test('show before source assignment, wait for new metadata, and invoke play from click',async()=>{
+ const {calls,video,playback,fire}=setup();
+ playback.open({sourceKey:'A',sourceUrl:'blob:a',at:359.2,autoplay:true});
+ assert.equal(video.hidden,false);
+ assert.equal(video.src,'blob:a');
+ assert.equal(video.preload,'auto');
+ assert.equal(calls.plays,1);
+ assert.equal(calls.before,1);
+ assert.equal(calls.loads,0);
+ assert.equal(video.currentTime,0);
+ video.readyState=1;fire('loadedmetadata');
+ assert.equal(video.currentTime,359.2);
+ await tick();
+ playback.open({sourceKey:'A',sourceUrl:'blob:a',at:360,autoplay:true});
+ assert.equal(calls.plays,2);
+ assert.equal(calls.loads,0);
+ assert.equal(video.src,'blob:a');
+ assert.equal(video.currentTime,360);
+ playback.open({sourceKey:'B',sourceUrl:'blob:b',at:97.5,autoplay:true});
+ assert.equal(video.src,'blob:b');
+ assert.equal(video.currentTime,360,'old metadata must not be used on source change');
+ fire('loadedmetadata');
+ assert.equal(video.currentTime,97.5);
+});
+test('AbortError on initial play is retried after seeked/canplay, not in a tight loop',async()=>{
+ const {calls,video,playback,fire}=setup();
+ calls.nextFailure={name:'AbortError',message:'interrupted'};
+ playback.open({sourceKey:'A',sourceUrl:'blob:a',at:100,autoplay:true});
+ assert.equal(calls.plays,1);
+ await tick();
+ assert.equal(calls.plays,1,'do not retry until metadata/canplay');
+ video.readyState=1;video.seeking=true;fire('loadedmetadata');
+ video.readyState=3;fire('canplay');
+ assert.equal(calls.plays,1,'do not retry while seeking');
+ video.seeking=false;fire('seeked');
+ assert.equal(calls.plays,2,'retry after seek finishes');
+ await tick();
+ assert.equal(video.paused,false);
+ assert.match(calls.logs.join(' '),/再生を再試行/);
+});
+test('NotAllowedError leaves native controls usable without automatic retry',async()=>{
+ const {calls,video,playback,fire}=setup();
+ calls.nextFailure={name:'NotAllowedError'};
+ playback.open({sourceKey:'A',sourceUrl:'blob:a',at:5,autoplay:true});
+ await tick();
+ video.readyState=3;fire('loadedmetadata');fire('canplay');
+ assert.equal(calls.plays,1);
+ assert.match(calls.logs.at(-1),/▶/);
+ assert.equal(video.hidden,false);
+ playback.open({sourceKey:'A',sourceUrl:'blob:a',at:4,autoplay:true});
+ await tick();
+ assert.equal(calls.plays,2,'direct second tap can try again');
+});
+test('file or codec problems show specific diagnostic instead of silent failure',async()=>{
+ const {calls,video,playback,fire}=setup();
+ playback.open({sourceKey:'A',sourceUrl:'blob:a',at:10,autoplay:false});
+ video.error={code:4};
+ fire('error');
+ assert.match(calls.logs.at(-1),/MOVの形式/);
+ playback.pause();
+ assert.equal(video.paused,true);
+ playback.dispose();
+ assert.equal(calls.loads,1,'load is only used when clearing src');
+ assert.equal(playback.currentSourceKey(),'');
+});
