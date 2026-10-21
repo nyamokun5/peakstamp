@@ -109,9 +109,12 @@ test('obsolete bottom sticky Settings and Create buttons are removed',()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const css=readFileSync(new URL('../styles.css',import.meta.url),'utf8');
  const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
- assert.doesNotMatch(html,/id="stickyBar"|id="stickySettings"|id="stickyExport"/);
+ assert.equal(html.includes('id="stickyBar"'),false);
+ assert.equal(html.includes('id="stickySettings"'),false);
+ assert.equal(html.includes('id="stickyExport"'),false);
  assert.doesNotMatch(app,/stickyBar|stickySettings|stickyExport|updateStickyBar/);
- assert.doesNotMatch(css,/sticky-review-bar|body:has\\(\\.sticky-review/);
+ assert.equal(css.includes('sticky-review-bar'),false);
+ assert.equal(css.includes('body:has(.sticky-review'),false);
  assert.match(html,/id="montageExport"/);
- assert.match(css,/bottom:calc\\(8px \\+ env\\(safe-area-inset-bottom,0px\\)\\)/);
+ assert.ok(css.includes('bottom:calc(8px + env(safe-area-inset-bottom,0px))'));
 });
