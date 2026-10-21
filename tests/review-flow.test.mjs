@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, judgeScene, restoreJudgment,
-  nextUndecided, orderedScenes, visibleScenes, replayBounds } from '../review-flow.mjs';
+  nextUndecided, orderedScenes, visibleScenes, replayBounds, reviewUndoClearance } from '../review-flow.mjs';
 import { getCandidateEnd } from '../editing-rules.mjs';
 
 const source=(id, candidates)=>({
@@ -87,4 +87,13 @@ test('last kept or rejected scene leaves no undecided successor for export',()=>
   judgeScene(b,outcome);
   assert.equal(nextUndecided(sources,b),null);
  }
+});
+
+test('Undo below next scene never covers replay/keep/reject when card is nudged',()=>{
+ const actions={left:10,right:370,top:600,bottom:652};
+ const undo={left:8,right:372,top:630,bottom:697};
+ assert.equal(reviewUndoClearance(actions,undo),34);
+ assert.equal(reviewUndoClearance({...actions,top:566,bottom:618},undo),0);
+ assert.equal(reviewUndoClearance(actions,{...undo,left:500,right:620}),0);
+ assert.equal(reviewUndoClearance(actions,null),0);
 });
