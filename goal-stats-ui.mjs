@@ -257,7 +257,6 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
    onUpdate();
   });
   actions.append(confirm,reject);
-  editor.append(actions);
   // Video selection happens HERE. No second Keep/Reject in the normal list.
   // Score confirmation and clip inclusion are intentionally independent.
   const videoActions=make('div','goal-review-video-actions');
@@ -280,7 +279,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   videoKeep.addEventListener('click',()=>setVideoDecision(entry,'kept'));
   videoReject.addEventListener('click',()=>setVideoDecision(entry,'rejected'));
   videoActions.append(videoKeep,videoReject);
-  editor.append(videoStatus,videoActions);
+  editor.append(videoStatus,videoActions,actions);
  }
  function render(){
   const all=sources(),entries=queue();
