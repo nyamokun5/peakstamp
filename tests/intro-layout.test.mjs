@@ -158,3 +158,19 @@ test('very long movable titles remain within 90 percent canvas width',()=>{
   assert.ok(bounds.width<=288 && bounds.left>=0 && bounds.left+bounds.width<=320);
   assert.equal(context.call[3],288);
 });
+
+test('intro titles are solid bright white with dark contrast outline',()=>{
+ const calls=[];
+ const ctx={
+  save:()=>calls.push('save'),restore:()=>calls.push('restore'),
+  measureText:()=>({width:230}),
+  strokeText:()=>calls.push(['stroke',ctx.strokeStyle,ctx.lineWidth]),
+  fillText:()=>calls.push(['fill',ctx.fillStyle]),
+ };
+ drawIntro(ctx,640,360,'GOALS!',{skipBackground:true,font:'impact'});
+ assert.deepEqual(calls.map(x=>Array.isArray(x)?x[0]:x),['save','stroke','fill','restore']);
+ assert.equal(calls[2][1],'#ffffff');
+ assert.equal(calls[1][1],'#071320');
+ assert.ok(calls[1][2]>=2);
+});
+
