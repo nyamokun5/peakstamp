@@ -1,4 +1,4 @@
-import {goalSceneBounds,goalSceneZoom} from './goal-scene-edit.mjs?v=goal53';
+import {goalSceneBounds,goalSceneZoom} from './goal-scene-edit.mjs?v=commentary61';
 /** Goal video judgment uses the same candidate collection as other highlights,
  * but its acceptance/rejection happens directly inside the goal review UI.
  * Goal score confirmation remains a distinct operation.
