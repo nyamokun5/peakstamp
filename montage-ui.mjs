@@ -1,5 +1,5 @@
 import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=title51';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=peak52';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=goal54';
 import { formatTime } from './detector.mjs';
 import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=title51';
 
@@ -82,7 +82,9 @@ function setTitle(value) {
 
 export function updateMontageEditor(state) {
   activeState = state;
-  const visible = Boolean(state?.file && state?.bins);
+  const visible = Boolean(state?.file && (state?.bins ||
+    state.sources?.some(source=>Number(source.duration)>0 &&
+      (source.candidates||[]).some(c=>c.enabled===true&&c.goalRecordId))));
   $('montagePanel').hidden = !visible;
   if (lastFile && state.file !== lastFile) revokeOutput();
   lastFile = state?.file || null;
