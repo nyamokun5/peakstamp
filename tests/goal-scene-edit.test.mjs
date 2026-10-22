@@ -1,12 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {goalSceneBounds,goalSceneZoom,setGoalSceneEdge} from '../goal-scene-edit.mjs';
+import {goalSceneBounds,goalSceneZoom,setGoalSceneEdge,goalSceneReferenceTime} from '../goal-scene-edit.mjs';
 
-test('goal candidates default to 4 seconds before goal and 2 seconds after',()=>{
+test('audio-derived goal video defaults to spoken commentary -5 seconds through +2 seconds',()=>{
+ const g={origin:'audio',timeSeconds:75,goalTimeSeconds:65};
+ assert.equal(goalSceneReferenceTime(g),75);
+ assert.deepEqual(goalSceneBounds(g,100),{start:70,end:77});
+ // Adjusting actual scoring time must NOT silently move the clip away from
+ // the fixed, separately recorded original commentary timestamp.
+ assert.deepEqual(goalSceneBounds({...g,goalTimeSeconds:63.5},100),{start:70,end:77});
+});
+test('commentary cut handles source start/end and short files',()=>{
+ const g={origin:'audio',timeSeconds:1,goalTimeSeconds:0};
+ assert.deepEqual(goalSceneBounds(g,20),{start:0,end:3});
+ assert.deepEqual(goalSceneBounds({...g,timeSeconds:19},20),{start:14,end:20});
+ assert.deepEqual(goalSceneBounds({...g,timeSeconds:1},2),{start:0,end:2});
+});
+test('manual goals without commentary fall back to manually marked goal -5/+2',()=>{
  const g={origin:'manual',goalTimeSeconds:60,timeSeconds:60};
- assert.deepEqual(goalSceneBounds(g,100),{start:56,end:62});
+ assert.equal(goalSceneReferenceTime(g),60);
+ assert.deepEqual(goalSceneBounds(g,100),{start:55,end:62});
  assert.deepEqual(goalSceneBounds({...g,goalTimeSeconds:1},100),{start:0,end:3});
- assert.deepEqual(goalSceneBounds({...g,goalTimeSeconds:99},100),{start:95,end:100});
+ assert.deepEqual(goalSceneBounds({...g,goalTimeSeconds:99},100),{start:94,end:100});
 });
 test('manually trimmed goals keep their bounds even when goal timestamp changes',()=>{
  const g={origin:'audio',timeSeconds:75,goalTimeSeconds:65,
