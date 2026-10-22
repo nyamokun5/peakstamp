@@ -1,5 +1,5 @@
 import { DISSOLVE_SECONDS, dissolveFrames, dissolveOverlap, normalizeFont, normalizeSize, FONT_CHOICES, zoomDrawRect } from './editing-rules.mjs?v=pinch18';
-import { coverRect, drawCover, drawIntroOverlay, normalizeIntroPoint, prepareIntroPlan, introOverlayOpacity, INTRO_SECONDS as INTRO_LENGTH } from './intro-layout.mjs?v=scene15';
+import { coverRect, drawCover, drawIntroOverlay, normalizeIntroPoint, prepareIntroPlan, introOverlayOpacity, introOverlayActive, INTRO_SECONDS as INTRO_LENGTH } from './intro-layout.mjs?v=title62';
 /**
  * PeakStamp: automatic highlight montage with a 5-second title card.
  * Only processes an explicitly selected local file, never uploads it.
@@ -333,9 +333,11 @@ export async function exportMontage({
           } else {
             sample.draw(context, dx, dy, dw, dh);
           }
-          if (overlayFirstScene && section===0) {
-            // Fading white lettering makes it appear gray against the
-            // underlying video. Keep text opaque; preserve PNG fade effects.
+          if (overlayFirstScene && section===0 &&
+              introOverlayActive(frame,settings.frameRate,prepared.overlaySeconds)) {
+            // Text AND PNG belong only to the opening title window (3s).
+            // Previously white text stayed on every frame of the first clip.
+            // Keep text opaque and preserve optional PNG's original fade.
             const opacity=intro?.overlayImage
               ? introOverlayOpacity(frame/settings.frameRate,prepared.overlaySeconds):1;
             if(opacity>0){

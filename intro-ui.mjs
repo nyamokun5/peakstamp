@@ -1,6 +1,6 @@
-import { drawIntro, introTitleRect } from './exporter.mjs?v=title51';
+import { drawIntro, introTitleRect } from './exporter.mjs?v=title62';
 import { zoomDrawRect } from './editing-rules.mjs?v=pinch18';
-import { overlayRect, normalizeIntroPoint, imageDimensions, prepareIntroPlan, introOverlayOpacity } from './intro-layout.mjs?v=scene15';
+import { overlayRect, normalizeIntroPoint, imageDimensions, prepareIntroPlan, introOverlayOpacity } from './intro-layout.mjs?v=title62';
 
 const $=id=>document.getElementById(id);
 const fileSignature=f=>f?[f.name,f.size,f.lastModified]:null;

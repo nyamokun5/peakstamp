@@ -1,7 +1,7 @@
-import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=title51';
+import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=title62';
 import { buildMultiClipPlan } from './multi-plan.mjs?v=goal54';
 import { formatTime } from './detector.mjs';
-import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=title51';
+import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=title62';
 
 const $ = id => document.getElementById(id);
 function clipOptions(){return {mode:'peak'};}
