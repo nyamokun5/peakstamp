@@ -50,3 +50,30 @@ test('generated video chapters account for 5-second title and selected clips', (
 test('empty selection returns empty chapter text',()=>{
   assert.equal(montageChapters([], 'GOALS!'),'');
 });
+
+test('default export plan uses the same peak minus 4/plus 2 as scene preview',()=>{
+ const source=file('A','game.mov',100,[
+  {time:21,peakSeconds:25,manualEnd:null,enabled:true},
+  {time:56,peakSeconds:60,manualEnd:null,enabled:true},
+ ]);
+ assert.deepEqual(buildMultiClipPlan([source]),[
+  {sourceId:'A',sourceName:'game.mov',start:21,end:27},
+  {sourceId:'A',sourceName:'game.mov',start:56,end:62}
+ ]);
+ const edited=file('B','edited.mov',100,[
+  {time:18,peakSeconds:25,manualEnd:34,enabled:true}
+ ]);
+ assert.deepEqual(buildMultiClipPlan([edited]),[
+  {sourceId:'B',sourceName:'edited.mov',start:18,end:34}
+ ]);
+});
+test('default plan handles peak within four seconds of the video boundaries',()=>{
+ const source=file('A','short.mov',20,[
+  {time:0,peakSeconds:1,enabled:true},
+  {time:15,peakSeconds:19,enabled:true}
+ ]);
+ assert.deepEqual(buildMultiClipPlan([source]),[
+  {sourceId:'A',sourceName:'short.mov',start:0,end:3},
+  {sourceId:'A',sourceName:'short.mov',start:15,end:20}
+ ]);
+});
