@@ -269,8 +269,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   videoKeep.disabled=!(Number(source.duration)>0);
   videoKeep.setAttribute('aria-pressed',String(decision==='kept'));
   videoReject.setAttribute('aria-pressed',String(decision==='rejected'));
-  videoKeep.classList.toggle('is-active',decision==='kept');
-  videoReject.classList.toggle('is-active',decision==='rejected');
+  videoKeep.className='goal-review-video-keep'+(decision==='kept'?' is-active':'');
+  videoReject.className='goal-review-video-reject'+(decision==='rejected'?' is-active':'');
   videoStatus.textContent=decision==='kept'
    ?'動画：キープ済み（完成ハイライトに自動追加）'
    :decision==='rejected'
