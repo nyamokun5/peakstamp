@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initGoalStatsReview} from '../goal-stats-ui.mjs';
 import {createGoalDrafts,goalSourceKey,confirmedGoalExport} from '../goal-stats.mjs';
+import {keepGoalClip,rejectGoalClip} from '../goal-video-clip.mjs';
 
 const ids=[
  'goalStatsPanel','goalStatsList','goalStatsEditor','goalStatsSummary','goalStatsStatus',
@@ -85,7 +86,7 @@ function find(node,cls){
  const queue=[node];
  while(queue.length){
   const child=queue.shift();
-  if(child.className===cls)return child;
+  if(child.className===cls||(!cls.includes(' ')&&String(child.className).split(/\s+/).includes(cls)))return child;
   queue.push(...child.children);
  }
  return null;
@@ -231,5 +232,61 @@ test('scrub playhead release seeks once to chosen time and plays with the shared
   await Promise.resolve();
   assert.equal(stats.loads,before);
   assert.equal(stats.plays,plays+1);
+ }finally{restore()}
+});
+
+test('video can be kept or rejected inside goal editor without second review',async()=>{
+ const {dom,storage,one,restore}=setup();
+ try{
+  const calls={kept:0,rejected:0};
+  initGoalStatsReview({sources:[one]},{
+   onKeepClip:(source,item)=>{calls.kept++;return Boolean(keepGoalClip(source,item));},
+   onRejectClip:(source,item)=>{calls.rejected++;return rejectGoalClip(source,item);}
+  });
+  dom.goalStatsList.children[0].events.click();
+  await Promise.resolve();
+  const keep=find(dom.goalStatsEditor,'goal-review-video-keep');
+  const reject=find(dom.goalStatsEditor,'goal-review-video-reject');
+  assert.ok(keep&&reject);
+  assert.equal(find(dom.goalStatsEditor,'goal-review-keep-clip'),null);
+  assert.equal(keep.disabled,false);
+  assert.equal(createGoalDrafts(one,storage).items[0].status,'draft');
+  keep.events.click();
+  assert.equal(calls.kept,1);
+  assert.equal(one.candidates.length,1);
+  assert.equal(one.candidates[0].enabled,true);
+  assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
+  assert.equal(createGoalDrafts(one,storage).items[0].status,'draft',
+   'scoring confirmation is independent of video acceptance');
+  assert.equal(find(dom.goalStatsEditor,'goal-review-video-keep').className.includes('is-active'),true);
+  find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
+  assert.equal(calls.rejected,1);
+  assert.equal(one.candidates[0].enabled,false);
+  assert.equal(one.candidates[0].rejected,true);
+  assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'rejected');
+  assert.equal(one.candidates.length,1);
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  assert.equal(one.candidates.length,1,'Keep after Reject reuses the same candidate');
+  assert.equal(one.candidates[0].enabled,true);
+ }finally{restore()}
+});
+test('changing a kept goal crop updates the same export candidate immediately',async()=>{
+ const {dom,storage,one,restore}=setup();
+ try{
+  const updates=[];
+  initGoalStatsReview({sources:[one]},{
+   onKeepClip:(source,item)=>Boolean(keepGoalClip(source,item)),
+   onRejectClip:rejectGoalClip,
+   onClipEdit:(source,item)=>{updates.push(item.clipStartSeconds);keepGoalClip(source,item);}
+  });
+  dom.goalStatsList.children[0].events.click();
+  await Promise.resolve();
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  const input=find(dom.goalStatsViewer,'range-time');
+  input.value='06:03.0';input.events.change();
+  assert.deepEqual(updates,[363]);
+  assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,363);
+  assert.equal(one.candidates[0].time,363);
+  assert.equal(one.candidates[0].manualEnd,371.2);
  }finally{restore()}
 });

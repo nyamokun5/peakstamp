@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {goalSourceKey,createGoalDrafts,saveGoalDrafts,estimateGoalTime,
  actualGoalTime,confirmedGoalExport} from '../goal-stats.mjs';
-import {keepGoalClip} from '../goal-video-clip.mjs';
+import {keepGoalClip,rejectGoalClip,syncGoalClipDecisions} from '../goal-video-clip.mjs';
 
 const src=()=>({id:'video-1',file:{name:'IMG_5292.mov',size:591367587,lastModified:1792283825000},
  duration:450.752,bins:[{rms:.01}],candidates:[]});
@@ -79,14 +79,17 @@ test('normal scene matching goal is reused instead of duplicating clip',()=>{
  assert.equal(candidate.enabled,true);
  assert.equal(candidate.rejected,false);
  assert.equal(candidate.time,365.2);
- // Reused scene already extends 2.8 seconds beyond the new target; do not trim it.
- assert.equal(candidate.manualEnd,382);
+ // Reviewing the goal here sets the same exact cut used for MP4 export.
+ assert.equal(candidate.manualEnd,371.2);
 });
-test('no waveform never adds empty clips; goal review still exists',()=>{
+test('goal candidate is accepted directly even before regular waveform scan',()=>{
  const source=src(),store=makeStore();put(source,store);
  source.bins=null;
- assert.equal(keepGoalClip(source,createGoalDrafts(source,store).items[0]),null);
- assert.equal(source.candidates.length,0);
+ const clip=keepGoalClip(source,createGoalDrafts(source,store).items[0]);
+ assert.equal(clip.enabled,true);
+ assert.equal(clip.time,365.2);
+ assert.equal(clip.manualEnd,371.2);
+ assert.equal(source.candidates.length,1);
 });
 
 test('per-goal trim and pinch zoom are saved when adding the goal to MP4 highlights',()=>{
@@ -120,4 +123,53 @@ test('already-kept unrelated highlight does not have its trim overwritten by goa
  assert.equal(existing.time,56);
  assert.equal(existing.manualEnd,73);
  assert.equal(existing.zoom,1.5);
+});
+
+test('direct goal video rejection suppresses overlapping unjudged proposal',()=>{
+ const source=src(),goal={id:'goal-1',origin:'manual',goalTimeSeconds:40,timeSeconds:40};
+ source.candidates=[{id:'ordinary',time:33,peakSeconds:40,manualEnd:null,
+   enabled:false,rejected:false}];
+ assert.equal(rejectGoalClip(source,goal),true);
+ assert.equal(source.candidates.length,1);
+ assert.equal(source.candidates[0].enabled,false);
+ assert.equal(source.candidates[0].rejected,true);
+ assert.equal(source.candidates[0].goalRecordId,'goal-1');
+ assert.equal(keepGoalClip(source,goal),source.candidates[0]);
+ assert.equal(source.candidates.length,1);
+ assert.equal(source.candidates[0].enabled,true);
+ assert.equal(source.candidates[0].rejected,false);
+ assert.equal(source.candidates[0].time,36);
+ assert.equal(source.candidates[0].manualEnd,42);
+});
+test('rejecting a goal never removes an independently kept regular highlight',()=>{
+ const source=src(),goal={id:'goal-2',origin:'manual',goalTimeSeconds:40,timeSeconds:40};
+ source.candidates=[{id:'original',time:30,peakSeconds:40,manualEnd:51,
+    enabled:true,rejected:false,zoom:1.4}];
+ assert.equal(keepGoalClip(source,goal),source.candidates[0]);
+ assert.equal(rejectGoalClip(source,goal),true);
+ assert.equal(source.candidates[0].enabled,true);
+ assert.equal(source.candidates[0].rejected,false);
+ assert.equal(source.candidates[0].manualEnd,51);
+});
+test('saved goal video decisions restore after audio rescans without duplicates',()=>{
+ const source=src();
+ const kept={id:'g1',origin:'manual',goalTimeSeconds:70,timeSeconds:70,
+  videoDecision:'kept',clipStartSeconds:63,clipEndSeconds:73,
+  clipZoom:1.8,clipZoomX:.7,clipZoomY:.4};
+ const rejected={id:'g2',origin:'manual',goalTimeSeconds:130,timeSeconds:130,
+  videoDecision:'rejected'};
+ syncGoalClipDecisions(source,[kept,rejected]);
+ assert.equal(source.candidates.length,1);
+ assert.equal(source.candidates[0].time,63);
+ assert.equal(source.candidates[0].manualEnd,73);
+ source.candidates=[{id:'new-audio-1',peakSeconds:69,time:65,enabled:false,rejected:false},
+   {id:'new-audio-2',peakSeconds:130,time:126,enabled:false,rejected:false}];
+ syncGoalClipDecisions(source,[kept,rejected]);
+ assert.equal(source.candidates.length,2);
+ assert.equal(source.candidates[0].enabled,true);
+ assert.equal(source.candidates[0].zoom,1.8);
+ assert.equal(source.candidates[1].enabled,false);
+ assert.equal(source.candidates[1].rejected,true);
+ syncGoalClipDecisions(source,[kept,rejected]);
+ assert.equal(source.candidates.length,2,'repeat reconciliation never duplicates');
 });
