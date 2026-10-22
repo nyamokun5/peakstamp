@@ -13,6 +13,9 @@ export function createGoalPlaybackController(video,{
  let activeKey='',activeUrl='',wantedTime=0,pendingSeek=false,wantsPlayback=false;
  let requestId=0,playPending=false,retryNeeded=false,denied=false,retries=0;
  let seekingOwnJump=false,expectResume=false,fromBeginning=false,progressWatch=0;
+ // iPhone Safari may begin playback at t=0 if play() beats metadata/seek.
+ // Prime the desired position before playback and verify the first frames.
+ let initialTargetVerified=false,targetCorrectionCount=0;
  let lastProgress=0,lastEvent='init',lastMessage='',lastFailure='';
  let frameCallbackId=null,decodedFrames=0,lastFrameAt=null,lastFrameMediaTime=null;
  let lastFramePresentedCount=null,lastVisibilityAt=null,visibilityChanges=0;
@@ -122,10 +125,32 @@ export function createGoalPlaybackController(video,{
   if(name==='AbortError')return '再生位置の移動で一時停止しました。再生を再試行します。';
   return '動画を再生できませんでした（'+(name||e?.message||'不明なエラー')+'）。動画画面の▶をお試しください。';
  }
+ function primeTargetBeforeMetadata(){
+  if(!pendingSeek||fromBeginning||video.readyState>=1)return;
+  // Per HTMLMediaElement semantics, setting currentTime before metadata can
+  // establish the default playback start position. Safari sometimes ignores
+  // this early assignment, so the loadedmetadata handler still retries.
+  try{
+   video.currentTime=wantedTime;
+   record('target-primed');
+  }catch(_){record('target-await-metadata');}
+ }
  function seek(){
   if(!pendingSeek||video.readyState<1)return false;
   try{
    if(fromBeginning){pendingSeek=false;return true;}
+   if(Math.abs((Number(video.currentTime)||0)-wantedTime)<.08){
+    // The pre-metadata assignment may itself still be seeking on Safari.
+    // Remember that play() can pause during this pending deep jump.
+    if(video.seeking&&wantsPlayback){
+     seekingOwnJump=true;
+     expectResume=true;
+     retryNeeded=true;
+    }
+    pendingSeek=false;
+    record('target-already-set');
+    return true;
+   }
    seekingOwnJump=true;expectResume=wantsPlayback;
    video.currentTime=wantedTime;
    pendingSeek=false;
@@ -135,6 +160,26 @@ export function createGoalPlaybackController(video,{
    if(!denied)report(video.seeking?'ゴール位置に移動中…':'');
    return true;
   }catch(_){report('動画の位置を調整しています…');return false;}
+ }
+ function ensureGoalStart(){
+  if(fromBeginning||!wantsPlayback||initialTargetVerified||wantedTime<.75)return;
+  if(video.readyState<1){primeTargetBeforeMetadata();return;}
+  if(video.seeking)return;
+  const clock=Number(video.currentTime)||0;
+  if(clock>=wantedTime-.35){
+   initialTargetVerified=true;
+   return;
+  }
+  // Some iOS MOVs reset to 0 on play() even if a prior seek succeeded.
+  // Never accept a playback start minutes before the selected goal.
+  if(targetCorrectionCount>=3){
+   report('ゴール位置に移動できませんでした。もう一度▶ リプレイを押してください。');
+   return;
+  }
+  targetCorrectionCount++;
+  pendingSeek=true;
+  seek();
+  record('target-start-recovered');
  }
  function startPlay(token,{userGesture=false}={}){
   if(token!==requestId||!wantsPlayback||playPending||denied)return;
@@ -190,11 +235,15 @@ export function createGoalPlaybackController(video,{
  video.addEventListener('seeked',()=>{
   record('seeked');
   seekingOwnJump=false;
+  ensureGoalStart();
   retryWhenReady();
   if(!video.paused)report('');
  });
  video.addEventListener('playing',()=>{
-  record('playing');retryNeeded=false;lastProgress=Number(video.currentTime)||0;report('');
+  record('playing');retryNeeded=false;
+  ensureGoalStart();
+  lastProgress=Number(video.currentTime)||0;
+  if(!pendingSeek)report('');
   playingStartedAt=timeNow();playingStartPosition=Number(video.currentTime)||0;
   startWatchdog();
   // A resolved play() promise can still leave an iOS video frozen on one frame.
@@ -212,6 +261,7 @@ export function createGoalPlaybackController(video,{
   },3000);
  });
  video.addEventListener('timeupdate',()=>{
+  ensureGoalStart();
   const time=Number(video.currentTime)||0;
   if(Math.abs(time-lastProgress)>.2){lastProgress=time;record('timeupdate');}
  });
@@ -265,6 +315,8 @@ export function createGoalPlaybackController(video,{
   fromBeginning=Boolean(fromStart);
   wantedTime=fromBeginning?0:Math.max(0,Number(at)||0);
   pendingSeek=!fromBeginning;wantsPlayback=Boolean(autoplay);
+  initialTargetVerified=fromBeginning||wantedTime<.75;
+  targetCorrectionCount=0;
   seekingOwnJump=false;expectResume=false;
   playPending=false;retryNeeded=false;denied=false;retries=0;
   record(fromBeginning?'open-from-start':'open-goal');
@@ -286,7 +338,12 @@ export function createGoalPlaybackController(video,{
   }
   // On a new src, wait for its metadata: readyState may still describe
   // the previous source during Safari's media-resource reset.
-  if(!switching&&!fromBeginning)seek();
+  if(!fromBeginning){
+   // Even on the first load, prime the deep goal timestamp *before* play().
+   // On iPhone Safari waiting until loadedmetadata can allow t=0 playback.
+   if(video.readyState<1)primeTargetBeforeMetadata();
+   else if(!switching)seek();
+  }
   if(autoplay){
    report('動画を準備しています…');
    startPlay(token,{userGesture:true});

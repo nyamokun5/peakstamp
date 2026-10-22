@@ -38,7 +38,8 @@ test('show before source assignment, wait for new metadata, and invoke play from
  assert.equal(calls.plays,1);
  assert.equal(calls.before,1);
  assert.equal(calls.loads,0);
- assert.equal(video.currentTime,0);
+ assert.equal(video.currentTime,359.2,
+  'deep goal timestamp is armed even before the video reports metadata');
  video.readyState=1;fire('loadedmetadata');
  assert.equal(video.currentTime,359.2);
  await tick();
@@ -291,4 +292,53 @@ test('freeze anchor tracks most recently displayed frame rather than progressing
  assert.equal(diag.frameFreezeHistory[0].suspectedMediaPosition,360.1);
  assert.equal(diag.frameFreezeHistory[0].playbackTime,364.5);
  controller.pause();
+});
+
+test('Safari replay primes selected clip time before synchronous play on an unloaded MOV',async()=>{
+ const {calls,video,playback,fire}=setup();
+ let positionAtPlay=null;
+ video.play=function(){
+  calls.plays++;
+  positionAtPlay=this.currentTime;
+  this.paused=false;
+  return Promise.resolve();
+ };
+ playback.open({sourceKey:'IMG_5293',sourceUrl:'blob:large-mov',
+  at:110.5,autoplay:true});
+ assert.equal(positionAtPlay,110.5,
+  'the first play request is made with the goal timestamp, never t=0');
+ video.readyState=1;fire('loadedmetadata');
+ await tick();
+ assert.equal(video.currentTime,110.5);
+ assert.equal(playback.diagnostic().targetTime,110.5);
+});
+test('Safari reset to beginning after play is corrected to goal trim start',async()=>{
+ const {calls,video,playback,fire}=setup();
+ playback.open({sourceKey:'IMG_5293',sourceUrl:'blob:large-mov',
+  at:110.5,autoplay:false});
+ video.readyState=3;
+ fire('loadedmetadata');
+ assert.equal(video.currentTime,110.5);
+ video.play=function(){
+  calls.plays++;this.paused=false;
+  // iOS sometimes resets currentTime when starting an already opened MOV.
+  this.currentTime=0;
+  fire('playing');
+  return Promise.resolve();
+ };
+ playback.open({sourceKey:'IMG_5293',sourceUrl:'blob:large-mov',
+  at:110.5,autoplay:true});
+ await tick();
+ assert.equal(video.currentTime,110.5,
+  'Replay recovers from iPhone Safari starting at 0');
+ assert.equal(calls.plays,1,'recovery seeks without repeatedly calling play');
+ assert.equal(playback.diagnostic().targetTime,110.5);
+});
+test('Safari delayed media reset after goal playback begins is recovered on timeupdate',()=>{
+ const {video,playback,fire}=setup();
+ playback.open({sourceKey:'A',sourceUrl:'blob:a',
+  at:365.2,autoplay:true});
+ video.readyState=3;fire('loadedmetadata');
+ video.currentTime=0;video.seeking=false;fire('timeupdate');
+ assert.equal(video.currentTime,365.2);
 });
