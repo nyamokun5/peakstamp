@@ -58,7 +58,8 @@ test('matching may suggest candidates but NEVER marks goals human confirmed',()=
  assert.deepEqual(rows.map(x=>x.seq),[1,2]);
  assert.equal(rows[0].scorer,'Tyler Takasaki','unique high-confidence AI name now preselected');
  assert.equal(rows[0].confirmed,false,'preselection must not mark the goal human-confirmed');
- assert.equal(rows[1].scorerHints.length,0,'unmapped Japanese nickname requires manual selection');
+ assert.equal(rows[1].scorer,'Hiroyuki Kawata','Japanese surname can suggest Romanized member');
+ assert.equal(rows[1].confirmed,false,'the suggestion still needs human verification');
  assert.equal(validateGoalRow(rows[0],snap),'選手・試合の確認が必要です');
 });
 test('buildReviewPayload maps manually selected scorer/assist to official record_goal parameters',()=>{
