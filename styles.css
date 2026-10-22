@@ -1267,3 +1267,10 @@ footer{text-align:center;color:#7995a8;display:flex;align-items:center;flex-dire
 body:has(#undoReview:not([hidden])) .page{
  padding-bottom:calc(65px + env(safe-area-inset-bottom,0px));
 }
+
+/* v51: visible title lettering is bright white; intro video uses
+   the same white color/outlined canvas renderer as exported MP4. */
+.montage-title-preview strong,
+.montage-title-input,
+.intro-preview-header strong{color:#fff}
+.montage-title-preview strong{text-shadow:0 2px 4px #061525,0 0 10px #061525}
