@@ -47,7 +47,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  const sources=()=>state.sources.filter(s=>s?.file&&s?.objectUrl);
  const goalData=s=>createGoalDrafts(s,cache());
  const queue=()=>collectGoalQueue(sources(),cache());
- let activeKey='',displayedKey='';
+ let activeKey='',displayedKey='',hadGoalCandidates=false;
  const say=s=>{status.textContent=s;};
  const player=createGoalPlaybackController(video,{
   notify:s=>{$('goalStatsVideoStatus').textContent=s;},
@@ -239,7 +239,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   optional.append(optionalBody);
   editor.append(fields,timing,optional);
   const actions=make('div','goal-review-actions');
-  const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'✓ 確定済み':'✓ 確定して次へ');
+  const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'✓ 得点情報は確定済み':'✓ 得点情報を確定');
   confirm.type='button';confirm.disabled=item.status==='confirmed'||disabled;
   confirm.addEventListener('click',()=>{
    const error=validateGoal(item);
@@ -411,7 +411,17 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   }
   manualSource.value=all.some(s=>goalSourceKey(s)===old)?old:goalSourceKey(all[0]);
   $('goalStatsManualWrap').hidden=all.length<=1;
+  const nowHasGoals=queue().length>0;
+  const justDetected=nowHasGoals&&!hadGoalCandidates;
+  hadGoalCandidates=nowHasGoals;
   render();
+  if(justDetected&&!panel.hidden){
+   // The callout analysis tool lives BELOW goal review. Bring the actual
+   // first visible player into view when new results first become available.
+   const go=()=>panel.scrollIntoView({behavior:'smooth',block:'start'});
+   if(typeof requestAnimationFrame==='function')requestAnimationFrame(go);
+   else go();
+  }
  }
  function snapshot(){
   const data=confirmedGoalExport(sources(),cache());
