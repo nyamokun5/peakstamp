@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizePerson,normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,
- selectPlayerCandidates,findPotentialDuplicate,validateGoalRow,buildReviewPayload}
+ selectPlayerCandidates,findPotentialDuplicate,existingGoalsForMatch,matchingExistingGoals,
+ inferMatchFromCommentary,spokenNameTokens,scoredPlayerCandidates,suggestedPlayer,
+ validateGoalRow,buildReviewPayload}
  from '../sposched-review-core.mjs';
 const event=()=>({
  event:'日曜定期',event_id:'eeaed234-e9f0-4999-b05e-ec01c7b656fc',
@@ -54,9 +56,10 @@ test('matching may suggest candidates but NEVER marks goals human confirmed',()=
  const rows=prepareGoalRows(exported(),snap);
  assert.equal(rows.length,2);
  assert.deepEqual(rows.map(x=>x.seq),[1,2]);
- assert.equal(rows[0].scorer,'');
- assert.equal(rows[0].confirmed,false);
- assert.equal(rows[1].scorerHints.length,0,'unmapped Japanese nickname requires manual selection');
+ assert.equal(rows[0].scorer,'Tyler Takasaki','unique high-confidence AI name now preselected');
+ assert.equal(rows[0].confirmed,false,'preselection must not mark the goal human-confirmed');
+ assert.equal(rows[1].scorer,'Hiroyuki Kawata','Japanese surname can suggest Romanized member');
+ assert.equal(rows[1].confirmed,false,'the suggestion still needs human verification');
  assert.equal(validateGoalRow(rows[0],snap),'選手・試合の確認が必要です');
 });
 test('buildReviewPayload maps manually selected scorer/assist to official record_goal parameters',()=>{
@@ -83,7 +86,7 @@ test('refuses duplicate scorer/assist/team in same match until human resolves it
  const row=prepareGoalRows(exported(),snap)[0];
  row.scorer='Tyler Takasaki';row.team='チーム1';row.confirmed=true;
  assert.equal(findPotentialDuplicate(row,snap),true);
- assert.throws(()=>buildReviewPayload(snap,[row]),/重複候補/);
+ assert.throws(()=>buildReviewPayload(snap,[row]),/登録済みゴール/);
  row.duplicateApproved=true;
  const data=buildReviewPayload(snap,[row]);
  assert.equal(data.operations.length,1);
@@ -130,4 +133,95 @@ test('portal never has direct write fetch, API secrets or automatic side effects
  assert.doesNotMatch(html,/localStorage\.clear/);
  assert.doesNotMatch(html,/apiKey|api_key|Bearer\s+\w/i);
  assert.match(html,/未送信/);
+});
+
+test('spoken team matchup 2対3 identifies actual #3, not match #2 or score 2-3',()=>{
+ const snap=normalizeSpoSnapshot({...event(),matches:[
+  ...event().matches,
+  {seq:3,title:'#3 Team2 vs Team3',left_team:'Team2',right_team:'Team3',goals:[
+   {goal_id:'already',scorer:'Tyler Takasaki',assist:'Taisei Kobayashi',team:'Team3'}
+  ]},
+  {seq:4,left_team:'Team1',right_team:'Team4',goals:[]}
+ ],roster:{...event().roster,
+  'チーム1':['Yutaka Nakajima'],
+  'チーム3':['Gasuke.Y','Taisei Kobayashi','Tyler Takasaki']
+ }});
+ const goal={id:'from-voice',matchLabel:'２対３',teamA:'2',teamB:'3',
+  scorer:'高崎さん',assist:'たいせい',assistStatus:'named',
+  source:{name:'IMG_5293.MOV'},goalTimeSeconds:107.5};
+ const matched=inferMatchFromCommentary(goal,snap);
+ assert.equal(matched.seq,3);
+ assert.equal(matched.confidence,'high');
+ assert.match(matched.source,/実況/);
+ const row=prepareGoalRows({goals:[goal]},snap)[0];
+ assert.equal(row.seq,3);
+ assert.equal(row.scorer,'Tyler Takasaki','kanji surname selects unique Romanized roster name');
+ assert.equal(row.assist,'Taisei Kobayashi','hiragana first name selects Romanized roster name');
+ assert.equal(row.team,'Team3');
+ assert.equal(row.confirmed,false,'automatic guesses never count as human verification');
+ assert.equal(row.duplicateApproved,false);
+ assert.equal(matchingExistingGoals(row,snap).length,1,
+  'existing goal is surfaced before another same-scorer/assist goal is drafted');
+ assert.equal(existingGoalsForMatch(row,snap)[0].id,'already');
+});
+test('speech match pairing recognizes 「2番と3番」 and Team2 vs Team3',()=>{
+ const snap=normalizeSpoSnapshot({...event(),matches:[
+  {seq:3,left_team:'Team2',right_team:'Team3',goals:[]},
+  {seq:4,left_team:'Team1',right_team:'Team4',goals:[]}
+ ]});
+ for(const v of ['2番と3番','２対３','Team2 vs Team3','チーム2対チーム3','2-3']){
+  const inf=inferMatchFromCommentary({matchLabel:v},snap);
+  assert.equal(inf.seq,3,'did not map '+v);
+ }
+});
+test('repeated same pair is ambiguous; explicit confirmed seq is retained but conflict indicated',()=>{
+ const snap=normalizeSpoSnapshot({...event(),matches:[
+  {seq:1,left_team:'Team2',right_team:'Team3'},
+  {seq:3,left_team:'Team3',right_team:'Team2'},
+  {seq:4,left_team:'Team1',right_team:'Team4'}
+ ]});
+ const g={matchLabel:'2対3',teamA:'2',teamB:'3'};
+ const inferred=inferMatchFromCommentary(g,snap);
+ assert.equal(inferred.seq,null);
+ assert.equal(inferred.ambiguous,true);
+ assert.deepEqual(inferred.candidates,[1,3]);
+ const explicit=inferMatchFromCommentary({...g,matchSeq:3},snap);
+ assert.equal(explicit.seq,3);
+ assert.equal(explicit.conflict,false);
+ const contradiction=inferMatchFromCommentary({...g,matchSeq:4},snap);
+ assert.equal(contradiction.seq,4);
+ assert.equal(contradiction.conflict,true);
+});
+test('Japanese kana and kanji AI phrases suggest probable roster members but never ambiguous surnames',()=>{
+ const snap=normalizeSpoSnapshot(event());
+ assert.equal(spokenNameTokens('高崎さん').includes('takasaki'),true);
+ assert.equal(spokenNameTokens('たいせい').includes('taisei'),true);
+ assert.equal(suggestedPlayer('高崎さん',snap).name,'Tyler Takasaki');
+ assert.equal(suggestedPlayer('たいせい',snap).name,'Taisei Kobayashi');
+ assert.equal(suggestedPlayer('野田さん',snap).name,'Yuki Noda');
+ assert.equal(suggestedPlayer('完全に別名',snap).name,'');
+ const copy={...snap,players:[...snap.players,'Ken Takasaki']};
+ assert.equal(suggestedPlayer('高崎さん',copy).name,'',
+  'when two players share a surname do not guess which one');
+ const short=scoredPlayerCandidates('高',snap);
+ assert.equal(short.length,0,'a single kanji cannot cause unsafe roster auto-match');
+});
+test('an inferred match and a likely player are never enough to export without confirmation',()=>{
+ const snap=normalizeSpoSnapshot({...event(),matches:[
+  {seq:3,left_team:'Team2',right_team:'Team3',goals:[]}
+ ],roster:{...event().roster,
+  'チーム1':['Yutaka Nakajima'],
+  'チーム3':['Gasuke.Y','Taisei Kobayashi','Tyler Takasaki']
+ }});
+ const g={id:'x',source:{name:'clip.mov'},matchLabel:'2対3',teamA:'2',teamB:'3',
+  scorer:'高崎さん',assist:'たいせい',assistStatus:'named'};
+ const row=prepareGoalRows({goals:[g]},snap)[0];
+ assert.equal(row.seq,3);
+ assert.equal(row.confirmed,false);
+ assert.throws(()=>buildReviewPayload(snap,[row]),/確認が必要/);
+ row.confirmed=true;
+ const plan=buildReviewPayload(snap,[row]);
+ assert.deepEqual(plan.operations[0].args,{
+  event_id:snap.eventId,seq:3,scorer:'Tyler Takasaki',assist:'Taisei Kobayashi',team:'Team3'
+ });
 });

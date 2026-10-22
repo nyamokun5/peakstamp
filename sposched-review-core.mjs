@@ -56,23 +56,154 @@ export function selectPlayerCandidates(text,snapshot,team='',limit=7){
  }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,'ja'));
  return results.slice(0,limit);
 }
+
+/** Spoken "2対3" means Team2 versus Team3, NOT match sequence #2 or score 2-3.
+ * Use only the goal's preceding match_start context, never its score call.
+ */
+function nameForTeam(value){
+ const v=normalizeTeam(value).replace(/(番|組|チーム)$/g,'');
+ const numeric=v.match(/^(?:(?:team|第)?)(\d{1,2})$/);
+ return numeric?'team'+Number(numeric[1]):v;
+}
+function spokenTeamPair(goal){
+ const first=nameForTeam(goal?.teamA),second=nameForTeam(goal?.teamB);
+ if(first&&second)return [first,second];
+ const label=string(goal?.matchLabel).normalize('NFKC');
+ const m=label.match(/(?:team|チーム|第)?\s*(\d{1,2})(?:番|チーム)?\s*(?:対|vs\.?|と|－|ー|[-–])\s*(?:team|チーム|第)?\s*(\d{1,2})(?:番|チーム)?/i);
+ if(m)return ['team'+Number(m[1]),'team'+Number(m[2])];
+ return null;
+}
+export function inferMatchFromCommentary(goal,snapshot){
+ const selected=number(goal?.matchSeq),direct=snapshot.matches.find(x=>x.seq===selected);
+ const pair=spokenTeamPair(goal);
+ const pairMatches=pair?snapshot.matches.filter(m=>{
+  const actual=[nameForTeam(m.leftTeam),nameForTeam(m.rightTeam)];
+  return actual.sort().join('::')===pair.slice().sort().join('::');
+ }):[];
+ const commentary=string(goal?.matchLabel||[goal?.teamA,goal?.teamB].filter(Boolean).join('対'));
+ // Explicitly reviewed matchSeq wins; still surface a mismatch for review.
+ if(direct)return {seq:direct.seq,source:'PSで指定済みの試合番号',confidence:'high',
+  evidence:commentary,ambiguous:false,
+  conflict:pairMatches.length>0&&!pairMatches.some(m=>m.seq===direct.seq),
+  candidates:pairMatches.map(m=>m.seq)};
+ if(pairMatches.length===1)return {seq:pairMatches[0].seq,
+  source:'実況の対戦宣言 '+(commentary||pair.join('対')),confidence:'high',
+  evidence:commentary,ambiguous:false,conflict:false,candidates:[pairMatches[0].seq]};
+ if(pairMatches.length>1)return {seq:null,source:'同じ対戦組み合わせが複数試合あります',
+  confidence:'ambiguous',evidence:commentary,ambiguous:true,conflict:false,
+  candidates:pairMatches.map(m=>m.seq)};
+ const nth=string(goal?.matchLabel).normalize('NFKC').match(/(?:第\s*([1-9]\d*)\s*試合|試合\s*#?\s*([1-9]\d*)|#\s*([1-9]\d*)\s*(?:試合)?)/i);
+ const byNumber=nth?snapshot.matches.find(m=>m.seq===Number(nth[1]||nth[2]||nth[3])):null;
+ if(!pair&&byNumber)return {seq:byNumber.seq,
+  source:'実況で宣言された試合番号',confidence:'medium',evidence:commentary,
+  ambiguous:false,conflict:false,candidates:[byNumber.seq]};
+ return {seq:null,source:pair?'対戦宣言に一致する試合がありません':'実況から試合を確定できません',
+  confidence:'none',evidence:commentary,ambiguous:false,conflict:false,candidates:[]};
+}
+// Match Japanese-speaking commentary to romanized Shoot Sunday player names.
+// Exact roster member names are always preferred. Small kana/kanji conventions
+// are hints, never authoritative IDs; ambiguous matches are left unselected.
+const knownKanjiReadings={
+ '高崎':'takasaki','川田':'kawata','野田':'noda','小林':'kobayashi',
+ '西村':'nishimura','山田':'yamada','渡邊':'watanabe',
+ '渡辺':'watanabe','芦田':'ashida','徳永':'tokunaga',
+ '佐藤':'sato','鈴木':'suzuki','松本':'matsumoto'
+};
+const kanaMap={
+ 'あ':'a','い':'i','う':'u','え':'e','お':'o',
+ 'か':'ka','き':'ki','く':'ku','け':'ke','こ':'ko',
+ 'さ':'sa','し':'shi','す':'su','せ':'se','そ':'so',
+ 'た':'ta','ち':'chi','つ':'tsu','て':'te','と':'to',
+ 'な':'na','に':'ni','ぬ':'nu','ね':'ne','の':'no',
+ 'は':'ha','ひ':'hi','ふ':'fu','へ':'he','ほ':'ho',
+ 'ま':'ma','み':'mi','む':'mu','め':'me','も':'mo',
+ 'や':'ya','ゆ':'yu','よ':'yo',
+ 'ら':'ra','り':'ri','る':'ru','れ':'re','ろ':'ro',
+ 'わ':'wa','を':'o','ん':'n',
+ 'が':'ga','ぎ':'gi','ぐ':'gu','げ':'ge','ご':'go',
+ 'ざ':'za','じ':'ji','ず':'zu','ぜ':'ze','ぞ':'zo',
+ 'だ':'da','ぢ':'ji','づ':'zu','で':'de','ど':'do',
+ 'ば':'ba','び':'bi','ぶ':'bu','べ':'be','ぼ':'bo',
+ 'ぱ':'pa','ぴ':'pi','ぷ':'pu','ぺ':'pe','ぽ':'po'
+};
+const digraph={や:'ya',ゆ:'yu',よ:'yo'};
+function kanaRomanization(text){
+ const source=string(text).normalize('NFKC').replace(/[ァ-ヶ]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0x60));
+ let out='';
+ for(let i=0;i<source.length;i++){
+  const ch=source[i],next=source[i+1];
+  if(ch==='っ'&&next){const n=kanaMap[next]||'';out+=n[0]||'';continue}
+  if(ch==='ー'){if(out.length&&/[aeiou]$/.test(out))out+=out.at(-1);continue}
+  if(digraph[next]&&/^(?:き|し|ち|に|ひ|み|り|ぎ|じ|び|ぴ)$/.test(ch)){
+   const root=(kanaMap[ch]||'').replace(/i$/,'');out+=root+digraph[next];i++;continue;
+  }
+  out+=kanaMap[ch]??ch;
+ }
+ return out;
+}
+export function spokenNameTokens(text){
+ const normalized=normalizePerson(text);
+ if(!normalized)return [];
+ const candidates=[normalized,kanaRomanization(normalized)];
+ for(const [kanji,romaji] of Object.entries(knownKanjiReadings))
+  if(normalized===kanji||normalized.includes(kanji))candidates.push(romaji);
+ return [...new Set(candidates.filter(Boolean))];
+}
+export function scoredPlayerCandidates(text,snapshot,team='',limit=7){
+ const tokens=spokenNameTokens(text);
+ if(!tokens.length)return [];
+ const targetTeam=nameForTeam(team);
+ const ranked=snapshot.players.map(name=>{
+  const norm=normalizePerson(name);
+  const components=string(name).normalize('NFKC').toLowerCase()
+   .split(/[\s.・_\-]+/).filter(Boolean);
+  let score=0,why='';
+  for(const token of tokens){
+   let n=0,label='';
+   if(norm===token){n=120;label='正式名と一致'}
+   else if(components.includes(token)){n=98;label='氏名の一部が一致'}
+   else if(components.some(p=>p.startsWith(token)&&token.length>=3)){n=88;label='名前の先頭が一致'}
+   else if(components.some(p=>token.startsWith(p)&&p.length>=4)){n=85;label='名前の一部が一致'}
+   else if(norm.includes(token)&&token.length>=4){n=78;label='部分一致'}
+   if(n>score){score=n;why=label}
+  }
+  const teamName=snapshot.playerTeam.get(name)||'';
+  if(score&&targetTeam&&nameForTeam(teamName)===targetTeam)score+=8;
+  return {name,team:teamName,score,why};
+ }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,'ja'));
+ return ranked.slice(0,limit);
+}
+export function suggestedPlayer(text,snapshot,team=''){
+ const candidates=scoredPlayerCandidates(text,snapshot,team);
+ const top=candidates[0],next=candidates[1];
+ // Require an individual, convincing match. No player is marked confirmed.
+ if(!top||top.score<88||(next&&top.score-next.score<15))
+  return {name:'',confidence:'none',candidates};
+ return {name:top.name,confidence:top.score>=98?'high':'medium',
+  candidates,source:top.why};
+}
+
 export function prepareGoalRows(rawGoals,snapshot){
  const goals=Array.isArray(rawGoals?.goals)?rawGoals.goals:[];
  return goals.map((g,i)=>{
-  const seq=number(g.matchSeq);
-  const match=snapshot.matches.find(m=>m.seq===seq)||null;
-  const label=normalizeTeam(g.teamA),other=normalizeTeam(g.teamB);
-  const explicit=label&&other?snapshot.matches.filter(m=>
-   [normalizeTeam(m.leftTeam),normalizeTeam(m.rightTeam)].sort().join('::')===
-   [label,other].sort().join('::')):[];
-  const onlyMatch=match||(explicit.length===1?explicit[0]:null);
-  const scorerHints=selectPlayerCandidates(g.scorer,snapshot,onlyMatch?.leftTeam||'');
-  const assistHints=selectPlayerCandidates(g.assist,snapshot,'');
+  const matchGuess=inferMatchFromCommentary(g,snapshot);
+  const onlyMatch=snapshot.matches.find(m=>m.seq===matchGuess.seq)||null;
+  const teamHint=onlyMatch?onlyMatch.leftTeam:'';
+  const scorerGuess=suggestedPlayer(g.scorer,snapshot,teamHint);
+  const assistGuess=suggestedPlayer(g.assist,snapshot,'');
+  const scorerTeam=scorerGuess.name?snapshot.playerTeam.get(scorerGuess.name)||'':'';
+  const sides=onlyMatch?[nameForTeam(onlyMatch.leftTeam),nameForTeam(onlyMatch.rightTeam)]:[];
+  const prefilledTeam=scorerTeam&&sides.includes(nameForTeam(scorerTeam))?
+   (sides[0]===nameForTeam(scorerTeam)?onlyMatch.leftTeam:onlyMatch.rightTeam):'';
+  const scorerHints=scorerGuess.candidates;
+  const assistHints=assistGuess.candidates;
   return {key:string(g.source?.name||'video')+'::'+string(g.id||i),
-   goal:g,seq:onlyMatch?.seq??null,
-   scorer:'',assist:'',assistMode:g.assistStatus==='none'?'none':
+   goal:g,seq:onlyMatch?.seq??null,matchGuess,
+   scorer:scorerGuess.name,assist:assistGuess.name,
+   scorerGuess,assistGuess,
+   assistMode:g.assistStatus==='none'?'none':
     g.assistStatus==='named'?'named':'unknown',
-   scorerHints,assistHints,team:'',confirmed:false,include:true,
+   scorerHints,assistHints,team:prefilledTeam,confirmed:false,include:true,
    scoreConfirmed:false,duplicateApproved:false};
  });
 }
@@ -94,23 +225,40 @@ export function validateGoalRow(row,snapshot){
   return '得点者とアシストが同一です';
  return null;
 }
-export function findPotentialDuplicate(row,snapshot){
+/** Goals already registered IN Shoot Sunday for the selected official match.
+ * These are not PeakStamp drafts or browser cache items.
+ */
+export function existingGoalsForMatch(row,snapshot){
  const match=snapshot.matches.find(m=>m.seq===number(row.seq));
- if(!match||!row.scorer)return false;
+ return match?.existingGoals||[];
+}
+/** Warn on a matching scorer/assist/team combination, but don't assert that
+ * two goals with the same participants must be identical. Only a human who
+ * watched both goal scenes can decide that.
+ */
+export function matchingExistingGoals(row,snapshot){
+ if(!row.scorer)return [];
  const team=row.team||snapshot.playerTeam.get(row.scorer)||'';
- return match.existingGoals.some(g=>
+ const assist=row.assistMode==='named'?row.assist:'';
+ if(row.assistMode==='named'&&!row.assist)return [];
+ if(row.assistMode==='unknown')return [];
+ return existingGoalsForMatch(row,snapshot).filter(g=>
   normalizePerson(g.scorer)===normalizePerson(row.scorer)&&
-  normalizePerson(g.assist)===normalizePerson(row.assistMode==='named'?row.assist:'')&&
+  normalizePerson(g.assist)===normalizePerson(assist)&&
   normalizeTeam(g.team)===normalizeTeam(team));
+}
+export function findPotentialDuplicate(row,snapshot){
+ return matchingExistingGoals(row,snapshot).length>0;
 }
 export function buildReviewPayload(snapshot,rows,scoreRows=[]){
  const items=rows.filter(row=>row.include!==false);
- if(!items.length)throw Error('登録対象のゴールがありません');
+ if(!items.length&&!scoreRows.some(row=>row.include))
+  throw Error('追加するゴールはありません。既にShoot Sundayに登録済みなら、再登録は不要です。');
  const missing=items.map((row,i)=>({i,problem:validateGoalRow(row,snapshot)}))
   .filter(x=>x.problem);
  if(missing.length)throw Error((missing[0].i+1)+'件目：'+missing[0].problem);
  const duplicates=items.filter(row=>findPotentialDuplicate(row,snapshot)&&row.duplicateApproved!==true);
- if(duplicates.length)throw Error('既存記録との重複候補が'+duplicates.length+'件あります。元の記録と照合し、別ゴールであることを明示確認してください。');
+ if(duplicates.length)throw Error('Shoot Sundayに同じ得点者・アシストの登録済みゴールが'+duplicates.length+'件あります。「登録済みなので送らない」か「別ゴールとして追加」を選んでください。');
  const operationGoals=items.map(row=>{
   const team=row.team||snapshot.playerTeam.get(row.scorer)||'';
   const args={event_id:snapshot.eventId,seq:number(row.seq),scorer:row.scorer,team};
