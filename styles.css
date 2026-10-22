@@ -1368,3 +1368,36 @@ body:has(#undoReview:not([hidden])) .page{
 }
 .goal-review-time-tools .goal-review-mark-button{flex:1 0 100%}
 .goal-review-editor .goal-review-fields{margin:8px 0 3px}
+
+/* v54: decide video inclusion directly in the goal editor, independently
+   of scoring confirmation. Selection is explicit and visually persistent. */
+.goal-review-video-status{
+ margin:12px 0 7px;color:#d4f5ef;font-size:12px;font-weight:800;
+ line-height:1.4;
+}
+.goal-review-video-actions{
+ display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 10px;
+}
+.goal-review-video-actions button{
+ min-width:0;min-height:50px;padding:10px 7px;
+ border-radius:10px;font-size:13px;font-weight:850;
+ white-space:normal;line-height:1.3;
+}
+.goal-review-video-keep{
+ background:#1f5c4c;color:#ecfff3;border:1px solid #6fbaa0;
+}
+.goal-review-video-reject{
+ background:#263f4a;color:#edf4f5;border:1px solid #728f9a;
+}
+.goal-review-video-actions button.is-active{
+ box-shadow:inset 0 0 0 2px #d7fff1,0 0 0 1px #6ecbab;
+}
+.goal-review-video-actions .goal-review-video-reject.is-active{
+ box-shadow:inset 0 0 0 2px #ffd9d9,0 0 0 1px #ddaaaa;
+}
+.goal-review-video-actions button:disabled{opacity:.5}
+.goal-review-video-actions+ .goal-review-actions{margin-top:7px}
+@media(max-width:400px){
+ .goal-review-video-actions{gap:6px}
+ .goal-review-video-actions button{font-size:12px;padding:9px 5px}
+}
