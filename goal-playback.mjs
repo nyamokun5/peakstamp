@@ -18,6 +18,7 @@ export function createGoalPlaybackController(video,{
  let sourceKey='',sourceUrl='',target=0,serial=0;
  let wantPlay=false,prepared=false,awaitSeek=false;
  let seekAttempts=0,playAttempts=0,playingRequest=false,gestureNeeded=false;
+ let resetSeekFromZero=false;
  let pendingTimer=null,frameCallback=null,lastMessage='',phase='idle';
  let lastAttemptedTime=null;
  const clock=()=>Number(video.currentTime)||0;
@@ -125,6 +126,14 @@ export function createGoalPlaybackController(video,{
   if(clock()>=target-TOLERANCE)return;
   if(awaitSeek||video.seeking){
    try{video.pause()}catch(_){}
+   if(!awaitSeek&&video.seeking){
+    // Safari initiated a NEW seek back to zero while starting playback.
+    // Wait for that seek to settle, then seek back to the goal timestamp.
+    prepared=false;awaitSeek=true;phase='seeking';
+    resetSeekFromZero=true;
+    say('再生が元動画の先頭へ戻ったため、ゴール位置に移動し直しています…');
+    later(()=>{if(awaitSeek)failSeek()},12000);
+   }
    return;
   }
   try{video.pause()}catch(_){}
@@ -182,6 +191,8 @@ export function createGoalPlaybackController(video,{
   const alreadyPrepared=!change&&!changedTarget&&prepared&&!video.seeking;
   const alreadySeeking=!change&&!changedTarget&&(awaitSeek||video.seeking);
   stopIntent();
+  // The prior decoder's reset/seek must not leak into a newly selected goal.
+  resetSeekFromZero=false;
   sourceKey=key;sourceUrl=url;target=requested;
   wantPlay=Boolean(autoplay);
   gestureNeeded=false;playingRequest=false;
@@ -235,6 +246,11 @@ export function createGoalPlaybackController(video,{
   else if(!prepared)prepareSource();
  });
  video.addEventListener('seeked',()=>{
+  if(resetSeekFromZero){
+   resetSeekFromZero=false;awaitSeek=false;
+   seekToGoal(true);
+   return;
+  }
   if(awaitSeek)finishSeek();
  });
  video.addEventListener('canplay',()=>{
@@ -269,7 +285,7 @@ export function createGoalPlaybackController(video,{
   return {player:'PeakStamp goal replay v60',sourceKey,
    currentTime:Number(video.currentTime)||0,targetTime:target,
    readyState:video.readyState,seeking:video.seeking,paused:video.paused,
-   phase,prepared,awaitSeek,seekAttempts,playAttempts,
+   phase,prepared,awaitSeek,resetSeekFromZero,seekAttempts,playAttempts,
    gestureNeeded,lastMessage,lastAttemptedTime};
  }
  function formatTime(t){
