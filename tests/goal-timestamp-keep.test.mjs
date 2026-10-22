@@ -57,13 +57,13 @@ test('manual goal has no commentary delay or fake reaction timestamp',()=>{
  assert.equal(record.reactionTimeSeconds,null);
  assert.equal(record.timingMethod,'manual');
 });
-test('one click keeps the goal in video with 8sec lead and 10sec post-goal',()=>{
+test('one click keeps the goal in video from 4 seconds before to 2 seconds after',()=>{
  const source=src(),store=makeStore();put(source,store);
  const goal=createGoalDrafts(source,store).items[0];
  const candidate=keepGoalClip(source,goal);
- assert.equal(candidate.time,361.2);
+ assert.equal(candidate.time,365.2);
  assert.equal(candidate.peakSeconds,369.2);
- assert.equal(candidate.manualEnd,379.2);
+ assert.equal(candidate.manualEnd,371.2);
  assert.equal(candidate.enabled,true);
  assert.equal(source.candidates.length,1);
  assert.equal(keepGoalClip(source,goal),candidate);
@@ -78,7 +78,7 @@ test('normal scene matching goal is reused instead of duplicating clip',()=>{
  assert.equal(candidate.id,'gemini-1');
  assert.equal(candidate.enabled,true);
  assert.equal(candidate.rejected,false);
- assert.equal(candidate.time,361.2);
+ assert.equal(candidate.time,365.2);
  // Reused scene already extends 2.8 seconds beyond the new target; do not trim it.
  assert.equal(candidate.manualEnd,382);
 });
