@@ -166,11 +166,19 @@ function renderGoals(){
    '｜アシスト '+row.assistHints.map(x=>x.name).join(' / '),'details');
   article.append(hints);
   const warn=node('p','','error');
-  const updateDuplicate=()=>{warn.textContent=findPotentialDuplicate(row,snapshot)?
-   '⚠ 同じ試合に同じ得点者・アシストの登録があります。二重登録を確認してください。':''};
+  const duplicateWrap=node('label','','line'),duplicateCheck=mkInput('checkbox');
+  duplicateCheck.checked=row.duplicateApproved;
+  duplicateCheck.addEventListener('change',()=>{row.duplicateApproved=duplicateCheck.checked;touch()});
+  duplicateWrap.append(duplicateCheck,node('span','既存の記録とは別のゴールであることを確認した'));
+  const updateDuplicate=()=>{
+   const duplicate=findPotentialDuplicate(row,snapshot);
+   warn.textContent=duplicate?'⚠ 同じ試合に同じ得点者・アシストの既存記録があります。元動画と照合してください。':'';
+   duplicateWrap.hidden=!duplicate;
+   if(!duplicate){row.duplicateApproved=false;duplicateCheck.checked=false}
+  };
   const confirm=mkInput('checkbox');confirm.checked=row.confirmed;
   confirm.addEventListener('change',()=>{row.confirmed=confirm.checked;touch()});
-  const footer=node('label','','line');footer.append(confirm,node('strong','このゴールの試合・選手を確認した'));article.append(footer,warn);
+  const footer=node('label','','line');footer.append(confirm,node('strong','このゴールの試合・選手を確認した'));article.append(footer,warn,duplicateWrap);
   $('goalRows').append(article);updateDuplicate();
  }
 }
