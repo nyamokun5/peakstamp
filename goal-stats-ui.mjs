@@ -34,7 +34,7 @@ function inputRow(parent,label,value,commit,{type='text',placeholder='',maxLengt
  return input;
 }
 
-export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,onRejectClip=()=>false,onClipEdit=()=>{},onBeforePlay=()=>{}}={}){
+export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},onKeepClip=()=>false,onRejectClip=()=>false,onClipEdit=()=>{},onBeforePlay=()=>{}}={}){
  const panel=$('goalStatsPanel');
  if(!panel)return {refresh:()=>{},nearby:()=>[],openAt:()=>{},hasRecords:()=>false,pausePlayback:()=>{}};
  const list=$('goalStatsList'),editor=$('goalStatsEditor'),video=$('goalStatsPreview');
@@ -71,6 +71,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   if(active&&player.currentSourceKey()===goalSourceKey(active.source)&&
     !(Number(active.source.duration)>0)&&Number.isFinite(video.duration)&&video.duration>0){
    active.source.duration=video.duration;
+   // A returning user may have saved video decisions but no waveform.
+   // Reconcile them as soon as the original MOV reports its duration.
+   onSourceReady(active.source);
    scene.activate(active.source,active.item);
    render();
    scene.redraw();
