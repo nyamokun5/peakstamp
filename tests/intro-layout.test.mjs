@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   INTRO_ANCHORS,INTRO_SECONDS,normalizeIntroPoint,introPreset,
-  coverRect,overlayRect,imageDimensions,drawCover,drawIntroOverlay
+  coverRect,overlayRect,imageDimensions,drawCover,drawIntroOverlay,
+  introOverlayActive,prepareIntroPlan
 } from '../intro-layout.mjs';
 import { drawIntro, introTitleRect } from '../exporter.mjs';
 
@@ -174,3 +175,40 @@ test('intro titles are solid bright white with dark contrast outline',()=>{
  assert.ok(calls[1][2]>=2);
 });
 
+
+test('export title overlay is visible for 3 seconds only (never the whole first clip)',()=>{
+ const prepared=prepareIntroPlan([{sourceId:'A',start:70,end:82}],{presentation:'overlay'});
+ assert.equal(prepared.introSeconds,0);
+ assert.equal(prepared.overlaySeconds,3);
+ assert.equal(prepared.clips[0].start,67);
+ assert.equal(introOverlayActive(0,30,prepared.overlaySeconds),true);
+ assert.equal(introOverlayActive(89,30,prepared.overlaySeconds),true,
+  'final frame at 2.967 seconds still shows title');
+ assert.equal(introOverlayActive(90,30,prepared.overlaySeconds),false,
+  'first frame at 3.0 seconds must not show title');
+ for(let frame=90;frame<15*30;frame++)
+  assert.equal(introOverlayActive(frame,30,prepared.overlaySeconds),false,
+   'the text must never reappear during the remaining first clip');
+});
+test('overlay cap applies equally to text and PNG across video frame rates',()=>{
+ for(const fps of [24,25,30,60]){
+  assert.equal(introOverlayActive(fps*3-1,fps,3),true);
+  assert.equal(introOverlayActive(fps*3,fps,3),false);
+  assert.equal(introOverlayActive(fps*6,fps,3),false);
+ }
+ assert.equal(introOverlayActive(-1,30,3),false);
+ assert.equal(introOverlayActive(0,0,3),false);
+ assert.equal(introOverlayActive(0,30,0),false);
+});
+test('overlay beginning very close to the start still ends at exactly 3 seconds',()=>{
+ const intro=prepareIntroPlan([{sourceId:'A',start:1,end:10}],{presentation:'overlay'});
+ assert.equal(intro.clips[0].start,0);
+ assert.equal(intro.overlaySeconds,3);
+ assert.equal(introOverlayActive(89,30,intro.overlaySeconds),true);
+ assert.equal(introOverlayActive(90,30,intro.overlaySeconds),false);
+});
+test('actual MP4 exporter applies the time cap to the title drawing branch',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const source=readFileSync(new URL('../exporter.mjs',import.meta.url),'utf8');
+ assert.match(source,/overlayFirstScene\s*&&\s*section===0\s*&&\s*introOverlayActive\(frame,settings\.frameRate,prepared\.overlaySeconds\)/);
+});
