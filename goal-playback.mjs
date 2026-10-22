@@ -1,437 +1,264 @@
 /**
- * iPhone-Safari-compatible local MOV playback for the PS goal review.
- * Keep one player: a new source is loaded only when the source key changes.
- * iOS playback requires a synchronous .play() from the original tap.
- * The metadata/seek events can retry a transient AbortError afterwards.
+ * Goal-only local MOV replay (v60).
+ *
+ * Deliberately small state machine:
+ *   load metadata -> seek clip start -> await seeked/decoded data -> play.
+ *
+ * Never call play() while a deep seek is pending. That was the cause of
+ * long iPhone MOVs starting visibly at source t=0 before seeking.
+ * The first opening preloads/seeks while paused; ▶ Replay uses that state.
  */
 export function createGoalPlaybackController(video,{
  notify=()=>{},beforePlay=()=>{},
- now=()=>Date.now(),
- scheduleWatchdog=(fn,ms)=>setInterval(fn,ms),
- cancelWatchdog=id=>clearInterval(id)
+ schedule=(fn,ms)=>setTimeout(fn,ms),
+ cancel=id=>clearTimeout(id)
 }={}){
- let activeKey='',activeUrl='',wantedTime=0,pendingSeek=false,wantsPlayback=false;
- let requestId=0,playPending=false,retryNeeded=false,denied=false,retries=0;
- let seekingOwnJump=false,expectResume=false,fromBeginning=false,progressWatch=0;
- // iPhone Safari may begin playback at t=0 if play() beats metadata/seek.
- // Prime the desired position before playback and verify the first frames.
- let initialTargetVerified=false,targetCorrectionCount=0;
- let lastProgress=0,lastEvent='init',lastMessage='',lastFailure='';
- let frameCallbackId=null,decodedFrames=0,lastFrameAt=null,lastFrameMediaTime=null;
- let lastFramePresentedCount=null,lastVisibilityAt=null,visibilityChanges=0;
- let playbackOpenedAt=null,firstFrameDelayMs=null;
- let suspectedFreeze=null,playingStartedAt=null,playingStartPosition=null,watchdogId=null;
- let lastWatchClock=null,lastWatchAt=null;
- const freezeHistory=[];
- const eventLog=[];
- const timeNow=now;
- const visible=()=>typeof document==='undefined'||document.visibilityState!=='hidden';
- function stopWatchdog(){
-  if(watchdogId!==null)cancelWatchdog(watchdogId);
-  watchdogId=null;lastWatchClock=null;lastWatchAt=null;
- }
- function markFreeze(reason,clockAdvance){
-  if(suspectedFreeze||!wantsPlayback||video.paused||video.seeking||!visible())return;
-  suspectedFreeze={
-   sourceKey:activeKey,attemptId:requestId,reason,
-   detectedAt:timeNow(),playbackTime:Number(video.currentTime)||0,
-   // The displayed frame is more useful than the audio/media clock for
-   // identifying a repeatable decoding/keyframe boundary.
-   lastRenderedMediaTime:lastFrameMediaTime,
-   suspectedMediaPosition:lastFrameMediaTime??wantedTime,
-   framesAtDetection:decodedFrames,timeAdvanceSeconds:clockAdvance,
-   pageVisibility:typeof document!=='undefined'?document.visibilityState||'unknown':'unknown'
-  };
-  freezeHistory.push(suspectedFreeze);
-  if(freezeHistory.length>5)freezeHistory.shift();
-  record('video-frame-freeze-suspected');
-  report('動画の読み込みに時間がかかっています。動画画面の▶で再生をお試しください。');
- }
- function closeFreeze(reason){
-  if(!suspectedFreeze)return;
-  suspectedFreeze.endedReason=reason;
-  suspectedFreeze=null;
- }
- function startWatchdog(){
-  stopWatchdog();
-  if(!hasVideoFrames)return;
-  lastWatchClock=Number(video.currentTime)||0;
-  lastWatchAt=timeNow();
-  watchdogId=scheduleWatchdog(()=>{
-   if(!wantsPlayback||video.paused||video.seeking||!visible()){
-    lastWatchClock=Number(video.currentTime)||0;
-    lastWatchAt=timeNow();
-    return;
-   }
-   const now=timeNow(),clock=Number(video.currentTime)||0;
-   const earliestFrame=lastFrameAt??playingStartedAt;
-   const stalledFor=earliestFrame===null?0:now-earliestFrame;
-   const advancedFromWatch=clock-(lastWatchClock??clock);
-   const advancedFromFrame=clock-(lastFrameMediaTime??playingStartPosition??clock);
-   // A progressing media clock is not proof of frame presentation.
-   if(stalledFor>=3000&&advancedFromFrame>=.5&&
-     (advancedFromWatch>=.15||clock>(playingStartPosition??clock)+.5))
-    markFreeze('frame-watchdog',Math.round(advancedFromFrame*10)/10);
-   lastWatchClock=clock;lastWatchAt=now;
-  },1200);
-  // In Node tests this background diagnostic must never keep the process alive.
-  if(typeof watchdogId?.unref==='function')watchdogId.unref();
- }
- const hasVideoFrames=typeof video.requestVideoFrameCallback==='function';
- function cancelFrameWatch(){
-  if(frameCallbackId!==null&&typeof video.cancelVideoFrameCallback==='function')
-   try{video.cancelVideoFrameCallback(frameCallbackId);}catch(_){}
-  frameCallbackId=null;
- }
- function watchFrames(){
-  if(!hasVideoFrames||frameCallbackId!==null)return;
-  const token=requestId;
-  const onFrame=(_now,metadata)=>{
-   frameCallbackId=null;
-   if(token!==requestId||!wantsPlayback)return;
-   const first=decodedFrames===0;
-   decodedFrames++;
-   lastFrameAt=timeNow();
-   if(suspectedFreeze&&suspectedFreeze.attemptId===requestId){
-    suspectedFreeze.recoveredAfterMs=lastFrameAt-suspectedFreeze.detectedAt;
-    suspectedFreeze.recoveredAt=lastFrameAt;
-    suspectedFreeze.endedReason='frames-resumed';
-    record('video-frames-resumed');
-    report('映像フレームの更新が再開しました。');
-    suspectedFreeze=null;
-   }
-   if(first&&playbackOpenedAt!==null)firstFrameDelayMs=lastFrameAt-playbackOpenedAt;
-   if(Number.isFinite(metadata?.mediaTime))lastFrameMediaTime=metadata.mediaTime;
-   if(Number.isFinite(metadata?.presentedFrames))lastFramePresentedCount=metadata.presentedFrames;
-   if(first)record('first-video-frame');
-   watchFrames();
-  };
-  try{frameCallbackId=video.requestVideoFrameCallback(onFrame);}
-  catch(_){frameCallbackId=null;}
- }
- const record=(name)=>{
-  lastEvent=name;
-  eventLog.push({event:name,time:Number(video.currentTime)||0,
-   readyState:video.readyState,networkState:video.networkState,
-   paused:video.paused,seeking:video.seeking,
-   frameCount:decodedFrames});
-  if(eventLog.length>24)eventLog.shift();
+ const TOLERANCE=.32;
+ const MAX_RESEEKS=2;
+ let sourceKey='',sourceUrl='',target=0,serial=0;
+ let wantPlay=false,prepared=false,awaitSeek=false;
+ let seekAttempts=0,playAttempts=0,playingRequest=false,gestureNeeded=false;
+ let pendingTimer=null,frameCallback=null,lastMessage='',phase='idle';
+ let lastAttemptedTime=null;
+ const clock=()=>Number(video.currentTime)||0;
+ const nearTarget=()=>Math.abs(clock()-target)<=TOLERANCE;
+ const say=(s)=>{lastMessage=s;notify(s)};
+ const cancelTimer=()=>{
+  if(pendingTimer!==null)cancel(pendingTimer);
+  pendingTimer=null;
  };
- const report=message=>{lastMessage=message;notify(message);};
- function mediaError(e){
-  const name=e?.name||'';
-  if(name==='NotAllowedError')return 'Safariが自動再生を制限しました。動画画面の▶を直接タップしてください。';
-  if(name==='NotSupportedError')return 'この動画の形式・コーデックを再生できません。iPhoneの写真アプリで再生できるか確認してください。';
-  if(name==='AbortError')return '再生位置の移動で一時停止しました。再生を再試行します。';
-  return '動画を再生できませんでした（'+(name||e?.message||'不明なエラー')+'）。動画画面の▶をお試しください。';
- }
- function primeTargetBeforeMetadata(){
-  if(!pendingSeek||fromBeginning||video.readyState>=1)return;
-  // Per HTMLMediaElement semantics, setting currentTime before metadata can
-  // establish the default playback start position. Safari sometimes ignores
-  // this early assignment, so the loadedmetadata handler still retries.
-  try{
-   video.currentTime=wantedTime;
-   record('target-primed');
-  }catch(_){record('target-await-metadata');}
- }
- function seek(){
-  if(!pendingSeek||video.readyState<1)return false;
-  try{
-   if(fromBeginning){pendingSeek=false;return true;}
-   if(Math.abs((Number(video.currentTime)||0)-wantedTime)<.08){
-    // The pre-metadata assignment may itself still be seeking on Safari.
-    // Remember that play() can pause during this pending deep jump.
-    if(video.seeking&&wantsPlayback){
-     seekingOwnJump=true;
-     expectResume=true;
-     retryNeeded=true;
-    }
-    pendingSeek=false;
-    record('target-already-set');
-    return true;
-   }
-   seekingOwnJump=true;expectResume=wantsPlayback;
-   video.currentTime=wantedTime;
-   pendingSeek=false;
-   record('target-seek');
-   // Playing can stop even after play() has resolved when iOS starts seeking.
-   if(wantsPlayback)retryNeeded=true;
-   if(!denied)report(video.seeking?'ゴール位置に移動中…':'');
-   return true;
-  }catch(_){report('動画の位置を調整しています…');return false;}
- }
- function ensureGoalStart(){
-  if(fromBeginning||!wantsPlayback||initialTargetVerified||wantedTime<.75)return;
-  if(video.readyState<1){primeTargetBeforeMetadata();return;}
-  if(video.seeking)return;
-  const clock=Number(video.currentTime)||0;
-  if(clock>=wantedTime-.35){
-   initialTargetVerified=true;
-   return;
-  }
-  // Some iOS MOVs reset to 0 on play() even if a prior seek succeeded.
-  // Never accept a playback start minutes before the selected goal.
-  if(targetCorrectionCount>=3){
-   report('ゴール位置に移動できませんでした。もう一度▶ リプレイを押してください。');
-   return;
-  }
-  targetCorrectionCount++;
-  pendingSeek=true;
-  seek();
-  record('target-start-recovered');
- }
- function startPlay(token,{userGesture=false}={}){
-  if(token!==requestId||!wantsPlayback||playPending||denied)return;
-  if(userGesture)beforePlay();
-  record(userGesture?'user-play':'retry-play');
-  watchFrames();
-  // Keep the original gesture alive: call play synchronously before any awaits.
-  let attempt;
-  try{attempt=video.play();}
-  catch(error){handlePlayFailure(token,error);return;}
-  if(attempt&&typeof attempt.then==='function'){
-   playPending=true;
-   Promise.resolve(attempt).then(()=>{
-    if(token!==requestId)return;
-    playPending=false;
-    if(!video.paused){retryNeeded=false;}
-    else if(expectResume&&wantsPlayback&&!denied){retryNeeded=true;retryWhenReady();}
-   },error=>{
-    if(token!==requestId)return;
-    playPending=false;handlePlayFailure(token,error);
-   });
-  }
- }
- function handlePlayFailure(token,error){
-  if(token!==requestId||!wantsPlayback)return;
-  const message=mediaError(error);lastFailure=String(error?.name||error?.message||error);
-  record('play-error:'+lastFailure);
-  if(error?.name==='AbortError'&&retries<2){
-   retryNeeded=true;
-   report('ゴール位置へ移動中… 読み込み後に再生を再試行します。');
-   retryWhenReady();
+ const cancelFrame=()=>{
+  if(frameCallback!==null&&typeof video.cancelVideoFrameCallback==='function')
+   try{video.cancelVideoFrameCallback(frameCallback)}catch(_){}
+  frameCallback=null;
+ };
+ const later=(fn,delay=10000)=>{
+  cancelTimer();
+  const id=serial;
+  pendingTimer=schedule(()=>{
+   pendingTimer=null;
+   if(serial===id)fn();
+  },delay);
+  if(typeof pendingTimer?.unref==='function')pendingTimer.unref();
+ };
+ function handleError(error){
+  if(!wantPlay)return;
+  phase='paused';
+  playingRequest=false;
+  const name=String(error?.name||'');
+  if(name==='NotAllowedError'){
+   gestureNeeded=true;
+   say('ゴール位置への移動は完了しました。iPhoneの再生許可が必要です。▶ リプレイをもう一度押してください。');
+  }else if(name==='AbortError'){
+   // A pending seek may interrupt a play attempt on Safari; do not
+   // loop while the decoder is seeking.
+   if(video.seeking||!prepared){phase='seeking';say('ゴール位置に移動中…');}
+   else{say('再生が中断されました。▶ リプレイで再開してください。');gestureNeeded=true;}
   }else{
-   retryNeeded=false;
-   denied=error?.name==='NotAllowedError';
-   report(message);
+   gestureNeeded=true;
+   say('再生できませんでした。▶ リプレイを押してください。'+(name?'（'+name+'）':''));
   }
  }
- function retryWhenReady(){
-  if(!retryNeeded||!wantsPlayback||denied||playPending||
-    video.readyState<2||video.seeking||pendingSeek||retries>=2)return;
-  if(!video.paused){retryNeeded=false;expectResume=false;return;}
-  retries++;
-  retryNeeded=false;expectResume=false;
-  startPlay(requestId);
+ function beginPlayback(){
+  if(!wantPlay||!prepared||awaitSeek||video.seeking||playingRequest||gestureNeeded)return;
+  // Do not start until the media clock has landed on the actual goal.
+  // In particular, never try to play while metadata is still pending.
+  if(!nearTarget()){seekToGoal();return}
+  cancelTimer();
+  phase='playing';
+  playingRequest=true;
+  playAttempts++;
+  say('');
+  let promise;
+  try{promise=video.play()}catch(error){handleError(error);return}
+  Promise.resolve(promise).then(()=>{
+   playingRequest=false;
+   if(!wantPlay)return;
+   if(clock()<target-TOLERANCE)guardWrongStart();
+  },handleError);
  }
- video.addEventListener('loadedmetadata',()=>{
-  record('loadedmetadata');
-  seek();retryWhenReady();
- });
- video.addEventListener('loadeddata',()=>{record('loadeddata');retryWhenReady();});
- video.addEventListener('canplay',()=>{record('canplay');retryWhenReady();});
- video.addEventListener('seeking',()=>{record('seeking');});
- video.addEventListener('seeked',()=>{
-  record('seeked');
-  seekingOwnJump=false;
-  ensureGoalStart();
-  retryWhenReady();
-  if(!video.paused)report('');
- });
- video.addEventListener('playing',()=>{
-  record('playing');retryNeeded=false;
-  ensureGoalStart();
-  lastProgress=Number(video.currentTime)||0;
-  if(!pendingSeek)report('');
-  playingStartedAt=timeNow();playingStartPosition=Number(video.currentTime)||0;
-  startWatchdog();
-  // A resolved play() promise can still leave an iOS video frozen on one frame.
-  if(progressWatch)clearTimeout(progressWatch);
-  watchFrames();
-  const token=requestId,at=lastProgress,framesAtStart=decodedFrames;
-  progressWatch=setTimeout(()=>{
-   progressWatch=0;
-   if(token!==requestId||video.paused||video.seeking)return;
-   const audioClockAdvance=Math.abs((Number(video.currentTime)||0)-at);
-   if(audioClockAdvance<.15)
-    report('動画の再生が進んでいません。動画画面の▶で再生をお試しください。');
-   else if(hasVideoFrames&&decodedFrames===framesAtStart&&visible())
-    markFreeze('initial-playing-no-frames',Math.round(audioClockAdvance*10)/10);
-  },3000);
- });
- video.addEventListener('timeupdate',()=>{
-  ensureGoalStart();
-  const time=Number(video.currentTime)||0;
-  if(Math.abs(time-lastProgress)>.2){lastProgress=time;record('timeupdate');}
- });
- video.addEventListener('pause',()=>{
-  record('pause');
-  stopWatchdog();
-  if(wantsPlayback&&seekingOwnJump)expectResume=true;
-  else if(wantsPlayback&&!pendingSeek&&!denied)
-   report('再生が一時停止しました。動画画面の▶で再開してください。');
- });
- video.addEventListener('ended',()=>{
-  record('ended');stopWatchdog();closeFreeze('video-ended');
-  report('動画が最後まで再生されました。別のゴール候補を選ぶか、再生ボタンで戻れます。');
- });
- video.addEventListener('suspend',()=>record('suspend'));
- // Returning to a backgrounded Safari tab may restart the compositor/decoder.
- if(typeof document!=='undefined'&&typeof document.addEventListener==='function')
-  document.addEventListener('visibilitychange',()=>{
-   visibilityChanges++;lastVisibilityAt=timeNow();
-   record('visibility:'+String(document.visibilityState||'unknown'));
-   if(document.visibilityState==='hidden'){
-    stopWatchdog();closeFreeze('page-hidden');
-   }else if(wantsPlayback){
-    watchFrames();if(!video.paused)startWatchdog();
-   }
-  });
- video.addEventListener('waiting',()=>{record('waiting');report('動画の読み込み中…');});
- video.addEventListener('stalled',()=>{record('stalled');report('動画の読み込みが一時停止しています。動画画面の▶で再開してください。');});
- video.addEventListener('error',()=>{
-  record('error');
-  const code=video.error?.code;
-  report(code===4
-   ?'SafariがこのMOVの形式を再生できません。iPhoneの写真アプリで開けるか確認してください。'
-   :code===3
-   ?'動画のデコードに失敗しました。動画画面の▶か、元ファイルの再選択をお試しください。'
-   :'動画を読み込めませんでした。ファイルを再選択してください。');
- });
-
- function open({sourceKey,sourceUrl,at,autoplay=false,fromStart=false}){
-  if(!sourceKey||!sourceUrl)return false;
-  closeFreeze('new-playback-attempt');
-  stopWatchdog();
-  requestId++;
-  const token=requestId;
-  if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
-  cancelFrameWatch();
-  decodedFrames=0;lastFrameAt=null;lastFrameMediaTime=null;
-  lastFramePresentedCount=null;firstFrameDelayMs=null;
-  playbackOpenedAt=timeNow();
-  playingStartedAt=null;playingStartPosition=null;
-  fromBeginning=Boolean(fromStart);
-  wantedTime=fromBeginning?0:Math.max(0,Number(at)||0);
-  pendingSeek=!fromBeginning;wantsPlayback=Boolean(autoplay);
-  initialTargetVerified=fromBeginning||wantedTime<.75;
-  targetCorrectionCount=0;
-  seekingOwnJump=false;expectResume=false;
-  playPending=false;retryNeeded=false;denied=false;retries=0;
-  record(fromBeginning?'open-from-start':'open-goal');
-  // IMPORTANT: the containing player and <video> must be unhidden BEFORE
-  // setting src or play() on Safari, otherwise decoding may remain suspended.
-  video.hidden=false;
-  video.playsInline=true;
+ function finishSeek(){
+  if(!sourceKey||!awaitSeek||video.readyState<1)return;
+  // A future timestamp is not automatically "ready": an actual seek
+  // completion or loaded video frame is required before playing.
+  if(video.seeking)return;
+  if(!nearTarget()){
+   if(seekAttempts<=MAX_RESEEKS){seekToGoal(true);return}
+   failSeek();return;
+  }
+  awaitSeek=false;
+  prepared=true;
+  phase='ready';
+  cancelTimer();
+  if(wantPlay)beginPlayback();
+  else say('');
+ }
+ function failSeek(){
+  awaitSeek=false;prepared=false;wantPlay=false;phase='seek-failed';
+  try{video.pause()}catch(_){}
+  say('ゴール位置まで移動できませんでした。▶ リプレイで再試行してください。元動画の0秒からは再生しません。');
+ }
+ function seekToGoal(force=false){
+  if(!sourceKey||video.readyState<1)return;
+  // Do not keep assigning currentTime for the same in-flight deep seek.
+  if(video.seeking&&!force)return;
+  if(seekAttempts>MAX_RESEEKS){failSeek();return}
+  seekAttempts++;
+  awaitSeek=true;prepared=false;phase='seeking';
+  lastAttemptedTime=target;
+  say('ゴール位置（'+formatTime(target)+'）へ移動中…');
+  try{
+   video.currentTime=target;
+  }catch(error){
+   if(seekAttempts>MAX_RESEEKS){failSeek();return}
+   later(()=>seekToGoal(true),400);
+   return;
+  }
+  // Event-driven completion only: Safari may expose the requested
+  // currentTime immediately even when the MOV is still showing frame 0.
+  // A genuine seeked event, or loadeddata for an already-seeked frame,
+  // is needed. If seeked never arrives, show a retry instead of playing t=0.
+  later(()=>{if(awaitSeek)failSeek()},12000);
+ }
+ function guardWrongStart(){
+  if(!wantPlay||!sourceKey)return;
+  if(clock()>=target-TOLERANCE)return;
+  try{video.pause()}catch(_){}
+  playingRequest=false;prepared=false;awaitSeek=false;
+  gestureNeeded=false;
+  if(seekAttempts>MAX_RESEEKS){failSeek();return}
+  say('再生位置が先頭に戻ったため、ゴール位置を再設定しています…');
+  seekToGoal(true);
+ }
+ function inspectFrame(mediaTime){
+  frameCallback=null;
+  if(!sourceKey||!wantPlay)return;
+  // On some iPhones currentTime is correct while the displayed frame
+  // is still from 0. Guard the decoded frame time independently.
+  if(Number.isFinite(mediaTime)&&mediaTime<target-TOLERANCE){
+   guardWrongFrame();
+   return;
+  }
+  watchFirstFrame();
+ }
+ function guardWrongFrame(){
+  if(!wantPlay)return;
+  try{video.pause()}catch(_){}
+  playingRequest=false;prepared=false;awaitSeek=false;
+  gestureNeeded=false;
+  if(seekAttempts>MAX_RESEEKS){failSeek();return}
+  say('ゴール以外の映像が出たため再調整しています…');
+  seekToGoal(true);
+ }
+ function watchFirstFrame(){
+  if(frameCallback!==null||typeof video.requestVideoFrameCallback!=='function')return;
+  try{frameCallback=video.requestVideoFrameCallback((_now,metadata)=>{
+   inspectFrame(metadata?.mediaTime);
+  })}catch(_){frameCallback=null}
+ }
+ function prepareSource(){
+  if(!sourceKey||video.readyState<1)return;
+  if(awaitSeek||prepared)return;
+  seekToGoal();
+ }
+ function stopIntent(){
+  wantPlay=false;playingRequest=false;gestureNeeded=false;
+  cancelTimer();cancelFrame();
+  try{video.pause()}catch(_){}
+ }
+ function open({sourceKey:key,sourceUrl:url,at,autoplay=false,fromStart=false}){
+  if(!key||!url)return false;
+  // The target is ALWAYS an actual clip start (except an explicit
+  // debugging fromStart call), never a source-relative fallback to zero.
+  const requested=fromStart?0:Math.max(0,Number(at)||0);
+  const change=sourceKey!==key||sourceUrl!==url;
+  const changedTarget=Math.abs(target-requested)>TOLERANCE;
+  serial++;
+  cancelTimer();cancelFrame();
+  const alreadyPrepared=!change&&!changedTarget&&prepared&&!video.seeking;
+  stopIntent();
+  sourceKey=key;sourceUrl=url;target=requested;
+  wantPlay=Boolean(autoplay);
+  gestureNeeded=false;playingRequest=false;
+  seekAttempts=0;playAttempts=0;
+  video.hidden=false;video.playsInline=true;
   video.setAttribute('playsinline','');
   video.setAttribute('webkit-playsinline','');
-  const switching=activeKey!==sourceKey||activeUrl!==sourceUrl;
-  const restartFromBeginning=fromBeginning&&!switching;
-  if(switching||restartFromBeginning){
-   video.pause();
+  if(autoplay)beforePlay(); // synchronous user-gesture dependent cleanup
+  if(change){
+   prepared=false;awaitSeek=false;phase='loading';
    video.preload='auto';
-   // For the explicit fallback, reassign the original blob URL to RESET
-   // the media pipeline at t=0 instead of seeking backward within a stalled MOV.
-   video.src=sourceUrl; // src initiates load; do not call load() twice.
-   activeKey=sourceKey;activeUrl=sourceUrl;
+   video.src=url; // only when changing source: no extra MOV reload
+   say('動画を読み込み、ゴール位置を準備しています…');
+  }else if(alreadyPrepared&&nearTarget()){
+   // This is the fast path: user tapped ▶ after initial paused preview
+   // already sought to the correct goal start.
+   prepared=true;awaitSeek=false;phase='ready';
+   beginPlayback(); // synchronously inside the Replay button tap
+  }else{
+   prepared=false;awaitSeek=false;phase='loading';
+   prepareSource();
   }
-  // On a new src, wait for its metadata: readyState may still describe
-  // the previous source during Safari's media-resource reset.
-  if(!fromBeginning){
-   // Even on the first load, prime the deep goal timestamp *before* play().
-   // On iPhone Safari waiting until loadedmetadata can allow t=0 playback.
-   if(video.readyState<1)primeTargetBeforeMetadata();
-   else if(!switching)seek();
-  }
-  if(autoplay){
-   report('動画を準備しています…');
-   startPlay(token,{userGesture:true});
-  }else video.pause();
-  return switching;
+  return change;
  }
  function pause(){
-  wantsPlayback=false;retryNeeded=false;expectResume=false;
-  closeFreeze('manual-pause');stopWatchdog();
-  if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
-  cancelFrameWatch();
-  video.pause();
+  stopIntent();phase='paused';
  }
  function dispose(){
-  closeFreeze('disposed');stopWatchdog();
-  requestId++;wantsPlayback=false;retryNeeded=false;playPending=false;
-  if(progressWatch){clearTimeout(progressWatch);progressWatch=0;}
-  cancelFrameWatch();
-  video.pause();video.removeAttribute('src');video.load();
-  video.hidden=true;activeKey='';activeUrl='';pendingSeek=false;
+  serial++;stopIntent();
+  sourceKey='';sourceUrl='';target=0;
+  prepared=false;awaitSeek=false;phase='idle';
+  try{video.removeAttribute('src');video.load()}catch(_){}
+  video.hidden=true;
  }
- function currentSourceKey(){return activeKey;}
- const round=x=>Number.isFinite(Number(x))?Math.round(Number(x)*10)/10:null;
- function range(x){
-  try{const out=[];for(let i=0;i<Math.min(x?.length||0,5);i++)
-    out.push([round(x.start(i)),round(x.end(i))]);return out;}
-  catch(_){return [];}
- }
- function repeatFreezeLocations(){
-  const rows=[];
-  for(const freeze of freezeHistory){
-   const pos=Number(freeze.suspectedMediaPosition);
-   if(!Number.isFinite(pos)||pos<0)continue;
-   let group=rows.find(x=>x.sourceKey===freeze.sourceKey&&
-    Math.abs(x.approxPositionSeconds-pos)<=2);
-   if(!group){
-    group={sourceKey:freeze.sourceKey,approxPositionSeconds:Math.round(pos*10)/10,
-     attempts:[],records:0};rows.push(group);
-   }
-   group.records++;
-   if(!group.attempts.includes(freeze.attemptId))group.attempts.push(freeze.attemptId);
+ video.addEventListener('loadedmetadata',()=>{
+  if(!sourceKey)return;
+  prepareSource();
+ });
+ video.addEventListener('loadeddata',()=>{
+  if(awaitSeek&&!video.seeking&&video.readyState>=2)finishSeek();
+  else if(!prepared)prepareSource();
+ });
+ video.addEventListener('seeked',()=>{
+  if(awaitSeek)finishSeek();
+ });
+ video.addEventListener('canplay',()=>{
+  if(awaitSeek&&!video.seeking&&video.readyState>=2)finishSeek();
+ });
+ video.addEventListener('playing',()=>{
+  if(!wantPlay)return;
+  if(!prepared||awaitSeek||video.seeking||clock()<target-TOLERANCE){
+   guardWrongStart();
+   return;
   }
-  return rows.map(x=>({...x,repeatAcrossAttempts:x.attempts.length>=2}))
-   .sort((a,b)=>b.attempts.length-a.attempts.length);
- }
+  phase='playing';watchFirstFrame();
+ });
+ video.addEventListener('timeupdate',()=>{
+  if(!wantPlay)return;
+  if(clock()<target-TOLERANCE)guardWrongStart();
+ });
+ video.addEventListener('pause',()=>{
+  if(!wantPlay)return;
+  if(phase==='playing')phase='paused';
+ });
+ video.addEventListener('error',()=>{
+  if(!sourceKey)return;
+  phase='error';wantPlay=false;prepared=false;awaitSeek=false;cancelTimer();
+  const code=video.error?.code;
+  say(code===4?'このMOV形式をSafariで再生できません。元動画の形式を確認してください。':
+   '動画の読み込みに失敗しました。元動画を選び直してください。');
+ });
+ function currentSourceKey(){return sourceKey}
  function diagnostic(){
-  let quality=null;
-  try{
-   if(typeof video.getVideoPlaybackQuality==='function'){
-    const x=video.getVideoPlaybackQuality();
-    quality={totalVideoFrames:x.totalVideoFrames,droppedVideoFrames:x.droppedVideoFrames,
-     corruptedVideoFrames:x.corruptedVideoFrames??null};
-   }
-  }catch(_){}
-  const now=timeNow();
-  return {
-   player:'PeakStamp goal playback v45',sourceKey:activeKey,
-   currentTime:round(video.currentTime),targetTime:round(wantedTime),
-   duration:round(video.duration),paused:video.paused,seeking:video.seeking,
-   readyState:video.readyState,networkState:video.networkState,
-   videoSize:[video.videoWidth||0,video.videoHeight||0],
-   buffered:range(video.buffered),seekable:range(video.seekable),
-   mediaError:video.error?{code:video.error.code,message:video.error.message||''}:null,
-   pageVisibility:typeof document!=='undefined'?document.visibilityState||'unknown':'unknown',
-   lastEvent,lastMessage,lastFailure,fromBeginning,retries,
-   frameDiagnostics:{
-    supported:hasVideoFrames,decodedFrames,lastFrameMediaTime,
-    lastFramePresentedCount,
-    lastFrameAgeMs:lastFrameAt!==null?now-lastFrameAt:null,
-    firstFrameDelayMs,quality,
-    playbackElapsedMs:playbackOpenedAt!==null?now-playbackOpenedAt:null
-   },
-   visibility:{changes:visibilityChanges,lastChangeAgeMs:lastVisibilityAt!==null?now-lastVisibilityAt:null},
-   activeAttemptId:requestId,freezeCurrentlySuspected:!!suspectedFreeze,
-   repeatFreezeLocations:repeatFreezeLocations(),
-   frameFreezeHistory:freezeHistory.map(x=>({
-    sourceKey:x.sourceKey,attemptId:x.attemptId,reason:x.reason,
-    endedReason:x.endedReason??null,detectedAt:x.detectedAt,
-    playbackTime:Math.round(x.playbackTime*10)/10,
-    lastRenderedMediaTime:x.lastRenderedMediaTime??null,
-    suspectedMediaPosition:Math.round(x.suspectedMediaPosition*10)/10,
-    framesAtDetection:x.framesAtDetection,timeAdvanceSeconds:Math.round(x.timeAdvanceSeconds*10)/10,
-    pageVisibility:x.pageVisibility,
-    recoveredAfterMs:x.recoveredAfterMs??null,
-    recoveredAt:x.recoveredAt??null
-   })),
-   events:eventLog.slice(-15)
-  };
+  return {player:'PeakStamp goal replay v60',sourceKey,
+   currentTime:Number(video.currentTime)||0,targetTime:target,
+   readyState:video.readyState,seeking:video.seeking,paused:video.paused,
+   phase,prepared,awaitSeek,seekAttempts,playAttempts,
+   gestureNeeded,lastMessage,lastAttemptedTime};
+ }
+ function formatTime(t){
+  const m=Math.floor(t/60),s=Math.floor(t%60);
+  return m+':'+String(s).padStart(2,'0');
  }
  return {open,pause,dispose,currentSourceKey,diagnostic};
 }
