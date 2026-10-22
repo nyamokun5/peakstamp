@@ -315,8 +315,8 @@ test('goal section occurs directly below main Gemini analysis before regular hig
  assert.ok(p1>=0&&p1<goals&&goals<oldTools&&goals<standard);
  assert.match(html,/id="goalStatsStep"/);
  assert.match(html,/class="goal-review-queue-fold"/);
- assert.match(html,/id="goalStatsViewer"[^>]*\\shidden/,
-   'hidden in source until the goal review loads its first scene');
+ assert.ok(html.includes('id="goalStatsViewer" class="goal-review-viewer" hidden'),
+   'video is initially hidden only until the first goal preview is selected');
 });
 test('after first video Reject, next candidate starts automatically; final view remains editable',async()=>{
  const {dom,one,two,storage,stats,restore}=setup();
