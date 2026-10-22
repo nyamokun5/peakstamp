@@ -1,4 +1,4 @@
-import { drawIntro, introTitleRect } from './exporter.mjs?v=pinch18';
+import { drawIntro, introTitleRect } from './exporter.mjs?v=title51';
 import { zoomDrawRect } from './editing-rules.mjs?v=pinch18';
 import { overlayRect, normalizeIntroPoint, imageDimensions, prepareIntroPlan, introOverlayOpacity } from './intro-layout.mjs?v=scene15';
 
@@ -148,7 +148,9 @@ export function renderIntroPreview(){
     backgroundImage:!overlayMode&&state.mode==='image'?state.backgroundImage:null,
     overlayImage:state.overlayImage,position:state.position,overlayScale:state.overlayScale
   };
-  if(overlayMode && playing){
+  // Keep white letter titles fully opaque in preview, matching the MP4.
+  // Transparent PNGs retain their original gradual fade animation.
+  if(overlayMode && playing && state.overlayImage){
     const elapsed=Math.max(0,$('introFirstScenePreview').currentTime-firstSceneStart);
     ctx.globalAlpha=introOverlayOpacity(elapsed,firstSceneOverlaySeconds);
   }
