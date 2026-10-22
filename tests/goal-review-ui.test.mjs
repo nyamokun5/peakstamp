@@ -5,7 +5,7 @@ import {createGoalDrafts,goalSourceKey,confirmedGoalExport} from '../goal-stats.
 import {keepGoalClip,rejectGoalClip} from '../goal-video-clip.mjs';
 
 const ids=[
- 'goalStatsPanel','goalStatsList','goalStatsEditor','goalStatsSummary','goalStatsStatus',
+ 'goalStatsPanel','goalStatsList','goalStatsEditor','goalStatsSummary','goalStatsStep','goalStatsStatus',
  'goalStatsPreview','goalStatsPlayingLabel','goalStatsViewer','goalStatsVideoStatus',
  'goalStatsAdd','goalStatsManualSource','goalStatsManualWrap','goalStatsExport',
  'goalStatsCopy','goalStatsShow','goalStatsJson','goalStatsJsonArea'
@@ -91,43 +91,56 @@ function find(node,cls){
  }
  return null;
 }
-test('one queue for multiple videos; one decoder; confirm automatically advances',async()=>{
+test('first goal is immediately visible; score confirmation stays put; video judgment advances one decoder',async()=>{
  const {dom,storage,one,two,stats,restore}=setup();
  try{
-  initGoalStatsReview({sources:[one,two]},
-   {onBeforePlay:()=>stats.competingPaused++});
+  initGoalStatsReview({sources:[one,two]},{
+   onBeforePlay:()=>stats.competingPaused++,
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onRejectClip:(src,item)=>rejectGoalClip(src,item)
+  });
+  await Promise.resolve();
+  assert.equal(dom.goalStatsPanel.hidden,false);
   assert.equal(dom.goalStatsList.children.length,2);
   assert.match(dom.goalStatsList.children[0].children[0].textContent,/IMG_5292/);
   assert.match(dom.goalStatsList.children[1].children[0].textContent,/IMG_5293/);
   assert.equal(createGoalDrafts(one,storage).items[0].goalTimeSeconds,369.2);
   assert.equal(createGoalDrafts(two,storage).items[0].goalTimeSeconds,107.5);
-
-  dom.goalStatsList.children[0].events.click();
-  await Promise.resolve();
+  assert.equal(dom.goalStatsViewer.hidden,false,'video editor is open without queue tap');
   assert.equal(dom.goalStatsPreview.currentTime,365.2);
   assert.equal(stats.loads,1);
+  assert.equal(stats.plays,0,'initial first frame does not attempt gesture-restricted autoplay');
+  assert.match(dom.goalStatsStep.textContent,/ゴール 1 \/ 2/);
+  const replay=find(dom.goalStatsViewer,'play-btn goal-scene-replay');
+  assert.ok(replay,'Replay button is visible on first candidate');
+  replay.events.click();
+  await Promise.resolve();
+  assert.equal(stats.loads,1,'Replay must not reload the same source');
   assert.equal(stats.plays,1);
-
-  find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
-  await Promise.resolve();
-  assert.equal(stats.loads,1,'replaying same video must NOT reload source');
-  assert.equal(stats.plays,2);
-
   find(dom.goalStatsEditor,'goal-review-confirm').events.click();
-  await Promise.resolve();
   assert.equal(createGoalDrafts(one,storage).items[0].status,'confirmed');
-  assert.equal(stats.loads,2,'next video requires exactly one source change');
-  assert.equal(stats.plays,3);
+  assert.equal(stats.loads,1,'scorer confirmation must not skip unjudged video');
+  assert.match(dom.goalStatsStep.textContent,/1 \/ 2/);
+
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  await Promise.resolve();
+  assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
+  assert.equal(stats.loads,2,'next goal loads only when its source changes');
+  assert.equal(stats.plays,2,'next goal plays automatically after Keep tap');
   assert.equal(dom.goalStatsPreview.currentTime,103.5);
+  assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
   assert.match(dom.goalStatsPlayingLabel.textContent,/IMG_5293/);
 
   find(dom.goalStatsEditor,'goal-review-confirm').events.click();
-  await Promise.resolve();
   assert.equal(createGoalDrafts(two,storage).items[0].status,'confirmed');
-  assert.equal(dom.goalStatsViewer.hidden,true);
-  assert.match(dom.goalStatsStatus.textContent,/未確定候補はありません/);
+  find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
+  await Promise.resolve();
+  assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
+  assert.equal(dom.goalStatsViewer.hidden,false,'after last goal the editor stays available for replay');
+  assert.match(dom.goalStatsStep.textContent,/動画判定完了/);
+  assert.match(dom.goalStatsStatus.textContent,/すべて終わりました/);
   assert.equal(confirmedGoalExport([one,two],storage).goals.length,2);
-  assert.equal(stats.competingPaused,3);
+  assert.equal(stats.competingPaused,2);
  }finally{restore()}
 });
 test('editing scorer does not reload current video and requires reconfirmation',async()=>{
@@ -145,18 +158,19 @@ test('editing scorer does not reload current video and requires reconfirmation',
 });
 
 
-test('normal goal review keeps one standard player without debug controls',async()=>{
+test('goal replay starts from visible first-frame preview without an extra list tap',async()=>{
  const {dom,one,stats,restore}=setup();
  try{
   initGoalStatsReview({sources:[one]});
-  dom.goalStatsList.children[0].events.click();
   await Promise.resolve();
+  assert.equal(dom.goalStatsViewer.hidden,false);
   assert.equal(dom.goalStatsPreview.currentTime,365.2);
   assert.equal(stats.loads,1);
+  assert.equal(stats.plays,0);
   find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
   await Promise.resolve();
   assert.equal(stats.loads,1);
-  assert.equal(stats.plays,2);
+  assert.equal(stats.plays,1);
  }finally{restore()}
 });
 
@@ -288,5 +302,40 @@ test('changing a kept goal crop updates the same export candidate immediately',a
   assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,363);
   assert.equal(one.candidates[0].time,363);
   assert.equal(one.candidates[0].manualEnd,371.2);
+ }finally{restore()}
+});
+
+test('goal section occurs directly below main Gemini analysis before regular highlights',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const p1=html.indexOf('id="geminiPrimaryPanel"');
+ const goals=html.indexOf('id="goalStatsPanel"');
+ const oldTools=html.indexOf('id="geminiCalloutPanel"');
+ const standard=html.indexOf('id="resultsPanel"');
+ assert.ok(p1>=0&&p1<goals&&goals<oldTools&&goals<standard);
+ assert.match(html,/id="goalStatsStep"/);
+ assert.match(html,/class="goal-review-queue-fold"/);
+ assert.equal(html.includes('goalStatsViewer" hidden'),true,
+   'hidden in source until actual goal queue is loaded');
+});
+test('after first video Reject, next candidate starts automatically; final view remains editable',async()=>{
+ const {dom,one,two,storage,stats,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one,two]},{
+   onRejectClip:(source,item)=>rejectGoalClip(source,item),
+   onKeepClip:(source,item)=>Boolean(keepGoalClip(source,item))
+  });
+  await Promise.resolve();
+  assert.equal(stats.loads,1);
+  find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
+  await Promise.resolve();
+  assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'rejected');
+  assert.equal(stats.loads,2);
+  assert.equal(stats.plays,1);
+  assert.match(dom.goalStatsStep.textContent,/2 \/ 2/);
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  assert.equal(dom.goalStatsViewer.hidden,false);
+  assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'kept');
+  assert.match(dom.goalStatsStep.textContent,/動画判定完了/);
  }finally{restore()}
 });
