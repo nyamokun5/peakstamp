@@ -140,6 +140,13 @@ export function createGoalPlaybackController(video,{
   try{
    if(fromBeginning){pendingSeek=false;return true;}
    if(Math.abs((Number(video.currentTime)||0)-wantedTime)<.08){
+    // The pre-metadata assignment may itself still be seeking on Safari.
+    // Remember that play() can pause during this pending deep jump.
+    if(video.seeking&&wantsPlayback){
+     seekingOwnJump=true;
+     expectResume=true;
+     retryNeeded=true;
+    }
     pendingSeek=false;
     record('target-already-set');
     return true;
