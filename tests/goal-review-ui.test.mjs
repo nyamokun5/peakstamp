@@ -6,6 +6,7 @@ import {keepGoalClip,rejectGoalClip} from '../goal-video-clip.mjs';
 
 const ids=[
  'goalStatsPanel','goalStatsList','goalStatsEditor','goalStatsSummary','goalStatsStep','goalStatsStatus',
+ 'goalStatsDone','goalStatsDoneText','goalStatsDoneToRegular','goalStatsDoneAdd','resultsPanel','standardReviewArea',
  'goalStatsPreview','goalStatsPlayingLabel','goalStatsViewer','goalStatsVideoStatus',
  'goalStatsAdd','goalStatsManualSource','goalStatsManualWrap','goalStatsExport',
  'goalStatsCopy','goalStatsShow','goalStatsJson','goalStatsJsonArea'
@@ -40,6 +41,7 @@ function setup(){
   scrollIntoView(){}
   focus(){}
   select(){}
+  click(){this.events.click?.()}
   pause(){this.paused=true}
   set src(value){
    this._src=value;
@@ -138,7 +140,9 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
   assert.equal(dom.goalStatsViewer.hidden,false,'after last goal the editor stays available for replay');
   assert.match(dom.goalStatsStep.textContent,/動画判定完了/);
-  assert.match(dom.goalStatsStatus.textContent,/すべて終わりました/);
+  assert.match(dom.goalStatsStatus.textContent,/全件判定済み/);
+  assert.equal(dom.goalStatsDone.hidden,false);
+  assert.match(dom.goalStatsDoneText.textContent,/2件の判定が完了/);
   assert.equal(confirmedGoalExport([one,two],storage).goals.length,2);
   assert.equal(stats.competingPaused,2);
  }finally{restore()}
@@ -337,5 +341,58 @@ test('after first video Reject, next candidate starts automatically; final view 
   assert.equal(dom.goalStatsViewer.hidden,false);
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'kept');
   assert.match(dom.goalStatsStep.textContent,/動画判定完了/);
+ }finally{restore()}
+});
+
+test('only one detected goal: Keep shows explicit all-done state instead of a silent stuck screen',async()=>{
+ const {dom,one,storage,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onRejectClip:(src,item)=>rejectGoalClip(src,item)
+  });
+  await Promise.resolve();
+  assert.equal(dom.goalStatsDone.hidden,true);
+  assert.match(dom.goalStatsStep.textContent,/1 \/ 1/);
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
+  assert.equal(dom.goalStatsDone.hidden,false);
+  assert.match(dom.goalStatsDoneText.textContent,/1件の判定が完了.*残り0件/);
+  assert.match(dom.goalStatsStep.textContent,/動画判定完了/);
+  assert.equal(dom.goalStatsViewer.hidden,false,'can still review final saved goal');
+  assert.ok(find(dom.goalStatsViewer,'play-btn goal-scene-replay'));
+  assert.equal(dom.goalStatsDoneToRegular.hidden,false);
+ }finally{restore()}
+});
+
+test('Keep advances to next unjudged goal even when save callback synchronously triggers refresh',async()=>{
+ const {dom,one,two,stats,storage,restore}=setup();
+ try{
+  let review;
+  review=initGoalStatsReview({sources:[one,two]},{
+   onKeepClip:(source,item)=>{
+    if(!keepGoalClip(source,item))return false;
+    review.refresh();
+    return true;
+   },
+   onRejectClip:(source,item)=>{
+    if(!rejectGoalClip(source,item))return false;
+    review.refresh();
+    return true;
+   }
+  });
+  await Promise.resolve();
+  const first=dom.goalStatsPlayingLabel.textContent;
+  assert.match(first,/IMG_5292/);
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  await Promise.resolve();
+  assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
+  assert.match(dom.goalStatsPlayingLabel.textContent,/IMG_5293/);
+  assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
+  assert.equal(stats.loads,2);
+  find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
+  assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
+  assert.equal(dom.goalStatsDone.hidden,false);
+  assert.match(dom.goalStatsDoneText.textContent,/2件の判定が完了/);
  }finally{restore()}
 });
