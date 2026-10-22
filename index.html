@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=goal55" />
+  <link rel="stylesheet" href="styles.css?v=goal57" />
 </head>
 <body>
   <header class="topbar">
@@ -111,6 +111,14 @@
       <p class="fine-print">最初のゴールを表示します。<strong>▶ リプレイで確認 → 得点・アシストを確認 → 動画をキープ／不採用で次のゴールへ。</strong> 切り抜き・2本指での画角調整もここでできます。得点情報の確定は別操作です。</p>
       <p id="goalStatsSummary" class="goal-review-summary" aria-live="polite"></p>
       <div id="goalStatsStep" class="goal-review-step" aria-live="polite"></div>
+      <div id="goalStatsDone" class="goal-review-completed" hidden role="status">
+        <strong id="goalStatsDoneText">すべてのゴール動画を判定しました。</strong>
+        <p>ほかのゴール候補が見つかっていない場合、次に表示するゴールはありません。</p>
+        <div class="goal-review-completed-actions">
+          <button id="goalStatsDoneToRegular" type="button" class="whisper-run" hidden>通常の見どころを確認 →</button>
+          <button id="goalStatsDoneAdd" type="button" class="whisper-run">＋ 見逃したゴールを追加</button>
+        </div>
+      </div>
       <div id="goalStatsViewer" class="goal-review-viewer" hidden>
         <strong id="goalStatsPlayingLabel"></strong>
         <video id="goalStatsPreview" controls playsinline preload="metadata" hidden aria-label="ゴール候補を確認する共通動画プレーヤー"></video>
@@ -475,6 +483,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=goal56"></script>
+  <script type="module" src="app.mjs?v=goal57"></script>
 </body>
 </html>
