@@ -20,7 +20,12 @@ function setup(){
   }
   append(...items){this.children.push(...items)}
   replaceChildren(...items){this.children=items}
-  addEventListener(name,handler){this.events[name]=handler}
+  addEventListener(name,handler){
+   // Browsers deliver every listener. The player and shared trim/zoom
+   // editor each subscribe to loadedmetadata on the SAME video.
+   const prev=this.events[name];
+   this.events[name]=prev?(...args)=>{prev(...args);handler(...args)}:handler;
+  }
   removeEventListener(name){delete this.events[name]}
   getBoundingClientRect(){return {left:0,top:0,width:360,height:203,right:360,bottom:203}}
   setPointerCapture(){}
