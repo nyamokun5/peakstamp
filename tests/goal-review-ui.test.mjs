@@ -13,7 +13,7 @@ function setup(){
  const stats={loads:0,plays:0,competingPaused:0};
  class Element{
   constructor(tag='div'){
-   this.tagName=tag;this.className='';this.children=[];this.events={};this.dataset={};
+   this.tagName=tag;this.className='';this.children=[];this.events={};this.listeners={};this.dataset={};
    this.value='';this.textContent='';this.hidden=false;this.disabled=false;
    this.readyState=0;this.currentTime=0;this.paused=true;
    this.style={};this.videoWidth=1920;this.videoHeight=1080;
@@ -21,12 +21,16 @@ function setup(){
   append(...items){this.children.push(...items)}
   replaceChildren(...items){this.children=items}
   addEventListener(name,handler){
-   // Browsers deliver every listener. The player and shared trim/zoom
-   // editor each subscribe to loadedmetadata on the SAME video.
-   const prev=this.events[name];
-   this.events[name]=prev?(...args)=>{prev(...args);handler(...args)}:handler;
+   if(!this.listeners[name])this.listeners[name]=new Set();
+   this.listeners[name].add(handler);
+   this.events[name]=(...args)=>{
+    for(const fn of [...(this.listeners[name]||[])])fn(...args);
+   };
   }
-  removeEventListener(name){delete this.events[name]}
+  removeEventListener(name,handler){
+   this.listeners[name]?.delete(handler);
+   if(!this.listeners[name]?.size)delete this.events[name];
+  }
   getBoundingClientRect(){return {left:0,top:0,width:360,height:203,right:360,bottom:203}}
   setPointerCapture(){}
   releasePointerCapture(){}
@@ -99,7 +103,6 @@ test('one queue for multiple videos; one decoder; confirm automatically advances
 
   dom.goalStatsList.children[0].events.click();
   await Promise.resolve();
-  console.log('GOAL_MOCK_TRACE',JSON.stringify({time:dom.goalStatsPreview.currentTime,ready:dom.goalStatsPreview.readyState,src:dom.goalStatsPreview.src,status:dom.goalStatsVideoStatus.textContent,loads:stats.loads,playing:!dom.goalStatsPreview.paused}));
   assert.equal(dom.goalStatsPreview.currentTime,365.2);
   assert.equal(stats.loads,1);
   assert.equal(stats.plays,1);
@@ -147,7 +150,6 @@ test('normal goal review keeps one standard player without debug controls',async
   initGoalStatsReview({sources:[one]});
   dom.goalStatsList.children[0].events.click();
   await Promise.resolve();
-  console.log('GOAL_MOCK_TRACE',JSON.stringify({time:dom.goalStatsPreview.currentTime,ready:dom.goalStatsPreview.readyState,src:dom.goalStatsPreview.src,status:dom.goalStatsVideoStatus.textContent,loads:stats.loads,playing:!dom.goalStatsPreview.paused}));
   assert.equal(dom.goalStatsPreview.currentTime,365.2);
   assert.equal(stats.loads,1);
   find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
