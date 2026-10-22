@@ -20,14 +20,19 @@ export function keepGoalClip(source,goal){
    .sort((a,b)=>proximity(a)-proximity(b))[0];
  if(match){
   // Do not override intentionally edited already-kept scenes, just mark as kept.
-  if(match.enabled!==true){
+  if(match.enabled!==true || match.goalRecordId===goal.id){
    // An explicitly adjusted goal preview must use exactly its chosen trim.
    // Otherwise retain any wider manually edited pre-existing highlight.
-   match.time=Number.isFinite(goal.clipStartSeconds)
-    ?start:Math.min(Number(match.time)||0,start);
-   match.manualEnd=Number.isFinite(goal.clipEndSeconds)
-    ?end:Math.min(duration,Math.max(Number(match.manualEnd)||0,end));
-   if(crop.zoom>1){
+   if(match.enabled!==true){
+    match.time=Number.isFinite(goal.clipStartSeconds)
+     ?start:Math.min(Number(match.time)||0,start);
+    match.manualEnd=Number.isFinite(goal.clipEndSeconds)
+     ?end:Math.min(duration,Math.max(Number(match.manualEnd)||0,end));
+   }else{
+    if(Number.isFinite(goal.clipStartSeconds))match.time=start;
+    if(Number.isFinite(goal.clipEndSeconds))match.manualEnd=end;
+   }
+   if(crop.zoom>1 || goal.clipZoom!==undefined){
     match.zoom=crop.zoom;match.zoomX=crop.zoomX;match.zoomY=crop.zoomY;
    }
   }
