@@ -77,10 +77,16 @@ export function createGoalSceneControls({viewer,video,label,status,
  const inputStart=field('開始');const inputEnd=field('終了');
  range.append(heading,legend,track,hint,inputs);
  viewer.replaceChildren(label,viewport,zoomRow,playRow,range,status);
- const bounds=()=>goalSceneBounds(item,source?.duration);
+ const duration=()=>{
+  const sourceLength=Number(source?.duration);
+  if(sourceLength>0)return sourceLength;
+  const mediaLength=Number(video.duration);
+  return mediaLength>0?mediaLength:Math.max(1,actualGoalTime(item)+2);
+ };
+ const bounds=()=>goalSceneBounds(item,duration());
  const timeWindow=()=> {
   const b=bounds();
-  return drag?.window||clipMarkerPositions(b.start,actualGoalTime(item),b.end,source.duration);
+  return drag?.window||clipMarkerPositions(b.start,actualGoalTime(item),b.end,duration());
  };
  const positionAt=x=>{
   const win=timeWindow();
@@ -106,7 +112,7 @@ export function createGoalSceneControls({viewer,video,label,status,
   current.textContent='再生位置 '+formatTimelineTime(showTime);
   pause.textContent=video.paused?'▶ 再生':'⏸ 一時停止';
   for(const [el,val,low,high] of [
-   [start,b.start,0,b.end-.3],[end,b.end,b.start+.3,source.duration],
+   [start,b.start,0,b.end-.3],[end,b.end,b.start+.3,duration()],
    [head,showTime,b.start,b.end]
   ]){
    el.setAttribute('aria-valuemin',String(low));
@@ -115,7 +121,7 @@ export function createGoalSceneControls({viewer,video,label,status,
   }
  };
  const saveEdge=(edge,time)=>{
-  if(!item||!setGoalSceneEdge(item,edge,time,source.duration)){
+  if(!item||!setGoalSceneEdge(item,edge,time,duration())){
    redraw();return false;
   }
   onChange(source,item);
@@ -131,7 +137,7 @@ export function createGoalSceneControls({viewer,video,label,status,
    if(!item||event.button!==undefined&&event.button!==0)return;
    event.stopPropagation();event.preventDefault();
    drag={kind,id:event.pointerId,time:null,
-    window:clipMarkerPositions(bounds().start,actualGoalTime(item),bounds().end,source.duration)};
+    window:clipMarkerPositions(bounds().start,actualGoalTime(item),bounds().end,duration())};
    try{el.setPointerCapture?.(event.pointerId)}catch{}
   });
   el.addEventListener('pointermove',event=>{
@@ -163,7 +169,7 @@ export function createGoalSceneControls({viewer,video,label,status,
   const b=bounds();
   drag={kind:'seek',id:event.pointerId,
    time:Math.max(b.start,Math.min(b.end,positionAt(event.clientX))),
-   window:clipMarkerPositions(b.start,actualGoalTime(item),b.end,source.duration)};
+   window:clipMarkerPositions(b.start,actualGoalTime(item),b.end,duration())};
   try{track.setPointerCapture?.(event.pointerId)}catch{}
   hint.textContent='指を離すとその位置から再生';
   redraw();
