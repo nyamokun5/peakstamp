@@ -86,7 +86,7 @@ function find(node,cls){
  const queue=[node];
  while(queue.length){
   const child=queue.shift();
-  if(child.className===cls)return child;
+  if(child.className===cls||(!cls.includes(' ')&&String(child.className).split(/\s+/).includes(cls)))return child;
   queue.push(...child.children);
  }
  return null;
