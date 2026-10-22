@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#081725">
+<title>PeakStamp × Shoot Sunday | 試合・ゴール照合</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#091927;color:#e7f7f7;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;padding:18px 12px 55px}main{max-width:830px;margin:auto}
+h1{font-size:23px;margin:8px 0}h2{font-size:17px;margin:0 0 10px}h3{font-size:15px}
+p{font-size:13px;line-height:1.65;color:#bbd1d5}label{font-size:13px}
+.panel{border:1px solid #355764;border-radius:13px;padding:15px;margin:13px 0;background:#122938}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.step{background:#204b50;color:#b1ffde;padding:5px 9px;font-size:11px;border-radius:15px}
+.small{font-size:12px;color:#c2d2db}.warning{border-left:3px solid #f4be72;padding:9px 12px;background:#3b3025}
+button{cursor:pointer;border:1px solid #669faf;background:#234c61;color:#fff;padding:10px 12px;border-radius:9px;font-weight:700;min-height:41px}
+button:disabled{cursor:default;opacity:.45}button.primary{background:#1a8f78;border-color:#78e2bc;color:#fff}
+button.danger{background:#73423f;border-color:#d49483}
+textarea,input,select{background:#0c1f2d;color:#fff;border:1px solid #567786;border-radius:7px;padding:9px;font-size:14px;max-width:100%}
+textarea{width:100%;min-height:110px;font-family:ui-monospace,monospace;font-size:11px}
+select{width:100%}input[type=number]{width:90px}input[type=checkbox]{width:18px;height:18px;accent-color:#70dcb8}
+.input-row{display:grid;grid-template-columns:1fr 1fr;gap:10px} .fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.grid-item{border:1px solid #466774;border-radius:11px;padding:11px;margin:9px 0;background:#193446}
+.details{font-size:11px;opacity:.83;line-height:1.5}
+.pill{font-size:11px;border-radius:12px;padding:3px 8px;background:#38565d;color:#fff}
+.positive{color:#a9f8d6}.muted{color:#b9d2da}
+.select-source{display:block;margin:9px 0;padding:8px;background:#0e2430;border-radius:8px}
+.error{color:#ffd1b7}a{color:#a9f8d6}summary{cursor:pointer;font-size:12px}
+details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
+#goalRows:empty:after{content:'データを読み込むとここに表示されます';color:#9dabbc}
+#planJson{min-height:160px}
+@media(max-width:620px){.input-row,.fields{grid-template-columns:1fr}body{padding:12px 9px 40px}}
+</style>
+</head>
+<body><main>
+<a href="./?v=spo63">← PeakStampに戻る</a>
+<header class="top"><h1>⚽ Shoot Sundayへ試合・ゴールを登録</h1><span class="step">確認・登録準備版</span></header>
+<p>PeakStampで確認したゴール・アシストとShoot Sundayの試合／選手名簿を照合します。<strong>誤登録を防ぐため、すべての行で試合・選手を人が選択して確認</strong>してください。</p>
+<p class="warning"><strong>現在は書き込み前の確認機能です。</strong>開発者APIのHTTP仕様を確認できていないため、この画面からShoot Sundayへの直接送信は行いません。最終JSONをコピーして、接続済みのChatGPTで登録できます。保存済みデータの削除・上書きも行いません。</p>
+<section class="panel">
+ <h2>1. PSのゴールデータを選択</h2>
+ <p>このiPhoneのブラウザに保存された確定済みゴールを読み込みます。複数の日付のデータがある場合は、対象動画だけ選んでください。</p>
+ <div id="sources"></div>
+ <div class="line"><button id="refreshSources">保存データを再読み込み</button><span id="sourceStatus" class="small"></span></div>
+</section>
+<section class="panel">
+ <h2>2. Shoot Sunday当日の試合／選手名簿を読み込む</h2>
+ <p>Shoot Sundayの <code>get_match_results</code> のJSON（<code>event_id / matches / roster</code>）をインポートしてください。アプリ連携用のAPI認証が整うまでの暫定方式です。</p>
+ <label class="field">JSONファイルを選択 <input type="file" accept=".json,application/json" id="snapshotFile"></label>
+ <details><summary>またはJSONを貼り付ける</summary><textarea id="snapshotText" placeholder='{"event_id":"...","matches":[{"seq":1,...}],"roster":{"チーム1":["選手A"]}}'></textarea></details>
+ <div class="line"><button id="loadSnapshot" class="primary">試合・名簿を読み込む</button><span id="snapshotStatus" class="status"></span></div>
+</section>
+<section class="panel" id="reviewArea" hidden>
+ <h2>3. 1ゴールずつ照合・確認</h2>
+ <p id="eventTitle" class="status"></p>
+ <p>「自動候補」は単なる提案です。<strong>試合、得点者、アシスト、得点チームを選んで「このゴールを確認」にチェック</strong>すると登録データへ進めます。試合番号はSpoSchedが返した正式な<code>seq</code>です。</p>
+ <div id="goalRows"></div>
+ <h3>試合スコアを修正する場合（任意）</h3>
+ <p>得点集計の見逃しを考慮して、ゴール件数からスコアを勝手に決めません。試合の得点を更新する場合にだけ選択し、明示的に確認します。未選択ならゴール登録のみ。</p>
+ <div id="matchRows"></div>
+ <div class="line"><button class="primary" id="buildPlan">確認した登録内容を作成</button><span id="reviewStatus" class="small"></span></div>
+</section>
+<section class="panel" id="exportArea" hidden>
+ <h2>4. Shoot Sunday登録前の最終データ</h2>
+ <p><strong>まだ送信していません。</strong>下のJSONは接続済みShoot Sundayツールの <code>record_match</code> / <code>record_goal</code> に対応する、人が確認済みの操作案です。登録前にアプリの最新状態と照合し、二重登録がないことを確認してください。</p>
+ <textarea id="planJson" readonly></textarea>
+ <div class="line"><button class="primary" id="copyPlan">JSONをコピー</button><span class="small" id="copyStatus"></span></div>
+ <p class="small">コピー後、ChatGPTに「Shoot SundayのこのJSONを確認して、登録前に差分と重複を見せて」と貼り付けると、接続済みアプリ経由で進められます。</p>
+</section>
+</main>
+<script type="module">
+import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
+import {normalizeSpoSnapshot,prepareGoalRows,selectPlayerCandidates,findPotentialDuplicate,buildReviewPayload} from './sposched-review-core.mjs?v=spo63';
+const $=id=>document.getElementById(id);
+const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
+const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
+let snapshot=null,rows=[],scores=[],goalExports=[];
+const touch=()=>{$('exportArea').hidden=true;$('planJson').value='';$('reviewStatus').textContent=''};
+const select=(choices,value,placeholder='選択してください')=>{
+ const el=document.createElement('select');
+ const blank=node('option',placeholder);blank.value='';el.append(blank);
+ for(const {value:v,label} of choices){const o=node('option',label);o.value=String(v);el.append(o)}
+ el.value=String(value??'');return el;
+};
+const field=(title,control)=>{const el=node('label','','field');el.append(node('span',title),control);return el};
+const checks=()=>{
+ const selected=[...document.querySelectorAll('#sources input:checked')].map(x=>x.value);
+ let sourceObjects=[];
+ for(const key of selected){
+  try{
+   const data=JSON.parse(localStorage.getItem(key)||'null');
+   if(data?.source?.name)sourceObjects.push({file:{...data.source}});
+  }catch{}
+ }
+ return sourceObjects;
+};
+function sourcesLoad(){
+ $('sources').replaceChildren();goalExports=[];
+ const saved=[];
+ try{
+  for(let i=0;i<localStorage.length;i++){
+   const k=localStorage.key(i);if(!k?.startsWith(GOAL_STORE_PREFIX))continue;
+   const data=JSON.parse(localStorage.getItem(k)||'null');
+   if(!data?.source?.name||!Array.isArray(data.items))continue;
+   const count=data.items.filter(g=>g.status==='confirmed').length;
+   if(count)saved.push({key:k,source:data.source,count});
+  }
+ }catch(e){$('sourceStatus').textContent='保存データにアクセスできません: '+e.message;return}
+ saved.sort((a,b)=>Number(b.source.lastModified)-Number(a.source.lastModified));
+ for(const [i,item] of saved.entries()){
+  const label=node('label','','select-source'),checkbox=mkInput('checkbox');
+  checkbox.value=item.key;checkbox.checked=i===0;
+  checkbox.addEventListener('change',()=>{touch();if(snapshot)rebuild()});
+  label.append(checkbox,node('span',' '+item.source.name+' · 確定ゴール '+item.count+'件'));
+  $('sources').append(label);
+ }
+ $('sourceStatus').textContent=saved.length?saved.length+'件の保存済み動画':'確定済みのゴール保存データはありません';
+}
+function chosenGoals(){
+ const files=checks();if(!files.length)return [];
+ return confirmedGoalExport(files,localStorage).goals;
+}
+function rebuild(){
+ touch();
+ const source=chosenGoals();
+ if(!snapshot||!source.length){$('reviewArea').hidden=true;return}
+ rows=prepareGoalRows({goals:source},snapshot);
+ scores=snapshot.matches.map(m=>({
+  seq:m.seq,leftScore:m.leftScore,rightScore:m.rightScore,
+  winner:m.leftScore===m.rightScore?'draw':'',
+  include:false,confirmed:false
+ }));
+ $('reviewArea').hidden=false;
+ $('eventTitle').textContent=(snapshot.eventName||'イベント')+
+  ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+'件 / 対象ゴール '+rows.length+'件';
+ renderGoals();renderScores();
+}
+function renderGoals(){
+ $('goalRows').replaceChildren();
+ const options=[...snapshot.players].map(name=>({value:name,label:name+'　'+(snapshot.playerTeam.get(name)||'')}));
+ for(const [i,row] of rows.entries()){
+  const g=row.goal,article=node('article','','grid-item');
+  const h=node('h3','#'+(i+1)+'　'+(g.source?.name||'')+' '+String(g.goalTimeSeconds??'')+'秒');
+  const quote=node('p','実況「'+(g.quote||'—')+'」　AI: 得点 '+(g.scorer||'不明')+' ／ アシスト '+(g.assist||'不明'),'details');
+  const include=mkInput('checkbox');include.checked=row.include;include.addEventListener('change',()=>{row.include=include.checked;touch()});
+  const bar=node('div','','line');bar.append(include,node('span','登録対象に含める'));article.append(h,quote,bar);
+  const wrap=node('div','','fields');
+  const matchSelect=select(snapshot.matches.map(m=>({value:m.seq,label:'#'+m.seq+' '+m.leftTeam+' vs '+m.rightTeam})),row.seq);
+  matchSelect.addEventListener('change',()=>{row.seq=Number(matchSelect.value)||null;row.confirmed=false;confirm.checked=false;touch();updateDuplicate()});
+  const scorerSelect=select(options,row.scorer,'得点者を選択（AI: '+(g.scorer||'—')+'）');
+  scorerSelect.addEventListener('change',()=>{row.scorer=scorerSelect.value;row.confirmed=false;confirm.checked=false;touch();updateDuplicate()});
+  const assistMode=select([{value:'named',label:'あり（選手を選択）'},{value:'none',label:'なし'},{value:'unknown',label:'不明（要確認）'}],row.assistMode);
+  const assistSelect=select(options,row.assist,'アシスト者を選択（AI: '+(g.assist||'—')+'）');
+  assistSelect.disabled=row.assistMode!=='named';
+  assistMode.addEventListener('change',()=>{row.assistMode=assistMode.value;assistSelect.disabled=assistMode.value!=='named';row.confirmed=false;confirm.checked=false;touch()});
+  assistSelect.addEventListener('change',()=>{row.assist=assistSelect.value;row.confirmed=false;confirm.checked=false;touch()});
+  const teamSelect=select([...new Set(snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]))]
+   .map(t=>({value:t,label:t})),row.team,'得点チームを選択');
+  teamSelect.addEventListener('change',()=>{row.team=teamSelect.value;row.confirmed=false;confirm.checked=false;touch();updateDuplicate()});
+  wrap.append(field('試合番号',matchSelect),field('得点者',scorerSelect),field('アシスト',assistMode),
+   field('アシスト者',assistSelect),field('得点チーム',teamSelect));
+  article.append(wrap);
+  const hints=node('p','AI候補: 得点者 '+row.scorerHints.map(x=>x.name).join(' / ')+
+   '｜アシスト '+row.assistHints.map(x=>x.name).join(' / '),'details');
+  article.append(hints);
+  const warn=node('p','','error');
+  const duplicateWrap=node('label','','line'),duplicateCheck=mkInput('checkbox');
+  duplicateCheck.checked=row.duplicateApproved;
+  duplicateCheck.addEventListener('change',()=>{row.duplicateApproved=duplicateCheck.checked;touch()});
+  duplicateWrap.append(duplicateCheck,node('span','既存の記録とは別のゴールであることを確認した'));
+  const updateDuplicate=()=>{
+   const duplicate=findPotentialDuplicate(row,snapshot);
+   warn.textContent=duplicate?'⚠ 同じ試合に同じ得点者・アシストの既存記録があります。元動画と照合してください。':'';
+   duplicateWrap.hidden=!duplicate;
+   if(!duplicate){row.duplicateApproved=false;duplicateCheck.checked=false}
+  };
+  const confirm=mkInput('checkbox');confirm.checked=row.confirmed;
+  confirm.addEventListener('change',()=>{row.confirmed=confirm.checked;touch()});
+  const footer=node('label','','line');footer.append(confirm,node('strong','このゴールの試合・選手を確認した'));article.append(footer,warn,duplicateWrap);
+  $('goalRows').append(article);updateDuplicate();
+ }
+}
+function renderScores(){
+ $('matchRows').replaceChildren();
+ for(const m of snapshot.matches){
+  const x=scores.find(y=>y.seq===m.seq),box=node('div','','grid-item');
+  const include=mkInput('checkbox');include.checked=x.include;
+  const left=mkInput('number');left.min=0;left.step=1;left.value=x.leftScore??'';
+  const right=mkInput('number');right.min=0;right.step=1;right.value=x.rightScore??'';
+  const winner=select([{value:'draw',label:'引き分け'},{value:m.leftTeam,label:m.leftTeam+'（じゃんけん勝）'},{value:m.rightTeam,label:m.rightTeam+'（じゃんけん勝）'}],x.winner,'同点の場合の勝敗');
+  const confirm=mkInput('checkbox');
+  const sync=()=>{x.confirmed=false;confirm.checked=false;touch()};
+  include.addEventListener('change',()=>{x.include=include.checked;sync()});
+  left.addEventListener('input',()=>{x.leftScore=left.value;sync()});
+  right.addEventListener('input',()=>{x.rightScore=right.value;sync()});
+  winner.addEventListener('change',()=>{x.winner=winner.value;sync()});
+  confirm.addEventListener('change',()=>{x.confirmed=confirm.checked;touch()});
+  box.append(node('strong','#'+m.seq+' '+m.leftTeam+' vs '+m.rightTeam),node('p','現行スコア: '+(m.leftScore??'—')+' - '+(m.rightScore??'—'),'details'));
+  const row=node('div','','line');row.append(include,node('span','スコアも登録・更新'),node('span',m.leftTeam),left,node('span','−'),right,node('span',m.rightTeam));
+  const check=node('label','','line');check.append(confirm,node('span','このスコアを確認した'));
+  box.append(row,field('同点の場合',winner),check);$('matchRows').append(box);
+ }
+}
+$('refreshSources').addEventListener('click',()=>{sourcesLoad();if(snapshot)rebuild()});
+$('snapshotFile').addEventListener('change',async e=>{
+ const f=e.target.files?.[0];if(!f)return;
+ try{$('snapshotText').value=await f.text();$('snapshotStatus').textContent=f.name+' を読み込みました';}
+ catch(error){$('snapshotStatus').textContent=error.message}
+});
+$('loadSnapshot').addEventListener('click',()=>{
+ try{
+  snapshot=normalizeSpoSnapshot(JSON.parse($('snapshotText').value));
+  $('snapshotStatus').textContent='試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人';
+  rebuild();
+ }catch(error){$('snapshotStatus').textContent='読み込みエラー：'+error.message}
+});
+$('buildPlan').addEventListener('click',()=>{
+ try{
+  const payload=buildReviewPayload(snapshot,rows,scores);
+  $('planJson').value=JSON.stringify(payload,null,2);
+  $('exportArea').hidden=false;
+  $('reviewStatus').textContent='登録操作 '+payload.operations.length+'件の確認データを作成しました（未送信）';
+  $('exportArea').scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(error){$('exportArea').hidden=true;$('reviewStatus').textContent=error.message}
+});
+$('copyPlan').addEventListener('click',async()=>{
+ try{
+  await navigator.clipboard.writeText($('planJson').value);
+  $('copyStatus').textContent='コピーしました（未送信）';
+ }catch(error){
+  $('copyStatus').textContent='コピーに失敗。下のJSONテキストを長押ししてコピーしてください。';
+ }
+});
+sourcesLoad();
+</script>
+</body></html>

@@ -1,0 +1,133 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {normalizePerson,normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,
+ selectPlayerCandidates,findPotentialDuplicate,validateGoalRow,buildReviewPayload}
+ from '../sposched-review-core.mjs';
+const event=()=>({
+ event:'日曜定期',event_id:'eeaed234-e9f0-4999-b05e-ec01c7b656fc',
+ matches:[
+ {seq:1,title:'#1 Team1 vs Team2',left_team:'Team1',right_team:'Team2',
+  left_score:1,right_score:0,
+  goals:[{goal_id:'old1',scorer:'Tyler Takasaki',assist:null,team:'Team1'}]},
+ {seq:null,title:'Drone',left_team:'Team1',right_team:'Team2'},
+ {seq:2,title:'#2 Team3 vs Team4',left_team:'Team3',right_team:'Team4',
+  left_score:0,right_score:1,
+  goals:[{goal_id:'old2',scorer:'Hiroyuki Kawata',assist:'Yuki Noda',team:'Team4'}]}
+ ],roster:{
+  'チーム1':['Tyler Takasaki','Yutaka Nakajima'],
+  'チーム2':['芦田','西村'],
+  'チーム3':['Gasuke.Y','Taisei Kobayashi'],
+  'チーム4':['Hiroyuki Kawata','Yuki Noda']
+ }
+});
+const exported=()=>({kind:'peakstamp-confirmed-goals',goals:[
+ {id:'goal-a',source:{name:'IMG_A.mov'},goalTimeSeconds:25,quote:'タイラーさんゴール！',
+  scorer:'Tyler Takasaki',assist:null,assistStatus:'none',matchSeq:1,
+  teamA:'Team1',teamB:'Team2'},
+ {id:'goal-b',source:{name:'IMG_B.mov'},goalTimeSeconds:76,quote:'川田さんゴール、野田さんアシスト',
+  scorer:'川田さん',assist:'野田さん',assistStatus:'named',matchSeq:null,
+  teamA:'Team3',teamB:'Team4'}
+]});
+test('normalizes real SpoSched get_match_results and ignores Drone / highlight placeholders',()=>{
+ const result=normalizeSpoSnapshot(event());
+ assert.equal(result.eventId,'eeaed234-e9f0-4999-b05e-ec01c7b656fc');
+ assert.deepEqual(result.matches.map(x=>x.seq),[1,2]);
+ assert.equal(result.players.length,8);
+ assert.equal(result.playerTeam.get('Yuki Noda'),'チーム4');
+ assert.equal(result.matches[0].existingGoals[0].scorer,'Tyler Takasaki');
+});
+test('handles roster チームN / match TeamN spelling',()=>{
+ assert.equal(normalizeTeam('チーム４'),normalizeTeam('Team4'));
+ const snap=normalizeSpoSnapshot(event());
+ assert.deepEqual(selectPlayerCandidates('Tyler Takasaki',snap,'Team1')[0].name,'Tyler Takasaki');
+ assert.equal(normalizePerson(' 野田さん '),normalizePerson('野田'));
+});
+test('fails closed when snapshot does not have official event id, duplicated seq or matches',()=>{
+ assert.throws(()=>normalizeSpoSnapshot({roster:{}}),/matches/);
+ assert.throws(()=>normalizeSpoSnapshot({matches:[],roster:{}}),/イベントID/);
+ const data=event();data.matches[1].seq=1;
+ assert.throws(()=>normalizeSpoSnapshot(data),/seqが重複/);
+});
+test('matching may suggest candidates but NEVER marks goals human confirmed',()=>{
+ const snap=normalizeSpoSnapshot(event());
+ const rows=prepareGoalRows(exported(),snap);
+ assert.equal(rows.length,2);
+ assert.deepEqual(rows.map(x=>x.seq),[1,2]);
+ assert.equal(rows[0].scorer,'');
+ assert.equal(rows[0].confirmed,false);
+ assert.equal(rows[1].scorerHints.length,0,'unmapped Japanese nickname requires manual selection');
+ assert.equal(validateGoalRow(rows[0],snap),'選手・試合の確認が必要です');
+});
+test('buildReviewPayload maps manually selected scorer/assist to official record_goal parameters',()=>{
+ const snap=normalizeSpoSnapshot(event());
+ const rows=prepareGoalRows(exported(),snap);
+ // The real historical snapshot already contains both goals; adjust old
+ // goals here to avoid duplicate and test the NEW unrecorded submissions.
+ snap.matches[0].existingGoals=[];
+ snap.matches[1].existingGoals=[];
+ rows[0].scorer='Tyler Takasaki';rows[0].team='Team1';rows[0].confirmed=true;
+ rows[1].scorer='Hiroyuki Kawata';rows[1].assist='Yuki Noda';rows[1].team='Team4';
+ rows[1].confirmed=true;
+ const payload=buildReviewPayload(snap,rows);
+ assert.equal(payload.status,'human-reviewed-NOT-SENT');
+ assert.equal(payload.operations.length,2);
+ assert.deepEqual(payload.operations.map(x=>x.action),['record_goal','record_goal']);
+ assert.deepEqual(payload.operations[1].args,{
+  event_id:snap.eventId,seq:2,scorer:'Hiroyuki Kawata',team:'Team4',assist:'Yuki Noda'
+ });
+ assert.equal(payload.operations[0].args.assist,undefined);
+});
+test('refuses duplicate scorer/assist/team in same match until human resolves it',()=>{
+ const snap=normalizeSpoSnapshot(event());
+ const row=prepareGoalRows(exported(),snap)[0];
+ row.scorer='Tyler Takasaki';row.team='チーム1';row.confirmed=true;
+ assert.equal(findPotentialDuplicate(row,snap),true);
+ assert.throws(()=>buildReviewPayload(snap,[row]),/重複候補/);
+ row.duplicateApproved=true;
+ const data=buildReviewPayload(snap,[row]);
+ assert.equal(data.operations.length,1);
+ assert.equal(data.operations[0].args.scorer,'Tyler Takasaki',
+  'the human may confirm a second legitimate goal from the same scorer');
+});
+test('blocks missing match assignment, uncertain assist and invalid team',()=>{
+ const snap=normalizeSpoSnapshot(event());snap.matches.forEach(m=>m.existingGoals=[]);
+ const row=prepareGoalRows(exported(),snap)[1];row.confirmed=true;
+ row.scorer='Hiroyuki Kawata';row.team='Team4';row.seq=null;
+ assert.match(validateGoalRow(row,snap),/試合番号/);
+ row.seq=2;row.assistMode='unknown';
+ assert.match(validateGoalRow(row,snap),/アシスト/);
+ row.assistMode='named';row.assist='Yuki Noda';
+ assert.equal(validateGoalRow(row,snap),null);
+ row.team='Team2';
+ assert.match(validateGoalRow(row,snap),/得点チーム/);
+});
+test('match score is ONLY included after explicit include and human confirmation',()=>{
+ const snap=normalizeSpoSnapshot(event());snap.matches.forEach(m=>m.existingGoals=[]);
+ const row=prepareGoalRows(exported(),snap)[0];row.scorer='Tyler Takasaki';
+ row.team='Team1';row.confirmed=true;
+ let payload=buildReviewPayload(snap,[row],[
+  {seq:1,include:false,confirmed:false,leftScore:3,rightScore:2}
+ ]);
+ assert.equal(payload.operations.length,1);
+ assert.throws(()=>buildReviewPayload(snap,[row],[{
+  seq:1,include:true,confirmed:false,leftScore:3,rightScore:2
+ }]),/確認してください/);
+ payload=buildReviewPayload(snap,[row],[{
+  seq:1,include:true,confirmed:true,leftScore:3,rightScore:2
+ }]);
+ assert.equal(payload.operations[0].action,'record_match');
+ assert.equal(payload.operations[0].args.left_score,3);
+ assert.equal(payload.operations[1].action,'record_goal');
+});
+test('portal never has direct write fetch, API secrets or automatic side effects',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ const home=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ assert.match(home,/sposched-review\.html/);
+ assert.match(html,/record_goal/);
+ assert.match(html,/人が選択/);
+ assert.doesNotMatch(html,/fetch\s*\(/);
+ assert.doesNotMatch(html,/localStorage\.clear/);
+ assert.doesNotMatch(html,/apiKey|api_key|Bearer\s+\w/i);
+ assert.match(html,/未送信/);
+});
