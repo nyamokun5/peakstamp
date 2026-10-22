@@ -77,3 +77,32 @@ test('default plan handles peak within four seconds of the video boundaries',()=
   {sourceId:'A',sourceName:'short.mov',start:15,end:20}
  ]);
 });
+
+test('accepted goal is interleaved chronologically with standard Keep clips',()=>{
+ const src=file('A','game.mov',120,[
+   {id:'regular-later',time:70,peakSeconds:74,manualEnd:76,enabled:true},
+   {id:'goal',goalRecordId:'g1',origin:'goal-commentary',
+    time:34,peakSeconds:38,manualEnd:40,enabled:true},
+   {id:'regular-earlier',time:10,peakSeconds:14,manualEnd:16,enabled:true},
+ ]);
+ const plan=buildMultiClipPlan([src]);
+ assert.deepEqual(plan.map(c=>c.start),[10,34,70]);
+ assert.deepEqual(plan.map(c=>c.end),[16,40,76]);
+});
+test('goal-only file exports without waveform; video file order is preserved',()=>{
+ const goalOnly=file('A','goal.mov',100,[
+  {goalRecordId:'g1',origin:'goal-commentary',
+   time:31,peakSeconds:35,manualEnd:37,enabled:true}
+ ],false);
+ const other=file('B','regular.mov',100,[
+  {time:5,peakSeconds:9,manualEnd:11,enabled:true}
+ ]);
+ assert.deepEqual(buildMultiClipPlan([goalOnly,other]).map(c=>[c.sourceId,c.start,c.end]),
+  [['A',31,37],['B',5,11]]);
+});
+test('unanalyzed ordinary candidates are still excluded from video export',()=>{
+ const src=file('X','old.mov',100,[
+  {time:8,peakSeconds:12,manualEnd:14,enabled:true}
+ ],false);
+ assert.deepEqual(buildMultiClipPlan([src]),[]);
+});
