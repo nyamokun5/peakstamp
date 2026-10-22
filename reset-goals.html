@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#091728">
+  <title>ゴール判定・編集データの削除 | PeakStamp</title>
+  <style>
+    :root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#effbf9;background:#091728}
+    *{box-sizing:border-box} body{margin:0;padding:24px 15px 48px}
+    main{max-width:640px;margin:auto}
+    .back{color:#aeeadd;text-decoration:none;display:inline-block;margin-bottom:20px;font-size:14px}
+    h1{font-size:23px;line-height:1.35;margin:0 0 9px}
+    h2{font-size:16px;margin:25px 0 8px}
+    p{line-height:1.7;margin:8px 0 12px;color:#c4dade}
+    .small{font-size:12px;color:#b6cdd0}
+    .panel{background:#122938;border:1px solid #3d6570;border-radius:13px;padding:15px;margin:18px 0}
+    .session{display:flex;align-items:flex-start;gap:12px;border:1px solid #416775;border-radius:10px;padding:13px 11px;margin:9px 0;background:#173443;cursor:pointer;overflow-wrap:anywhere}
+    .session input{width:21px;height:21px;flex:none;accent-color:#63dbb2;margin:3px 0}
+    .session strong{display:block;font-size:15px;line-height:1.5;color:#fff}
+    .session .meta{display:block;color:#b9d3d5;font-size:12px;margin-top:5px}
+    .session:has(input:checked){background:#1d4d43;border-color:#75e4bb}
+    .empty{border:1px dashed #7196a0;border-radius:10px;padding:20px 12px;text-align:center}
+    .delete{width:100%;border:0;border-radius:10px;min-height:52px;padding:12px;background:#bb4b4b;color:#fff;font-size:16px;font-weight:800;cursor:pointer}
+    .delete:disabled{background:#49616d;color:#b6c3ca;cursor:default}
+    .status{min-height:22px;color:#d6ffe9;font-weight:750}
+    .note{font-size:12px;border-left:3px solid #86b5ae;padding-left:10px}
+    .footer{margin-top:22px;color:#aac7c9;font-size:12px}
+  </style>
+</head>
+<body>
+<main>
+  <a class="back" href="./?v=reset59">← PeakStampに戻る</a>
+  <h1>このiPhoneのゴール判定・編集データを削除</h1>
+  <p>削除したい動画を選んでください。<strong>得点・アシスト確認、動画のキープ／不採用、手動ゴール、切り取り位置、画角の拡大設定</strong>を、その動画について初期状態に戻します。</p>
+  <div class="panel">
+    <h2>端末に保存されている動画</h2>
+    <p class="small">動画ファイルの更新日時が新しい順です。実際の編集日時とは異なります。削除する動画名を確認してください。</p>
+    <div id="sessions" role="group" aria-label="削除する動画を選択"></div>
+    <p id="selection" class="small" aria-live="polite"></p>
+    <button id="erase" class="delete" type="button" disabled>選択したゴール判定・編集データを削除</button>
+    <p id="message" class="status" role="status" aria-live="polite"></p>
+  </div>
+  <p class="note">動画ファイル本体、Geminiによる実況文字起こし、別の動画のゴールデータ、他のPeakStamp設定は削除しません。実況解析結果が残るため、同じ動画を読み込むとゴール候補そのものは再表示されますが、判定・編集は初期状態になります。</p>
+  <p class="footer">このデータはiPhone内のブラウザに保存されています。以前PeakStampを使ったのと同じブラウザ（Safariまたはホーム画面アプリ）でこの画面を開いてください。</p>
+</main>
+<script type="module">
+import {savedGoalSessions,deleteGoalSessions} from './goal-data-reset.mjs?v=reset59';
+const sessions=document.getElementById('sessions'),selection=document.getElementById('selection');
+const erase=document.getElementById('erase'),message=document.getElementById('message');
+let current=[];
+const selected=()=>[...sessions.querySelectorAll('input:checked')].map(el=>el.value);
+const updateSelection=()=>{
+ const count=selected().length;
+ selection.textContent=count?'削除対象：'+count+'件':'削除する動画を選んでください';
+ erase.disabled=!count;
+};
+const formatDate=ms=>{
+ if(!(ms>0))return '更新日不明';
+ try{return '元動画の更新日：'+new Intl.DateTimeFormat('ja-JP',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(ms))}catch{return '更新日不明'}
+};
+function render(){
+ sessions.replaceChildren();
+ message.textContent='';
+ try{current=savedGoalSessions(window.localStorage)}
+ catch{current=[];message.textContent='保存データを読み取れません。このブラウザのサイトデータ設定を確認してください。'}
+ if(!current.length){
+  const p=document.createElement('p');p.className='empty';
+  p.textContent='このブラウザにはゴール判定・編集の保存データがありません。';
+  sessions.append(p);updateSelection();return;
+ }
+ for(const [i,row] of current.entries()){
+  const label=document.createElement('label');label.className='session';
+  const check=document.createElement('input');check.type='checkbox';check.value=row.key;
+  check.addEventListener('change',updateSelection);
+  const copy=document.createElement('span');
+  const name=document.createElement('strong');name.textContent=row.name;
+  const meta=document.createElement('span');meta.className='meta';
+  meta.textContent=formatDate(row.lastModified)+'　／　ゴール '+row.total+'件　／　キープ '+row.kept+'件・不採用 '+row.rejected+'件　／　編集 '+row.edited+'件';
+  copy.append(name,meta);label.append(check,copy);
+  if(i===0)label.setAttribute('aria-label','更新日が最も新しい動画：'+row.name);
+  sessions.append(label);
+ }
+ updateSelection();
+}
+erase.addEventListener('click',()=>{
+ const keys=selected();
+ if(!keys.length)return;
+ const matches=current.filter(row=>keys.includes(row.key));
+ const names=matches.map(row=>'・'+row.name).join('\n');
+ const question='以下の動画のゴール判定・編集データを削除します。元に戻せません。\n\n'+names+
+  '\n\n実況解析結果と動画ファイルは削除しません。実行しますか？';
+ if(!window.confirm(question))return;
+ try{
+  const count=deleteGoalSessions(window.localStorage,keys);
+  render();
+  message.textContent=count+'件の動画について、ゴール判定・編集データを削除しました。PeakStampに戻って動画を読み込み直してください。';
+ }catch(error){message.textContent='削除できませんでした：'+(error?.message||String(error))}
+});
+render();
+</script>
+</body></html>

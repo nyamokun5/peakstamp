@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=cache58" />
+  <link rel="stylesheet" href="styles.css?v=reset59" />
 </head>
 <body>
   <header class="topbar">
@@ -36,6 +36,11 @@
         <span>MOV / MP4 · 複数選択もOK</span>
         <small>元動画は送信されません</small>
       </label>
+      <details class="compact-details">
+        <summary>このiPhoneに保存したゴール判定・編集データを消す</summary>
+        <p class="fine-print">動画ごとにゴールのキープ／不採用・得点／アシスト確認・切り取り・画角の保存情報だけを削除できます。別の動画やGemini解析結果は残ります。</p>
+        <a href="./reset-goals.html?v=reset59" class="plain-link">保存された動画を確認して削除する →</a>
+      </details>
       <details class="compact-details"><summary>iPhoneで動画が選べない場合</summary><p class="photo-picker-tip">長い動画は1本ずつ選択。失敗するときは写真アプリから「未編集のオリジナルを書き出す」でiPhone内に保存して選択してください。</p></details>
       <div class="file-details" id="fileDetails" hidden>
         <div class="file-logo">▶</div>
@@ -483,6 +488,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=cache58"></script>
+  <script type="module" src="app.mjs?v=reset59"></script>
 </body>
 </html>
