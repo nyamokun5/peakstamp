@@ -16,10 +16,15 @@ function setup(){
    this.tagName=tag;this.className='';this.children=[];this.events={};this.dataset={};
    this.value='';this.textContent='';this.hidden=false;this.disabled=false;
    this.readyState=0;this.currentTime=0;this.paused=true;
+   this.style={};this.videoWidth=1920;this.videoHeight=1080;
   }
   append(...items){this.children.push(...items)}
   replaceChildren(...items){this.children=items}
   addEventListener(name,handler){this.events[name]=handler}
+  removeEventListener(name){delete this.events[name]}
+  getBoundingClientRect(){return {left:0,top:0,width:360,height:203,right:360,bottom:203}}
+  setPointerCapture(){}
+  releasePointerCapture(){}
   setAttribute(){}
   removeAttribute(name){if(name==='src')this._src=''}
   scrollIntoView(){}
@@ -47,7 +52,7 @@ function setup(){
  const storage={values:new Map(),getItem(k){return this.values.get(k)||null},
   setItem(k,v){this.values.set(k,v)}};
  globalThis.document={getElementById:id=>dom[id],createElement:tag=>new Element(tag)};
- globalThis.window={localStorage:storage,prompt:()=>null};
+ globalThis.window={localStorage:storage,prompt:()=>null,addEventListener(){},removeEventListener(){}};
  const one={id:'one',objectUrl:'blob:first',duration:450.752,bins:[{}],candidates:[],
   file:{name:'IMG_5292.mov',size:591367587,lastModified:1792283825000}};
  const two={id:'two',objectUrl:'blob:second',duration:417.685,bins:[{}],candidates:[],
@@ -89,11 +94,11 @@ test('one queue for multiple videos; one decoder; confirm automatically advances
 
   dom.goalStatsList.children[0].events.click();
   await Promise.resolve();
-  assert.equal(dom.goalStatsPreview.currentTime,359.2);
+  assert.equal(dom.goalStatsPreview.currentTime,365.2);
   assert.equal(stats.loads,1);
   assert.equal(stats.plays,1);
 
-  find(dom.goalStatsEditor,'goal-review-play').events.click();
+  find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
   await Promise.resolve();
   assert.equal(stats.loads,1,'replaying same video must NOT reload source');
   assert.equal(stats.plays,2);
@@ -103,7 +108,7 @@ test('one queue for multiple videos; one decoder; confirm automatically advances
   assert.equal(createGoalDrafts(one,storage).items[0].status,'confirmed');
   assert.equal(stats.loads,2,'next video requires exactly one source change');
   assert.equal(stats.plays,3);
-  assert.equal(dom.goalStatsPreview.currentTime,97.5);
+  assert.equal(dom.goalStatsPreview.currentTime,103.5);
   assert.match(dom.goalStatsPlayingLabel.textContent,/IMG_5293/);
 
   find(dom.goalStatsEditor,'goal-review-confirm').events.click();
@@ -136,11 +141,86 @@ test('normal goal review keeps one standard player without debug controls',async
   initGoalStatsReview({sources:[one]});
   dom.goalStatsList.children[0].events.click();
   await Promise.resolve();
-  assert.equal(dom.goalStatsPreview.currentTime,359.2);
+  assert.equal(dom.goalStatsPreview.currentTime,365.2);
   assert.equal(stats.loads,1);
-  find(dom.goalStatsEditor,'goal-review-play').events.click();
+  find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
   await Promise.resolve();
   assert.equal(stats.loads,1);
   assert.equal(stats.plays,2);
+ }finally{restore()}
+});
+
+test('goal preview has shared replay, pinch controls and colored trim/playhead instead of native-only video',async()=>{
+ const {dom,one,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]});
+  dom.goalStatsList.children[0].events.click();
+  await Promise.resolve();
+  assert.equal(dom.goalStatsPreview.controls,false);
+  assert.ok(find(dom.goalStatsViewer,'goal-scene-viewport zoom-video-viewport'));
+  assert.ok(find(dom.goalStatsViewer,'scene-pinch-hint'));
+  assert.ok(find(dom.goalStatsViewer,'range-track interactive-range'));
+  assert.ok(find(dom.goalStatsViewer,'range-playhead'));
+  assert.ok(find(dom.goalStatsViewer,'range-dot range-start range-handle'));
+  assert.ok(find(dom.goalStatsViewer,'range-dot range-end range-handle'));
+  assert.ok(find(dom.goalStatsViewer,'play-btn goal-scene-replay'));
+  const labels=allLabels(dom.goalStatsEditor);
+  assert.ok(labels.includes('得点者（ゴール）'));
+  assert.ok(labels.includes('アシスト'));
+  assert.ok(labels.includes('対戦カード'));
+  assert.ok(labels.includes('SS試合番号（任意）'));
+ }finally{restore()}
+});
+function allLabels(root){
+ const result=[],queue=[root];
+ while(queue.length){
+  const node=queue.shift();
+  if(node.tagName==='span'&&typeof node.textContent==='string')result.push(node.textContent);
+  queue.push(...node.children);
+ }
+ return result;
+}
+test('goal trim handles and pinch gestures persist without changing the true goal timestamp',async()=>{
+ const {dom,one,storage,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]});
+  dom.goalStatsList.children[0].events.click();
+  await Promise.resolve();
+  const viewer=dom.goalStatsViewer;
+  const startField=find(viewer,'range-time');
+  assert.ok(startField);
+  startField.value='06:02.0';
+  startField.events.change();
+  let item=createGoalDrafts(one,storage).items[0];
+  assert.equal(item.clipStartSeconds,362);
+  assert.equal(item.goalTimeSeconds,369.2);
+  const viewport=find(viewer,'goal-scene-viewport zoom-video-viewport');
+  const point=(id,x)=>({pointerId:id,pointerType:'touch',clientX:x,clientY:90,preventDefault(){}});
+  viewport.events.pointerdown(point(1,120));
+  viewport.events.pointerdown(point(2,240));
+  viewport.events.pointermove(point(1,90));
+  viewport.events.pointermove(point(2,270));
+  viewport.events.pointerup(point(1,90));
+  viewport.events.pointerup(point(2,270));
+  item=createGoalDrafts(one,storage).items[0];
+  assert.ok(item.clipZoom>1);
+  assert.equal(item.goalTimeSeconds,369.2);
+ }finally{restore()}
+});
+test('scrub playhead release seeks once to chosen time and plays with the shared decoder',async()=>{
+ const {dom,one,stats,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]});
+  dom.goalStatsList.children[0].events.click();await Promise.resolve();
+  const track=find(dom.goalStatsViewer,'range-track interactive-range');
+  assert.ok(track);
+  const before=stats.loads,plays=stats.plays;
+  const touch=(x)=>({pointerId:3,pointerType:'touch',clientX:x,button:0,preventDefault(){}});
+  track.events.pointerdown(touch(160));
+  track.events.pointermove(touch(240));
+  track.events.pointerup(touch(240));
+  await Promise.resolve();
+  assert.equal(stats.loads,before);
+  assert.equal(stats.plays,plays+1);
  }finally{restore()}
 });
