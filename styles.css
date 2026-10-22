@@ -1351,3 +1351,20 @@ body:has(#undoReview:not([hidden])) .page{
  .goal-review-editor .goal-review-field input,
  .goal-review-editor .goal-review-field select{font-size:16px}
 }
+
+/* v53 details: goal metadata comes immediately after the common scene editor;
+   the infrequently needed goal timestamp correction is collapsed. */
+.goal-review-editor details.goal-review-time-adjust{
+ display:block;margin:10px 0 2px;padding:9px 10px;
+ background:#12313d;border:1px solid #365e69;border-radius:9px;
+}
+.goal-review-editor .goal-review-time-adjust>summary{
+ display:list-item;cursor:pointer;
+ font-size:12px;font-weight:800;color:#d2f8ea;
+}
+.goal-review-time-tools{
+ display:flex;gap:7px;align-items:center;flex-wrap:wrap;
+ padding:10px 0 1px;
+}
+.goal-review-time-tools .goal-review-mark-button{flex:1 0 100%}
+.goal-review-editor .goal-review-fields{margin:8px 0 3px}
