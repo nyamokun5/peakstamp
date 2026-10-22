@@ -99,6 +99,7 @@ test('one queue for multiple videos; one decoder; confirm automatically advances
 
   dom.goalStatsList.children[0].events.click();
   await Promise.resolve();
+  console.log('GOAL_MOCK_TRACE',JSON.stringify({time:dom.goalStatsPreview.currentTime,ready:dom.goalStatsPreview.readyState,src:dom.goalStatsPreview.src,status:dom.goalStatsVideoStatus.textContent,loads:stats.loads,playing:!dom.goalStatsPreview.paused}));
   assert.equal(dom.goalStatsPreview.currentTime,365.2);
   assert.equal(stats.loads,1);
   assert.equal(stats.plays,1);
@@ -146,6 +147,7 @@ test('normal goal review keeps one standard player without debug controls',async
   initGoalStatsReview({sources:[one]});
   dom.goalStatsList.children[0].events.click();
   await Promise.resolve();
+  console.log('GOAL_MOCK_TRACE',JSON.stringify({time:dom.goalStatsPreview.currentTime,ready:dom.goalStatsPreview.readyState,src:dom.goalStatsPreview.src,status:dom.goalStatsVideoStatus.textContent,loads:stats.loads,playing:!dom.goalStatsPreview.paused}));
   assert.equal(dom.goalStatsPreview.currentTime,365.2);
   assert.equal(stats.loads,1);
   find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
