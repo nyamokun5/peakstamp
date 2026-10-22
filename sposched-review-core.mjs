@@ -73,7 +73,7 @@ export function prepareGoalRows(rawGoals,snapshot){
    scorer:'',assist:'',assistMode:g.assistStatus==='none'?'none':
     g.assistStatus==='named'?'named':'unknown',
    scorerHints,assistHints,team:'',confirmed:false,include:true,
-   scoreConfirmed:false};
+   scoreConfirmed:false,duplicateApproved:false};
  });
 }
 export function validateGoalRow(row,snapshot){
@@ -109,8 +109,8 @@ export function buildReviewPayload(snapshot,rows,scoreRows=[]){
  const missing=items.map((row,i)=>({i,problem:validateGoalRow(row,snapshot)}))
   .filter(x=>x.problem);
  if(missing.length)throw Error((missing[0].i+1)+'件目：'+missing[0].problem);
- const duplicates=items.filter(row=>findPotentialDuplicate(row,snapshot));
- if(duplicates.length)throw Error('既存記録との重複候補が'+duplicates.length+'件あります。重複を確認して登録対象から外すか、アプリ側で既存内容を修正してください。');
+ const duplicates=items.filter(row=>findPotentialDuplicate(row,snapshot)&&row.duplicateApproved!==true);
+ if(duplicates.length)throw Error('既存記録との重複候補が'+duplicates.length+'件あります。元の記録と照合し、別ゴールであることを明示確認してください。');
  const operationGoals=items.map(row=>{
   const team=row.team||snapshot.playerTeam.get(row.scorer)||'';
   const args={event_id:snapshot.eventId,seq:number(row.seq),scorer:row.scorer,team};
