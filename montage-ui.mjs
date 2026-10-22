@@ -1,10 +1,10 @@
 import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=title51';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=pinch18';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=peak52';
 import { formatTime } from './detector.mjs';
 import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=title51';
 
 const $ = id => document.getElementById(id);
-function clipOptions(){return {mode:'fixed',fixedSeconds:16};}
+function clipOptions(){return {mode:'peak'};}
 function updateTitlePreview() {
   // The interactive intro canvas is the only preview. Its font, size,
   // location and background match the MP4 composition code.
