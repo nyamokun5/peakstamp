@@ -71,6 +71,15 @@ export function prepareIntroPlan(plan,intro=null){
     Math.max(0,Number(clips[0].end)-previous));
   return {clips,introSeconds:0,overlaySeconds,prerollSeconds};
 }
+/** True only during the overlay's configured opening seconds.
+ * Applies equally to white text and uploaded PNG, avoiding title text
+ * remaining visible over the *entire* first highlight.
+ */
+export function introOverlayActive(frameIndex,frameRate,duration){
+ const frame=Number(frameIndex),rate=Number(frameRate),seconds=Number(duration);
+ return Number.isFinite(frame)&&frame>=0&&Number.isFinite(rate)&&rate>0&&
+  Number.isFinite(seconds)&&seconds>0&&frame/rate<seconds;
+}
 export function introOverlayOpacity(seconds,duration=FIRST_SCENE_LEAD_SECONDS){
   const t=Number(seconds),d=Number(duration);
   if(!Number.isFinite(t)||!Number.isFinite(d)||d<=0||t<0||t>=d)return 0;
