@@ -5,8 +5,9 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=eta34';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal53';
-import { keepGoalClip } from './goal-video-clip.mjs?v=peak52';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal54';
+import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goal54';
+import {createGoalDrafts} from './goal-stats.mjs?v=40';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=peak52';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title51';
@@ -119,10 +120,15 @@ function syncSources() {
   const candidates = [];
   for (const source of state.sources) {
     source.offset = offset;
-    if (!source.bins) continue;
-    bins.push(...source.bins);
-    candidates.push(...source.candidates);
-    offset += source.duration;
+    // The goal editor owns video decisions, stored independently of its
+    // scorer/assist confirmation. Restore them after every reanalysis.
+    syncGoalClipDecisions(source,createGoalDrafts(source,window.localStorage).items);
+    if(source.bins)bins.push(...source.bins);
+    // Accepted goal videos are eligible for export even before the normal
+    // audio-waveform scan and must count with other kept clips.
+    candidates.push(...(source.candidates||[]).filter(item=>
+      Boolean(source.bins)||Boolean(item.goalRecordId)));
+    offset += Number(source.duration)||0;
   }
   state.duration = offset;
   state.bins = bins.length ? bins : null;
@@ -1166,7 +1172,10 @@ function row(item, index) {
   return entry;
 }
 function refreshComment() {
-  const selected = state.candidates.filter(item => item.enabled);
+  const byTime=new Map(state.sources.map((source,index)=>[source.id,index]));
+  const selected = state.candidates.filter(item => item.enabled).slice()
+    .sort((a,b)=>(byTime.get(a.sourceId)??0)-(byTime.get(b.sourceId)??0)||
+      (Number(a.time)||0)-(Number(b.time)||0));
   $('exportEditData').disabled = !buildMultiClipPlan(state.sources,currentClipOptions()).length || state.working || state.exporting || state.geminiProcessing;
   const isMulti = state.sources.length > 1;
   const perSource=sourceTimestampComments(state.sources);
@@ -1394,13 +1403,22 @@ const goalReview=initGoalStatsReview(state,{
     $('preview').pause();
   },
   onKeepClip:(source,item)=>{
-    if(!source?.bins)return false;
-    const added=keepGoalClip(source,item);
-    if(!added)return false;
+    if(!keepGoalClip(source,item))return false;
     syncSources();
-    reviewTab='kept';
-    drawResults();
     return true;
+  },
+  onRejectClip:(source,item)=>{
+    if(!rejectGoalClip(source,item))return false;
+    syncSources();
+    return true;
+  },
+  onClipEdit:(source,item)=>{
+    // A retained goal's trim/zoom is edited directly in the goal editor.
+    // Update the same clip used in MP4 export without rerendering the goal
+    // editor or pausing its Safari video decoder.
+    if(item.videoDecision==='kept' && keepGoalClip(source,item)){
+      refreshComment();
+    }
   }
 });
 const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
