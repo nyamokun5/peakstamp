@@ -1436,3 +1436,21 @@ body:has(#undoReview:not([hidden])) .page{
  .goal-review-step{font-size:12px;padding:9px 10px;line-height:1.5}
  .goal-review-viewer .goal-scene-replay{font-size:13px!important}
 }
+
+/* v57: make it unambiguous when no second goal exists. */
+.goal-review-completed{
+ margin:8px 0 12px;padding:13px 12px;
+ border:1px solid #66ad9d;border-radius:11px;background:#19433f;
+ color:#f2fff8;line-height:1.5;
+}
+.goal-review-completed[hidden]{display:none!important}
+.goal-review-completed strong{font-size:14px;font-weight:900;display:block}
+.goal-review-completed p{font-size:12px;margin:5px 0 10px;color:#d1e7df}
+.goal-review-completed-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.goal-review-completed-actions button{font-size:12px;min-height:41px;margin:0;padding:6px 5px}
+.goal-review-completed-actions button[hidden]{display:none!important}
+.goal-review-completed-actions:has(button[hidden]){grid-template-columns:1fr}
+@media(max-width:440px){
+ .goal-review-completed{padding:10px}
+ .goal-review-completed-actions{grid-template-columns:1fr}
+}
