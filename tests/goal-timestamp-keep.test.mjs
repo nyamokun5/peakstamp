@@ -57,13 +57,13 @@ test('manual goal has no commentary delay or fake reaction timestamp',()=>{
  assert.equal(record.reactionTimeSeconds,null);
  assert.equal(record.timingMethod,'manual');
 });
-test('one click keeps the goal in video from 4 seconds before to 2 seconds after',()=>{
+test('one click keeps the goal from 5sec before spoken commentary to 2sec after',()=>{
  const source=src(),store=makeStore();put(source,store);
  const goal=createGoalDrafts(source,store).items[0];
  const candidate=keepGoalClip(source,goal);
- assert.equal(candidate.time,365.2);
+ assert.equal(candidate.time,374.2);
  assert.equal(candidate.peakSeconds,369.2);
- assert.equal(candidate.manualEnd,371.2);
+ assert.equal(candidate.manualEnd,381.2);
  assert.equal(candidate.enabled,true);
  assert.equal(source.candidates.length,1);
  assert.equal(keepGoalClip(source,goal),candidate);
@@ -78,17 +78,17 @@ test('normal scene matching goal is reused instead of duplicating clip',()=>{
  assert.equal(candidate.id,'gemini-1');
  assert.equal(candidate.enabled,true);
  assert.equal(candidate.rejected,false);
- assert.equal(candidate.time,365.2);
+ assert.equal(candidate.time,374.2);
  // Reviewing the goal here sets the same exact cut used for MP4 export.
- assert.equal(candidate.manualEnd,371.2);
+ assert.equal(candidate.manualEnd,381.2);
 });
 test('goal candidate is accepted directly even before regular waveform scan',()=>{
  const source=src(),store=makeStore();put(source,store);
  source.bins=null;
  const clip=keepGoalClip(source,createGoalDrafts(source,store).items[0]);
  assert.equal(clip.enabled,true);
- assert.equal(clip.time,365.2);
- assert.equal(clip.manualEnd,371.2);
+ assert.equal(clip.time,374.2);
+ assert.equal(clip.manualEnd,381.2);
  assert.equal(source.candidates.length,1);
 });
 
@@ -138,7 +138,7 @@ test('direct goal video rejection suppresses overlapping unjudged proposal',()=>
  assert.equal(source.candidates.length,1);
  assert.equal(source.candidates[0].enabled,true);
  assert.equal(source.candidates[0].rejected,false);
- assert.equal(source.candidates[0].time,36);
+ assert.equal(source.candidates[0].time,35);
  assert.equal(source.candidates[0].manualEnd,42);
 });
 test('rejecting a goal never removes an independently kept regular highlight',()=>{
@@ -172,4 +172,22 @@ test('saved goal video decisions restore after audio rescans without duplicates'
  assert.equal(source.candidates[1].rejected,true);
  syncGoalClipDecisions(source,[kept,rejected]);
  assert.equal(source.candidates.length,2,'repeat reconciliation never duplicates');
+});
+
+test('new kept audio goals use commentary even after actual scoring time is adjusted',()=>{
+ const source=src(),store=makeStore();put(source,store);
+ const goal=createGoalDrafts(source,store).items[0];
+ goal.goalTimeSeconds=355.5;
+ const clip=keepGoalClip(source,goal);
+ assert.equal(clip.time,374.2);
+ assert.equal(clip.manualEnd,381.2);
+ assert.equal(clip.peakSeconds,355.5,'the score timestamp still stays separate');
+});
+test('previous manual trim is still honored when commentary-based defaults change',()=>{
+ const source=src(),store=makeStore();put(source,store);
+ const goal=createGoalDrafts(source,store).items[0];
+ goal.clipStartSeconds=370.3;goal.clipEndSeconds=383.6;
+ const clip=keepGoalClip(source,goal);
+ assert.equal(clip.time,370.3);
+ assert.equal(clip.manualEnd,383.6);
 });

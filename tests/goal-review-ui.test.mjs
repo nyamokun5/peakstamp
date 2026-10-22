@@ -123,7 +123,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.equal(createGoalDrafts(one,storage).items[0].goalTimeSeconds,369.2);
   assert.equal(createGoalDrafts(two,storage).items[0].goalTimeSeconds,107.5);
   assert.equal(dom.goalStatsViewer.hidden,false,'video editor is open without queue tap');
-  assert.equal(dom.goalStatsPreview.currentTime,365.2);
+  assert.equal(dom.goalStatsPreview.currentTime,374.2);
   assert.equal(stats.loads,1);
   assert.equal(stats.plays,0,'initial first frame does not attempt gesture-restricted autoplay');
   assert.match(dom.goalStatsStep.textContent,/ゴール 1 \/ 2/);
@@ -143,7 +143,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
   assert.equal(stats.loads,2,'next goal loads only when its source changes');
   assert.equal(stats.plays,2,'next goal plays automatically after Keep tap');
-  assert.equal(dom.goalStatsPreview.currentTime,103.5);
+  assert.equal(dom.goalStatsPreview.currentTime,112.5);
   assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
   assert.match(dom.goalStatsPlayingLabel.textContent,/IMG_5293/);
 
@@ -182,7 +182,7 @@ test('goal replay starts from visible first-frame preview without an extra list 
   initGoalStatsReview({sources:[one]});
   await settleMedia();
   assert.equal(dom.goalStatsViewer.hidden,false);
-  assert.equal(dom.goalStatsPreview.currentTime,365.2);
+  assert.equal(dom.goalStatsPreview.currentTime,374.2);
   assert.equal(stats.loads,1);
   assert.equal(stats.plays,0);
   find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
@@ -319,7 +319,7 @@ test('changing a kept goal crop updates the same export candidate immediately',a
   assert.deepEqual(updates,[363]);
   assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,363);
   assert.equal(one.candidates[0].time,363);
-  assert.equal(one.candidates[0].manualEnd,371.2);
+  assert.equal(one.candidates[0].manualEnd,381.2);
  }finally{await restore()}
 });
 
@@ -408,5 +408,24 @@ test('Keep advances to next unjudged goal even when save callback synchronously 
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
   assert.equal(dom.goalStatsDone.hidden,false);
   assert.match(dom.goalStatsDoneText.textContent,/2件の判定が完了/);
+ }finally{await restore()}
+});
+
+test('goal editing timeline marks COMMENTARY and Replay starts 5sec before commentary',async()=>{
+ const {dom,one,stats,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]});
+  await settleMedia();
+  assert.equal(dom.goalStatsPreview.currentTime,374.2);
+  const row=find(dom.goalStatsViewer,'range-legend');
+  assert.ok(row);
+  const labels=row.children.map(x=>x.textContent);
+  assert.ok(labels.some(x=>x.includes('実況')&&x.includes('06:19.2')),
+   'commentary marker represents 379.2 seconds, not the estimated goal at 369.2');
+  const replay=find(dom.goalStatsViewer,'play-btn goal-scene-replay');
+  replay.events.click();
+  await settleMedia();
+  assert.equal(dom.goalStatsPreview.currentTime,374.2);
+  assert.equal(stats.plays,1);
  }finally{await restore()}
 });
