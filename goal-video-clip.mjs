@@ -1,3 +1,4 @@
+import { defaultPeakClipBounds } from './editing-rules.mjs?v=peak52';
 /** Connect a confirmed-or-draft PS goal to the normal video Keep workflow.
  * This is an explicit action; recording a goal never automatically keeps a clip.
  * The regular PeakStamp / HS edit data formats stay unchanged.
@@ -8,8 +9,7 @@ export function keepGoalClip(source,goal){
  if(!source?.bins||!(Number(source.duration)>0)||!Array.isArray(source.candidates)||!goal)return null;
  const duration=Number(source.duration);
  const goalTime=clamp(actualGoalTime(goal),0,duration);
- const start=Math.max(0,Math.round((goalTime-8)*10)/10);
- const end=Math.min(duration,Math.round((goalTime+10)*10)/10);
+ const {start,end}=defaultPeakClipBounds(goalTime,duration);
  const proximity=c=>Math.min(
    Math.abs(Number(c.peakSeconds)-goalTime),
    goal.origin==='audio'?Math.abs(Number(c.peakSeconds)-Number(goal.timeSeconds)):Infinity);
