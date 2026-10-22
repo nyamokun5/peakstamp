@@ -56,8 +56,8 @@ test('matching may suggest candidates but NEVER marks goals human confirmed',()=
  const rows=prepareGoalRows(exported(),snap);
  assert.equal(rows.length,2);
  assert.deepEqual(rows.map(x=>x.seq),[1,2]);
- assert.equal(rows[0].scorer,'');
- assert.equal(rows[0].confirmed,false);
+ assert.equal(rows[0].scorer,'Tyler Takasaki','unique high-confidence AI name now preselected');
+ assert.equal(rows[0].confirmed,false,'preselection must not mark the goal human-confirmed');
  assert.equal(rows[1].scorerHints.length,0,'unmapped Japanese nickname requires manual selection');
  assert.equal(validateGoalRow(rows[0],snap),'選手・試合の確認が必要です');
 });
@@ -85,7 +85,7 @@ test('refuses duplicate scorer/assist/team in same match until human resolves it
  const row=prepareGoalRows(exported(),snap)[0];
  row.scorer='Tyler Takasaki';row.team='チーム1';row.confirmed=true;
  assert.equal(findPotentialDuplicate(row,snap),true);
- assert.throws(()=>buildReviewPayload(snap,[row]),/重複候補/);
+ assert.throws(()=>buildReviewPayload(snap,[row]),/登録済みゴール/);
  row.duplicateApproved=true;
  const data=buildReviewPayload(snap,[row]);
  assert.equal(data.operations.length,1);
@@ -141,7 +141,10 @@ test('spoken team matchup 2対3 identifies actual #3, not match #2 or score 2-3'
    {goal_id:'already',scorer:'Tyler Takasaki',assist:'Taisei Kobayashi',team:'Team3'}
   ]},
   {seq:4,left_team:'Team1',right_team:'Team4',goals:[]}
- ]});
+ ],roster:{...event().roster,
+  'チーム1':['Yutaka Nakajima'],
+  'チーム3':['Gasuke.Y','Taisei Kobayashi','Tyler Takasaki']
+ }});
  const goal={id:'from-voice',matchLabel:'２対３',teamA:'2',teamB:'3',
   scorer:'高崎さん',assist:'たいせい',assistStatus:'named',
   source:{name:'IMG_5293.MOV'},goalTimeSeconds:107.5};
@@ -205,7 +208,10 @@ test('Japanese kana and kanji AI phrases suggest probable roster members but nev
 test('an inferred match and a likely player are never enough to export without confirmation',()=>{
  const snap=normalizeSpoSnapshot({...event(),matches:[
   {seq:3,left_team:'Team2',right_team:'Team3',goals:[]}
- ]});
+ ],roster:{...event().roster,
+  'チーム1':['Yutaka Nakajima'],
+  'チーム3':['Gasuke.Y','Taisei Kobayashi','Tyler Takasaki']
+ }});
  const g={id:'x',source:{name:'clip.mov'},matchLabel:'2対3',teamA:'2',teamB:'3',
   scorer:'高崎さん',assist:'たいせい',assistStatus:'named'};
  const row=prepareGoalRows({goals:[g]},snap)[0];
