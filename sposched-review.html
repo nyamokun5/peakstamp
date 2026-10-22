@@ -66,7 +66,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 <section class="panel" id="reviewArea" hidden>
  <h2>3. 1ゴールずつ照合・確認</h2>
  <p id="eventTitle" class="status"></p>
- <p>選んだ試合の下に、<strong>Shoot Sundayアプリにすでに登録されているゴール</strong>も表示します。PSで検出したものと同じなら二重登録せず、違うゴールなら新規追加してください。選手・試合のAI候補は提案のみで、人が確認します。</p>
+ <p>実況の「2対3」などを当日の対戦表と照合し、得点者・アシストもAIの聞き取りと名簿から有力候補を<strong>最初から選択</strong>します。推定の根拠を確認し、違う場合は選び直してください。<strong>初期選択だけでは確定・送信されません。</strong>試合の下にはShoot Sundayに登録済みのゴールも表示します。</p>
  <div id="goalRows"></div>
  <h3>試合スコアを修正する場合（任意）</h3>
  <p>得点集計の見逃しを考慮して、ゴール件数からスコアを勝手に決めません。試合の得点を更新する場合にだけ選択し、明示的に確認します。未選択ならゴール登録のみ。</p>
@@ -155,8 +155,24 @@ function renderGoals(){
   const g=row.goal,article=node('article','','grid-item');
   const h=node('h3','#'+(i+1)+'　'+(g.source?.name||'')+' '+String(g.goalTimeSeconds??'')+'秒');
   const quote=node('p','実況「'+(g.quote||'—')+'」　AI: 得点 '+(g.scorer||'不明')+' ／ アシスト '+(g.assist||'不明'),'details');
+  const guess=node('div','','registered-goals');
+  const guessMatch=row.matchGuess;
+  guess.append(node('strong',row.seq?
+   '🎙️ 試合 #'+row.seq+' を初期選択（要確認）':
+   '🎙️ 試合番号は未選択（要確認）'));
+  guess.append(node('p',guessMatch?.evidence?
+   '音声の対戦宣言「'+guessMatch.evidence+'」 → '+guessMatch.source:
+   guessMatch?.source||'試合番号を選択してください','details'));
+  if(guessMatch?.ambiguous)guess.append(node('p',
+   '同じチームの対戦が複数あります：試合 #'+guessMatch.candidates.join('、#')+'。試合順を確認して選択してください。','error'));
+  if(guessMatch?.conflict)guess.append(node('p',
+   '⚠ PSで指定した試合番号と音声で聞いた対戦組み合わせが異なります。','error'));
+  guess.append(node('p','得点者：'+(row.scorer?
+   '「'+g.scorer+'」→ '+row.scorer+'（推定）':'未選択。候補から選んでください')+
+   ' ／ アシスト：'+(row.assist?
+   '「'+g.assist+'」→ '+row.assist+'（推定）':'未選択、またはアシストなし'),'details'));
   const include=mkInput('checkbox');include.checked=row.include;include.addEventListener('change',()=>{row.include=include.checked;touch();updateDuplicate()});
-  const bar=node('div','','line');bar.append(include,node('span','このゴールをShoot Sundayへ新規登録する'));article.append(h,quote,bar);
+  const bar=node('div','','line');bar.append(include,node('span','このゴールをShoot Sundayへ新規登録する'));article.append(h,quote,guess,bar);
   const wrap=node('div','','fields');
   const matchSelect=select(snapshot.matches.map(m=>({value:m.seq,label:'#'+m.seq+' '+m.leftTeam+' vs '+m.rightTeam})),row.seq);
   matchSelect.addEventListener('change',()=>{row.seq=Number(matchSelect.value)||null;invalidate()});
@@ -173,8 +189,8 @@ function renderGoals(){
   wrap.append(field('試合番号',matchSelect),field('得点者',scorerSelect),field('アシスト',assistMode),
    field('アシスト者',assistSelect),field('得点チーム',teamSelect));
   article.append(wrap);
-  const hints=node('p','AI候補: 得点者 '+row.scorerHints.map(x=>x.name).join(' / ')+
-   '｜アシスト '+row.assistHints.map(x=>x.name).join(' / '),'details');
+  const hints=node('p','名前の候補：得点者 '+(row.scorerHints.map(x=>x.name).join(' / ')||'なし')+
+   '｜アシスト '+(row.assistHints.map(x=>x.name).join(' / ')||'なし'),'details');
   article.append(hints);
   const registered=node('div','','registered-goals');
   const warn=node('p','','error'),duplicateWrap=node('div','','duplicate-actions');
@@ -212,6 +228,13 @@ function renderGoals(){
   const invalidate=()=>{
    row.duplicateApproved=false;row.confirmed=false;confirm.checked=false;
    decision.textContent='';touch();updateDuplicate();
+   const selectedMatch=snapshot.matches.find(m=>m.seq===Number(row.seq));
+   const who=row.scorer||'未選択',to=row.assist||'未選択';
+   guess.replaceChildren();
+   guess.append(node('strong','手動選択：'+(selectedMatch?
+    '試合 #'+selectedMatch.seq+' '+selectedMatch.leftTeam+' vs '+selectedMatch.rightTeam:
+    '試合未選択')));
+   guess.append(node('p','得点者 '+who+' ／ アシスト '+to,'details'));
   };
   sameButton.addEventListener('click',()=>{
    row.include=false;include.checked=false;
