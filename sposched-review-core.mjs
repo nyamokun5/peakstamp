@@ -94,23 +94,40 @@ export function validateGoalRow(row,snapshot){
   return '得点者とアシストが同一です';
  return null;
 }
-export function findPotentialDuplicate(row,snapshot){
+/** Goals already registered IN Shoot Sunday for the selected official match.
+ * These are not PeakStamp drafts or browser cache items.
+ */
+export function existingGoalsForMatch(row,snapshot){
  const match=snapshot.matches.find(m=>m.seq===number(row.seq));
- if(!match||!row.scorer)return false;
+ return match?.existingGoals||[];
+}
+/** Warn on a matching scorer/assist/team combination, but don't assert that
+ * two goals with the same participants must be identical. Only a human who
+ * watched both goal scenes can decide that.
+ */
+export function matchingExistingGoals(row,snapshot){
+ if(!row.scorer)return [];
  const team=row.team||snapshot.playerTeam.get(row.scorer)||'';
- return match.existingGoals.some(g=>
+ const assist=row.assistMode==='named'?row.assist:'';
+ if(row.assistMode==='named'&&!row.assist)return [];
+ if(row.assistMode==='unknown')return [];
+ return existingGoalsForMatch(row,snapshot).filter(g=>
   normalizePerson(g.scorer)===normalizePerson(row.scorer)&&
-  normalizePerson(g.assist)===normalizePerson(row.assistMode==='named'?row.assist:'')&&
+  normalizePerson(g.assist)===normalizePerson(assist)&&
   normalizeTeam(g.team)===normalizeTeam(team));
+}
+export function findPotentialDuplicate(row,snapshot){
+ return matchingExistingGoals(row,snapshot).length>0;
 }
 export function buildReviewPayload(snapshot,rows,scoreRows=[]){
  const items=rows.filter(row=>row.include!==false);
- if(!items.length)throw Error('登録対象のゴールがありません');
+ if(!items.length&&!scoreRows.some(row=>row.include))
+  throw Error('追加するゴールはありません。既にShoot Sundayに登録済みなら、再登録は不要です。');
  const missing=items.map((row,i)=>({i,problem:validateGoalRow(row,snapshot)}))
   .filter(x=>x.problem);
  if(missing.length)throw Error((missing[0].i+1)+'件目：'+missing[0].problem);
  const duplicates=items.filter(row=>findPotentialDuplicate(row,snapshot)&&row.duplicateApproved!==true);
- if(duplicates.length)throw Error('既存記録との重複候補が'+duplicates.length+'件あります。元の記録と照合し、別ゴールであることを明示確認してください。');
+ if(duplicates.length)throw Error('Shoot Sundayに同じ得点者・アシストの登録済みゴールが'+duplicates.length+'件あります。「登録済みなので送らない」か「別ゴールとして追加」を選んでください。');
  const operationGoals=items.map(row=>{
   const team=row.team||snapshot.playerTeam.get(row.scorer)||'';
   const args={event_id:snapshot.eventId,seq:number(row.seq),scorer:row.scorer,team};
