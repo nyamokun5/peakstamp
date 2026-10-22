@@ -180,11 +180,13 @@ export function createGoalPlaybackController(video,{
   serial++;
   cancelTimer();cancelFrame();
   const alreadyPrepared=!change&&!changedTarget&&prepared&&!video.seeking;
+  const alreadySeeking=!change&&!changedTarget&&(awaitSeek||video.seeking);
   stopIntent();
   sourceKey=key;sourceUrl=url;target=requested;
   wantPlay=Boolean(autoplay);
   gestureNeeded=false;playingRequest=false;
-  seekAttempts=0;playAttempts=0;
+  if(!alreadySeeking)seekAttempts=0;
+  playAttempts=0;
   video.hidden=false;video.playsInline=true;
   video.setAttribute('playsinline','');
   video.setAttribute('webkit-playsinline','');
@@ -194,6 +196,13 @@ export function createGoalPlaybackController(video,{
    video.preload='auto';
    video.src=url; // only when changing source: no extra MOV reload
    say('動画を読み込み、ゴール位置を準備しています…');
+  }else if(alreadySeeking){
+   // The user tapped Replay while the preview's initial deep seek was
+   // still in flight. Keep that pending seek; do NOT clear its completion
+   // listener or queue a competing seek into the same large MOV.
+   prepared=false;awaitSeek=true;phase='seeking';
+   say('ゴール位置へ移動中…');
+   later(()=>{if(awaitSeek)failSeek()},12000);
   }else if(alreadyPrepared&&nearTarget()){
    // This is the fast path: user tapped ▶ after initial paused preview
    // already sought to the correct goal start.
