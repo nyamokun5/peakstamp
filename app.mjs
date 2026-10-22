@@ -1395,6 +1395,7 @@ const goalReview=initGoalStatsReview(state,{
   // Avoid rebuilding every regular scene (and interrupting its video decoder)
   // when the organizer edits a name or verifies a goal.
   onUpdate:()=>{},
+  onSourceReady:()=>syncSources(),
   onBeforePlay:()=>{
     closeInlinePreview();
     // Free the competing decoder before playing large local iPhone MOV files.
