@@ -1,16 +1,18 @@
 import { INTRO_SECONDS } from './exporter.mjs?v=pinch18';
-import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
+import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
 import { prepareIntroPlan } from './intro-layout.mjs?v=scene15';
 
 /**
  * Produce non-overlapping clips, in user-controlled file order.
  * Candidate times are always LOCAL to their source file.
  */
-export function buildMultiClipPlan(sources, options = 16) {
-  // Numeric argument remains supported for the previous fixed-duration mode.
+export function buildMultiClipPlan(sources, options = {}) {
+  // A numeric argument still explicitly selects legacy fixed-length cuts.
+  // New, nonnumeric calls default to peak -4 / +2, using a fixed fallback
+  // only for legacy clips that have no recorded peakSeconds.
   const cfg = typeof options === 'number'
     ? { mode:'fixed', fixedSeconds:options }
-    : { mode:'fixed', fixedSeconds:16, ...options };
+    : { mode:'peak', fixedSeconds:16, ...options };
   const plan=[];
   for(const source of sources||[]){
     if(!source?.file || !source?.bins || !Number.isFinite(source.duration))continue;
