@@ -1,4 +1,4 @@
-import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=audio12';
+import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=peak52';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
@@ -6,13 +6,13 @@ import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=eta34';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
 import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal47';
-import { keepGoalClip } from './goal-video-clip.mjs?v=40';
-import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=1';
+import { keepGoalClip } from './goal-video-clip.mjs?v=peak52';
+import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=peak52';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title51';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=pinch18';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=peak52';
 import { createEditTransfer } from './edit-transfer.mjs';
-import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=pinch18';
+import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
 import { attachScenePinchEditor } from './scene-gesture.mjs?v=compact49';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds, reviewUndoClearance } from './review-flow.mjs?v=undo50';
@@ -44,7 +44,7 @@ const make = (tag, cls, text) => {
 };
 const state = {
   file: null, objectUrl: null, duration: 0, bins: null, candidates: [], sources: [],
-  sensitivity: 'normal', leadSeconds: 7, maxResults: 8,
+  sensitivity: 'normal', leadSeconds: 4, maxResults: 8,
   working: false, cancelled: false, exporting: false, geminiProcessing: false
 };
 const guide=initFirstRunGuide({hasPriorAnalysis:()=>{
@@ -58,7 +58,7 @@ let autoOpeningNextReplay = false;
 let lastRejected = null;
 let undoTimer = null;
 const UNDO_VISIBLE_MS = 5000;
-function currentClipOptions(){return {mode:'fixed',fixedSeconds:16};}
+function currentClipOptions(){return {mode:'peak'};}
 function closeInlinePreview() { if (activeInlineClose) { const fn = activeInlineClose; activeInlineClose = null; fn(); } }
 function error(id, message) {
   $(id).textContent = message;
@@ -920,7 +920,7 @@ function row(item, index) {
   const startBox=make('div','range-field');
   startBox.append(make('label','', '開始'));
   const endBox=make('div','range-field');
-  const endLabel=make('label','range-auto-label','終了（初期16秒）');
+  const endLabel=make('label','range-auto-label','終了（ピーク＋2秒）');
   const endInput=make('input','range-time');
   endInput.type='text';
   endInput.inputMode='text';
@@ -1107,7 +1107,7 @@ function row(item, index) {
     legendEnd.textContent='終了 '+formatTimelineTime(end);
     time.value=formatTimelineTime(item.time);
     endInput.value=formatTimelineTime(end);
-    endLabel.textContent=Number.isFinite(item.manualEnd)?'終了（手動）':'終了（初期16秒）';
+    endLabel.textContent=Number.isFinite(item.manualEnd)?'終了（手動）':'終了（ピーク＋2秒）';
     for(const [handle,now,min,max] of [
       [startDot,item.time,0,Math.max(0,end-.3)],
       [endDot,end,item.time+.3,source.duration]

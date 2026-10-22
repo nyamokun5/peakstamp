@@ -36,3 +36,9 @@ test('time and comment format', () => {
   assert.match(comment,/00:12 ⚽ Goal/);
   assert.doesNotMatch(comment,/00:43/);
 });
+
+test('fresh offline audio candidates default to exactly 4 seconds before each detected peak',()=>{
+ const clips=detectHighlights(envelope(90,[20,60]),{sensitivity:'sensitive'});
+ assert.ok(clips.length>=2);
+ for(const clip of clips)assert.ok(Math.abs(clip.time-Math.max(0,clip.peakSeconds-4))<1e-8);
+});

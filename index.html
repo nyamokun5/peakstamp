@@ -156,8 +156,8 @@
         <button data-sensitivity="strict" type="button">厳選</button>
       </div>
       <div class="controls">
-        <label>歓声の何秒前から？ <strong><output id="leadValue">7秒</output></strong>
-          <input id="leadInput" type="range" min="0" max="15" step="1" value="7" />
+        <label>歓声の何秒前から？ <strong><output id="leadValue">4秒</output></strong>
+          <input id="leadInput" type="range" min="0" max="15" step="1" value="4" />
         </label>
         <label>最大検出件数 <strong><output id="maxValue">8件</output></strong>
           <input id="maxInput" type="range" min="3" max="15" step="1" value="8" />
@@ -404,7 +404,7 @@
         <p class="intro-help">PNGを使うと文字タイトルの代わりに表示されます。</p>
       </section>
 
-      <p class="fine-print">切り抜きは初期16秒。各シーンの共通タイムラインで開始・終了を直接調整できます。</p>
+      <p class="fine-print">新規候補の切り抜きはピークの4秒前〜2秒後（初期6秒）。共通タイムラインで開始・終了を直接調整できます。</p>
       <div class="montage-summary"><span id="montageSelected">0シーンを結合</span><span id="montageLength">完成：約00:05</span></div>
 
       <fieldset class="quality-picker">
@@ -469,6 +469,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=title51"></script>
+  <script type="module" src="app.mjs?v=peak52"></script>
 </body>
 </html>

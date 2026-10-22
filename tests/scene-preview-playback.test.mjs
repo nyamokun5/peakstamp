@@ -92,8 +92,8 @@ test('normal scene editing UI uses one combined draggable timeline and no quiet/
  assert.match(app,/track\.addEventListener\('pointerup'/);
  assert.match(app,/seekScenePreview\(player,seconds,bounds,\{/);
  assert.match(app,/autoPlay:true/);
- assert.match(app,/fixedSeconds:16/);
- assert.match(montage,/fixedSeconds:16/);
+ assert.match(app,/mode:'peak'/);
+ assert.match(montage,/mode:'peak'/);
  assert.doesNotMatch(app,/make\('input','scene-seek-slider'\)/);
 });
 

@@ -9,7 +9,7 @@
  * No speech-recognition, AI model, external requests, or audio uploads.
  */
 export function detectHighlights(bins, options = {}) {
-  const { sensitivity='normal', leadSeconds=7, maxResults=8,
+  const { sensitivity='normal', leadSeconds=4, maxResults=8,
     minGapSeconds=18, binSeconds=0.25 }=options;
   if(!Array.isArray(bins) || !bins.length || maxResults<=0) return [];
   const profile={
@@ -131,7 +131,7 @@ export function detectHighlights(bins, options = {}) {
     if(picked.some(s=>Math.abs(s.peakSeconds-event.peakSeconds)<minGapSeconds))continue;
     picked.push({
       ...event,
-      time:Math.max(0,Math.floor(event.peakSeconds-leadSeconds)),
+      time:Math.max(0,event.peakSeconds-leadSeconds),
       id:'peak-'+Math.round(event.peakSeconds*1000),
       enabled:false,title:'ナイスプレイ！'
     });

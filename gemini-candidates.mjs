@@ -1,3 +1,4 @@
+import { defaultPeakClipBounds } from './editing-rules.mjs?v=peak52';
 /** Pure converter from Gemini's AUDIO-REACTION suggestions into PeakStamp editor scenes. */
 const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
 const kinds={
@@ -46,11 +47,13 @@ export function geminiEventsToCandidates(events,sourceId,duration,prior=[]){
    const old=(prior||[]).find(p=>p.origin==='gemini'&&Math.abs(p.peakSeconds-group.time)<1.5);
    const quote=[...new Set(group.merged.map(e=>e.quote).filter(Boolean))].join(' / ').slice(0,240);
    const kind=kinds[group.type];
-   const end=clamp(group.end,Math.min(videoLength,group.start+.25),videoLength);
+   const defaults=defaultPeakClipBounds(group.time,videoLength);
    return {
      id:'gemini-'+Math.round(group.time*10)+'-'+group.type,
      sourceId,origin:'gemini',peakSeconds:+group.time.toFixed(1),
-     time:+group.start.toFixed(1),manualEnd:+end.toFixed(1),
+     // Use the same peak-relative defaults as the offline audio detector.
+     // Keep any previously edited bounds when a Gemini scan is repeated.
+     time:old?.time??defaults.start,manualEnd:old?.manualEnd??null,
      score:confidenceValue[group.confidence]||0.44,
      db:null,title:kind.title,geminiType:group.type,geminiConfidence:group.confidence,
      geminiQuote:quote,geminiReason:group.merged.map(e=>e.clue).filter(Boolean).join(' / ').slice(0,600),
