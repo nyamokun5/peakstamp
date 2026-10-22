@@ -4,7 +4,7 @@
 import {clipMarkerPositions,timelineTimeAt,formatTimelineTime} from './editing-rules.mjs?v=peak52';
 import {attachScenePinchEditor} from './scene-gesture.mjs?v=compact49';
 import {actualGoalTime} from './goal-stats.mjs?v=40';
-import {goalSceneBounds,goalSceneZoom,setGoalSceneEdge} from './goal-scene-edit.mjs?v=goal53';
+import {goalSceneBounds,goalSceneZoom,setGoalSceneEdge,goalSceneReferenceTime} from './goal-scene-edit.mjs?v=commentary61';
 const make=(tag,cls,text)=>{
  const el=document.createElement(tag);if(cls)el.className=cls;
  if(text!==undefined)el.textContent=text;return el;
@@ -86,7 +86,7 @@ export function createGoalSceneControls({viewer,video,label,status,
  const bounds=()=>goalSceneBounds(item,duration());
  const timeWindow=()=> {
   const b=bounds();
-  return drag?.window||clipMarkerPositions(b.start,actualGoalTime(item),b.end,duration());
+  return drag?.window||clipMarkerPositions(b.start,goalSceneReferenceTime(item),b.end,duration());
  };
  const positionAt=x=>{
   const win=timeWindow();
@@ -98,11 +98,11 @@ export function createGoalSceneControls({viewer,video,label,status,
   const pc=x=>Math.max(0,Math.min(100,(x-win.left)/Math.max(.001,win.right-win.left)*100));
   start.style.left=pc(b.start)+'%';
   end.style.left=pc(b.end)+'%';
-  peak.style.left=pc(actualGoalTime(item))+'%';
+  peak.style.left=pc(goalSceneReferenceTime(item))+'%';
   fill.style.left=pc(b.start)+'%';
   fill.style.width=Math.max(0,pc(b.end)-pc(b.start))+'%';
   startLabel.textContent='開始 '+formatTimelineTime(b.start);
-  peakLabel.textContent='ゴール '+formatTimelineTime(actualGoalTime(item));
+  peakLabel.textContent=(item.origin==='audio'?'実況 ':'ゴール ')+formatTimelineTime(goalSceneReferenceTime(item));
   endLabel.textContent='終了 '+formatTimelineTime(b.end);
   if(drag?.kind!=='start')inputStart.value=formatTimelineTime(b.start);
   if(drag?.kind!=='end')inputEnd.value=formatTimelineTime(b.end);
@@ -137,7 +137,7 @@ export function createGoalSceneControls({viewer,video,label,status,
    if(!item||event.button!==undefined&&event.button!==0)return;
    event.stopPropagation();event.preventDefault();
    drag={kind,id:event.pointerId,time:null,
-    window:clipMarkerPositions(bounds().start,actualGoalTime(item),bounds().end,duration())};
+    window:clipMarkerPositions(bounds().start,goalSceneReferenceTime(item),bounds().end,duration())};
    try{el.setPointerCapture?.(event.pointerId)}catch{}
   });
   el.addEventListener('pointermove',event=>{
@@ -169,7 +169,7 @@ export function createGoalSceneControls({viewer,video,label,status,
   const b=bounds();
   drag={kind:'seek',id:event.pointerId,
    time:Math.max(b.start,Math.min(b.end,positionAt(event.clientX))),
-   window:clipMarkerPositions(b.start,actualGoalTime(item),b.end,duration())};
+   window:clipMarkerPositions(b.start,goalSceneReferenceTime(item),b.end,duration())};
   try{track.setPointerCapture?.(event.pointerId)}catch{}
   hint.textContent='指を離すとその位置から再生';
   redraw();
