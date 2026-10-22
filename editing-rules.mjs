@@ -1,4 +1,15 @@
 /** PeakStamp pure editing rules — no media file operations here. */
+export const DEFAULT_PEAK_BEFORE_SECONDS = 4;
+export const DEFAULT_PEAK_AFTER_SECONDS = 2;
+/** New clip defaults use the actual detected event time, not a fixed scene length. */
+export function defaultPeakClipBounds(peakSeconds,duration) {
+  const length=Math.max(0,Number(duration)||0);
+  const at=Math.max(0,Math.min(length,Number(peakSeconds)||0));
+  return {
+    start:Math.max(0,at-DEFAULT_PEAK_BEFORE_SECONDS),
+    end:Math.min(length,at+DEFAULT_PEAK_AFTER_SECONDS)
+  };
+}
 export const DISSOLVE_SECONDS = 0.5;
 export const END_PADDING_SECONDS = 3;
 export const QUIET_CONFIRM_SECONDS = 1.5;
@@ -81,6 +92,12 @@ export function getCandidateEnd(source, item, options = {}) {
   const start = Math.max(0, Math.min(duration, Number(item?.time) || 0));
   if (Number.isFinite(item?.manualEnd)) {
     return Math.min(duration, Math.max(start + 0.25, Number(item.manualEnd)));
+  }
+  // Existing manually adjusted starts remain untouched. Fresh clips start at
+  // peak - 4s and their untouched end is always peak + 2s.
+  if(options.mode === 'peak' && Number.isFinite(item?.peakSeconds)){
+    const {end}=defaultPeakClipBounds(item.peakSeconds,duration);
+    return Math.min(duration,Math.max(start+0.25,end));
   }
   const seconds = Number(options.fixedSeconds) || 16;
   if (options.mode === 'fixed') return Math.min(duration, start + Math.max(6, Math.min(40,seconds)));
