@@ -106,8 +106,22 @@ export function drawIntro(context, width, height, title, options = {}) {
     return;
   }
   const placed = introTitleRect(context, width, height, title, options);
-  context.fillStyle = '#ffffff';
-  context.fillText(placed.label, placed.x, placed.y, width * .9);
+  // Solid pure-white lettering against both bright pitch footage and dark
+  // intro cards. A dark outline increases contrast without tinting the text.
+  if(typeof context.save==='function'&&typeof context.restore==='function'
+    &&typeof context.strokeText==='function'){
+    context.save();
+    context.lineJoin='round';
+    context.lineWidth=Math.max(2,placed.font*.07);
+    context.strokeStyle='#071320';
+    context.strokeText(placed.label,placed.x,placed.y,width*.9);
+    context.fillStyle='#ffffff';
+    context.fillText(placed.label,placed.x,placed.y,width*.9);
+    context.restore();
+  }else{
+    context.fillStyle='#ffffff';
+    context.fillText(placed.label,placed.x,placed.y,width*.9);
+  }
 }
 
 const FRAME_SOURCE = 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.3/dist/bundles/mediabunny.min.mjs';
@@ -320,7 +334,10 @@ export async function exportMontage({
             sample.draw(context, dx, dy, dw, dh);
           }
           if (overlayFirstScene && section===0) {
-            const opacity=introOverlayOpacity(frame/settings.frameRate,prepared.overlaySeconds);
+            // Fading white lettering makes it appear gray against the
+            // underlying video. Keep text opaque; preserve PNG fade effects.
+            const opacity=intro?.overlayImage
+              ? introOverlayOpacity(frame/settings.frameRate,prepared.overlaySeconds):1;
             if(opacity>0){
               context.globalAlpha=opacity;
               drawIntro(context,width,height,title,{...options,skipBackground:true});
