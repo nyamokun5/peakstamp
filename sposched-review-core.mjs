@@ -49,7 +49,9 @@ export function selectPlayerCandidates(text,snapshot,team='',limit=7){
   let score=norm===term?100:norm.startsWith(term)||term.startsWith(norm)?72:
    norm.includes(term)||term.includes(norm)?56:0;
   const teamName=snapshot.playerTeam.get(name)||'';
-  if(targetTeam&&normalizeTeam(teamName)===targetTeam)score+=12;
+  // Team membership may break ties only after a genuine name match.
+  // Otherwise every person on the expected team becomes a false candidate.
+  if(score>0&&targetTeam&&normalizeTeam(teamName)===targetTeam)score+=12;
   return {name,team:teamName,score};
  }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,'ja'));
  return results.slice(0,limit);
