@@ -32,10 +32,21 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 #goalRows:empty:after{content:'データを読み込むとここに表示されます';color:#9dabbc}
 #planJson{min-height:160px}
 @media(max-width:620px){.input-row,.fields{grid-template-columns:1fr}body{padding:12px 9px 40px}}
+.registered-goals{background:#102834;border:1px solid #476b73;border-radius:9px;padding:11px;margin:10px 0;font-size:12px}
+.registered-goals strong{display:block;margin-bottom:6px;color:#d6f3e8}
+.registered-goal-line{border-top:1px solid #365966;padding:7px 0;line-height:1.6}
+.registered-goal-line:last-child{padding-bottom:0}
+.registered-match{color:#ffdaad;font-weight:750}
+.duplicate-actions{padding:11px;border:1px solid #bb896b;border-radius:9px;margin:8px 0;background:#392b29}
+.duplicate-actions[hidden]{display:none!important}
+.duplicate-actions button{flex:1;min-width:210px;text-align:center}
+.duplicate-actions .secondary-action{background:#264b47;border-color:#82bca9}
+.decision-status{font-size:12px;color:#b5f9d8}
+@media(max-width:620px){.duplicate-actions button{min-width:0;width:100%}}
 </style>
 </head>
 <body><main>
-<a href="./?v=spo63">← PeakStampに戻る</a>
+<a href="./?v=spo64">← PeakStampに戻る</a>
 <header class="top"><h1>⚽ Shoot Sundayへ試合・ゴールを登録</h1><span class="step">確認・登録準備版</span></header>
 <p>PeakStampで確認したゴール・アシストとShoot Sundayの試合／選手名簿を照合します。<strong>誤登録を防ぐため、すべての行で試合・選手を人が選択して確認</strong>してください。</p>
 <p class="warning"><strong>現在は書き込み前の確認機能です。</strong>開発者APIのHTTP仕様を確認できていないため、この画面からShoot Sundayへの直接送信は行いません。最終JSONをコピーして、接続済みのChatGPTで登録できます。保存済みデータの削除・上書きも行いません。</p>
@@ -55,7 +66,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 <section class="panel" id="reviewArea" hidden>
  <h2>3. 1ゴールずつ照合・確認</h2>
  <p id="eventTitle" class="status"></p>
- <p>「自動候補」は単なる提案です。<strong>試合、得点者、アシスト、得点チームを選んで「このゴールを確認」にチェック</strong>すると登録データへ進めます。試合番号はSpoSchedが返した正式な<code>seq</code>です。</p>
+ <p>選んだ試合の下に、<strong>Shoot Sundayアプリにすでに登録されているゴール</strong>も表示します。PSで検出したものと同じなら二重登録せず、違うゴールなら新規追加してください。選手・試合のAI候補は提案のみで、人が確認します。</p>
  <div id="goalRows"></div>
  <h3>試合スコアを修正する場合（任意）</h3>
  <p>得点集計の見逃しを考慮して、ゴール件数からスコアを勝手に決めません。試合の得点を更新する場合にだけ選択し、明示的に確認します。未選択ならゴール登録のみ。</p>
@@ -72,7 +83,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </main>
 <script type="module">
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
-import {normalizeSpoSnapshot,prepareGoalRows,selectPlayerCandidates,findPotentialDuplicate,buildReviewPayload} from './sposched-review-core.mjs?v=spo63';
+import {normalizeSpoSnapshot,prepareGoalRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=spo64';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -144,41 +155,80 @@ function renderGoals(){
   const g=row.goal,article=node('article','','grid-item');
   const h=node('h3','#'+(i+1)+'　'+(g.source?.name||'')+' '+String(g.goalTimeSeconds??'')+'秒');
   const quote=node('p','実況「'+(g.quote||'—')+'」　AI: 得点 '+(g.scorer||'不明')+' ／ アシスト '+(g.assist||'不明'),'details');
-  const include=mkInput('checkbox');include.checked=row.include;include.addEventListener('change',()=>{row.include=include.checked;touch()});
-  const bar=node('div','','line');bar.append(include,node('span','登録対象に含める'));article.append(h,quote,bar);
+  const include=mkInput('checkbox');include.checked=row.include;include.addEventListener('change',()=>{row.include=include.checked;touch();updateDuplicate()});
+  const bar=node('div','','line');bar.append(include,node('span','このゴールをShoot Sundayへ新規登録する'));article.append(h,quote,bar);
   const wrap=node('div','','fields');
   const matchSelect=select(snapshot.matches.map(m=>({value:m.seq,label:'#'+m.seq+' '+m.leftTeam+' vs '+m.rightTeam})),row.seq);
-  matchSelect.addEventListener('change',()=>{row.seq=Number(matchSelect.value)||null;row.confirmed=false;confirm.checked=false;touch();updateDuplicate()});
+  matchSelect.addEventListener('change',()=>{row.seq=Number(matchSelect.value)||null;invalidate()});
   const scorerSelect=select(options,row.scorer,'得点者を選択（AI: '+(g.scorer||'—')+'）');
-  scorerSelect.addEventListener('change',()=>{row.scorer=scorerSelect.value;row.confirmed=false;confirm.checked=false;touch();updateDuplicate()});
+  scorerSelect.addEventListener('change',()=>{row.scorer=scorerSelect.value;invalidate()});
   const assistMode=select([{value:'named',label:'あり（選手を選択）'},{value:'none',label:'なし'},{value:'unknown',label:'不明（要確認）'}],row.assistMode);
   const assistSelect=select(options,row.assist,'アシスト者を選択（AI: '+(g.assist||'—')+'）');
   assistSelect.disabled=row.assistMode!=='named';
-  assistMode.addEventListener('change',()=>{row.assistMode=assistMode.value;assistSelect.disabled=assistMode.value!=='named';row.confirmed=false;confirm.checked=false;touch()});
-  assistSelect.addEventListener('change',()=>{row.assist=assistSelect.value;row.confirmed=false;confirm.checked=false;touch()});
+  assistMode.addEventListener('change',()=>{row.assistMode=assistMode.value;assistSelect.disabled=assistMode.value!=='named';invalidate()});
+  assistSelect.addEventListener('change',()=>{row.assist=assistSelect.value;invalidate()});
   const teamSelect=select([...new Set(snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]))]
    .map(t=>({value:t,label:t})),row.team,'得点チームを選択');
-  teamSelect.addEventListener('change',()=>{row.team=teamSelect.value;row.confirmed=false;confirm.checked=false;touch();updateDuplicate()});
+  teamSelect.addEventListener('change',()=>{row.team=teamSelect.value;invalidate()});
   wrap.append(field('試合番号',matchSelect),field('得点者',scorerSelect),field('アシスト',assistMode),
    field('アシスト者',assistSelect),field('得点チーム',teamSelect));
   article.append(wrap);
   const hints=node('p','AI候補: 得点者 '+row.scorerHints.map(x=>x.name).join(' / ')+
    '｜アシスト '+row.assistHints.map(x=>x.name).join(' / '),'details');
   article.append(hints);
-  const warn=node('p','','error');
-  const duplicateWrap=node('label','','line'),duplicateCheck=mkInput('checkbox');
-  duplicateCheck.checked=row.duplicateApproved;
-  duplicateCheck.addEventListener('change',()=>{row.duplicateApproved=duplicateCheck.checked;touch()});
-  duplicateWrap.append(duplicateCheck,node('span','既存の記録とは別のゴールであることを確認した'));
-  const updateDuplicate=()=>{
-   const duplicate=findPotentialDuplicate(row,snapshot);
-   warn.textContent=duplicate?'⚠ 同じ試合に同じ得点者・アシストの既存記録があります。元動画と照合してください。':'';
-   duplicateWrap.hidden=!duplicate;
-   if(!duplicate){row.duplicateApproved=false;duplicateCheck.checked=false}
-  };
+  const registered=node('div','','registered-goals');
+  const warn=node('p','','error'),duplicateWrap=node('div','','duplicate-actions');
+  const instruction=node('p','同じ選手・試合のゴールがShoot Sundayに登録されています。PSの映像と照合し、どちらかを選んでください。');
+  const sameButton=node('button','✓ 登録済みなので新規登録しない','secondary-action');
+  const anotherButton=node('button','＋ 別ゴールとして新しく登録する');
+  sameButton.type='button';anotherButton.type='button';
+  const actions=node('div','','line'),decision=node('p','','decision-status');
+  actions.append(sameButton,anotherButton);
+  duplicateWrap.append(instruction,actions,decision);
   const confirm=mkInput('checkbox');confirm.checked=row.confirmed;
+  const updateDuplicate=()=>{
+   registered.replaceChildren();
+   const match=snapshot.matches.find(m=>m.seq===Number(row.seq));
+   const stored=existingGoalsForMatch(row,snapshot),same=matchingExistingGoals(row,snapshot);
+   if(match){
+    registered.append(node('strong','Shoot Sundayアプリに登録済み（試合 #'+match.seq+'　'+match.leftTeam+' vs '+match.rightTeam+'）'));
+    if(stored.length)stored.forEach((g,j)=>{
+     const line=node('div','','registered-goal-line');
+     const equal=same.some(other=>other.id===g.id);
+     line.textContent=(equal?'⚠ 同じ得点者・アシスト　':'')+
+      (j+1)+'. 得点 '+(g.scorer||'不明')+' / アシスト '+(g.assist||'なし')+
+      ' / チーム '+(g.team||'不明');
+     if(equal)line.classList.add('registered-match');
+     registered.append(line);
+    });
+    else registered.append(node('p','この試合はゴール登録なし','details'));
+   }else registered.append(node('p','試合を選ぶと、登録済みゴールを表示します。','details'));
+   duplicateWrap.hidden=!same.length;
+   if(!same.length){row.duplicateApproved=false;warn.textContent=''}
+   else if(!row.include)warn.textContent='✓ 新規登録の対象から外しました。既存の登録は変更されません。';
+   else if(row.duplicateApproved)warn.textContent='別のゴールとして新規登録する設定です。試合スコアも確認してください。';
+   else warn.textContent='⚠ Shoot Sundayに同じ得点者・アシストのゴールがあります。同じゴールなら追加しないでください。';
+  };
+  const invalidate=()=>{
+   row.duplicateApproved=false;row.confirmed=false;confirm.checked=false;
+   decision.textContent='';touch();updateDuplicate();
+  };
+  sameButton.addEventListener('click',()=>{
+   row.include=false;include.checked=false;
+   row.duplicateApproved=false;row.confirmed=false;confirm.checked=false;
+   decision.textContent='登録対象から除外しました。元の記録は変更されません。';
+   touch();updateDuplicate();
+  });
+  anotherButton.addEventListener('click',()=>{
+   row.include=true;include.checked=true;row.duplicateApproved=true;
+   row.confirmed=false;confirm.checked=false;
+   decision.textContent='別のゴールとして追加する設定です。下で選手・試合を確認してください。';
+   touch();updateDuplicate();
+  });
   confirm.addEventListener('change',()=>{row.confirmed=confirm.checked;touch()});
-  const footer=node('label','','line');footer.append(confirm,node('strong','このゴールの試合・選手を確認した'));article.append(footer,warn,duplicateWrap);
+  const footer=node('label','','line');
+  footer.append(confirm,node('strong','このゴールの試合・選手を確認した'));
+  article.append(registered,footer,warn,duplicateWrap);
   $('goalRows').append(article);updateDuplicate();
  }
 }
