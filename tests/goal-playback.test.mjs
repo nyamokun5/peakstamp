@@ -189,3 +189,33 @@ test('explicit fromStart remains opt-in, never used by goal UI',async()=>{
  assert.equal(controller.diagnostic().targetTime,0);
  assert.equal(calls.plays,1);
 });
+
+test('loadeddata/canplay do not count as completion of a delayed deep goal seek',async()=>{
+ const {video,calls,controller,fire,flush}=fixture({autoMetadata:false,autoSeek:false});
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:365.2,autoplay:true});
+ video.readyState=1;fire('loadedmetadata');
+ assert.equal(video.seeking,true);
+ video.seeking=false;
+ video.readyState=3;
+ fire('loadeddata');fire('canplay');
+ await flush();
+ assert.equal(calls.plays,0,'must not play merely because video data became available');
+ assert.equal(controller.diagnostic().awaitSeek,true);
+ fire('seeked');
+ await flush();
+ assert.equal(calls.plays,1);
+ assert.equal(video.currentTime,365.2);
+});
+test('pressing Replay while the initial paused preview is still seeking preserves the pending seek',async()=>{
+ const {video,calls,controller,fire,flush}=fixture({autoMetadata:false,autoSeek:false});
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:365.2,autoplay:false});
+ video.readyState=1;fire('loadedmetadata');
+ assert.equal(controller.diagnostic().awaitSeek,true);
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:365.2,autoplay:true});
+ assert.equal(calls.plays,0);
+ assert.equal(controller.diagnostic().awaitSeek,true);
+ video.seeking=false;fire('seeked');
+ await flush();
+ assert.equal(video.currentTime,365.2);
+ assert.equal(calls.plays,1);
+});
