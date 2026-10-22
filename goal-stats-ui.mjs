@@ -8,6 +8,7 @@ import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextPendingGoal} from './goal-review-queue.mjs?v=40';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=45';
+import {createGoalSceneControls} from './goal-scene-editor.mjs?v=goal53';
 
 const $=id=>document.getElementById(id);
 const make=(tag,cls,text)=>{
@@ -52,9 +53,19 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   notify:s=>{$('goalStatsVideoStatus').textContent=s;},
   beforePlay:onBeforePlay
  });
+ const scene=createGoalSceneControls({
+  viewer,video,label,status:$('goalStatsVideoStatus'),
+  onChange:(src,record)=>{
+   const rows=goalData(src).items.map(x=>x.id===record.id?record:x);
+   write(src,rows);
+  },
+  onReplay:()=>seekTo(locate(activeKey),{autoplay:true}),
+  onSeek:time=>seekTo(locate(activeKey),{autoplay:true,at:time}),
+  onPause:()=>player.pause()
+ });
  function pausePlayback(){player.pause();}
  function disposeVideo(){player.dispose();viewer.hidden=true;}
- function seekTo(entry,{autoplay=false,leadSeconds=10}={}){
+ function seekTo(entry,{autoplay=false,at=null}={}){
   if(!entry)return;
   const {source,item}=entry;
   // Safari suspends media loading while parent is display:none or hidden.
@@ -62,10 +73,14 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   viewer.hidden=false;
   label.textContent=source.file.name+' · ゴール '+fmt(actualGoalTime(item))+
    '（実況 '+(item.origin==='audio'?fmt(item.timeSeconds):'手動追加')+'）';
+  scene.activate(source,item);
+  const bounds=scene.clipBounds();
   player.open({
    sourceKey:goalSourceKey(source),sourceUrl:source.objectUrl,
-   at:Math.max(0,actualGoalTime(item)-leadSeconds),autoplay
+   at:Number.isFinite(at)?Math.max(bounds.start,Math.min(bounds.end-.2,at)):bounds.start,
+   autoplay
   });
+  scene.redraw();
  }
  function locate(key){
   return queue().find(row=>row.key===key)||null;
@@ -109,14 +124,15 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
       (item.goalTimeVerified?'（映像確認済み）':'（10秒前の仮時刻）')
     : '手動入力 · ゴール '+fmt(actualGoalTime(item)));
   head.append(detail);editor.append(head);
-  editor.append(make('p','goal-review-quote',item.quote||''));
-  const play=make('button','goal-review-play','▶ ゴールの10秒前から再生');
-  play.type='button';
-  play.addEventListener('click',()=>{seekTo(entry,{autoplay:true});viewer.scrollIntoView({behavior:'auto',block:'start'});});
-  editor.append(play);
+  if(item.quote){
+   const quote=make('details','goal-review-quote-details');
+   quote.append(make('summary','','検出された実況を確認'));
+   quote.append(make('p','goal-review-quote',item.quote));
+   editor.append(quote);
+  }
   const fields=make('div','goal-review-fields');
   const timing=make('div','goal-review-time-adjust');
-  timing.append(make('strong','','プレー時刻を調整'));
+  timing.append(make('strong','','ゴール時刻を修正（切り抜き範囲とは別）'));
   const earlier=make('button','goal-review-adjust-button','−1秒');
   const later=make('button','goal-review-adjust-button','＋1秒');
   const stamp=make('input','goal-review-time-input');
@@ -134,7 +150,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   earlier.addEventListener('click',()=>changeTime(Math.max(0,actualGoalTime(item)-1)));
   later.addEventListener('click',()=>changeTime(actualGoalTime(item)+1));
   stamp.addEventListener('change',()=>changeTime(stamp.value));
-  const useVideo=make('button','goal-review-mark-button','⏱ 動画の停止位置をゴール時刻にする');
+  const useVideo=make('button','goal-review-mark-button','⏱ 現在の再生位置をゴール時刻に設定');
   useVideo.type='button';
   useVideo.addEventListener('click',()=>{
    if(player.currentSourceKey()!==goalSourceKey(source)||video.readyState<1||
@@ -148,7 +164,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   });
   timing.append(earlier,stamp,later,useVideo);
   editor.append(timing);
-  inputRow(fields,'得点者',item.scorer,v=>edit(entry,'scorer',v),{placeholder:'例：若さん'});
+  inputRow(fields,'得点者（ゴール）',item.scorer,v=>edit(entry,'scorer',v),{placeholder:'例：若さん'});
   const assistBox=make('label','goal-review-field');
   assistBox.append(make('span','','アシスト'));
   const assistChoice=make('select','');
@@ -162,11 +178,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   assistBox.append(assistChoice);fields.append(assistBox);
   if(item.assistStatus==='named')
    inputRow(fields,'アシスト者',item.assist,v=>edit(entry,'assist',v),{placeholder:'例：野田さん'});
+  inputRow(fields,'対戦カード',item.matchLabel,v=>edit(entry,'matchLabel',v),{placeholder:'例：3 vs 4'});
+  inputRow(fields,'SS試合番号（任意）',item.matchSeq||'',v=>edit(entry,'matchSeq',v),{type:'number',placeholder:'例：3'});
   const optional=make('details','goal-optional-fields');
-  optional.append(make('summary','','詳細：対戦カード・試合番号・メモ'));
+  optional.append(make('summary','','詳細：チーム番号・メモ'));
   const optionalBody=make('div','goal-review-fields');
-  inputRow(optionalBody,'対戦チーム',item.matchLabel,v=>edit(entry,'matchLabel',v));
-  inputRow(optionalBody,'SS試合番号（任意）',item.matchSeq||'',v=>edit(entry,'matchSeq',v),{type:'number',placeholder:'例：3'});
+  inputRow(optionalBody,'チームA',item.teamA||'',v=>edit(entry,'teamA',v),{placeholder:'例：3'});
+  inputRow(optionalBody,'チームB',item.teamB||'',v=>edit(entry,'teamB',v),{placeholder:'例：4'});
   inputRow(optionalBody,'メモ（任意）',item.note||'',v=>edit(entry,'note',v),{maxLength:400});
   optional.append(optionalBody);
   editor.append(fields,optional);
@@ -230,6 +248,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   if(!previous && !activeKey)activeKey=(entries.find(row=>row.item.status==='draft')||entries[0])?.key||'';
   const active=entries.find(row=>row.key===activeKey);
   if(!active){viewer.hidden=true;player.pause();}
+  if(active)scene.activate(active.source,active.item);
   renderEditor(active);
   const cards=[];
   for(const [index,entry] of entries.entries()){
