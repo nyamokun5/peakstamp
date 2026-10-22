@@ -18,7 +18,7 @@ import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds, reviewUndoClearance } from './review-flow.mjs?v=undo50';
 import { createSceneReplayMedia } from './scene-replay-media.mjs?v=1';
 import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
-import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=scrub48';
+import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=autoplay51';
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 
 const $ = id => document.getElementById(id);
@@ -1025,7 +1025,13 @@ function row(item, index) {
   const commitReplaySeek=seconds=>{
     if(!replayVideo || replayVideo.readyState<1)return;
     const bounds=replayBounds(source,item,(src,c)=>getCandidateEnd(src,c,currentClipOptions()));
-    const at=seekScenePreview(replayVideo,seconds,bounds);
+    const player=replayVideo;
+    const at=seekScenePreview(player,seconds,bounds,{
+      autoPlay:true,
+      onBeforePlay:()=>{void scenePreviewAudio.wake();},
+      onError:()=>{if(replayVideo===player)
+        setReplayStatus('移動しましたが再生できません。▶ 再生を押してください。');}
+    });
     if(at===null)setReplayStatus('再生位置を移動できませんでした。');
     updatePauseResume();
     updatePlayhead();
@@ -1039,7 +1045,7 @@ function row(item, index) {
     updatePauseResume();
     seekDrag={id:event.pointerId,previewTime:replaySeekPosition(event.clientX)};
     try{track.setPointerCapture?.(event.pointerId);}catch(_){}
-    rangeHint.textContent='再生位置を移動中… 指を離すと確定します';
+    rangeHint.textContent='再生位置を移動中… 指を離すとその位置から再生します';
     updatePlayhead();
   });
   track.addEventListener('pointermove',event=>{
