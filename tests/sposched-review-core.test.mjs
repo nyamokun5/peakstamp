@@ -84,6 +84,11 @@ test('refuses duplicate scorer/assist/team in same match until human resolves it
  row.scorer='Tyler Takasaki';row.team='チーム1';row.confirmed=true;
  assert.equal(findPotentialDuplicate(row,snap),true);
  assert.throws(()=>buildReviewPayload(snap,[row]),/重複候補/);
+ row.duplicateApproved=true;
+ const data=buildReviewPayload(snap,[row]);
+ assert.equal(data.operations.length,1);
+ assert.equal(data.operations[0].args.scorer,'Tyler Takasaki',
+  'the human may confirm a second legitimate goal from the same scorer');
 });
 test('blocks missing match assignment, uncertain assist and invalid team',()=>{
  const snap=normalizeSpoSnapshot(event());snap.matches.forEach(m=>m.existingGoals=[]);
