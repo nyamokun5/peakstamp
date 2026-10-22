@@ -11,6 +11,7 @@ const ids=[
  'goalStatsAdd','goalStatsManualSource','goalStatsManualWrap','goalStatsExport',
  'goalStatsCopy','goalStatsShow','goalStatsJson','goalStatsJsonArea'
 ];
+const settleMedia=async()=>{for(let i=0;i<10;i++)await Promise.resolve()};
 function setup(){
  const stats={loads:0,plays:0,competingPaused:0};
  class Element{
@@ -54,7 +55,8 @@ function setup(){
   pause(){this.paused=true}
   set src(value){
    this._src=value;
-   this.currentTime=0; // Browser resets currentTime on media source replacement.
+   this.readyState=0;this.seeking=false;
+   this._currentTime=0; // Browser resets media clock on src replacement.
    stats.loads++;
    queueMicrotask(()=>{
     this.readyState=1;
@@ -89,7 +91,10 @@ function setup(){
      scorer,assist}
    ]}));
  }
- return {dom,storage,one,two,stats,restore(){
+ return {dom,storage,one,two,stats,async restore(){
+  // Drain seeked/play microtasks before releasing this fake DOM; otherwise
+  // an old async seek might target the next test's document.
+  await settleMedia();
   globalThis.document=previousDocument;globalThis.window=previousWindow;
  }};
 }
@@ -110,7 +115,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
    onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
    onRejectClip:(src,item)=>rejectGoalClip(src,item)
   });
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(dom.goalStatsPanel.hidden,false);
   assert.equal(dom.goalStatsList.children.length,2);
   assert.match(dom.goalStatsList.children[0].children[0].textContent,/IMG_5292/);
@@ -125,7 +130,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   const replay=find(dom.goalStatsViewer,'play-btn goal-scene-replay');
   assert.ok(replay,'Replay button is visible on first candidate');
   replay.events.click();
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(stats.loads,1,'Replay must not reload the same source');
   assert.equal(stats.plays,1);
   find(dom.goalStatsEditor,'goal-review-confirm').events.click();
@@ -134,7 +139,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.match(dom.goalStatsStep.textContent,/1 \/ 2/);
 
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
   assert.equal(stats.loads,2,'next goal loads only when its source changes');
   assert.equal(stats.plays,2,'next goal plays automatically after Keep tap');
@@ -145,7 +150,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   find(dom.goalStatsEditor,'goal-review-confirm').events.click();
   assert.equal(createGoalDrafts(two,storage).items[0].status,'confirmed');
   find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
   assert.equal(dom.goalStatsViewer.hidden,false,'after last goal the editor stays available for replay');
   assert.match(dom.goalStatsStep.textContent,/動画判定完了/);
@@ -154,20 +159,20 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.match(dom.goalStatsDoneText.textContent,/2件の判定が完了/);
   assert.equal(confirmedGoalExport([one,two],storage).goals.length,2);
   assert.equal(stats.competingPaused,2);
- }finally{restore()}
+ }finally{await restore()}
 });
 test('editing scorer does not reload current video and requires reconfirmation',async()=>{
  const {dom,one,stats,storage,restore}=setup();
  try{
   initGoalStatsReview({sources:[one]});
-  dom.goalStatsList.children[0].events.click();await Promise.resolve();
+  dom.goalStatsList.children[0].events.click();await settleMedia();
   const loads=stats.loads;
   const scoreInput=find(dom.goalStatsEditor,'goal-review-field').children[1];
   scoreInput.value='若さん（確認）';
   scoreInput.events.change();
   assert.equal(stats.loads,loads);
   assert.equal(createGoalDrafts(one,storage).items[0].scorer,'若さん（確認）');
- }finally{restore()}
+ }finally{await restore()}
 });
 
 
@@ -175,16 +180,16 @@ test('goal replay starts from visible first-frame preview without an extra list 
  const {dom,one,stats,restore}=setup();
  try{
   initGoalStatsReview({sources:[one]});
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(dom.goalStatsViewer.hidden,false);
   assert.equal(dom.goalStatsPreview.currentTime,365.2);
   assert.equal(stats.loads,1);
   assert.equal(stats.plays,0);
   find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(stats.loads,1);
   assert.equal(stats.plays,1);
- }finally{restore()}
+ }finally{await restore()}
 });
 
 test('goal preview has shared replay, pinch controls and colored trim/playhead instead of native-only video',async()=>{
@@ -192,7 +197,7 @@ test('goal preview has shared replay, pinch controls and colored trim/playhead i
  try{
   initGoalStatsReview({sources:[one]});
   dom.goalStatsList.children[0].events.click();
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(dom.goalStatsPreview.controls,false);
   assert.ok(find(dom.goalStatsViewer,'goal-scene-viewport zoom-video-viewport'));
   assert.ok(find(dom.goalStatsViewer,'scene-pinch-hint'));
@@ -206,7 +211,7 @@ test('goal preview has shared replay, pinch controls and colored trim/playhead i
   assert.ok(labels.includes('アシスト'));
   assert.ok(labels.includes('対戦カード'));
   assert.ok(labels.includes('SS試合番号（任意）'));
- }finally{restore()}
+ }finally{await restore()}
 });
 function allLabels(root){
  const result=[],queue=[root];
@@ -222,7 +227,7 @@ test('goal trim handles and pinch gestures persist without changing the true goa
  try{
   initGoalStatsReview({sources:[one]});
   dom.goalStatsList.children[0].events.click();
-  await Promise.resolve();
+  await settleMedia();
   const viewer=dom.goalStatsViewer;
   const startField=find(viewer,'range-time');
   assert.ok(startField);
@@ -242,13 +247,13 @@ test('goal trim handles and pinch gestures persist without changing the true goa
   item=createGoalDrafts(one,storage).items[0];
   assert.ok(item.clipZoom>1);
   assert.equal(item.goalTimeSeconds,369.2);
- }finally{restore()}
+ }finally{await restore()}
 });
 test('scrub playhead release seeks once to chosen time and plays with the shared decoder',async()=>{
  const {dom,one,stats,restore}=setup();
  try{
   initGoalStatsReview({sources:[one]});
-  dom.goalStatsList.children[0].events.click();await Promise.resolve();
+  dom.goalStatsList.children[0].events.click();await settleMedia();
   const track=find(dom.goalStatsViewer,'range-track interactive-range');
   assert.ok(track);
   const before=stats.loads,plays=stats.plays;
@@ -256,10 +261,10 @@ test('scrub playhead release seeks once to chosen time and plays with the shared
   track.events.pointerdown(touch(160));
   track.events.pointermove(touch(240));
   track.events.pointerup(touch(240));
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(stats.loads,before);
   assert.equal(stats.plays,plays+1);
- }finally{restore()}
+ }finally{await restore()}
 });
 
 test('video can be kept or rejected inside goal editor without second review',async()=>{
@@ -271,7 +276,7 @@ test('video can be kept or rejected inside goal editor without second review',as
    onRejectClip:(source,item)=>{calls.rejected++;return rejectGoalClip(source,item);}
   });
   dom.goalStatsList.children[0].events.click();
-  await Promise.resolve();
+  await settleMedia();
   const keep=find(dom.goalStatsEditor,'goal-review-video-keep');
   const reject=find(dom.goalStatsEditor,'goal-review-video-reject');
   assert.ok(keep&&reject);
@@ -295,7 +300,7 @@ test('video can be kept or rejected inside goal editor without second review',as
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
   assert.equal(one.candidates.length,1,'Keep after Reject reuses the same candidate');
   assert.equal(one.candidates[0].enabled,true);
- }finally{restore()}
+ }finally{await restore()}
 });
 test('changing a kept goal crop updates the same export candidate immediately',async()=>{
  const {dom,storage,one,restore}=setup();
@@ -307,7 +312,7 @@ test('changing a kept goal crop updates the same export candidate immediately',a
    onClipEdit:(source,item)=>{updates.push(item.clipStartSeconds);keepGoalClip(source,item);}
   });
   dom.goalStatsList.children[0].events.click();
-  await Promise.resolve();
+  await settleMedia();
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
   const input=find(dom.goalStatsViewer,'range-time');
   input.value='06:03.0';input.events.change();
@@ -315,7 +320,7 @@ test('changing a kept goal crop updates the same export candidate immediately',a
   assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,363);
   assert.equal(one.candidates[0].time,363);
   assert.equal(one.candidates[0].manualEnd,371.2);
- }finally{restore()}
+ }finally{await restore()}
 });
 
 test('goal section occurs directly below main Gemini analysis before regular highlights',async()=>{
@@ -338,10 +343,10 @@ test('after first video Reject, next candidate starts automatically; final view 
    onRejectClip:(source,item)=>rejectGoalClip(source,item),
    onKeepClip:(source,item)=>Boolean(keepGoalClip(source,item))
   });
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(stats.loads,1);
   find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'rejected');
   assert.equal(stats.loads,2);
   assert.equal(stats.plays,1);
@@ -350,7 +355,7 @@ test('after first video Reject, next candidate starts automatically; final view 
   assert.equal(dom.goalStatsViewer.hidden,false);
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'kept');
   assert.match(dom.goalStatsStep.textContent,/動画判定完了/);
- }finally{restore()}
+ }finally{await restore()}
 });
 
 test('only one detected goal: Keep shows explicit all-done state instead of a silent stuck screen',async()=>{
@@ -360,7 +365,7 @@ test('only one detected goal: Keep shows explicit all-done state instead of a si
    onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
    onRejectClip:(src,item)=>rejectGoalClip(src,item)
   });
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(dom.goalStatsDone.hidden,true);
   assert.match(dom.goalStatsStep.textContent,/1 \/ 1/);
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
@@ -371,7 +376,7 @@ test('only one detected goal: Keep shows explicit all-done state instead of a si
   assert.equal(dom.goalStatsViewer.hidden,false,'can still review final saved goal');
   assert.ok(find(dom.goalStatsViewer,'play-btn goal-scene-replay'));
   assert.equal(dom.goalStatsDoneToRegular.hidden,false);
- }finally{restore()}
+ }finally{await restore()}
 });
 
 test('Keep advances to next unjudged goal even when save callback synchronously triggers refresh',async()=>{
@@ -390,11 +395,11 @@ test('Keep advances to next unjudged goal even when save callback synchronously 
     return true;
    }
   });
-  await Promise.resolve();
+  await settleMedia();
   const first=dom.goalStatsPlayingLabel.textContent;
   assert.match(first,/IMG_5292/);
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
-  await Promise.resolve();
+  await settleMedia();
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
   assert.match(dom.goalStatsPlayingLabel.textContent,/IMG_5293/);
   assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
@@ -403,5 +408,5 @@ test('Keep advances to next unjudged goal even when save callback synchronously 
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
   assert.equal(dom.goalStatsDone.hidden,false);
   assert.match(dom.goalStatsDoneText.textContent,/2件の判定が完了/);
- }finally{restore()}
+ }finally{await restore()}
 });
