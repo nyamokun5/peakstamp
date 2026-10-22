@@ -5,7 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=eta34';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal56';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal57';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goal54';
 import {createGoalDrafts} from './goal-stats.mjs?v=40';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=peak52';
@@ -109,7 +109,7 @@ function busy(value) {
   refreshCloudAudioPilot(state);
   refreshGeminiPrimary(state);
 }
-function syncSources() {
+function syncSources({skipGoalReviewRefresh=false}={}) {
   closeInlinePreview();
   // Existing single-video controls still point to the first file.
   const first = state.sources[0] || null;
@@ -138,7 +138,9 @@ function syncSources() {
   refreshVideoExplore(state);
   refreshGeminiPrimary(state);
   refreshCloudAudioPilot(state);
-  goalReview?.refresh();
+  // Goal Keep/Reject already owns the next-scene transition. Do not
+  // synchronously rebuild its editor while its tap handler is advancing.
+  if(!skipGoalReviewRefresh)goalReview?.refresh();
   calloutPilot?.refresh();
   if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
   // Goal scene review has its own priority section above Step 03.
@@ -1407,12 +1409,12 @@ const goalReview=initGoalStatsReview(state,{
   },
   onKeepClip:(source,item)=>{
     if(!keepGoalClip(source,item))return false;
-    syncSources();
+    syncSources({skipGoalReviewRefresh:true});
     return true;
   },
   onRejectClip:(source,item)=>{
     if(!rejectGoalClip(source,item))return false;
-    syncSources();
+    syncSources({skipGoalReviewRefresh:true});
     return true;
   },
   onClipEdit:(source,item)=>{
