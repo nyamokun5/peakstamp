@@ -20,3 +20,17 @@ export function nextPendingGoal(rows,currentKey){
  const position=(rows||[]).findIndex(x=>x.key===currentKey);
  return queue.find(x=>(rows||[]).indexOf(x)>position)||queue[0];
 }
+
+/** Video-review queue: only scenes not yet Keep/Rejected are pending.
+ * Scorer/assist verification does not substitute for video judgment.
+ * Once all video decisions are made, return null (do not wrap forever).
+ */
+export function goalNeedsVideoReview(item){
+ return Boolean(item)&&item.status!=='excluded'&&
+   item.videoDecision!=='kept'&&item.videoDecision!=='rejected';
+}
+export function nextUnreviewedGoalVideo(rows,currentKey){
+ const list=rows||[],position=list.findIndex(row=>row.key===currentKey);
+ return list.find((row,index)=>index>position&&goalNeedsVideoReview(row.item))||
+   list.find((row,index)=>index<=position&&goalNeedsVideoReview(row.item))||null;
+}

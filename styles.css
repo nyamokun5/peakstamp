@@ -1401,3 +1401,38 @@ body:has(#undoReview:not([hidden])) .page{
  .goal-review-video-actions{gap:6px}
  .goal-review-video-actions button{font-size:12px;padding:9px 5px}
 }
+
+/* v55: goal-first review is an independent priority section above the
+   regular highlight result panel and advanced analysis tools. */
+.page>.goal-stats-panel{
+ margin:14px 0 18px;padding:14px;
+ background:#0c2731;border:1px solid #427d76;border-radius:14px;
+ scroll-margin-top:8px;
+}
+.page>.goal-stats-panel[hidden]{display:none!important}
+.goal-review-step{
+ color:#f1fffa;background:#214a47;border:1px solid #67b6a0;
+ border-radius:9px;padding:10px 12px;margin:8px 0 12px;
+ font-size:13px;font-weight:850;line-height:1.55;
+}
+.goal-review-viewer:not([hidden]){margin-top:9px}
+.goal-review-queue-fold{
+ border-top:1px solid #395b67;margin:14px 0 2px;padding:9px 0 0;
+}
+.goal-review-queue-fold>summary{
+ color:#d5f8ee;font-size:13px;font-weight:800;cursor:pointer;
+ padding:9px 3px;
+}
+.goal-review-queue-fold .goal-review-list{margin:8px 0 11px}
+.goal-review-viewer .goal-scene-replay{
+ background:#1b6874!important;color:#fff!important;
+ border:2px solid #7adecf!important;font-size:14px!important;
+}
+.goal-review-viewer .goal-scene-replay:focus-visible{
+ outline:2px solid #fff;outline-offset:2px;
+}
+@media(max-width:480px){
+ .page>.goal-stats-panel{padding:9px;margin:10px 0 16px}
+ .goal-review-step{font-size:12px;padding:9px 10px;line-height:1.5}
+ .goal-review-viewer .goal-scene-replay{font-size:13px!important}
+}

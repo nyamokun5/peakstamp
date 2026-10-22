@@ -6,7 +6,7 @@
 import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
  confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=40';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
-import {collectGoalQueue,nextPendingGoal} from './goal-review-queue.mjs?v=40';
+import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=goal55';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=45';
 import {createGoalSceneControls} from './goal-scene-editor.mjs?v=goal53';
 
@@ -47,7 +47,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  const sources=()=>state.sources.filter(s=>s?.file&&s?.objectUrl);
  const goalData=s=>createGoalDrafts(s,cache());
  const queue=()=>collectGoalQueue(sources(),cache());
- let activeKey='';
+ let activeKey='',displayedKey='',hadGoalCandidates=false;
  const say=s=>{status.textContent=s;};
  const player=createGoalPlaybackController(video,{
   notify:s=>{$('goalStatsVideoStatus').textContent=s;},
@@ -80,9 +80,10 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   }
  });
  function pausePlayback(){player.pause();}
- function disposeVideo(){player.dispose();viewer.hidden=true;}
+ function disposeVideo(){player.dispose();viewer.hidden=true;displayedKey='';}
  function seekTo(entry,{autoplay=false,at=null}={}){
   if(!entry)return;
+  displayedKey=entry.key;
   const {source,item}=entry;
   // Safari suspends media loading while parent is display:none or hidden.
   // Unhide first, then set src and start playing from this user interaction.
@@ -105,9 +106,12 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   if(!entry)return;
   activeKey=entry.key;
   manualSource.value=goalSourceKey(entry.source);
+  // The first preview is opened by this actual user tap. Do not let the
+  // passive render seek first, which can interrupt iPhone Safari playback.
+  displayedKey=entry.key;
   render();
   seekTo(entry,{autoplay});
-  if(scroll)viewer.scrollIntoView({behavior:'auto',block:'start'});
+  if(scroll)panel.scrollIntoView({behavior:'smooth',block:'start'});
  }
  function write(source,items){
   if(!saveGoalDrafts(source,cache(),items))
@@ -142,10 +146,17 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    say('動画の判定を保存できませんでした。動画を再読み込みしてください。');
    render();return;
   }
-  render();
-  say(decision==='kept'
-   ?'このゴール動画をキープしました。ほかのキープ動画と時間順に結合されます。'
-   :'このゴール動画を不採用にしました。完成動画には入りません。');
+  // Once this video has been judged, continue to the next untouched goal.
+  // Score confirmation remains separate and can be revisited via the queue.
+  const next=nextUnreviewedGoalVideo(queue(),entry.key);
+  if(next){
+   focusActive(next,{autoplay:true,scroll:true});
+   say((decision==='kept'?'動画をキープ':'動画を不採用')+
+    'にしました。次の未判断ゴールを開きました。');
+  }else{
+   render();panel.scrollIntoView({behavior:'smooth',block:'start'});
+   say('ゴール動画の判定がすべて終わりました。通常シーンの確認・動画作成へ進めます。');
+  }
  }
  function renderEditor(entry){
   editor.replaceChildren();
@@ -228,7 +239,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   optional.append(optionalBody);
   editor.append(fields,timing,optional);
   const actions=make('div','goal-review-actions');
-  const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'✓ 確定済み':'✓ 確定して次へ');
+  const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'✓ 得点情報は確定済み':'✓ 得点情報を確定');
   confirm.type='button';confirm.disabled=item.status==='confirmed'||disabled;
   confirm.addEventListener('click',()=>{
    const error=validateGoal(item);
@@ -236,15 +247,12 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    item.status='confirmed';item.goalTimeVerified=true;
    item.confirmedAt=new Date().toISOString();
    write(source,goalData(source).items.map(x=>x.id===item.id?item:x));
-   const next=nextPendingGoal(queue(),entry.key);
-   if(next){
-    focusActive(next,{autoplay:true});
-    say('ゴールを確定しました。次の未確定候補に進みました。');
-   }else{
-    player.pause();activeKey='__all_done__';render();
-    summary.scrollIntoView({behavior:'auto',block:'start'});
-    say('ゴールを確定しました。未確定候補はありません。');
-   }
+   // Confirming scorer/assist must not silently skip the video decision.
+   // Keep the player and the Keep/Reject buttons visible until judged.
+   render();
+   say(item.videoDecision
+    ?'得点情報を確定しました。動画の判定は保存済みです。'
+    :'得点情報を確定しました。動画をキープ／不採用にすると次のゴールへ進みます。');
    onUpdate();
   });
   const reject=make('button','goal-review-exclude',
@@ -254,9 +262,15 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const now=item.status==='excluded'?'draft':'excluded';
    item.status=now;item.confirmedAt=null;
    write(source,goalData(source).items.map(x=>x.id===item.id?item:x));
-   const next=now==='excluded'?nextPendingGoal(queue(),entry.key):null;
-   if(next)focusActive(next,{autoplay:false});
-   else render();
+   if(now==='excluded'&&!item.videoDecision){
+    // Not a goal: dismiss its unjudged goal video too. This is reversible
+    // from the candidate list; independently kept highlight clips are safe.
+    setVideoDecision(entry,'rejected');
+   }else{
+    const next=now==='excluded'?nextUnreviewedGoalVideo(queue(),entry.key):null;
+    if(next)focusActive(next,{autoplay:true});
+    else render();
+   }
    onUpdate();
   });
   actions.append(confirm,reject);
@@ -286,7 +300,10 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  }
  function render(){
   const all=sources(),entries=queue();
-  panel.hidden=all.length===0;
+  // This standalone priority panel appears as soon as there are actual
+  // goals, transcript results, or a completed waveform analysis.
+  panel.hidden=all.length===0 || (!entries.length &&
+    !all.some(source=>Boolean(goalData(source).transcript)||Boolean(source.bins)));
   if(!all.length){
    disposeVideo();list.replaceChildren();editor.replaceChildren();return;
   }
@@ -301,13 +318,20 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    '  ·  動画キープ '+videoKept+'件  ·  動画不採用 '+videoRejected+'件';
   exportButton.disabled=copyButton.disabled=showButton.disabled=confirmed===0;
   const previous=entries.find(row=>row.key===activeKey);
-  // Keep the completion state until a genuinely new unconfirmed goal appears.
-  if(activeKey==='__all_done__'&&pending>0)
-   activeKey=entries.find(row=>row.item.status==='draft').key;
-  if(!previous && !activeKey)activeKey=(entries.find(row=>row.item.status==='draft')||entries[0])?.key||'';
+  if(!previous){
+   const firstToReview=entries.find(row=>goalNeedsVideoReview(row.item));
+   activeKey=(firstToReview||entries[0])?.key||'';
+  }
   const active=entries.find(row=>row.key===activeKey);
-  if(!active){viewer.hidden=true;player.pause();}
+  if(!active){viewer.hidden=true;displayedKey='';player.pause();}
   if(active)scene.activate(active.source,active.item);
+  const index=active?entries.findIndex(row=>row.key===active.key):-1;
+  const waiting=entries.filter(row=>goalNeedsVideoReview(row.item)).length;
+  $('goalStatsStep').textContent=active
+   ?'⚽ ゴール '+(index+1)+' / '+entries.length+
+     (waiting?'　·　動画未判断 '+waiting+'件':'　·　動画判定完了')+
+     '　·　リプレイで確認 → 動画をキープ／不採用'
+   :entries.length?'すべての候補を確認しました':'まだゴール候補はありません';
   renderEditor(active);
   const cards=[];
   for(const [index,entry] of entries.entries()){
@@ -334,10 +358,15 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    editor.replaceChildren();
    editor.append(make('p','goal-review-meta',
     'まだゴール候補がありません。音声の実況解析を実行するか、手動で追加してください。'));
-   viewer.hidden=true;player.pause();
+   viewer.hidden=true;displayedKey='';player.pause();
+  }else if(!panel.hidden && active && displayedKey!==active.key){
+   // Opening the first candidate MUST NOT require tapping the queue.
+   // Pause at the initial scene frame: iPhone Safari allows a visible
+   // video preview without attempting gesture-restricted autoplay.
+   seekTo(active,{autoplay:false});
   }
-  // A single video stays mounted above the editor, even when many cards change.
-  // Never reload the same MOV just because the summary or fields were edited.
+  // One player/decoder is mounted for all candidates. Rerendering fields
+  // does not force a MOV reload or restart a scene already being edited.
  }
  function hasRecords(){return sources().some(s=>Boolean(goalData(s).transcript)||goalData(s).items.length>0);}
  function nearby(source,time,start,end){
@@ -382,7 +411,17 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   }
   manualSource.value=all.some(s=>goalSourceKey(s)===old)?old:goalSourceKey(all[0]);
   $('goalStatsManualWrap').hidden=all.length<=1;
+  const nowHasGoals=queue().length>0;
+  const justDetected=nowHasGoals&&!hadGoalCandidates;
+  hadGoalCandidates=nowHasGoals;
   render();
+  if(justDetected&&!panel.hidden){
+   // The callout analysis tool lives BELOW goal review. Bring the actual
+   // first visible player into view when new results first become available.
+   const go=()=>panel.scrollIntoView({behavior:'smooth',block:'start'});
+   if(typeof requestAnimationFrame==='function')requestAnimationFrame(go);
+   else go();
+  }
  }
  function snapshot(){
   const data=confirmedGoalExport(sources(),cache());

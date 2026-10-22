@@ -5,7 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=eta34';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal54';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goal55';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goal54';
 import {createGoalDrafts} from './goal-stats.mjs?v=40';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=peak52';
@@ -141,7 +141,9 @@ function syncSources() {
   goalReview?.refresh();
   calloutPilot?.refresh();
   if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
-  $('resultsPanel').hidden = !state.bins && !goalReview?.hasRecords();
+  // Goal scene review has its own priority section above Step 03.
+  // Do not show an empty regular results panel for goal-only projects.
+  $('resultsPanel').hidden = !state.bins;
   $('standardReviewArea').hidden = !state.bins;
   $('multiWaveNotice').hidden = state.sources.length <= 1;
   $('commentHelp').hidden = state.sources.length <= 1;
@@ -1427,7 +1429,7 @@ const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
     goalReview.refresh();
     if(state.bins)drawResults();
     else{
-      $('resultsPanel').hidden=!goalReview.hasRecords();
+      $('resultsPanel').hidden=true;
       $('standardReviewArea').hidden=true;
     }
   }});
