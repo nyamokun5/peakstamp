@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {collectGoalQueue,nextPendingGoal} from '../goal-review-queue.mjs';
+import {collectGoalQueue,nextPendingGoal,nextUnreviewedGoalVideo,goalNeedsVideoReview} from '../goal-review-queue.mjs';
 import {goalSourceKey,createGoalDrafts,saveGoalDrafts,actualGoalTime} from '../goal-stats.mjs';
 const store=()=>({m:new Map(),getItem(k){return this.m.get(k)||null},setItem(k,v){this.m.set(k,v)}});
 const mk=(name,size,modified)=>({id:name,objectUrl:'blob:'+name,
@@ -49,4 +49,31 @@ test('one denied goal does not block advancing to another source',()=>{
  const item=rows[0].item;item.status='excluded';saveGoalDrafts(a,s,[item]);
  rows=collectGoalQueue([a,b],s);
  assert.equal(nextPendingGoal(rows,rows[0].key).source.file.name,b.file.name);
+});
+
+test('video-review queue advances after Keep or Reject without depending on scorer confirmation',()=>{
+ const rows=[
+  {key:'a',item:{status:'confirmed',videoDecision:'kept'}},
+  {key:'b',item:{status:'confirmed'}},
+  {key:'c',item:{status:'draft',videoDecision:'rejected'}},
+  {key:'d',item:{status:'draft'}}
+ ];
+ assert.equal(goalNeedsVideoReview(rows[0].item),false);
+ assert.equal(goalNeedsVideoReview(rows[1].item),true);
+ assert.equal(nextUnreviewedGoalVideo(rows,'a').key,'b');
+ assert.equal(nextUnreviewedGoalVideo(rows,'b').key,'d');
+ rows[1].item.videoDecision='kept';
+ rows[3].item.videoDecision='rejected';
+ assert.equal(nextUnreviewedGoalVideo(rows,'b'),null);
+});
+test('video review skips excluded goals, wraps to remaining unjudged, and does not loop after all',()=>{
+ const rows=[
+  {key:'a',item:{status:'draft'}},
+  {key:'b',item:{status:'excluded'}},
+  {key:'c',item:{status:'confirmed',videoDecision:'kept'}}
+ ];
+ assert.equal(nextUnreviewedGoalVideo(rows,'c').key,'a');
+ assert.equal(nextUnreviewedGoalVideo(rows,'b').key,'a');
+ rows[0].item.videoDecision='rejected';
+ assert.equal(nextUnreviewedGoalVideo(rows,'c'),null);
 });
