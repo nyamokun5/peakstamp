@@ -17,7 +17,8 @@ function setup(){
   constructor(tag='div'){
    this.tagName=tag;this.className='';this.children=[];this.events={};this.listeners={};this.dataset={};
    this.value='';this.textContent='';this.hidden=false;this.disabled=false;
-   this.readyState=0;this.currentTime=0;this.paused=true;
+   this.readyState=0;this._currentTime=0;this.paused=true;
+   this.seeking=false;
    this.style={};this.videoWidth=1920;this.videoHeight=1080;
   }
   append(...items){this.children.push(...items)}
@@ -32,6 +33,14 @@ function setup(){
   removeEventListener(name,handler){
    this.listeners[name]?.delete(handler);
    if(!this.listeners[name]?.size)delete this.events[name];
+  }
+  get currentTime(){return this._currentTime}
+  set currentTime(time){
+   this._currentTime=time;
+   if(this.readyState>=1 && this.events.seeked){
+    this.seeking=true;
+    queueMicrotask(()=>{this.seeking=false;this.events.seeked?.()});
+   }
   }
   getBoundingClientRect(){return {left:0,top:0,width:360,height:203,right:360,bottom:203}}
   setPointerCapture(){}
