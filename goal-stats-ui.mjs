@@ -131,8 +131,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
    editor.append(quote);
   }
   const fields=make('div','goal-review-fields');
-  const timing=make('div','goal-review-time-adjust');
-  timing.append(make('strong','','ゴール時刻を修正（切り抜き範囲とは別）'));
+  const timing=make('details','goal-review-time-adjust');
+  timing.append(make('summary','','⏱ ゴール時刻を修正（切り抜きとは別）'));
+  const timingTools=make('div','goal-review-time-tools');
   const earlier=make('button','goal-review-adjust-button','−1秒');
   const later=make('button','goal-review-adjust-button','＋1秒');
   const stamp=make('input','goal-review-time-input');
@@ -162,8 +163,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
    changeTime(at);
    say('ゴール時刻を '+fmt(at)+' に調整しました。');
   });
-  timing.append(earlier,stamp,later,useVideo);
-  editor.append(timing);
+  timingTools.append(earlier,stamp,later,useVideo);
+  timing.append(timingTools);
   inputRow(fields,'得点者（ゴール）',item.scorer,v=>edit(entry,'scorer',v),{placeholder:'例：若さん'});
   const assistBox=make('label','goal-review-field');
   assistBox.append(make('span','','アシスト'));
@@ -187,7 +188,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onKeepClip=()=>false,
   inputRow(optionalBody,'チームB',item.teamB||'',v=>edit(entry,'teamB',v),{placeholder:'例：4'});
   inputRow(optionalBody,'メモ（任意）',item.note||'',v=>edit(entry,'note',v),{maxLength:400});
   optional.append(optionalBody);
-  editor.append(fields,optional);
+  editor.append(fields,timing,optional);
   const actions=make('div','goal-review-actions');
   const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'✓ 確定済み':'✓ 確定して次へ');
   confirm.type='button';confirm.disabled=item.status==='confirmed'||disabled;
