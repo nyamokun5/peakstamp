@@ -88,3 +88,36 @@ test('no waveform never adds empty clips; goal review still exists',()=>{
  assert.equal(keepGoalClip(source,createGoalDrafts(source,store).items[0]),null);
  assert.equal(source.candidates.length,0);
 });
+
+test('per-goal trim and pinch zoom are saved when adding the goal to MP4 highlights',()=>{
+ const source=src();
+ const goal={id:'manual-test',origin:'manual',timeSeconds:60,goalTimeSeconds:60,
+  clipStartSeconds:53.7,clipEndSeconds:64.2,
+  clipZoom:2.15,clipZoomX:.31,clipZoomY:.67};
+ const c=keepGoalClip(source,goal);
+ assert.equal(c.time,53.7);
+ assert.equal(c.manualEnd,64.2);
+ assert.equal(c.zoom,2.15);
+ assert.equal(c.zoomX,.31);
+ assert.equal(c.zoomY,.67);
+ assert.equal(c.goalRecordId,goal.id);
+ // Revisiting the same goal can apply an edited framing/trim.
+ goal.clipEndSeconds=62.5;goal.clipZoom=1.4;
+ const updated=keepGoalClip(source,goal);
+ assert.equal(updated,c);
+ assert.equal(updated.manualEnd,62.5);
+ assert.equal(updated.zoom,1.4);
+ assert.equal(source.candidates.length,1);
+});
+test('already-kept unrelated highlight does not have its trim overwritten by goal edit',()=>{
+ const source=src();
+ const existing={id:'audio-scene',time:56,peakSeconds:60,manualEnd:73,
+  enabled:true,zoom:1.5,zoomX:.3,zoomY:.5};
+ source.candidates.push(existing);
+ const goal={id:'g',origin:'manual',goalTimeSeconds:60,timeSeconds:60,
+  clipStartSeconds:58,clipEndSeconds:62,clipZoom:2};
+ assert.equal(keepGoalClip(source,goal),existing);
+ assert.equal(existing.time,56);
+ assert.equal(existing.manualEnd,73);
+ assert.equal(existing.zoom,1.5);
+});
