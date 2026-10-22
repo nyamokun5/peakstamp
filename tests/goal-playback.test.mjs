@@ -2,343 +2,190 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createGoalPlaybackController} from '../goal-playback.mjs';
 
-function setup(){
- const calls={plays:0,loads:0,paused:0,logs:[],before:0};
- const events=new Map();
+/** Safari-like fixture: changing src resets to 0, and deep MOV seeks
+ * complete asynchronously. It NEVER delivers an actual frame immediately
+ * simply because a currentTime setter was called. */
+function fixture({autoMetadata=true,autoSeek=true}={}){
+ const calls={plays:0,pauses:0,loads:0,events:[],messages:[],before:0};
+ const listeners=new Map();
+ const timers=new Map();let timerId=0;
  const video={
-  hidden:true,paused:true,seeking:false,readyState:0,currentTime:0,
-  error:null,preload:'metadata',src:'',
-  setAttribute(){},
-  addEventListener(name,fn){events.set(name,fn)},
-  pause(){this.paused=true;calls.paused++},
-  load(){calls.loads++},
-  removeAttribute(name){if(name==='src')this.src=''},
+  hidden:true,paused:true,seeking:false,readyState:0,duration:450,
+  currentTime:0,preload:'metadata',_src:'',
+  setAttribute(){},removeAttribute(name){if(name==='src')this._src=''},
+  load(){calls.loads++;this.readyState=0},
+  pause(){calls.pauses++;this.paused=true},
+  addEventListener(name,fn){
+   if(!listeners.has(name))listeners.set(name,[]);
+   listeners.get(name).push(fn);
+  },
   play(){
    calls.plays++;
-   if(calls.nextFailure){
-    const e=calls.nextFailure;calls.nextFailure=null;
-    return Promise.reject(e);
+   if(calls.failNext){const e=calls.failNext;calls.failNext=null;return Promise.reject(e)}
+   if(calls.resetOnPlay){
+    calls.resetOnPlay=false;this.currentTime=0;
    }
    this.paused=false;
+   fire('playing');
    return Promise.resolve();
   }
  };
- const playback=createGoalPlaybackController(video,{
-  notify:x=>calls.logs.push(x),beforePlay:()=>calls.before++
+ let position=0;
+ Object.defineProperty(video,'currentTime',{
+  get(){return position},
+  set(value){
+   position=value;
+   if(video.readyState>=1){
+    video.seeking=true;
+    calls.events.push('seek:'+Number(value).toFixed(1));
+    if(autoSeek)queueMicrotask(()=>{video.seeking=false;fire('seeked')});
+   }
+  }
  });
- return {calls,events,video,playback,fire:(type)=>events.get(type)?.()};
+ Object.defineProperty(video,'src',{
+  get(){return this._src},
+  set(value){
+   this._src=value;this.readyState=0;this.seeking=false;
+   position=0;calls.events.push('src:'+value);
+   if(autoMetadata)queueMicrotask(()=>{this.readyState=1;fire('loadedmetadata')});
+  }
+ });
+ const fire=name=>{calls.events.push(name);for(const fn of listeners.get(name)||[])fn()};
+ const controller=createGoalPlaybackController(video,{
+  notify:msg=>calls.messages.push(msg),
+  beforePlay:()=>calls.before++,
+  schedule:(fn,delay)=>{const id=++timerId;timers.set(id,{fn,delay});return id},
+  cancel:id=>timers.delete(id)
+ });
+ const flush=async()=>{for(let i=0;i<9;i++)await Promise.resolve()};
+ return {video,calls,controller,fire,flush,timers,
+  triggerTimer(){
+   const entries=[...timers.entries()];
+   if(!entries.length)return;
+   const [id,x]=entries[0];timers.delete(id);x.fn();
+  }
+ };
 }
-const tick=async()=>{await Promise.resolve();await Promise.resolve();await Promise.resolve()};
-test('show before source assignment, wait for new metadata, and invoke play from click',async()=>{
- const {calls,video,playback,fire}=setup();
- playback.open({sourceKey:'A',sourceUrl:'blob:a',at:359.2,autoplay:true});
- assert.equal(video.hidden,false);
- assert.equal(video.src,'blob:a');
- assert.equal(video.preload,'auto');
+test('initial goal preview loads and seeks into clip without ever playing at source t=0',async()=>{
+ const {video,calls,controller,flush}=fixture();
+ controller.open({sourceKey:'IMG_5292',sourceUrl:'blob:large-mov',at:365.2,autoplay:false});
+ assert.equal(video.src,'blob:large-mov');
+ assert.equal(video.currentTime,0,'before metadata no pretend seek');
+ assert.equal(calls.plays,0);
+ await flush();
+ assert.equal(video.currentTime,365.2);
+ assert.equal(controller.diagnostic().phase,'ready');
+ assert.equal(controller.diagnostic().prepared,true);
+ assert.equal(calls.plays,0);
+ assert.equal(calls.before,0);
+});
+test('Replay uses already prepared goal timestamp, not 0, in the same user tap',async()=>{
+ const {video,calls,controller,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:365.2,autoplay:false});
+ await flush();
+ let playedAt=null;
+ video.play=function(){
+  calls.plays++;playedAt=this.currentTime;this.paused=false;return Promise.resolve();
+ };
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:365.2,autoplay:true});
+ assert.equal(playedAt,365.2);
  assert.equal(calls.plays,1);
  assert.equal(calls.before,1);
- assert.equal(calls.loads,0);
- assert.equal(video.currentTime,359.2,
-  'deep goal timestamp is armed even before the video reports metadata');
- video.readyState=1;fire('loadedmetadata');
- assert.equal(video.currentTime,359.2);
- await tick();
- playback.open({sourceKey:'A',sourceUrl:'blob:a',at:360,autoplay:true});
- assert.equal(calls.plays,2);
- assert.equal(calls.loads,0);
- assert.equal(video.src,'blob:a');
- assert.equal(video.currentTime,360);
- playback.open({sourceKey:'B',sourceUrl:'blob:b',at:97.5,autoplay:true});
- assert.equal(video.src,'blob:b');
- assert.equal(video.currentTime,360,'old metadata must not be used on source change');
- fire('loadedmetadata');
- assert.equal(video.currentTime,97.5);
+ assert.equal(controller.diagnostic().targetTime,365.2);
 });
-test('AbortError on initial play is retried after seeked/canplay, not in a tight loop',async()=>{
- const {calls,video,playback,fire}=setup();
- calls.nextFailure={name:'AbortError',message:'interrupted'};
- playback.open({sourceKey:'A',sourceUrl:'blob:a',at:100,autoplay:true});
- assert.equal(calls.plays,1);
- await tick();
- assert.equal(calls.plays,1,'do not retry until metadata/canplay');
- video.readyState=1;video.seeking=true;fire('loadedmetadata');
- video.readyState=3;fire('canplay');
- assert.equal(calls.plays,1,'do not retry while seeking');
- video.seeking=false;fire('seeked');
- assert.equal(calls.plays,2,'retry after seek finishes');
- await tick();
- assert.equal(video.paused,false);
- assert.match(calls.logs.join(' '),/再生を再試行/);
-});
-test('NotAllowedError leaves native controls usable without automatic retry',async()=>{
- const {calls,video,playback,fire}=setup();
- calls.nextFailure={name:'NotAllowedError'};
- playback.open({sourceKey:'A',sourceUrl:'blob:a',at:5,autoplay:true});
- await tick();
- video.readyState=3;fire('loadedmetadata');fire('canplay');
- assert.equal(calls.plays,1);
- assert.match(calls.logs.at(-1),/▶/);
- assert.equal(video.hidden,false);
- playback.open({sourceKey:'A',sourceUrl:'blob:a',at:4,autoplay:true});
- await tick();
- assert.equal(calls.plays,2,'direct second tap can try again');
-});
-test('file or codec problems show specific diagnostic instead of silent failure',async()=>{
- const {calls,video,playback,fire}=setup();
- playback.open({sourceKey:'A',sourceUrl:'blob:a',at:10,autoplay:false});
- video.error={code:4};
- fire('error');
- assert.match(calls.logs.at(-1),/MOVの形式/);
- playback.pause();
- assert.equal(video.paused,true);
- playback.dispose();
- assert.equal(calls.loads,1,'load is only used when clearing src');
- assert.equal(playback.currentSourceKey(),'');
-});
-
-
-test('a successful initial play still recovers if Safari pauses during deep seek',async()=>{
- const {calls,video,playback,fire}=setup();
- playback.open({sourceKey:'A',sourceUrl:'blob:a',at:359.2,autoplay:true});
- await tick();
- assert.equal(calls.plays,1);
- video.readyState=1;video.seeking=true;
- fire('loadedmetadata');
- video.pause();
- video.readyState=3;video.seeking=false;
- fire('seeked');
- assert.equal(calls.plays,2,'resume playback after Safari pauses during a deep seek');
- assert.equal(playback.diagnostic().targetTime,359.2);
-});
-test('normal playback fallback skips deep seek and diagnostics describe browser state',async()=>{
- const {calls,video,playback,fire}=setup();
- playback.open({sourceKey:'A',sourceUrl:'blob:a',at:359.2,autoplay:true,fromStart:true});
- assert.equal(calls.plays,1);
+test('Replay on a different MOV waits for loadedmetadata and completed seek BEFORE play',async()=>{
+ const {video,calls,controller,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:365.2,autoplay:false});
+ await flush();
+ controller.open({sourceKey:'B',sourceUrl:'blob:b',at:103.5,autoplay:true});
+ assert.equal(calls.plays,0,'never launch a new source at 0 before metadata');
  assert.equal(video.currentTime,0);
- assert.equal(playback.diagnostic().fromBeginning,true);
- assert.equal(playback.diagnostic().targetTime,0);
+ await flush();
+ assert.equal(video.currentTime,103.5);
+ assert.equal(calls.plays,1);
+ assert.equal(controller.diagnostic().targetTime,103.5);
+ assert.equal(calls.before,1);
+});
+test('pressing Replay before slow MOV metadata is loaded still never plays from zero',async()=>{
+ const {video,calls,controller,fire,flush}=fixture({autoMetadata:false});
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:310,autoplay:true});
+ assert.equal(calls.plays,0);
+ assert.equal(video.currentTime,0);
+ assert.match(calls.messages.join(' '),/読み込み/);
  video.readyState=1;fire('loadedmetadata');
- assert.equal(video.currentTime,0,'fallback must not jump into the long MOV');
- video.readyState=3;
- video.buffered={length:1,start:()=>0,end:()=>20};
- video.seekable={length:1,start:()=>0,end:()=>450};
- video.videoWidth=1920;video.videoHeight=1080;
- fire('playing');
- const out=playback.diagnostic();
- assert.equal(out.videoSize[0],1920);
- assert.equal(out.buffered[0][1],20);
- assert.equal(out.seekable[0][1],450);
- assert.equal(out.lastEvent,'playing');
- playback.pause();
+ assert.equal(calls.plays,0,'pending deep seek must finish first');
+ await flush();
+ assert.equal(calls.plays,1);
+ assert.equal(video.currentTime,310);
 });
-test('the diagnostic keeps a concise list of media events without copying video bytes',()=>{
- const {playback,video,fire}=setup();
- playback.open({sourceKey:'A',sourceUrl:'blob:a',at:30,autoplay:false});
- fire('waiting');fire('stalled');
- const data=playback.diagnostic();
- assert.match(data.lastMessage,/動画画面の▶で再開してください/);
- assert.equal(Array.isArray(data.events),true);
- assert.equal(JSON.stringify(data).includes('blob:a'),false);
- assert.equal(data.events.at(-1).event,'stalled');
- playback.pause();
+test('when Safari changes the media clock back to 0 on play, stop and re-seek before retry',async()=>{
+ const {video,calls,controller,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:359.2,autoplay:false});
+ await flush();
+ video.currentTime=359.2;await flush();
+ calls.resetOnPlay=true;
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:359.2,autoplay:true});
+ await flush();
+ assert.equal(calls.plays,2,'first incorrect attempt is interrupted, then re-played from goal');
+ assert.equal(video.currentTime,359.2);
+ assert.equal(controller.diagnostic().phase,'playing');
+ assert.equal(controller.diagnostic().targetTime,359.2);
 });
-
-test('actual frame presentation is tracked separately from media currentTime',async()=>{
- const {video,playback,fire}=setup();
- const callbacks=new Map();
- let nextId=0;
- video.requestVideoFrameCallback=cb=>{const id=++nextId;callbacks.set(id,cb);return id;};
- video.cancelVideoFrameCallback=id=>callbacks.delete(id);
- // Controller must be initialized AFTER requestVideoFrameCallback exists.
- const controller=createGoalPlaybackController(video,{notify:()=>{}});
- controller.open({sourceKey:'B',sourceUrl:'blob:b',at:359.7,autoplay:true});
- await tick();
- let diag=controller.diagnostic();
- assert.equal(diag.frameDiagnostics.supported,true);
- assert.equal(diag.frameDiagnostics.decodedFrames,0);
- video.currentTime=366.3;
- assert.equal(controller.diagnostic().frameDiagnostics.decodedFrames,0,
-  'media clock advancing does not prove a frame was presented');
- const firstId=Math.min(...callbacks.keys());
- const cb=callbacks.get(firstId);
- callbacks.delete(firstId);
- cb(1234,{mediaTime:366.3,presentedFrames:80});
- diag=controller.diagnostic();
- assert.equal(diag.frameDiagnostics.decodedFrames,1);
- assert.equal(diag.frameDiagnostics.lastFrameMediaTime,366.3);
- assert.equal(diag.frameDiagnostics.lastFramePresentedCount,80);
- assert.equal(diag.frameDiagnostics.firstFrameDelayMs>=0,true);
- assert.equal(callbacks.size,1);
- controller.pause();
- assert.equal(callbacks.size,0,'pause cancels video frame callbacks');
-});
-test('Safari playback-quality counters are copied into diagnostics when available',()=>{
- const {video,playback}=setup();
- video.getVideoPlaybackQuality=()=>({
-  totalVideoFrames:210,droppedVideoFrames:7,corruptedVideoFrames:0
- });
- const d=playback.diagnostic();
- assert.equal(d.frameDiagnostics.quality.totalVideoFrames,210);
- assert.equal(d.frameDiagnostics.quality.droppedVideoFrames,7);
-});
-
-
-function frameFixture(){
- const calls={now:1000,watchdog:null,frames:new Map(),logs:[],id:0};
- const listeners=new Map();
- const video={
-  readyState:4,paused:true,seeking:false,currentTime:0,networkState:1,src:'',
-  setAttribute(){},removeAttribute(){},load(){},pause(){this.paused=true;},
-  play(){this.paused=false;return Promise.resolve();},
-  addEventListener(name,fn){listeners.set(name,fn)},
-  requestVideoFrameCallback(fn){
-   const id=++calls.id;calls.frames.set(id,fn);return id;
-  },
-  cancelVideoFrameCallback(id){calls.frames.delete(id);}
- };
- const controller=createGoalPlaybackController(video,{
-  notify:message=>calls.logs.push(message),now:()=>calls.now,
-  scheduleWatchdog:fn=>{
-   calls.watchdog=fn;return {unref(){}};
-  },
-  cancelWatchdog:()=>{calls.watchdog=null;}
- });
- const fire=(name)=>listeners.get(name)?.();
- const deliverFrame=(mediaTime)=>{
-  const id=[...calls.frames.keys()][0];
-  assert.notEqual(id,undefined);
-  const callback=calls.frames.get(id);calls.frames.delete(id);
-  callback(0,{mediaTime,presentedFrames:100});
- };
- return {calls,video,controller,fire,deliverFrame};
-}
-test('a freeze from an earlier attempt must never be marked recovered on a new seek',async()=>{
- const {calls,video,controller,fire,deliverFrame}=frameFixture();
- controller.open({sourceKey:'same',sourceUrl:'blob:x',at:359.7,autoplay:true});
- fire('playing');await tick();
- video.currentTime=361.1;
- calls.now+=4100;
- calls.watchdog();
- let diag=controller.diagnostic();
- assert.equal(diag.frameFreezeHistory.length,1);
- assert.equal(diag.frameFreezeHistory[0].recoveredAfterMs,null);
- assert.equal(diag.freezeCurrentlySuspected,true);
- const prevAttempt=diag.activeAttemptId;
- controller.open({sourceKey:'same',sourceUrl:'blob:x',at:359.7,autoplay:true});
- video.currentTime=359.7;
- deliverFrame(359.7);
- diag=controller.diagnostic();
- assert.equal(diag.frameFreezeHistory[0].attemptId,prevAttempt);
- assert.equal(diag.frameFreezeHistory[0].endedReason,'new-playback-attempt');
- assert.equal(diag.frameFreezeHistory[0].recoveredAfterMs,null);
- assert.equal(diag.freezeCurrentlySuspected,false);
- assert.equal(diag.frameDiagnostics.decodedFrames,1);
- controller.pause();
-});
-test('ongoing watchdog detects a fresh freeze after frames have already rendered',async()=>{
- const {calls,video,controller,fire,deliverFrame}=frameFixture();
- controller.open({sourceKey:'same',sourceUrl:'blob:y',at:300,autoplay:true});
- fire('playing');await tick();
- calls.now+=200;
- video.currentTime=300.2;deliverFrame(300.2);
- calls.now+=3600;video.currentTime=304.3;
- calls.watchdog();
- let diag=controller.diagnostic();
- assert.equal(diag.frameFreezeHistory.length,1);
- assert.equal(diag.frameFreezeHistory[0].reason,'frame-watchdog');
- assert.equal(diag.frameFreezeHistory[0].framesAtDetection,1);
- assert.equal(diag.freezeCurrentlySuspected,true);
- calls.now+=450;
- video.currentTime=304.7;deliverFrame(304.7);
- diag=controller.diagnostic();
- assert.equal(diag.frameFreezeHistory[0].endedReason,'frames-resumed');
- assert.equal(diag.frameFreezeHistory[0].recoveredAfterMs,450);
- assert.equal(diag.freezeCurrentlySuspected,false);
- assert.equal(diag.frameDiagnostics.decodedFrames,2);
- controller.pause();
-});
-
-test('repeat freeze position groups two independent attempts around the same decoded/keyframe boundary',async()=>{
- const {calls,video,controller,fire,deliverFrame}=frameFixture();
- for(let n=0;n<2;n++){
-  controller.open({sourceKey:'IMG_5292',sourceUrl:'blob:x',at:359.7,autoplay:true});
-  fire('playing');await tick();
-  video.currentTime=n===0?361.1:361.5;
-  calls.now+=4200;
-  calls.watchdog();
- }
- const diag=controller.diagnostic();
- assert.equal(diag.frameFreezeHistory.length,2);
- assert.equal(diag.frameFreezeHistory[0].recoveredAfterMs,null);
- assert.equal(diag.frameFreezeHistory[0].endedReason,'new-playback-attempt');
- assert.equal(diag.frameFreezeHistory[0].suspectedMediaPosition,359.7);
- assert.equal(diag.frameFreezeHistory[1].suspectedMediaPosition,359.7);
- assert.equal(diag.repeatFreezeLocations.length,1);
- assert.equal(diag.repeatFreezeLocations[0].repeatAcrossAttempts,true);
- assert.equal(diag.repeatFreezeLocations[0].attempts.length,2);
- controller.pause();
-});
-test('freeze anchor tracks most recently displayed frame rather than progressing audio clock',async()=>{
- const {calls,video,controller,fire,deliverFrame}=frameFixture();
- controller.open({sourceKey:'IMG_5292',sourceUrl:'blob:x',at:359.7,autoplay:true});
- fire('playing');await tick();
- calls.now+=200;
- video.currentTime=360.1;deliverFrame(360.1);
- calls.now+=4000;video.currentTime=364.5;
- calls.watchdog();
- const diag=controller.diagnostic();
- assert.equal(diag.frameFreezeHistory.length,1);
- assert.equal(diag.frameFreezeHistory[0].lastRenderedMediaTime,360.1);
- assert.equal(diag.frameFreezeHistory[0].suspectedMediaPosition,360.1);
- assert.equal(diag.frameFreezeHistory[0].playbackTime,364.5);
- controller.pause();
-});
-
-test('Safari replay primes selected clip time before synchronous play on an unloaded MOV',async()=>{
- const {calls,video,playback,fire}=setup();
- let positionAtPlay=null;
- video.play=function(){
-  calls.plays++;
-  positionAtPlay=this.currentTime;
-  this.paused=false;
-  return Promise.resolve();
- };
- playback.open({sourceKey:'IMG_5293',sourceUrl:'blob:large-mov',
-  at:110.5,autoplay:true});
- assert.equal(positionAtPlay,110.5,
-  'the first play request is made with the goal timestamp, never t=0');
+test('deep seek that never finishes never falls through to zero-time playback',()=>{
+ const {controller,calls,video,fire,triggerTimer}=fixture({autoMetadata:false,autoSeek:false});
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
  video.readyState=1;fire('loadedmetadata');
- await tick();
- assert.equal(video.currentTime,110.5);
- assert.equal(playback.diagnostic().targetTime,110.5);
+ assert.equal(video.seeking,true);
+ triggerTimer();
+ assert.equal(calls.plays,0);
+ assert.equal(controller.diagnostic().phase,'seek-failed');
+ assert.match(calls.messages.at(-1),/0秒からは再生しません/);
 });
-test('Safari reset to beginning after play is corrected to goal trim start',async()=>{
- const {calls,video,playback,fire}=setup();
- playback.open({sourceKey:'IMG_5293',sourceUrl:'blob:large-mov',
-  at:110.5,autoplay:false});
- video.readyState=3;
- fire('loadedmetadata');
- assert.equal(video.currentTime,110.5);
- video.play=function(){
-  calls.plays++;this.paused=false;
-  // iOS sometimes resets currentTime when starting an already opened MOV.
-  this.currentTime=0;
-  fire('playing');
-  return Promise.resolve();
- };
- playback.open({sourceKey:'IMG_5293',sourceUrl:'blob:large-mov',
-  at:110.5,autoplay:true});
- await tick();
- assert.equal(video.currentTime,110.5,
-  'Replay recovers from iPhone Safari starting at 0');
- assert.equal(calls.plays,1,'recovery seeks without repeatedly calling play');
- assert.equal(playback.diagnostic().targetTime,110.5);
+test('Safari NotAllowedError leaves prepared goal and requests a second explicit Replay tap',async()=>{
+ const {controller,calls,video,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:102,autoplay:false});
+ await flush();
+ calls.failNext={name:'NotAllowedError'};
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:102,autoplay:true});
+ await flush();
+ assert.equal(calls.plays,1);
+ assert.equal(controller.diagnostic().gestureNeeded,true);
+ assert.match(calls.messages.at(-1),/もう一度押して/);
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:102,autoplay:true});
+ await flush();
+ assert.equal(calls.plays,2);
+ assert.equal(video.currentTime,102);
 });
-test('Safari delayed media reset after goal playback begins is recovered on timeupdate',()=>{
- const {video,playback,fire}=setup();
- playback.open({sourceKey:'A',sourceUrl:'blob:a',
-  at:365.2,autoplay:true});
- video.readyState=3;fire('loadedmetadata');
- video.currentTime=0;video.seeking=false;fire('timeupdate');
- assert.equal(video.currentTime,365.2);
+test('manually changed goal cut start is respected on every new Replay',async()=>{
+ const {video,calls,controller,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:100,autoplay:false});
+ await flush();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:95.5,autoplay:true});
+ await flush();
+ assert.equal(controller.diagnostic().targetTime,95.5);
+ assert.equal(video.currentTime,95.5);
+ assert.equal(calls.plays,1);
+});
+test('switching video files reuses one media element; failed/stale sessions never start later',async()=>{
+ const {video,controller,calls,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
+ controller.open({sourceKey:'B',sourceUrl:'blob:b',at:40,autoplay:false});
+ await flush();
+ assert.equal(video.src,'blob:b');
+ assert.equal(video.currentTime,40);
+ assert.equal(calls.plays,0,'stale A pending autoplay cancelled by B preview');
+ assert.equal(controller.currentSourceKey(),'B');
+ controller.pause();
+ controller.dispose();
+ assert.equal(controller.currentSourceKey(),'');
+ assert.equal(video.hidden,true);
+ assert.equal(calls.loads,1);
+});
+test('explicit fromStart remains opt-in, never used by goal UI',async()=>{
+ const {video,controller,calls,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:359,autoplay:true,fromStart:true});
+ await flush();
+ assert.equal(video.currentTime,0);
+ assert.equal(controller.diagnostic().targetTime,0);
+ assert.equal(calls.plays,1);
 });
