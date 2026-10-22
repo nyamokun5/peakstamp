@@ -123,6 +123,10 @@ export function createGoalPlaybackController(video,{
  function guardWrongStart(){
   if(!wantPlay||!sourceKey)return;
   if(clock()>=target-TOLERANCE)return;
+  if(awaitSeek||video.seeking){
+   try{video.pause()}catch(_){}
+   return;
+  }
   try{video.pause()}catch(_){}
   playingRequest=false;prepared=false;awaitSeek=false;
   gestureNeeded=false;
@@ -216,14 +220,17 @@ export function createGoalPlaybackController(video,{
   prepareSource();
  });
  video.addEventListener('loadeddata',()=>{
-  if(awaitSeek&&!video.seeking&&video.readyState>=2)finishSeek();
+  // 'loadeddata' can still refer to frame 0 when currentTime already reads
+  // the *requested* goal time; never mistake that for seek completion.
+  if(awaitSeek&&target<=TOLERANCE&&!video.seeking)finishSeek();
   else if(!prepared)prepareSource();
  });
  video.addEventListener('seeked',()=>{
   if(awaitSeek)finishSeek();
  });
  video.addEventListener('canplay',()=>{
-  if(awaitSeek&&!video.seeking&&video.readyState>=2)finishSeek();
+  // A deep MOV is ready only on 'seeked', not on generic canplay.
+  if(awaitSeek&&target<=TOLERANCE&&!video.seeking)finishSeek();
  });
  video.addEventListener('playing',()=>{
   if(!wantPlay)return;
