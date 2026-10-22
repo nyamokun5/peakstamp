@@ -10,7 +10,7 @@ import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-vide
 import {createGoalDrafts} from './goal-stats.mjs?v=40';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=peak52';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title51';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title62';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=peak52';
 import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
