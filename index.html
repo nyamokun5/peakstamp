@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=title51" />
+  <link rel="stylesheet" href="styles.css?v=goal53" />
 </head>
 <body>
   <header class="topbar">
@@ -179,7 +179,7 @@
       <div class="panel-label"><span class="number">03</span><h2>確認してキープ</h2></div>
     <section class="panel goal-stats-panel" id="goalStatsPanel" aria-label="PeakStamp内でゴールとアシストを確定" hidden>
       <div class="panel-label"><span class="number">⚽</span><h2>最優先：ゴールシーン候補</h2></div>
-      <p class="fine-print">実況から約10秒前をプレー位置として仮設定。<strong>すべての動画のゴール候補を一括表示</strong>し、確認・確定すると次の未確定ゴールに移ります。ハイライト採用と得点確定は別です。</p>
+      <p class="fine-print">すべての動画のゴール候補を一括表示。<strong>リプレイ・切り抜き範囲・2本指での画角調整</strong>を行い、対戦カード・ゴール・アシストを確認できます。得点の確定と動画へのキープは別々です。</p>
       <p id="goalStatsSummary" class="goal-review-summary" aria-live="polite"></p>
       <div id="goalStatsViewer" class="goal-review-viewer" hidden>
         <strong id="goalStatsPlayingLabel"></strong>
@@ -469,6 +469,6 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=peak52"></script>
+  <script type="module" src="app.mjs?v=goal53"></script>
 </body>
 </html>

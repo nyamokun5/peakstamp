@@ -1,4 +1,4 @@
-import { defaultPeakClipBounds } from './editing-rules.mjs?v=peak52';
+import {goalSceneBounds,goalSceneZoom} from './goal-scene-edit.mjs?v=goal53';
 /** Connect a confirmed-or-draft PS goal to the normal video Keep workflow.
  * This is an explicit action; recording a goal never automatically keeps a clip.
  * The regular PeakStamp / HS edit data formats stay unchanged.
@@ -9,7 +9,8 @@ export function keepGoalClip(source,goal){
  if(!source?.bins||!(Number(source.duration)>0)||!Array.isArray(source.candidates)||!goal)return null;
  const duration=Number(source.duration);
  const goalTime=clamp(actualGoalTime(goal),0,duration);
- const {start,end}=defaultPeakClipBounds(goalTime,duration);
+ const {start,end}=goalSceneBounds(goal,duration);
+ const crop=goalSceneZoom(goal);
  const proximity=c=>Math.min(
    Math.abs(Number(c.peakSeconds)-goalTime),
    goal.origin==='audio'?Math.abs(Number(c.peakSeconds)-Number(goal.timeSeconds)):Infinity);
@@ -19,9 +20,21 @@ export function keepGoalClip(source,goal){
    .sort((a,b)=>proximity(a)-proximity(b))[0];
  if(match){
   // Do not override intentionally edited already-kept scenes, just mark as kept.
-  if(match.enabled!==true){
-   match.time=Math.min(Number(match.time)||0,start);
-   match.manualEnd=Math.min(duration,Math.max(Number(match.manualEnd)||0,end));
+  if(match.enabled!==true || match.goalRecordId===goal.id){
+   // An explicitly adjusted goal preview must use exactly its chosen trim.
+   // Otherwise retain any wider manually edited pre-existing highlight.
+   if(match.enabled!==true){
+    match.time=Number.isFinite(goal.clipStartSeconds)
+     ?start:Math.min(Number(match.time)||0,start);
+    match.manualEnd=Number.isFinite(goal.clipEndSeconds)
+     ?end:Math.min(duration,Math.max(Number(match.manualEnd)||0,end));
+   }else{
+    if(Number.isFinite(goal.clipStartSeconds))match.time=start;
+    if(Number.isFinite(goal.clipEndSeconds))match.manualEnd=end;
+   }
+   if(crop.zoom>1 || goal.clipZoom!==undefined){
+    match.zoom=crop.zoom;match.zoomX=crop.zoomX;match.zoomY=crop.zoomY;
+   }
   }
   match.enabled=true;match.rejected=false;match.goalRecordId=goal.id;
   return match;
@@ -31,7 +44,7 @@ export function keepGoalClip(source,goal){
   sourceId:source.id,origin:'goal-commentary',peakSeconds:goalTime,
   time:start,manualEnd:Math.max(start+.3,end),score:1,db:null,
   title:'ゴール',enabled:true,rejected:false,
-  zoom:1,zoomX:.5,zoomY:.5
+  zoom:crop.zoom,zoomX:crop.zoomX,zoomY:crop.zoomY
  };
  source.candidates.push(item);
  source.candidates.sort((a,b)=>Number(a.peakSeconds)-Number(b.peakSeconds));

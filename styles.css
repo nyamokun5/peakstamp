@@ -1274,3 +1274,97 @@ body:has(#undoReview:not([hidden])) .page{
 .montage-title-input,
 .intro-preview-header strong{color:#fff}
 .montage-title-preview strong{text-shadow:0 2px 4px #061525,0 0 10px #061525}
+
+/* v53: goal candidates use the SAME replay, pinch crop and shared trim timeline
+   as regular highlight clips. One mounted video and no native control overlay. */
+.goal-review-viewer:not([hidden]){
+ position:relative;top:auto;z-index:1;
+ margin:10px 0 0;padding:7px;
+ border:1px solid #4f8287;border-bottom:0;border-radius:11px 11px 0 0;
+ background:#103341;box-shadow:none;
+}
+.goal-review-viewer:not([hidden]) #goalStatsPreview{
+ position:absolute;inset:0;display:block;width:100%;height:100%;
+ max-height:none;object-fit:fill;margin:0;border:0;border-radius:0;
+ pointer-events:none;transition:none;will-change:transform;transform-origin:center center;
+}
+.goal-scene-viewport{
+ position:relative;aspect-ratio:16/9;width:100%;max-height:min(44dvh,390px);
+ border-radius:9px;overflow:hidden;background:#071826;
+ touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;
+ border:1px solid #42697d;
+}
+.goal-scene-viewport:active{cursor:grabbing}
+.goal-scene-viewport:focus-visible{outline:2px solid #8ee4ca;outline-offset:2px}
+.goal-scene-viewport .pinch-overlay-tip{pointer-events:none}
+.goal-review-viewer .scene-pinch-toolbar{
+ margin:4px 0 2px;padding:7px 9px;background:#123a42;
+ border:1px solid #4cae9a;border-radius:9px;
+}
+.goal-review-viewer .scene-pinch-hint{
+ flex:1;flex-basis:auto;min-width:0!important;color:#ccfff0!important;
+ font-size:12px!important;font-weight:850;line-height:1.3;
+}
+.goal-review-viewer .scene-pinch-value{font-size:13px;min-width:34px}
+.goal-scene-playback{display:grid;grid-template-columns:1.5fr 1fr 42px;gap:6px;padding:3px 0}
+.goal-scene-playback button{width:100%;max-width:none;min-height:43px;min-width:0;margin:0}
+.goal-scene-playback .play-btn{
+ display:flex;justify-content:center;align-items:center;
+ border:1px solid #55a8b9;border-radius:9px;background:#1e5e72;color:#e8fdff;
+ font-size:13px;font-weight:850;line-height:1.2;padding:7px 6px;
+}
+.goal-scene-playback .scene-pause-button{padding:7px 4px;font-size:12px}
+.goal-scene-playback .scene-mute-button{padding:4px}
+.goal-review-viewer .goal-scene-range{
+ margin:6px 0 1px;padding:9px 8px 7px;box-sizing:border-box;
+}
+.goal-review-viewer .goal-scene-range .range-heading{margin-bottom:4px}
+.goal-review-viewer .goal-scene-range .range-legend{margin-bottom:2px}
+.goal-review-viewer .goal-scene-range .range-track{height:42px;margin:5px 12px 5px}
+.goal-review-viewer .goal-scene-range .range-handle{top:5px;height:30px}
+.goal-review-viewer .goal-scene-range .range-playhead{top:-7px;height:54px}
+.goal-review-viewer .goal-scene-range .range-hint{margin:3px 0;font-size:10px}
+.goal-review-viewer .goal-scene-range .range-field{gap:3px}
+.goal-review-viewer .goal-scene-range .range-field span{font-size:11px;color:#cae0e4}
+.goal-review-viewer .goal-scene-range .range-time{
+ font-size:16px;min-height:40px;padding:7px 8px;box-sizing:border-box;
+}
+.goal-review-viewer #goalStatsVideoStatus{margin:5px 1px 0;font-size:11px}
+.goal-review-viewer:not([hidden])+.goal-review-editor{
+ margin:0 0 17px;border-top:0;border-radius:0 0 11px 11px;
+}
+.goal-review-editor .goal-review-fields{margin-top:7px}
+.goal-review-editor .goal-review-time-adjust{
+ margin:5px 0 10px;padding:8px 5px;
+ border:1px solid #365e69;border-radius:9px;background:#12313d;
+}
+.goal-review-editor .goal-review-time-adjust>strong{font-size:12px}
+.goal-review-quote-details{border-top:1px solid #3b5b65;padding-top:6px;margin-bottom:7px}
+.goal-review-quote-details summary{font-size:11px;color:#c4dfe4;cursor:pointer}
+.goal-review-quote-details .goal-review-quote{margin:7px 0}
+@media(max-width:480px){
+ .goal-review-viewer:not([hidden]){padding:4px;margin:8px 0 0}
+ .goal-review-viewer .goal-scene-range{padding:6px 6px}
+ .goal-scene-viewport{max-height:min(40dvh,330px)}
+ .goal-scene-playback{grid-template-columns:1.2fr 1fr 40px;gap:5px}
+ .goal-review-editor .goal-review-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .goal-review-editor .goal-review-field input,
+ .goal-review-editor .goal-review-field select{font-size:16px}
+}
+
+/* v53 details: goal metadata comes immediately after the common scene editor;
+   the infrequently needed goal timestamp correction is collapsed. */
+.goal-review-editor details.goal-review-time-adjust{
+ display:block;margin:10px 0 2px;padding:9px 10px;
+ background:#12313d;border:1px solid #365e69;border-radius:9px;
+}
+.goal-review-editor .goal-review-time-adjust>summary{
+ display:list-item;cursor:pointer;
+ font-size:12px;font-weight:800;color:#d2f8ea;
+}
+.goal-review-time-tools{
+ display:flex;gap:7px;align-items:center;flex-wrap:wrap;
+ padding:10px 0 1px;
+}
+.goal-review-time-tools .goal-review-mark-button{flex:1 0 100%}
+.goal-review-editor .goal-review-fields{margin:8px 0 3px}
