@@ -27,7 +27,7 @@ export function keepGoalClip(source,goal){
   if(!wasIndependentKeep){
    // The exact range/crop already selected above in the goal editor wins.
    // Never make the user re-trim this scene in the regular review section.
-   match.time=start;match.manualEnd=end;
+   match.time=start;match.manualEnd=end;match.peakSeconds=goalTime;
    match.zoom=crop.zoom;match.zoomX=crop.zoomX;match.zoomY=crop.zoomY;
    match.goalVideoOwned=true;
   }
