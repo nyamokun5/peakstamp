@@ -118,3 +118,49 @@ test('obsolete bottom sticky Settings and Create buttons are removed',()=>{
  assert.match(html,/id="montageExport"/);
  assert.ok(css.includes('bottom:calc(8px + env(safe-area-inset-bottom,0px))'));
 });
+
+test('releasing playback scrub seeks once and immediately resumes from chosen time',async()=>{
+ const sequence=[];
+ let now=12;
+ const video={
+  paused:false,
+  get currentTime(){return now},
+  set currentTime(v){sequence.push(['seek',v]);now=v},
+  pause(){sequence.push(['pause']);this.paused=true},
+  play(){sequence.push(['play']);this.paused=false;return Promise.resolve()}
+ };
+ const bounds={start:10,end:26};
+ const at=seekScenePreview(video,19.37,bounds,{
+  autoPlay:true,onBeforePlay:()=>sequence.push(['wake'])
+ });
+ await Promise.resolve();
+ assert.equal(at,19.4);
+ assert.deepEqual(sequence,[['pause'],['seek',19.4],['wake'],['play']]);
+ assert.equal(video.paused,false);
+ assert.deepEqual(bounds,{start:10,end:26});
+});
+
+test('releasing scrub on trim end still leaves video playable before the end watcher',()=>{
+ let pos=0,plays=0;
+ const video={paused:true,
+  set currentTime(t){pos=t},get currentTime(){return pos},
+  pause(){this.paused=true},
+  play(){plays++;this.paused=false;return Promise.resolve()}
+ };
+ const at=seekScenePreview(video,26,{start:10,end:26},{autoPlay:true});
+ assert.equal(at,25.8);
+ assert.equal(pos,25.8);
+ assert.equal(plays,1);
+});
+
+test('failed scrub autoplay reports the playback problem instead of changing trim',async()=>{
+ const errors=[];
+ const video={currentTime:3,paused:true,pause(){this.paused=true},
+  play(){return Promise.reject(new Error('Safari denied play'))}
+ };
+ const at=seekScenePreview(video,15,{start:10,end:26},{autoPlay:true,onError:e=>errors.push(e.message)});
+ await Promise.resolve();
+ await Promise.resolve();
+ assert.equal(at,15);
+ assert.deepEqual(errors,['Safari denied play']);
+});
