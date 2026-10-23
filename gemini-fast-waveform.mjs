@@ -4,7 +4,7 @@
  * Cached sections are intentionally not regenerated: caller uses legacy decode
  * if any bins are missing. Gemini event data is never touched.
  */
-import {MAX_GEMINI_DURATION_SECONDS} from './gemini-wav-chunks.mjs';
+import {MAX_GEMINI_DURATION_SECONDS} from './gemini-wav-chunks.mjs?v=long30';
 export function createGeminiFastWaveform(duration,{binSeconds=.25}={}){
   const n=Math.ceil(Number(duration)/binSeconds);
   if(!Number.isFinite(Number(duration))||Number(duration)<=0||Number(duration)>MAX_GEMINI_DURATION_SECONDS||
