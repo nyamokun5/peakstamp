@@ -225,3 +225,91 @@ test('an inferred match and a likely player are never enough to export without c
   event_id:snap.eventId,seq:3,scorer:'Tyler Takasaki',assist:'Taisei Kobayashi',team:'Team3'
  });
 });
+
+
+test('2026-10-24 DILF real match skeleton: one official seq, no opponent yet, 22 SS players',()=>{
+ const ssPlayers=[
+  'Satoshi Nakamura','SUZUKI','松本な','梶原','西村','大川隼',
+  'Ashesh','Hidetoshi Akiyama','徳永','Ashikawa','山﨑',
+  'Kengo Akimoto','脇阪','Hiroyuki Kawata','石坂 孝博','星',
+  '豊田','Akihiro Sato','Soma','Tyler Takasaki','おばたけ','芦田'
+ ];
+ const raw={event:'試合（11人制）vs DILF',
+  event_id:'cf375e6f-8f6d-4eef-9aa1-fdeccf7ac470',
+  matches:[
+   {seq:1,title:'#1 Match',left_team:'Team1',right_team:null,
+    left_score:null,right_score:null,goals:[]},
+   {seq:null,title:'#1 Match Drone',left_team:'Team1',right_team:null},
+   {seq:null,title:'ゴール集',left_team:null,right_team:null}
+  ],roster:{'チーム1':ssPlayers}};
+ const snap=normalizeSpoSnapshot(raw);
+ assert.equal(snap.matches.length,1);
+ assert.equal(snap.matches[0].seq,1);
+ assert.equal(snap.matches[0].rightTeam,'DILF',
+  'only one external event: opponent from official event title for reviewer');
+ assert.equal(snap.matches[0].inferredRightTeam,true);
+ assert.equal(snap.players.length,22);
+ const g={id:'test',scorer:'高崎さん',assistStatus:'none',source:{name:'DILF.MOV'}};
+ const row=prepareGoalRows({goals:[g]},snap)[0];
+ assert.equal(row.seq,1,'when a single official match exists, preselect it');
+ assert.equal(row.matchGuess.source,'このイベントには試合が1件のみ');
+ assert.equal(row.scorer,'Tyler Takasaki');
+ assert.equal(row.team,'Team1');
+ assert.equal(row.confirmed,false,'one match and roster-based guesses never auto-confirm');
+ row.confirmed=true;
+ assert.equal(validateGoalRow(row,snap),null);
+ const json=buildReviewPayload(snap,[row]);
+ assert.deepEqual(json.operations[0].args,{
+  event_id:raw.event_id,seq:1,scorer:'Tyler Takasaki',team:'Team1'});
+});
+test('external opponents can be entered as explicitly confirmed guest players',()=>{
+ const snap=normalizeSpoSnapshot({event:'試合（11人制）vs DILF',event_id:'test-id',
+  matches:[{seq:1,left_team:'Team1',right_team:null,goals:[]}],
+  roster:{'チーム1':['西村'],'DILF':[]}});
+ const goal={id:'g',scorer:'DILF #7',assist:'DILF #9',assistStatus:'named',
+  source:{name:'dilf.mov'}};
+ const row=prepareGoalRows({goals:[goal]},snap)[0];
+ row.guest=true;row.scorer='Confirmed DILF #7';row.assist='Confirmed DILF #9';
+ row.team='DILF';row.confirmed=true;
+ assert.equal(validateGoalRow(row,snap),null);
+ const payload=buildReviewPayload(snap,[row]);
+ assert.deepEqual(payload.operations[0].args,{
+  event_id:'test-id',seq:1,scorer:'Confirmed DILF #7',
+  assist:'Confirmed DILF #9',team:'DILF',guest:true
+ });
+ row.scorer='';assert.match(validateGoalRow(row,snap),/得点者名/);
+ row.scorer='西村';assert.match(validateGoalRow(row,snap),/ゲスト指定を外して/);
+});
+test('score-only external fixture can export without ANY PS-confirmed goals',()=>{
+ const snap=normalizeSpoSnapshot({event:'11人制試合 vs DILF',event_id:'event-id',
+  matches:[{seq:1,left_team:'Team1',right_team:null,goals:[]}],
+  roster:{'チーム1':['芦田']}});
+ assert.equal(snap.matches[0].rightTeam,'DILF');
+ const score={seq:1,include:true,confirmed:true,leftScore:2,rightScore:1};
+ const out=buildReviewPayload(snap,[],[score]);
+ assert.equal(out.operations.length,1);
+ assert.deepEqual(out.operations[0],{
+  action:'record_match',args:{
+   event_id:'event-id',seq:1,left_team:'Team1',right_team:'DILF',
+   left_score:2,right_score:1,winner:'left'
+  }
+ });
+ assert.throws(()=>buildReviewPayload(snap,[],[{...score,confirmed:false}]),/確認してください/);
+});
+test('do not invent external opponent for multiple fixtures or unrelated titles',()=>{
+ const raw={event:'11人制 vs DILF',event_id:'id',roster:{},
+  matches:[{seq:1,left_team:'Team1',right_team:null},
+   {seq:2,left_team:'Team1',right_team:null}]};
+ const snap=normalizeSpoSnapshot(raw);
+ assert.equal(snap.matches[0].rightTeam,'');
+ assert.equal(snap.matches[1].rightTeam,'');
+ assert.equal(snap.matches[0].inferredRightTeam,false);
+ assert.equal(inferMatchFromCommentary({},snap).seq,null);
+});
+test('one-match external fixture accepts an already confirmed official match number',()=>{
+ const snap=normalizeSpoSnapshot({event:'SS vs DILF',event_id:'id',
+  matches:[{seq:1,left_team:'Team1',right_team:'DILF'}],roster:{'チーム1':['西村']}});
+ const row=prepareGoalRows({goals:[{matchSeq:1,scorer:'西村',assistStatus:'none'}]},snap)[0];
+ assert.equal(row.seq,1);
+ assert.equal(row.scorer,'西村');
+});
