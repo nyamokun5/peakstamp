@@ -16,9 +16,18 @@ export function normalizeSpoSnapshot(raw){
  if(!obj)throw Error('SpoSchedの試合結果JSONにmatches配列がありません');
  const eventId=string(obj.event_id||obj.event?.id||input.event_id);
  if(!eventId)throw Error('イベントIDがありません。get_match_resultsのJSONを読み込んでください');
- const matches=obj.matches.filter(m=>number(m.seq)!==null).map(m=>({
+ const eventName=string(obj.event?.name||obj.event||'');
+ // For an external one-off fixture, SpoSched may have Team1 vs null before
+ // the score is registered. Only infer an opponent from its official title
+ // when there is exactly ONE numbered match and human verification is required.
+ const numbered=obj.matches.filter(m=>number(m.seq)!==null);
+ const opponentFromTitle=numbered.length===1?
+  string(eventName.match(/\bvs\.?\s+(.+?)\s*$/i)?.[1]):'';
+ const matches=numbered.map(m=>({
   seq:number(m.seq),title:string(m.title||'#'+m.seq),
-  leftTeam:string(m.left_team||''),rightTeam:string(m.right_team||''),
+  leftTeam:string(m.left_team||''),
+  rightTeam:string(m.right_team||opponentFromTitle||''),
+  inferredRightTeam:!string(m.right_team)&&Boolean(opponentFromTitle),
   leftScore:Number.isInteger(m.left_score)&&m.left_score>=0?m.left_score:null,
   rightScore:Number.isInteger(m.right_score)&&m.right_score>=0?m.right_score:null,
   existingGoals:Array.isArray(m.goals)?m.goals.filter(Boolean).map(g=>({
@@ -38,7 +47,7 @@ export function normalizeSpoSnapshot(raw){
  const playerTeam=new Map();
  for(const [team,names] of Object.entries(roster))for(const name of Array.isArray(names)?names:[])
   playerTeam.set(string(name),string(team));
- return {eventId,eventName:string(obj.event?.name||obj.event||''),matches,players,roster,playerTeam};
+ return {eventId,eventName,matches,players,roster,playerTeam};
 }
 export function selectPlayerCandidates(text,snapshot,team='',limit=7){
  const term=normalizePerson(text);
@@ -97,6 +106,14 @@ export function inferMatchFromCommentary(goal,snapshot){
  if(!pair&&byNumber)return {seq:byNumber.seq,
   source:'実況で宣言された試合番号',confidence:'medium',evidence:commentary,
   ambiguous:false,conflict:false,candidates:[byNumber.seq]};
+ // One external fixture: don't force the user to choose a match sequence
+ // when the event only has one numbered match. Never override a conflicting
+ // spoken TEAM pair; that remains for manual review.
+ if(!pair&&snapshot.matches.length===1)return {
+  seq:snapshot.matches[0].seq,source:'このイベントには試合が1件のみ',
+  confidence:'medium',evidence:commentary,ambiguous:false,conflict:false,
+  candidates:[snapshot.matches[0].seq]
+ };
  return {seq:null,source:pair?'対戦宣言に一致する試合がありません':'実況から試合を確定できません',
   confidence:'none',evidence:commentary,ambiguous:false,conflict:false,candidates:[]};
 }
@@ -204,7 +221,7 @@ export function prepareGoalRows(rawGoals,snapshot){
    assistMode:g.assistStatus==='none'?'none':
     g.assistStatus==='named'?'named':'unknown',
    scorerHints,assistHints,team:prefilledTeam,confirmed:false,include:true,
-   scoreConfirmed:false,duplicateApproved:false};
+   guest:false,scoreConfirmed:false,duplicateApproved:false};
  });
 }
 export function validateGoalRow(row,snapshot){
@@ -212,10 +229,13 @@ export function validateGoalRow(row,snapshot){
  if(!row.confirmed)return '選手・試合の確認が必要です';
  const match=snapshot.matches.find(m=>m.seq===number(row.seq));
  if(!match)return '試合番号を選択してください';
- if(!row.scorer||!snapshot.players.includes(row.scorer))return '得点者を選択してください';
+ if(!row.scorer||(!row.guest&&!snapshot.players.includes(row.scorer)))
+  return row.guest?'外部選手の得点者名を入力してください':'得点者を選択してください';
+ if(row.guest&&snapshot.players.includes(row.scorer))
+  return '登録メンバーの得点にはゲスト指定を外してください';
  if(row.assistMode==='unknown')return 'アシストあり／なし／不明を明示的に確認してください';
- if(row.assistMode==='named'&&(!row.assist||!snapshot.players.includes(row.assist)))
-  return 'アシスト選手を選択してください';
+ if(row.assistMode==='named'&&(!row.assist||(!row.guest&&!snapshot.players.includes(row.assist))))
+  return row.guest?'外部選手のアシスト者名を入力してください':'アシスト選手を選択してください';
  const actualTeam=string(snapshot.playerTeam.get(row.scorer)||'');
  if(!row.team&&!actualTeam)return '得点チームを選択してください';
  const team=row.team||actualTeam;
@@ -263,6 +283,7 @@ export function buildReviewPayload(snapshot,rows,scoreRows=[]){
   const team=row.team||snapshot.playerTeam.get(row.scorer)||'';
   const args={event_id:snapshot.eventId,seq:number(row.seq),scorer:row.scorer,team};
   if(row.assistMode==='named')args.assist=row.assist;
+  if(row.guest===true)args.guest=true;
   return {action:'record_goal',args,fromPeakStamp:{
    goalId:row.goal.id,source:row.goal.source?.name,
    goalTimeSeconds:row.goal.goalTimeSeconds,quote:row.goal.quote
