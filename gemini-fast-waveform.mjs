@@ -4,9 +4,12 @@
  * Cached sections are intentionally not regenerated: caller uses legacy decode
  * if any bins are missing. Gemini event data is never touched.
  */
+import {MAX_GEMINI_DURATION_SECONDS} from './gemini-wav-chunks.mjs';
 export function createGeminiFastWaveform(duration,{binSeconds=.25}={}){
   const n=Math.ceil(Number(duration)/binSeconds);
-  if(!(n>0&&n<=3000)||binSeconds<=0)throw Error('波形の長さが不正です。');
+  if(!Number.isFinite(Number(duration))||Number(duration)<=0||Number(duration)>MAX_GEMINI_DURATION_SECONDS||
+     !(n>0&&n<=Math.ceil(MAX_GEMINI_DURATION_SECONDS/binSeconds))||
+     !(binSeconds>0&&binSeconds<=1))throw Error('波形の長さが不正です。');
   const energy=new Float64Array(n),counts=new Uint32Array(n);
   return {
     async add(segment){
