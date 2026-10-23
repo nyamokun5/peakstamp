@@ -3,7 +3,7 @@
  * The fallback is a FLAT, clearly disclosed timeline, not an audio waveform.
  * Never re-submit any WAV to Gemini or invent acoustic peaks.
  */
-import {MAX_GEMINI_DURATION_SECONDS} from './gemini-wav-chunks.mjs';
+import {MAX_GEMINI_DURATION_SECONDS} from './gemini-wav-chunks.mjs?v=long30';
 const finite=x=>Number.isFinite(Number(x));
 export function usableWaveform(decoded,durationSeconds){
  const arr=decoded?.bins;
