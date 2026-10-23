@@ -29,7 +29,7 @@ select{width:100%}input[type=number]{width:90px}input[type=checkbox]{width:18px;
 .select-source{display:block;margin:9px 0;padding:8px;background:#0e2430;border-radius:8px}
 .error{color:#ffd1b7}a{color:#a9f8d6}summary{cursor:pointer;font-size:12px}
 details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
-#goalRows:empty:after{content:'データを読み込むとここに表示されます';color:#9dabbc}
+#goalRows:empty:after{content:'確定済みのPSゴールがまだありません。試合スコアだけでも登録用JSONを作成できます。';color:#9dabbc}
 #planJson{min-height:160px}
 @media(max-width:620px){.input-row,.fields{grid-template-columns:1fr}body{padding:12px 9px 40px}}
 .registered-goals{background:#102834;border:1px solid #476b73;border-radius:9px;padding:11px;margin:10px 0;font-size:12px}
@@ -46,7 +46,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </style>
 </head>
 <body><main>
-<a href="./?v=spo64">← PeakStampに戻る</a>
+<a href="./?v=external65">← PeakStampに戻る</a>
 <header class="top"><h1>⚽ Shoot Sundayへ試合・ゴールを登録</h1><span class="step">確認・登録準備版</span></header>
 <p>PeakStampで確認したゴール・アシストとShoot Sundayの試合／選手名簿を照合します。<strong>誤登録を防ぐため、すべての行で試合・選手を人が選択して確認</strong>してください。</p>
 <p class="warning"><strong>現在は書き込み前の確認機能です。</strong>開発者APIのHTTP仕様を確認できていないため、この画面からShoot Sundayへの直接送信は行いません。最終JSONをコピーして、接続済みのChatGPTで登録できます。保存済みデータの削除・上書きも行いません。</p>
@@ -66,7 +66,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 <section class="panel" id="reviewArea" hidden>
  <h2>3. 1ゴールずつ照合・確認</h2>
  <p id="eventTitle" class="status"></p>
- <p>実況の「2対3」などを当日の対戦表と照合し、得点者・アシストもAIの聞き取りと名簿から有力候補を<strong>最初から選択</strong>します。推定の根拠を確認し、違う場合は選び直してください。<strong>初期選択だけでは確定・送信されません。</strong>試合の下にはShoot Sundayに登録済みのゴールも表示します。</p>
+ <p>実況の対戦カードと当日の選手名簿から試合・得点者・アシストを初期選択します。<strong>対外試合で選手名が名簿にない場合は「外部選手（ゲスト）を手入力」を選んで名前を入力</strong>できます。初期選択は未確定です。ゴールが0件でも試合スコアの確認・JSON出力はできます。</p>
  <div id="goalRows"></div>
  <h3>試合スコアを修正する場合（任意）</h3>
  <p>得点集計の見逃しを考慮して、ゴール件数からスコアを勝手に決めません。試合の得点を更新する場合にだけ選択し、明示的に確認します。未選択ならゴール登録のみ。</p>
@@ -83,7 +83,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </main>
 <script type="module">
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
-import {normalizeSpoSnapshot,prepareGoalRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=spo64';
+import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=external65';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -127,7 +127,7 @@ function sourcesLoad(){
   label.append(checkbox,node('span',' '+item.source.name+' · 確定ゴール '+item.count+'件'));
   $('sources').append(label);
  }
- $('sourceStatus').textContent=saved.length?saved.length+'件の保存済み動画':'確定済みのゴール保存データはありません';
+ $('sourceStatus').textContent=saved.length?saved.length+'件の保存済み動画':'確定済みゴールはありません（スコアのみの確認は可能）';
 }
 function chosenGoals(){
  const files=checks();if(!files.length)return [];
@@ -136,7 +136,7 @@ function chosenGoals(){
 function rebuild(){
  touch();
  const source=chosenGoals();
- if(!snapshot||!source.length){$('reviewArea').hidden=true;return}
+ if(!snapshot){$('reviewArea').hidden=true;return}
  rows=prepareGoalRows({goals:source},snapshot);
  scores=snapshot.matches.map(m=>({
   seq:m.seq,leftScore:m.leftScore,rightScore:m.rightScore,
@@ -181,14 +181,48 @@ function renderGoals(){
   const assistMode=select([{value:'named',label:'あり（選手を選択）'},{value:'none',label:'なし'},{value:'unknown',label:'不明（要確認）'}],row.assistMode);
   const assistSelect=select(options,row.assist,'アシスト者を選択（AI: '+(g.assist||'—')+'）');
   assistSelect.disabled=row.assistMode!=='named';
-  assistMode.addEventListener('change',()=>{row.assistMode=assistMode.value;assistSelect.disabled=assistMode.value!=='named';invalidate()});
+  assistMode.addEventListener('change',()=>{row.assistMode=assistMode.value;updateGuestFields();invalidate()});
   assistSelect.addEventListener('change',()=>{row.assist=assistSelect.value;invalidate()});
-  const teamSelect=select([...new Set(snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]))]
+  const teamSelect=select([...new Set(snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]).filter(Boolean))]
    .map(t=>({value:t,label:t})),row.team,'得点チームを選択');
   teamSelect.addEventListener('change',()=>{row.team=teamSelect.value;invalidate()});
   wrap.append(field('試合番号',matchSelect),field('得点者',scorerSelect),field('アシスト',assistMode),
    field('アシスト者',assistSelect),field('得点チーム',teamSelect));
   article.append(wrap);
+  const guestBar=node('label','','line'),guestSwitch=mkInput('checkbox');
+  guestSwitch.checked=row.guest===true;
+  guestBar.append(guestSwitch,node('span','外部選手（ゲスト）を手入力する'));
+  const guestScorer=mkInput('text'),guestAssist=mkInput('text');
+  guestScorer.placeholder='例：DILFの選手名（確認できた正式な名前）';
+  guestAssist.placeholder='アシストした外部選手名';
+  guestScorer.value=row.guest?row.scorer:'';
+  guestAssist.value=row.guest?row.assist:'';
+  guestScorer.addEventListener('input',()=>{row.scorer=guestScorer.value.trim();invalidate()});
+  guestAssist.addEventListener('input',()=>{row.assist=guestAssist.value.trim();invalidate()});
+  const guestFields=node('div','','fields');
+  guestFields.append(field('外部の得点者名（必須）',guestScorer),
+    field('外部のアシスト者（ある場合）',guestAssist));
+  const updateGuestFields=()=>{
+   guestFields.hidden=!row.guest;
+   scorerSelect.disabled=row.guest;
+   assistSelect.disabled=row.guest||row.assistMode!=='named';
+   guestAssist.disabled=row.assistMode!=='named';
+  };
+  guestSwitch.addEventListener('change',()=>{
+   row.guest=guestSwitch.checked;row.scorer='';row.assist='';
+   scorerSelect.value='';assistSelect.value='';
+   guestScorer.value='';guestAssist.value='';
+   if(row.guest){
+    const match=snapshot.matches.find(m=>m.seq===Number(row.seq));
+    const knownTeam=team=>Object.entries(snapshot.roster).some(([key,players])=>
+     normalizeTeam(key)===normalizeTeam(team)&&Array.isArray(players)&&players.length>0);
+    const outside=match?[match.leftTeam,match.rightTeam].filter(t=>t&&!knownTeam(t)):[];
+    if(outside.length===1){row.team=outside[0];teamSelect.value=row.team}
+   }
+   updateGuestFields();invalidate();
+  });
+  const guestNotice=node('p','※ 外部選手のゴールは、実際に確認できた選手名だけを入力してください。氏名が不明ならゴール登録はせず、試合スコアだけ入力できます。','details');
+  article.append(guestBar,guestFields,guestNotice);updateGuestFields();
   const hints=node('p','名前の候補：得点者 '+(row.scorerHints.map(x=>x.name).join(' / ')||'なし')+
    '｜アシスト '+(row.assistHints.map(x=>x.name).join(' / ')||'なし'),'details');
   article.append(hints);
@@ -259,6 +293,7 @@ function renderScores(){
  $('matchRows').replaceChildren();
  for(const m of snapshot.matches){
   const x=scores.find(y=>y.seq===m.seq),box=node('div','','grid-item');
+  if(m.inferredRightTeam)box.append(node('p','⚠ 相手チーム「'+m.rightTeam+'」はイベント名からの暫定補完です。スポスケ側では対戦相手がまだ未設定です。結果登録前に確認してください。','error'));
   const include=mkInput('checkbox');include.checked=x.include;
   const left=mkInput('number');left.min=0;left.step=1;left.value=x.leftScore??'';
   const right=mkInput('number');right.min=0;right.step=1;right.value=x.rightScore??'';
