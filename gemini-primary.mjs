@@ -7,6 +7,7 @@ import { runGeminiFastPipeline } from './gemini-fast-pipeline.mjs?v=1';
 import { runGeminiVideoBatch } from './gemini-video-batch.mjs?v=1';
 import { createGeminiEta, formatGeminiEta } from './gemini-eta.mjs?v=1';
 import { createGeminiFastWaveform } from './gemini-fast-waveform.mjs?v=1';
+import {usableWaveform,restoreGeminiReviewWaveform,isUnavailableFileError} from './gemini-waveform-recovery.mjs?v=fix90';
 import { createGeminiProgressUI } from './gemini-progress-ui.mjs?v=1';
 import { updateGeminiScreenNotice } from './gemini-screen-notice.mjs?v=1';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
@@ -17,6 +18,20 @@ const API_ENDPOINT = 'https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
 const MAX_AUDIO_BYTES = 2_900_000;
 const CACHE_KEY = 'peakstamp_gemini_primary_json_v1';
 const SEGMENT_CACHE_KEY='peakstamp_gemini_wav_segments_v1';
+const WAVEFORM_CACHE_KEY='peakstamp_gemini_preview_waveform_v1';
+function cachedWaveform(source){
+ try{
+  const x=JSON.parse(localStorage.getItem(WAVEFORM_CACHE_KEY+'::'+fileKey(source))||'null');
+  return usableWaveform(x)?x:null;
+ }catch{return null;}
+}
+function saveWaveform(source,decoded){
+ if(!usableWaveform(decoded)||decoded.waveformUnavailable)return;
+ try{
+  localStorage.setItem(WAVEFORM_CACHE_KEY+'::'+fileKey(source),
+   JSON.stringify({duration:decoded.duration,bins:decoded.bins}));
+ }catch{/* iPhone storage may be full; review can still continue. */}
+}
 const segmentCacheId=source=>fileKey(source)+'::'+WAV_SEGMENT_VERSION;
 function getSavedChunks(source){
  try{return JSON.parse(localStorage.getItem(SEGMENT_CACHE_KEY+'::'+segmentCacheId(source))||'{}');}
@@ -417,13 +432,22 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    status('Gemini候補'+parsed.events.length+'件。確認用の音声波形を準備しています…');
    // Existing waveform wins, then the one reused from streamed WAV segments.
    // Partial chunk caches may still need the legacy local-only decoder.
-   const decoded=source.bins?.length?{bins:source.bins,duration:source.duration}:
-    decodedDuringGemini||await decodeAudio(source.file,
-     (label,progress)=>{if(id===generation){
-      status('確認用波形を準備中… '+Math.round(progress)+'%');
-      progressUI.waveform(progress);
-     }},
-     alive);
+   const restored=await restoreGeminiReviewWaveform({
+    durationSeconds:duration,
+    existing:source.bins?.length?{bins:source.bins,duration:source.duration}:null,
+    streamed:decodedDuringGemini,
+    stored:cachedWaveform(source),
+    decodeAudio:(onProgress,check)=>decodeAudio(source.file,onProgress,check),
+    onProgress:(label,progress)=>{if(id===generation){
+     status('確認用波形を準備中… '+Math.round(progress)+'%');
+     progressUI.waveform(progress);
+    }},
+    check:alive
+   });
+   const decoded=restored.decoded;
+   if(restored.recovered){
+    status('Geminiの音声解析結果は保存済みです。iPhoneが元動画の参照を失ったため、波形なしの確認画面を復元しています。映像を再生できない場合は元動画を端末に保存して選び直してください。');
+   }else saveWaveform(source,decoded);
    waveformSeconds=(performance.now()-waveformStarted)/1000;
    alive();
    progressUI.finalizing();
@@ -431,7 +455,9 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    alive();
    progressUI.complete();
    setCurrentEta('この動画の解析は完了しました');
-   status('Gemini解析完了：'+summary.candidates+'件の候補（'+summary.merged+'件の近接反応を統合）。'+
+   status((restored.recovered?
+    'Gemini結果を救済しました（'+summary.candidates+'件）。元動画へのアクセスが切れているため波形は表示できません。元のMOV/MP4を「ファイル」に保存して再選択すると、動画を確認できます。既存の解析結果は再利用できます。':
+    'Gemini解析完了：'+summary.candidates+'件の候補（'+summary.merged+'件の近接反応を統合）。')+
     (cache?'保存済みのAI結果を利用。':'WAV音声を '+(answer.meta?.segments||'?')+' 区間に分けて並列解析。')+
     ' API方式：'+(answer.meta?.api||'不明')+'。'+
     ' 所要 '+elapsed(started)+'（区間処理 '+geminiSeconds.toFixed(1)+'秒、WAV変換 '+wavSeconds.toFixed(1)+'秒、'+
@@ -463,7 +489,10 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    await analyzeOne({source,access,id,signal:abortController.signal,force});
   }catch(e){
    if(id===generation){
-    status('Gemini解析エラー：'+(e?.message||String(e)));
+    const unavailable=isUnavailableFileError(e);
+    status(unavailable?
+     'iPhoneが元動画を読み出せませんでした。iCloud上の動画なら「写真」でダウンロードするか「ファイル」に保存し、PSで選び直してください。解析済み区間は保存されているため、再選択後に再利用できる可能性があります。詳細：'+(e?.message||String(e)):
+     'Gemini解析エラー：'+(e?.message||String(e)));
     progressUI.fail('解析が完了しませんでした');
     setCurrentEta('残り時間の推定を終了しました');
    }
