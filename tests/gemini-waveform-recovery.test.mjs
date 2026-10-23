@@ -53,7 +53,7 @@ test('genuine decoder failures are NOT disguised as successful AI review',async(
 });
 test('do not rescue an invalid or unknown-duration video',()=>{
  assert.throws(()=>blankReviewTimeline(NaN),/長さが不明/);
- assert.throws(()=>blankReviewTimeline(700),/長さが不明/);
+ assert.throws(()=>blankReviewTimeline(1900),/長さが不明/);
 });
 test('gemini primary saves AI response before waveform recovery and never re-requests it for 90 percent',()=>{
  const code=readFileSync(new URL('../gemini-primary.mjs',import.meta.url),'utf8');

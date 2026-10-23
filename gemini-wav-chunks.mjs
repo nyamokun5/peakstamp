@@ -8,10 +8,13 @@
 export const WAV_SAMPLE_RATE=16000;
 export const WAV_CHUNK_SECONDS=70;
 export const WAV_OVERLAP_SECONDS=5;
+// Per-file AI duration; 70s WAV chunks keep each request below the API body limit.
+export const MAX_GEMINI_DURATION_SECONDS=1800;
 export const WAV_SEGMENT_VERSION='pcm16-wav-direct-source-70s-5s-v2';
 export function wavSegmentRanges(duration,{length=WAV_CHUNK_SECONDS,overlap=WAV_OVERLAP_SECONDS}={}){
  const total=Number(duration);
- if(!Number.isFinite(total)||total<=0||total>605)throw Error('WAV解析は10分以下の音声に対応します。');
+ if(!Number.isFinite(total)||total<=0||total>MAX_GEMINI_DURATION_SECONDS)
+  throw Error('Gemini音声解析は動画1本あたり30分以下に対応します。');
  if(!(length>1)||!(overlap>=0)||overlap>=length)throw Error('音声区間の設定が不正です。');
  const ranges=[];
  for(let start=0;start<total;start+=length-overlap){

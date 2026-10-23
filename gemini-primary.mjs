@@ -2,16 +2,16 @@
  * Primary Gemini-only workflow: local MOV -> streamed PCM WAV -> authenticated API
  * -> on-device scene review. Never calls Whisper or acoustic peak detection.
  */
-import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=1';
+import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=long30';
 import { runGeminiFastPipeline } from './gemini-fast-pipeline.mjs?v=1';
 import { runGeminiVideoBatch } from './gemini-video-batch.mjs?v=1';
 import { createGeminiEta, formatGeminiEta } from './gemini-eta.mjs?v=1';
-import { createGeminiFastWaveform } from './gemini-fast-waveform.mjs?v=1';
-import {usableWaveform,restoreGeminiReviewWaveform,isUnavailableFileError} from './gemini-waveform-recovery.mjs?v=fix90';
+import { createGeminiFastWaveform } from './gemini-fast-waveform.mjs?v=long30';
+import {usableWaveform,restoreGeminiReviewWaveform,isUnavailableFileError} from './gemini-waveform-recovery.mjs?v=long30';
 import { createGeminiProgressUI } from './gemini-progress-ui.mjs?v=1';
 import { updateGeminiScreenNotice } from './gemini-screen-notice.mjs?v=1';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
-import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=2';
+import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=long30';
 
 // Verified owner project: Vercel production domain for nyamokun5/peakstamp.
 const API_ENDPOINT = 'https://peakstamp-gemini-api.vercel.app/api/gemini-audio';

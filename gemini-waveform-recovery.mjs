@@ -3,6 +3,7 @@
  * The fallback is a FLAT, clearly disclosed timeline, not an audio waveform.
  * Never re-submit any WAV to Gemini or invent acoustic peaks.
  */
+import {MAX_GEMINI_DURATION_SECONDS} from './gemini-wav-chunks.mjs?v=long30';
 const finite=x=>Number.isFinite(Number(x));
 export function usableWaveform(decoded,durationSeconds){
  const arr=decoded?.bins;
@@ -18,7 +19,7 @@ export function isUnavailableFileError(error){
 }
 export function blankReviewTimeline(durationSeconds,{binSeconds=.25}={}){
  const duration=Number(durationSeconds);
- if(!Number.isFinite(duration)||duration<=0||duration>605)
+ if(!Number.isFinite(duration)||duration<=0||duration>MAX_GEMINI_DURATION_SECONDS)
   throw Error('元動画の長さが不明なため、確認画面を復元できません。');
  if(!(binSeconds>0&&binSeconds<=1))throw Error('タイムライン間隔が不正です。');
  const n=Math.ceil(duration/binSeconds);
