@@ -1,4 +1,4 @@
-import { montageSeconds, exportMontage, estimateMontageMB } from './exporter.mjs?v=title62';
+import { montageSeconds, exportMontage, estimateMontageMB, formatExportFailure } from './exporter.mjs?v=exportstage1';
 import { buildMultiClipPlan } from './multi-plan.mjs?v=goal54';
 import { formatTime } from './detector.mjs';
 import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=title62';
@@ -209,12 +209,7 @@ export function initMontageEditor(state) {
       $('montageDownload').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
       $('montageProgress').hidden = true;
-      const detail = err?.message || String(err);
-      const storageOrMemory = /quota|out.of.memory|insufficient|not.enough.space|memory|storage|容量|空き領域/i
-        .test(String(err?.name || '') + ' ' + detail);
-      displayError('書き出せませんでした：' + detail + (storageOrMemory
-        ? '。容量または処理用メモリの不足が疑われます。省容量540pで短く作り直し、iPhoneストレージの空きを確認してください。'
-        : '。まず省容量540p・30秒程度の動画でお試しください。'));
+      displayError(formatExportFailure(err));
     } finally {
       setWorking(false);
       const planAfter = buildMultiClipPlan(activeState?.sources || [], clipOptions());
