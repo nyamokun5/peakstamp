@@ -38,6 +38,29 @@ export function estimateMontageMB(seconds, preset='high') {
 
 
 /** Return sorted, nonoverlapping intervals from the candidates the user checked. */
+/**
+ * Preserve the actual failure stage, rather than mislabeling every iPhone
+ * WebKit or file-decoder failure as insufficient output storage.
+ */
+export function formatExportFailure(error) {
+  const phase = String(error?.exportPhase || '失敗箇所を特定できませんでした');
+  const name = String(error?.name || 'Error');
+  const detail = String(error?.message || error || '原因不明');
+  const signature = name + ' ' + detail;
+  let advice;
+  if (/notfounderror|the object can not be found here|webKitBlobResource/i.test(signature)) {
+    advice = 'iPhoneの元動画ファイル参照または映像・音声デコードに失敗した可能性があります。元動画を「このiPhone内」に保存して選び直しても失敗する場合は、まず1シーンだけで試してください。改善しなければPCのブラウザから書き出してください。';
+  } else if (/quota|out.of.memory|insufficient|not.enough.space|memory|storage|容量|空き領域/i.test(signature)) {
+    advice = 'Safariの処理用メモリまたは空き容量の不足が疑われます。ほかのタブを閉じ、1シーン・540pで試すかPCで書き出してください。';
+  } else if (/notallowederror|notsupportederror|codec|encoder|decoder|encode|decode/i.test(signature)) {
+    advice = 'iPhoneの動画コーデックまたはWebCodecsの対応状況が原因の可能性があります。1シーン・540pで試し、改善しなければPCで書き出してください。';
+  } else {
+    advice = '1シーン・540pでも失敗する場合は、失敗箇所とエラー全文を共有してください。原因を絞れます。';
+  }
+  return '書き出せませんでした（' + phase + '）。\n'
+    + name + ': ' + detail + '\n' + advice;
+}
+
 export function buildClipPlan(candidates, duration, seconds = 16) {
   if (!Number.isFinite(duration) || duration <= 0) return [];
   const length = Math.max(6, Math.min(40, Number(seconds) || 16));
@@ -158,6 +181,7 @@ export async function exportMontage({
   const openSource = async (sourceId) => {
     check();
     const entry = items.find(x => x.id === sourceId);
+    exportPhase = '元動画の読み込み：' + (entry?.file?.name || sourceId);
     const input = new Input({
       formats: ALL_FORMATS,
       source: new BlobSource(entry.file, { maxCacheSize: 4 * 1024 * 1024 }),
@@ -179,6 +203,7 @@ export async function exportMontage({
   };
 
   let output = null, finalized = false, opened = null;
+  let exportPhase = '元動画の準備';
   const liveBitmaps = new Set();
   try {
     // Use the first clip to select output aspect ratio; other ratios get letterboxed.
@@ -211,7 +236,9 @@ export async function exportMontage({
       transform: { sampleRate: 48000, numberOfChannels: 2 },
     });
     output.addAudioTrack(audioSource);
+    exportPhase = 'MP4エンコーダーの起動';
     await output.start();
+    exportPhase = '冒頭のタイトル処理';
     const overlayFirstScene=intro?.presentation==='overlay';
     onProgress(overlayFirstScene?'最初のシーンを準備中':'冒頭5秒のイントロを作成中',2);
     const mode=intro?.mode||'default';
@@ -284,6 +311,7 @@ export async function exportMontage({
     for (let section = 0; section < clips.length; section++) {
       check();
       const clip = clips[section];
+      exportPhase = 'シーン ' + (section + 1) + '/' + clips.length + ' の映像準備';
       if (loadedSourceId !== clip.sourceId) {
         opened.input.dispose();
         opened = null;
@@ -312,6 +340,7 @@ export async function exportMontage({
       const { dx,dy,dw,dh }=zoomDrawRect(vWidth,vHeight,width,height,clip.zoom,clip.zoomX,clip.zoomY);
 
       let frame = 0;
+      exportPhase = 'シーン ' + (section + 1) + '/' + clips.length + ' の映像処理：' + opened.name;
       for await (const sample of videoSink.samplesAtTimestamps(stamps)) {
         check();
         if (!sample) throw new Error('「' + opened.name + '」の映像フレームを読み込めませんでした。');
@@ -376,6 +405,7 @@ export async function exportMontage({
 
       // Trim each clip's audio to its local interval and shift into montage time.
       // A new sink is used whenever the source changes; this avoids cross-file offsets.
+      exportPhase = 'シーン ' + (section + 1) + '/' + clips.length + ' の音声処理：' + opened.name;
       const first = await audioSink.getSample(clip.start);
       const audioEnd = Math.min(clip.end,clip.start + (clipFrames - outgoingFrames) / settings.frameRate);
       const samples = (async function* () {
@@ -411,6 +441,7 @@ export async function exportMontage({
     check();
     videoSource.close();
     audioSource.close();
+    exportPhase = 'MP4ファイルの最終化';
     onProgress('MP4を仕上げています', 98);
     await output.finalize();
     finalized = true;
@@ -421,7 +452,11 @@ export async function exportMontage({
     if (output && !finalized) {
       try { await output.cancel(); } catch {}
     }
-    throw error;
+    const failure = new Error(error?.message || String(error), { cause: error });
+    failure.name = error?.name || 'Error';
+    failure.exportPhase = exportPhase;
+    console.error('[PeakStamp] MP4書き出し失敗:', exportPhase, error);
+    throw failure;
   } finally {
     for (const image of liveBitmaps) image.close();
     liveBitmaps.clear();
