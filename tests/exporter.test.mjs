@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildClipPlan, montageSeconds, drawIntro, getExportSettings, estimateMontageMB, EXPORT_PROFILES, FRAME_RATE, INTRO_SECONDS } from '../exporter.mjs';
+import { buildClipPlan, montageSeconds, drawIntro, getExportSettings, estimateMontageMB, formatExportFailure, EXPORT_PROFILES, FRAME_RATE, INTRO_SECONDS } from '../exporter.mjs';
 
 test('only selected highlights are included and sorted chronologically', () => {
   const plan = buildClipPlan([{time:50,enabled:true}, {time:20,enabled:false},
@@ -90,4 +90,22 @@ test('file size estimates are nonzero for positive durations and ordered by bitr
   assert.equal(estimateMontageMB(0,'compact'),0);
   assert.equal(estimateMontageMB(NaN,'high'),0);
   assert.equal(EXPORT_PROFILES.compact.bitrate,2000000);
+});
+
+test('NotFoundError identifies its export phase without mislabeling file size', () => {
+  const error = Object.assign(new Error('The object can not be found here.'), {
+    name: 'NotFoundError', exportPhase: 'シーン 2/5 の映像処理：original.mov'
+  });
+  const message = formatExportFailure(error);
+  assert.match(message, /シーン 2\/5 の映像処理/);
+  assert.match(message, /NotFoundError/);
+  assert.match(message, /このiPhone内/);
+  assert.doesNotMatch(message, /容量の不足が疑われます/);
+});
+test('memory errors and generic errors give different recovery guidance', () => {
+  assert.match(formatExportFailure(Object.assign(new Error('out of memory'), {
+    exportPhase: 'MP4エンコーダーの起動'
+  })), /処理用メモリ/);
+  assert.match(formatExportFailure(new Error('unexpected failure')),
+    /失敗箇所を特定できませんでした/);
 });

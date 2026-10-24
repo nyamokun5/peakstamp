@@ -78,7 +78,7 @@ footer{text-align:center;color:#7995a8;display:flex;align-items:center;flex-dire
 #montageBar{background:var(--mint);height:100%;width:0%;transition:width .2s}
 #montagePreview{width:100%;max-height:360px;object-fit:contain;background:#000;border-radius:12px;margin:18px 0 10px}
 .montage-download{margin:12px 0;text-decoration:none;justify-content:center}
-#montageError{margin-top:12px}
+#montageError{margin-top:12px;white-space:pre-line}
 
 
 /* UX fixes 2026-10 */
