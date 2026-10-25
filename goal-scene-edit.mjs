@@ -1,6 +1,6 @@
 /** Pure goal scene trim/zoom state, compatible with regular highlight clips. */
 import {normalizeSceneZoom,normalizeSceneFocus} from './editing-rules.mjs?v=peak52';
-import {actualGoalTime} from './goal-stats.mjs?v=unifiedga1';
+import {actualGoalTime} from './goal-stats.mjs?v=goalprefill1';
 const finite=n=>typeof n==='number'&&Number.isFinite(n);
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const round=n=>Math.round(n*10)/10;
