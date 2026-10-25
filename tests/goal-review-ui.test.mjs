@@ -123,9 +123,10 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.equal(createGoalDrafts(one,storage).items[0].goalTimeSeconds,369.2);
   assert.equal(createGoalDrafts(two,storage).items[0].goalTimeSeconds,107.5);
   assert.equal(dom.goalStatsViewer.hidden,false,'video editor is open without queue tap');
-  assert.equal(dom.goalStatsPreview.currentTime,374.2);
-  assert.equal(stats.loads,1);
-  assert.equal(stats.plays,0,'initial first frame does not attempt gesture-restricted autoplay');
+  assert.equal(dom.goalStatsPreview.currentTime,0);
+  assert.equal(dom.goalStatsPreview.hidden,true,'MOV remains unloaded before tapping Replay');
+  assert.equal(stats.loads,0);
+  assert.equal(stats.plays,0,'passive goal preview never decodes the MOV');
   assert.match(dom.goalStatsStep.textContent,/ゴール 1 \/ 2/);
   const replay=find(dom.goalStatsViewer,'play-btn goal-scene-replay');
   assert.ok(replay,'Replay button is visible on first candidate');
@@ -176,19 +177,21 @@ test('editing scorer does not reload current video and requires reconfirmation',
 });
 
 
-test('goal replay starts from visible first-frame preview without an extra list tap',async()=>{
+test('first goal Replay is visible without loading its MOV until tapped',async()=>{
  const {dom,one,stats,restore}=setup();
  try{
   initGoalStatsReview({sources:[one]});
   await settleMedia();
   assert.equal(dom.goalStatsViewer.hidden,false);
-  assert.equal(dom.goalStatsPreview.currentTime,374.2);
-  assert.equal(stats.loads,1);
+  assert.equal(dom.goalStatsPreview.hidden,true,'Replay button is visible; MOV is lazy');
+  assert.equal(dom.goalStatsPreview.currentTime,0);
+  assert.equal(stats.loads,0);
   assert.equal(stats.plays,0);
   find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
   await settleMedia();
   assert.equal(stats.loads,1);
   assert.equal(stats.plays,1);
+  assert.equal(dom.goalStatsPreview.currentTime,374.2);
  }finally{await restore()}
 });
 
@@ -344,7 +347,7 @@ test('after first video Reject, next candidate starts automatically; final view 
    onKeepClip:(source,item)=>Boolean(keepGoalClip(source,item))
   });
   await settleMedia();
-  assert.equal(stats.loads,1);
+  assert.equal(stats.loads,0);
   find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
   await settleMedia();
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'rejected');
@@ -416,7 +419,7 @@ test('goal editing timeline marks COMMENTARY and Replay starts 5sec before comme
  try{
   initGoalStatsReview({sources:[one]});
   await settleMedia();
-  assert.equal(dom.goalStatsPreview.currentTime,374.2);
+  assert.equal(dom.goalStatsPreview.currentTime,0,'no pre-seek before Replay');
   const row=find(dom.goalStatsViewer,'range-legend');
   assert.ok(row);
   const labels=row.children.map(x=>x.textContent);
