@@ -56,9 +56,27 @@ test('main app activates current modules and avoids stale Safari caches',()=>{
  const main=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
  const primary=readFileSync(new URL('../gemini-primary.mjs',import.meta.url),'utf8');
- assert.match(main,/app\.mjs\?v=goallive1/);
- assert.match(app,/gemini-primary\.mjs\?v=unifiedga2/);
+ assert.match(main,/app\.mjs\?v=goalprefill1/);
+ assert.match(app,/gemini-primary\.mjs\?v=goalprefill1/);
  assert.match(primary,/gemini-wav-stream\.mjs\?v=unifiedga2/);
  assert.match(primary,/gemini-fast-waveform\.mjs\?v=long30/);
  assert.match(primary,/gemini-waveform-recovery\.mjs\?v=long30/);
+});
+
+test('secondary settings links open separately so Safari does not discard imported MOV File handles',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ assert.match(html,/<a href="\.\/reset-goals\.html[^"]*"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
+ assert.match(html,/<a href="\.\/sposched-review\.html[^"]*"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
+});
+
+test('settings and match result pages instruct returning to original tab, not resetting video import',()=>{
+ for(const path of ['reset-goals.html','sposched-review.html']){
+  const html=readFileSync(new URL('../'+path,import.meta.url),'utf8');
+  assert.match(html,/URLSearchParams\(location\.search\)\.has\('returnTab'\)/);
+  assert.match(html,/Safariのタブ一覧から元のPeakStampタブ/);
+  assert.match(html,/back\.hidden=true/);
+ }
+ const peakstamp=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ assert.match(peakstamp,/reset-goals\.html\?v=reset59&returnTab=1/);
+ assert.match(peakstamp,/sposched-review\.html\?v=external65&returnTab=1/);
 });

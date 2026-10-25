@@ -3,7 +3,7 @@ import {goalSceneBounds,goalSceneZoom} from './goal-scene-edit.mjs?v=unifiedga1'
  * but its acceptance/rejection happens directly inside the goal review UI.
  * Goal score confirmation remains a distinct operation.
  */
-import {actualGoalTime} from './goal-stats.mjs?v=unifiedga1';
+import {actualGoalTime} from './goal-stats.mjs?v=goalprefill1';
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 function matchGoalCandidate(source,goal){
  const goalTime=clamp(actualGoalTime(goal),0,Number(source.duration)||0);

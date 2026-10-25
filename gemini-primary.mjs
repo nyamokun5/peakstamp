@@ -12,7 +12,7 @@ import { createGeminiProgressUI } from './gemini-progress-ui.mjs?v=1';
 import { updateGeminiScreenNotice } from './gemini-screen-notice.mjs?v=1';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
 import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=unifiedga2';
-import { createGoalDrafts } from './goal-stats.mjs?v=unifiedga1';
+import { createGoalDrafts } from './goal-stats.mjs?v=goalprefill1';
 import { buildAnalysisDiagnostic } from './gemini-diagnostics.mjs?v=1';
 
 // Verified owner project: Vercel production domain for nyamokun5/peakstamp.

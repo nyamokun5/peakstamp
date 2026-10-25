@@ -99,4 +99,18 @@ erase.addEventListener('click',()=>{
 });
 render();
 </script>
+
+<script>
+ // A separate tab cannot transfer the browser-owned MOV File objects.
+ // When this page came from an active PeakStamp editor, closing/swapping
+ // tabs (not navigating back to a fresh PeakStamp URL) preserves the upload.
+ if(new URLSearchParams(location.search).has('returnTab')){
+  const back=document.querySelector('a[href^="./?v="]');
+  if(back)back.hidden=true;
+  const note=document.createElement('p');
+  note.style.cssText='padding:12px;border:1px solid #548d83;border-radius:10px;background:#183d40;color:#e6fbf4;font-size:14px';
+  note.textContent='動画データを保持するため、この画面は別タブで開きました。Safariのタブ一覧から元のPeakStampタブに切り替えて戻ってください。';
+  (back||document.body.firstElementChild)?.insertAdjacentElement('afterend',note);
+ }
+</script>
 </body></html>

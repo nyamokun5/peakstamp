@@ -98,3 +98,85 @@ test('excluded and unconfirmed candidates are not included in official-export-re
  saveGoalDrafts(a,cache,rows);
  assert.equal(confirmedGoalExport([a],cache).goals.length,0);
 });
+
+test('existing unnamed Gemini goal is automatically prefilled from unified scorer/assist audio and matchup',()=>{
+ const cache=storage(),src={...source('PREFILL.MOV',500000,1782340000),duration:400};
+ cache.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({
+  [goalSourceKey(src)]:{duration_seconds:400,events:[{
+    reaction_time_seconds:241,type:'goal_reaction',confidence:'high',
+    suggested_clip_start_seconds:233,suggested_clip_end_seconds:246
+   }],utterances:[
+    {kind:'match_start',time_seconds:4,quote:'3と4で開始',match_label:'3と4',team_a:'3',team_b:'4'},
+    {kind:'goal_call',time_seconds:243,quote:'山田さんゴール、佐藤さんアシスト',
+     scorer:'山田さん',assist:'佐藤さん',confidence:'high'}
+   ]}
+ }));
+ const old={id:'gemini-goal-2410',origin:'gemini',timeSeconds:241,
+  goalTimeSeconds:238,clipStartSeconds:233,clipEndSeconds:246,
+  scorer:'',assist:'',assistStatus:'unknown',status:'draft',
+  goalTimeEdited:true,goalTimeVerified:false,videoDecision:'kept',clipZoom:1.7};
+ saveGoalDrafts(src,cache,[old]);
+ const items=createGoalDrafts(src,cache).items;
+ assert.equal(items.length,1);
+ const g=items[0];
+ assert.equal(g.scorer,'山田さん');
+ assert.equal(g.assist,'佐藤さん');
+ assert.equal(g.assistStatus,'named');
+ assert.equal(g.matchLabel,'3と4');
+ assert.equal(g.teamA,'3');
+ assert.equal(g.teamB,'4');
+ assert.equal(g.goalTimeSeconds,238);
+ assert.equal(g.clipStartSeconds,233);
+ assert.equal(g.clipEndSeconds,246);
+ assert.equal(g.clipZoom,1.7);
+ assert.equal(g.videoDecision,'kept');
+ assert.equal(g.status,'draft','AI prefill must NOT automatically confirm a goal');
+});
+test('AI may fill only blanks, never overwrite corrected or manually cleared names',()=>{
+ const cache=storage(),src=source('EDITED.MOV',734500,9090);
+ put(cache,src,[{kind:'goal_call',time_seconds:100,quote:'聞き取りゴール、聞き取りアシスト',
+  scorer:'誤認識A',assist:'誤認識B',confidence:'high'}]);
+ const original={id:'existing-100',origin:'audio',timeSeconds:100,
+  goalTimeSeconds:90,status:'draft',scorer:'正しい名前',
+  assist:'',assistStatus:'unknown',matchLabel:'手入力マッチ',
+  userEditedGoalFields:['scorer','assist','assistStatus','matchLabel']};
+ saveGoalDrafts(src,cache,[original]);
+ const items=createGoalDrafts(src,cache).items;
+ assert.equal(items.length,1);
+ assert.equal(items[0].scorer,'正しい名前');
+ assert.equal(items[0].assist,'');
+ assert.equal(items[0].assistStatus,'unknown');
+ assert.equal(items[0].matchLabel,'手入力マッチ');
+});
+test('confirmed score and manual goal never overwritten by audio reanalysis',()=>{
+ const cache=storage(),src=source('CONFIRMED.MOV',493454,19990);
+ put(cache,src,[{kind:'goal_call',time_seconds:110,
+  quote:'聞き取りAさんゴール、Bさんアシスト',scorer:'Aさん',assist:'Bさん'}]);
+ const confirmed={id:'previous',origin:'audio',timeSeconds:110,
+  goalTimeSeconds:100,status:'confirmed',scorer:'公式Cさん',
+  assist:'公式Dさん',assistStatus:'named',videoDecision:'kept'};
+ const manual={id:'manual-1',origin:'manual',timeSeconds:102,
+  goalTimeSeconds:102,status:'draft',scorer:'手入力Eさん',
+  assist:'',assistStatus:'unknown'};
+ saveGoalDrafts(src,cache,[confirmed,manual]);
+ const goals=createGoalDrafts(src,cache).items;
+ assert.equal(goals.length,2);
+ assert.equal(goals.find(x=>x.id==='previous').scorer,'公式Cさん');
+ assert.equal(goals.find(x=>x.id==='previous').assist,'公式Dさん');
+ assert.equal(goals.find(x=>x.id==='manual-1').scorer,'手入力Eさん');
+});
+test('uncertain spoken assist and match labels are prefilled, not asserted as confirmed',()=>{
+ const cache=storage(),src=source('UNSURE.MOV',7677,9990);
+ put(cache,src,[
+ {kind:'match_start',time_seconds:2,quote:'2と3',team_a:'2',team_b:'3'},
+ {kind:'goal_call',time_seconds:80,quote:'アシスト佐藤さん',scorer:null,
+  assist:'佐藤さん',confidence:'low'}]);
+ const goals=createGoalDrafts(src,cache).items;
+ assert.equal(goals.length,1);
+ assert.equal(goals[0].scorer,'');
+ assert.equal(goals[0].assist,'佐藤さん');
+ assert.equal(goals[0].assistStatus,'named');
+ assert.equal(goals[0].teamA,'2');
+ assert.equal(goals[0].teamB,'3');
+ assert.equal(goals[0].status,'draft');
+});

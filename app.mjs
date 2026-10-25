@@ -3,11 +3,11 @@ import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experime
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=unifiedga2';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=goalprefill1';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goallive1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goalprefill1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
-import {createGoalDrafts} from './goal-stats.mjs?v=unifiedga1';
+import {createGoalDrafts} from './goal-stats.mjs?v=goalprefill1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=goaltrim1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title62';
