@@ -1787,3 +1787,34 @@ body{background:#0b1828}
  .journey-dialog-card h2{font-size:18px}
  #journeyDialogBody{font-size:13px;line-height:1.7}
 }
+
+/* Manual goal creation is a last resort after BOTH goal and highlight reviews. */
+.missing-goal-fallback{
+ margin:20px 0 7px;
+ padding:12px 13px;
+ border:1px solid #456577;
+ border-radius:11px;
+ background:#122a3c;
+ color:#dcecf2;
+}
+.missing-goal-fallback>summary{
+ cursor:pointer;
+ font-size:12px;
+ font-weight:780;
+ line-height:1.6;
+ color:#b7d4df;
+}
+.missing-goal-fallback>p{
+ font-size:12px;line-height:1.7;
+ color:#c1d7e0;
+ margin:12px 0;
+}
+.missing-goal-fallback .goal-review-manual-add{
+ background:#152f42;
+ border-radius:9px;
+ margin:8px 0 2px;
+ padding:11px;
+}
+.missing-goal-fallback #goalStatsAdd{
+ width:100%;margin-top:8px;min-height:43px;
+}

@@ -126,3 +126,27 @@ test('goal review places scoring confirmation ahead of clip Keep and keeps autom
  assert.match(goal,/動画をキープ（次のゴールへ）/);
  assert.match(goal,/nextUnreviewedGoalVideo\(queue\(\),entry\.key\)/);
 });
+
+test('highlight completion is offered again only after re-judging the last fully-reviewed scene',()=>{
+ const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
+ const after=app.split('function nextSceneAfter(current,{wasUnjudged=false}={}) {')[1]
+  ?.split('function decideReview(')[0];
+ assert.ok(after,'review completion flow must exist');
+ assert.match(after,/if\(wasUnjudged\|\|ordinary\.at\(-1\)===current\)/);
+ assert.match(after,/coaching\.highlightReviewFinished/);
+ assert.match(app,/nextSceneAfter\(item,\{wasUnjudged:!previous\.enabled&&!previous\.rejected\}\)/);
+ // Without this fix, the 'すべて' tab silently switched to '未判断',
+ // making it impossible to reach the final already-reviewed candidate.
+ assert.match(app,/\['all','kept','reviewed'\]\.includes\(button\.dataset\.reviewTab\)/);
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ assert.match(html,/id="tabReviewed"/);
+});
+test('review completion and visible interface consistently say ハイライトを確認',()=>{
+ const dialog=readFileSync(new URL('../journey-coach.mjs',import.meta.url),'utf8');
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ assert.doesNotMatch(dialog,/通常ハイライトを確認/);
+ assert.doesNotMatch(html,/通常の見どころを確認/);
+ assert.match(dialog,/ハイライトを確認しますか/);
+ assert.match(html,/id="goalStatsDoneToRegular"[^>]+>ハイライトを確認/);
+ assert.match(html,/data-editor-jump="resultsPanel">🎞 ハイライト/);
+});

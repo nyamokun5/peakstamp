@@ -90,8 +90,8 @@ export function initJourneyCoach({
    title:'ゴール動画の判定が完了しました！',
    body:total+'件のゴール候補の動画を確認しました。'+
     (unconfirmed?'\n得点情報の未確定が'+unconfirmed+'件あります。必要なら一覧から確認してください。':'')+
-    '\n次は通常ハイライトを確認しますか？',
-   main:{label:'🎞 ハイライトへ進む',run:goHighlights},
+    '\n次はハイライトを確認しますか？',
+   main:{label:'🎞 ハイライトを確認',run:goHighlights},
    other:{label:'⚽ ゴールを振り返る',run:()=>{actions.goGoals?.();actions.showGoalList?.();}}
   });
  }

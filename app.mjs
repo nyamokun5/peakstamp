@@ -5,7 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=guided1';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=guided1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=reviewagain1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
@@ -23,7 +23,7 @@ import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-pl
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
 import {initWorkflowSteps} from './workflow-steps.mjs?v=workflowui1';
-import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=guided1';
+import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=reviewagain1';
 import {assignMatchNumber,setMatchNumber,sourceDisplayName,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from './match-label.mjs?v=matchsort1';
 
 const $ = id => document.getElementById(id);
@@ -621,7 +621,7 @@ function showUndoReview(message) {
   $('undoReview').hidden = false;
   undoTimer = setTimeout(clearUndoReview, UNDO_VISIBLE_MS);
 }
-function nextSceneAfter(current) {
+function nextSceneAfter(current,{wasUnjudged=false}={}) {
   const next=nextUndecided(state.sources,current);
   if (reviewTab === 'kept') reviewTab='all';
   drawResults();
@@ -630,11 +630,17 @@ function nextSceneAfter(current) {
     $('reviewProgress').textContent=kept
       ?'すべての候補を確認しました。ハイライト動画の作成へ進みます。'
       :'すべての候補を確認しました。動画を作成するにはシーンをキープしてください。';
-    // Never silently jump past export setup. Offer review-all or export.
-    const ordinary=state.candidates.filter(c=>!c.goalRecordId&&!c.goalVideoOwned);
-    coaching.highlightReviewFinished({
-     total:ordinary.length,kept:ordinary.filter(c=>c.enabled===true).length
-    });
+    // An initial final decision, OR re-judging the final previously reviewed
+    // highlight, must offer Review all / Export. Editing an earlier kept
+    // highlight alone must not interrupt the user before they reach the end.
+    const ordinary=state.sources.filter(src=>src.bins)
+      .flatMap(src=>src.candidates||[])
+      .filter(c=>!c.goalRecordId&&!c.goalVideoOwned);
+    if(wasUnjudged||ordinary.at(-1)===current){
+     coaching.highlightReviewFinished({
+      total:ordinary.length,kept:ordinary.filter(c=>c.enabled===true).length
+     });
+    }
     return;
   }
   $('reviewProgress').textContent='次の未判断シーンへ移動しました。';
@@ -671,7 +677,7 @@ function decideReview(source,item,decision) {
     lastRejected={item,source,previous};
     showUndoReview('「'+(item.title||'シーン')+'」を不採用にしました');
   }
-  nextSceneAfter(item);
+  nextSceneAfter(item,{wasUnjudged:!previous.enabled&&!previous.rejected});
 }
 $('undoReviewButton').addEventListener('click',()=>{
   if(!lastRejected) return;
@@ -1411,7 +1417,8 @@ window.addEventListener('montage-settings-changed', () => {
 });
 document.querySelectorAll('[data-review-tab]').forEach(button=>{
   button.addEventListener('click',()=>{
-    reviewTab=button.dataset.reviewTab==='kept'?'kept':'all';
+    reviewTab=['all','kept','reviewed'].includes(button.dataset.reviewTab)
+      ?button.dataset.reviewTab:'all';
     if(state.bins)drawResults();
   });
 });

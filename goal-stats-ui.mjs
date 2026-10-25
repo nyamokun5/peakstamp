@@ -183,10 +183,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    say('動画の判定を保存できませんでした。動画を再読み込みしてください。');
    render();return;
   }
-  // Keep the existing automatic next-goal navigation. A completion dialog
-  // is shown only on the transition from unjudged to the final judged video.
+  // Keep automatic navigation for still-unjudged goals. After revisiting
+  // already judged clips, reaching the LAST goal and judging it again must
+  // also offer the choice of review-again / highlight review.
   const wasUnjudged=previous!=='kept'&&previous!=='rejected';
-  const next=nextUnreviewedGoalVideo(queue(),entry.key);
+  const rows=queue();
+  const lastGoal=rows.filter(row=>row.item.status!=='excluded').at(-1);
+  const next=nextUnreviewedGoalVideo(rows,entry.key);
   if(next){
    // Switching is performed within the original Keep/Reject tap so iOS
    // can authorize playback of the next MOV. The main app no longer
@@ -199,8 +202,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    // no new candidate exists until the user adds or detects another goal.
    render();panel.scrollIntoView({behavior:'smooth',block:'start'});
    say('ゴール動画は全件判定済みです。確認が完了しました。');
-   if(wasUnjudged){
-    const rows=queue();
+   // Do not interrupt a user who is changing an earlier reviewed goal.
+   // When they reach and re-judge the last goal, show the dialog EVERY time.
+   if(wasUnjudged||entry.key===lastGoal?.key){
     const unconfirmed=rows.filter(x=>x.item.status==='draft').length;
     onVideoReviewCompleted({total:rows.length,unconfirmed});
    }

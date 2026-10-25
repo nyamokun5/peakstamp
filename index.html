@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=guided1" />
+  <link rel="stylesheet" href="styles.css?v=reviewagain1" />
 </head>
 <body>
   <header class="topbar">
@@ -120,7 +120,7 @@
 
     <nav id="editorQuickNav" class="editor-quick-nav" aria-label="編集画面内の移動">
       <button type="button" data-editor-jump="goalStatsPanel">⚽ ゴール一覧</button>
-      <button type="button" data-editor-jump="resultsPanel">🎞 通常ハイライト</button>
+      <button type="button" data-editor-jump="resultsPanel">🎞 ハイライト</button>
     </nav>
     <!-- Goal review first: placed directly below analysis, before
          experimental tools and all regular highlight editing. -->
@@ -152,8 +152,8 @@
         <strong id="goalStatsDoneText">すべてのゴール動画を判定しました。</strong>
         <p>キープ済みも上の一覧から再編集できます。</p>
         <div class="goal-review-completed-actions">
-          <button id="goalStatsDoneToRegular" type="button" class="whisper-run" hidden>通常の見どころを確認 →</button>
-          <button id="goalStatsDoneAdd" type="button" class="whisper-run">＋ 見逃したゴールを追加</button>
+          <button id="goalStatsDoneToRegular" type="button" class="whisper-run" hidden>ハイライトを確認 →</button>
+          <button id="goalStatsDoneAdd" type="button" hidden>ゴールを手動追加</button>
         </div>
       </div>
       <div id="goalStatsViewer" class="goal-review-viewer" hidden>
@@ -162,13 +162,7 @@
         <p id="goalStatsVideoStatus" class="fine-print" role="status" aria-live="polite"></p>
       </div>
       <div id="goalStatsEditor" class="goal-review-editor"></div>
-      <div class="goal-review-manual-add">
-        <div id="goalStatsManualWrap" hidden>
-          <label for="goalStatsManualSource">手動追加先の動画</label>
-          <select id="goalStatsManualSource"></select>
-        </div>
-        <button id="goalStatsAdd" class="whisper-run" type="button">＋ 見逃したゴールを手動追加</button>
-      </div>
+
       <div class="goal-review-external-sync" style="margin:15px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
         <strong>⚽ Shoot Sundayアプリとの照合</strong>
         <p class="fine-print">確定したゴール・アシストと、その日の試合・チーム別選手名簿を突き合わせて、登録前に1件ずつ人が確認できます。書き込みはまだ行わない確認・準備版です。</p>
@@ -261,7 +255,7 @@
     </details>
 
     <section class="panel results-panel" id="resultsPanel" hidden>
-      <div class="panel-label"><span class="number">03</span><h2>通常ハイライト</h2></div>
+      <div class="panel-label"><span class="number">03</span><h2>ハイライト</h2></div>
       <div id="standardReviewArea">
       <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
 
@@ -286,7 +280,17 @@
       <p id="reviewProgress" class="review-progress" role="status" aria-live="polite"></p>
       <p id="reviewEmpty" class="empty-results" hidden>キープしたシーンはまだありません。「未判断」タブから選んでください。</p>
       <div id="highlightList" class="highlight-list"></div>
-      <p class="fine-print">見逃したゴールがあれば、該当ハイライトの「＋ ゴールとして追加」から得点者・アシストを登録できます。</p>
+      <details id="missingGoalFallback" class="missing-goal-fallback">
+        <summary>ゴール一覧にもハイライトにも見つからない場合</summary>
+        <p>該当するシーンがハイライトにある場合は、そのカードの「＋ このシーンをゴールとして追加」を使ってください。<strong>どちらにも見つからない場合だけ</strong>、元動画とゴール時刻を指定して追加できます。</p>
+      <div class="goal-review-manual-add">
+        <div id="goalStatsManualWrap" hidden>
+          <label for="goalStatsManualSource">手動追加先の動画</label>
+          <select id="goalStatsManualSource"></select>
+        </div>
+        <button id="goalStatsAdd" class="whisper-run" type="button">＋ 見逃したゴールを手動追加</button>
+      </div>
+      </details>
       </div>
       <details class="extra-analysis-tools">
         <summary>その他の実験ツール（詳細を開く）</summary>
@@ -563,6 +567,6 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=journeyflow1"></script>
+  <script type="module" src="app.mjs?v=reviewagain1"></script>
 </body>
 </html>

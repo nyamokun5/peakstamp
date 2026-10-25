@@ -99,7 +99,7 @@ test('normal scene editing UI uses one combined draggable timeline and no quiet/
 
 test('last review opens a choice dialog instead of silently jumping into export',()=>{
  const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
- const tail=app.split('function nextSceneAfter(current) {')[1].split('function decideReview(')[0];
+ const tail=app.split('function nextSceneAfter(current,{wasUnjudged=false}={}) {')[1].split('function decideReview(')[0];
  assert.match(tail,/if \(!next\)/);
  assert.match(tail,/coaching\.highlightReviewFinished\(/);
  assert.doesNotMatch(tail,/montageExport'\)\.click/);
