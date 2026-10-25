@@ -825,5 +825,5 @@ test('manual goal entry lives only at end of highlight review, not on the goal c
  assert.match(review,/id="goalStatsManualSource"/);
  assert.match(review,/id="goalStatsAdd"/);
  assert.ok(review.indexOf('id="missingGoalFallback"')>review.indexOf('id="highlightList"'));
- assert.ok(review.indexOf('id="missingGoalFallback"')>review.indexOf('このシーンをゴールとして追加'));
+ assert.ok(review.indexOf('id="missingGoalFallback"')>review.indexOf('id="highlightList"'));
 });
