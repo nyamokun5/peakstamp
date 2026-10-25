@@ -88,9 +88,9 @@ function setup(){
   setItem(k,v){this.values.set(k,v)}};
  globalThis.document={getElementById:id=>dom[id],createElement:tag=>new Element(tag)};
  globalThis.window={localStorage:storage,prompt:()=>null,addEventListener(){},removeEventListener(){}};
- const one={id:'one',objectUrl:'blob:first',duration:450.752,bins:[{}],candidates:[],
+ const one={id:'one',objectUrl:'blob:first',matchNumber:1,duration:450.752,bins:[{}],candidates:[],
   file:{name:'IMG_5292.mov',size:591367587,lastModified:1792283825000}};
- const two={id:'two',objectUrl:'blob:second',duration:417.685,bins:[{}],candidates:[],
+ const two={id:'two',objectUrl:'blob:second',matchNumber:2,duration:417.685,bins:[{}],candidates:[],
   file:{name:'IMG_5293.MOV',size:548875601,lastModified:1792284336000}};
  for(const [source,time,scorer,assist,label] of [
   [one,379.2,'若さん','野田さん','3と4'],
@@ -130,8 +130,8 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   await settleMedia();
   assert.equal(dom.goalStatsPanel.hidden,false);
   assert.equal(dom.goalStatsList.children.length,2);
-  assert.match(dom.goalStatsList.children[0].children[0].textContent,/IMG_5292/);
-  assert.match(dom.goalStatsList.children[1].children[0].textContent,/IMG_5293/);
+  assert.match(dom.goalStatsList.children[0].children[0].textContent,/第1試合/);
+  assert.match(dom.goalStatsList.children[1].children[0].textContent,/第2試合/);
   assert.equal(createGoalDrafts(one,storage).items[0].goalTimeSeconds,369.2);
   assert.equal(createGoalDrafts(two,storage).items[0].goalTimeSeconds,107.5);
   assert.equal(dom.goalStatsViewer.hidden,false,'video editor is open without queue tap');
@@ -158,7 +158,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.equal(stats.plays,2,'next goal plays automatically after Keep tap');
   assert.equal(dom.goalStatsPreview.currentTime,112.5);
   assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
-  assert.match(dom.goalStatsPlayingLabel.textContent,/IMG_5293/);
+  assert.match(dom.goalStatsPlayingLabel.textContent,/第2試合/);
 
   find(dom.goalStatsEditor,'goal-review-confirm').events.click();
   assert.equal(createGoalDrafts(two,storage).items[0].status,'confirmed');
@@ -166,7 +166,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   await settleMedia();
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
   assert.equal(dom.goalStatsViewer.hidden,false,'after last goal the editor stays available for replay');
-  assert.match(dom.goalStatsStep.textContent,/動画判定完了/);
+  assert.match(dom.goalStatsStep.textContent,/全件確認済み/);
   assert.match(dom.goalStatsStatus.textContent,/全件判定済み/);
   assert.equal(dom.goalStatsDone.hidden,false);
   assert.match(dom.goalStatsDoneText.textContent,/2件の判定が完了/);
@@ -369,7 +369,7 @@ test('after first video Reject, next candidate starts automatically; final view 
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
   assert.equal(dom.goalStatsViewer.hidden,false);
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'kept');
-  assert.match(dom.goalStatsStep.textContent,/動画判定完了/);
+  assert.match(dom.goalStatsStep.textContent,/全件確認済み/);
  }finally{await restore()}
 });
 
@@ -387,7 +387,7 @@ test('only one detected goal: Keep shows explicit all-done state instead of a si
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
   assert.equal(dom.goalStatsDone.hidden,false);
   assert.match(dom.goalStatsDoneText.textContent,/1件の判定が完了.*残り0件/);
-  assert.match(dom.goalStatsStep.textContent,/動画判定完了/);
+  assert.match(dom.goalStatsStep.textContent,/全件確認済み/);
   assert.equal(dom.goalStatsViewer.hidden,false,'can still review final saved goal');
   assert.ok(find(dom.goalStatsViewer,'play-btn goal-scene-replay'));
   assert.equal(dom.goalStatsDoneToRegular.hidden,false);
@@ -412,11 +412,11 @@ test('Keep advances to next unjudged goal even when save callback synchronously 
   });
   await settleMedia();
   const first=dom.goalStatsPlayingLabel.textContent;
-  assert.match(first,/IMG_5292/);
+  assert.match(first,/第1試合/);
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
   await settleMedia();
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
-  assert.match(dom.goalStatsPlayingLabel.textContent,/IMG_5293/);
+  assert.match(dom.goalStatsPlayingLabel.textContent,/第2試合/);
   assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
   assert.equal(stats.loads,1,'next goal alone loads a MOV when first was never replayed');
   find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
@@ -730,13 +730,13 @@ test('all goals remain visible in filters when Keep automatically advances to th
   assert.equal(dom.goalQueueKeptCount.textContent,'1');
   dom.goalQueueKept.events.click();
   assert.equal(dom.goalStatsList.children.length,1);
-  assert.match(dom.goalStatsList.children[0].children[0].textContent,/IMG_5292/);
+  assert.match(dom.goalStatsList.children[0].children[0].textContent,/第1試合/);
   dom.goalStatsList.children[0].events.click();
   await settleMedia();
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
   dom.goalQueuePending.events.click();
   assert.equal(dom.goalStatsList.children.length,1);
-  assert.match(dom.goalStatsList.children[0].children[0].textContent,/IMG_5293/);
+  assert.match(dom.goalStatsList.children[0].children[0].textContent,/第2試合/);
   dom.goalQueueAll.events.click();
   assert.equal(dom.goalStatsList.children.length,2);
  }finally{await restore()}
