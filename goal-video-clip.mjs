@@ -1,9 +1,9 @@
-import {goalSceneBounds,goalSceneZoom} from './goal-scene-edit.mjs?v=commentary61';
+import {goalSceneBounds,goalSceneZoom} from './goal-scene-edit.mjs?v=unifiedga1';
 /** Goal video judgment uses the same candidate collection as other highlights,
  * but its acceptance/rejection happens directly inside the goal review UI.
  * Goal score confirmation remains a distinct operation.
  */
-import {actualGoalTime} from './goal-stats.mjs?v=40';
+import {actualGoalTime} from './goal-stats.mjs?v=unifiedga1';
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 function matchGoalCandidate(source,goal){
  const goalTime=clamp(actualGoalTime(goal),0,Number(source.duration)||0);
