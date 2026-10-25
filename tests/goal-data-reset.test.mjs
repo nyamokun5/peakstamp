@@ -76,7 +76,7 @@ test('delete requires explicit selection and does not accept unrelated keys',()=
 test('reset page requires explicit confirmation and does not run destructive code upon load',()=>{
  const html=readFileSync(new URL('../reset-goals.html',import.meta.url),'utf8');
  const main=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- assert.match(main,/href="\.\/reset-goals\.html\?v=reset59"/);
+ assert.match(main,/href="\.\/reset-goals\.html\?v=reset59&returnTab=1"[^>]*target="_blank"/);
  assert.match(html,/savedGoalSessions,deleteGoalSessions/);
  assert.match(html,/window\.confirm\(question\)/);
  assert.match(html,/erase\.addEventListener\('click'/);
