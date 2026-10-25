@@ -4,11 +4,11 @@
  * gets reset merely because a card, field or summary rerenders.
  */
 import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
- confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=40';
+ confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=unifiedga1';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
-import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=cache58';
+import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=replay60';
-import {createGoalSceneControls} from './goal-scene-editor.mjs?v=commentary61';
+import {createGoalSceneControls} from './goal-scene-editor.mjs?v=unifiedga1';
 
 const $=id=>document.getElementById(id);
 const make=(tag,cls,text)=>{
@@ -91,7 +91,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   // Unhide first, then set src and start playing from this user interaction.
   viewer.hidden=false;
   label.textContent=source.file.name+' · ゴール '+fmt(actualGoalTime(item))+
-   '（実況 '+(item.origin==='audio'?fmt(item.timeSeconds):'手動追加')+'）';
+   '（'+(item.origin==='audio'?'実況 '+fmt(item.timeSeconds):item.origin==='gemini'?'Geminiの音声反応 '+fmt(item.timeSeconds):'手動追加')+'）';
   scene.activate(source,item);
   const bounds=scene.clipBounds();
   player.open({
@@ -178,12 +178,17 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    item.origin==='audio'
     ? '実況 '+fmt(item.timeSeconds)+' ／ ゴール推定 '+fmt(actualGoalTime(item))+
       (item.goalTimeVerified?'（映像確認済み）':'（10秒前の仮時刻）')
+    : item.origin==='gemini'
+    ? 'Gemini音声からのゴール候補 '+fmt(item.timeSeconds)+
+      '（確信度：'+(item.geminiConfidence||'不明')+'）／映像で確認が必要'
     : '手動入力 · ゴール '+fmt(actualGoalTime(item)));
   head.append(detail);editor.append(head);
   if(item.quote){
    const quote=make('details','goal-review-quote-details');
-   quote.append(make('summary','','検出された実況を確認'));
+   quote.append(make('summary','',item.origin==='gemini'?'検出した音声・判断根拠を見る':'検出された実況を確認'));
    quote.append(make('p','goal-review-quote',item.quote));
+   if(item.origin==='gemini'&&item.audioClue)
+    quote.append(make('p','goal-review-quote',item.audioClue));
    editor.append(quote);
   }
   const fields=make('div','goal-review-fields');
@@ -372,7 +377,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   if(!entries.length){
    editor.replaceChildren();
    editor.append(make('p','goal-review-meta',
-    'まだゴール候補がありません。音声の実況解析を実行するか、手動で追加してください。'));
+    'ゴール候補がありません。統合Gemini解析を実行するか、手動で追加してください。'));
    viewer.hidden=true;displayedKey='';player.pause();
   }else if(!panel.hidden && active && displayedKey!==active.key){
    // Opening the first candidate MUST NOT require tapping the queue.
