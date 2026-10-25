@@ -1,296 +1,134 @@
 /**
- * Goal-only local MOV replay (v60).
+ * Goal video replay uses the SAME direct seek-and-play primitive as regular
+ * highlight cards. On iOS, waiting for an extra "deep seek completed" state
+ * before calling play() can lose the tap's gesture authorization.
  *
- * Deliberately small state machine:
- *   load metadata -> seek clip start -> await seeked/decoded data -> play.
- *
- * Never call play() while a deep seek is pending. That was the cause of
- * long iPhone MOVs starting visibly at source t=0 before seeking.
- * The first opening preloads/seeks while paused; ▶ Replay uses that state.
+ * Keep the goal metadata/trim editor visible, but defer opening the MOV
+ * until Replay (or the explicit next-goal selection) is requested.
+ * A single HTMLVideoElement is reused across scenes; one source assignment
+ * is made only when switching video files.
  */
+import {seekScenePreview} from './scene-preview-playback.mjs?v=autoplay51';
+
 export function createGoalPlaybackController(video,{
- notify=()=>{},beforePlay=()=>{},
- schedule=(fn,ms)=>setTimeout(fn,ms),
- cancel=id=>clearTimeout(id)
+ notify=()=>{},beforePlay=()=>{}
 }={}){
- const TOLERANCE=.32;
- const MAX_RESEEKS=2;
- let sourceKey='',sourceUrl='',target=0,serial=0;
- let wantPlay=false,prepared=false,awaitSeek=false;
- let seekAttempts=0,playAttempts=0,playingRequest=false,gestureNeeded=false;
- let resetSeekFromZero=false;
- let pendingTimer=null,frameCallback=null,lastMessage='',phase='idle';
- let lastAttemptedTime=null;
+ let sourceKey='',sourceUrl='',loadedUrl='',target=0;
+ let pendingPlay=false,prepared=false,phase='idle',playAttempts=0;
+ let serial=0,lastMessage='',lastAttemptedTime=null,gestureNeeded=false;
+ const say=message=>{lastMessage=message;notify(message)};
+ const ready=()=>video.readyState>=1;
  const clock=()=>Number(video.currentTime)||0;
- const nearTarget=()=>Math.abs(clock()-target)<=TOLERANCE;
- const say=(s)=>{lastMessage=s;notify(s)};
- const cancelTimer=()=>{
-  if(pendingTimer!==null)cancel(pendingTimer);
-  pendingTimer=null;
- };
- const cancelFrame=()=>{
-  if(frameCallback!==null&&typeof video.cancelVideoFrameCallback==='function')
-   try{video.cancelVideoFrameCallback(frameCallback)}catch(_){}
-  frameCallback=null;
- };
- const later=(fn,delay=10000)=>{
-  cancelTimer();
-  const id=serial;
-  pendingTimer=schedule(()=>{
-   pendingTimer=null;
-   if(serial===id)fn();
-  },delay);
-  if(typeof pendingTimer?.unref==='function')pendingTimer.unref();
- };
- function handleError(error){
-  if(!wantPlay)return;
-  phase='paused';
-  playingRequest=false;
-  const name=String(error?.name||'');
-  if(name==='NotAllowedError'){
-   gestureNeeded=true;
-   say('ゴール位置への移動は完了しました。iPhoneの再生許可が必要です。▶ リプレイをもう一度押してください。');
-  }else if(name==='AbortError'){
-   // A pending seek may interrupt a play attempt on Safari; do not
-   // loop while the decoder is seeking.
-   if(video.seeking||!prepared){phase='seeking';say('ゴール位置に移動中…');}
-   else{say('再生が中断されました。▶ リプレイで再開してください。');gestureNeeded=true;}
-  }else{
-   gestureNeeded=true;
-   say('再生できませんでした。▶ リプレイを押してください。'+(name?'（'+name+'）':''));
-  }
- }
- function beginPlayback(){
-  if(!wantPlay||!prepared||awaitSeek||video.seeking||playingRequest||gestureNeeded)return;
-  // Do not start until the media clock has landed on the actual goal.
-  // In particular, never try to play while metadata is still pending.
-  if(!nearTarget()){seekToGoal();return}
-  cancelTimer();
-  phase='playing';
-  playingRequest=true;
+ const stop=()=>{pendingPlay=false;try{video.pause()}catch(_){}};
+ const formatTime=time=>Math.floor(time/60)+':'+String(Math.floor(time%60)).padStart(2,'0');
+
+ function playAtTarget(){
+  if(!pendingPlay||!sourceKey||loadedUrl!==sourceUrl||!ready())return;
+  pendingPlay=false;
+  const requested=target;
+  lastAttemptedTime=requested;
+  phase='seeking';
   playAttempts++;
-  say('');
-  let promise;
-  try{promise=video.play()}catch(error){handleError(error);return}
-  Promise.resolve(promise).then(()=>{
-   playingRequest=false;
-   if(!wantPlay)return;
-   if(clock()<target-TOLERANCE)guardWrongStart();
-  },handleError);
- }
- function finishSeek(){
-  if(!sourceKey||!awaitSeek||video.readyState<1)return;
-  // A future timestamp is not automatically "ready": an actual seek
-  // completion or loaded video frame is required before playing.
-  if(video.seeking)return;
-  if(!nearTarget()){
-   if(seekAttempts<=MAX_RESEEKS){seekToGoal(true);return}
-   failSeek();return;
-  }
-  awaitSeek=false;
-  prepared=true;
-  phase='ready';
-  cancelTimer();
-  if(wantPlay)beginPlayback();
-  else say('');
- }
- function failSeek(){
-  awaitSeek=false;prepared=false;wantPlay=false;phase='seek-failed';
-  try{video.pause()}catch(_){}
-  say('ゴール位置まで移動できませんでした。▶ リプレイで再試行してください。元動画の0秒からは再生しません。');
- }
- function seekToGoal(force=false){
-  if(!sourceKey||video.readyState<1)return;
-  // Do not keep assigning currentTime for the same in-flight deep seek.
-  if(video.seeking&&!force)return;
-  if(seekAttempts>MAX_RESEEKS){failSeek();return}
-  seekAttempts++;
-  awaitSeek=true;prepared=false;phase='seeking';
-  lastAttemptedTime=target;
-  say('ゴール位置（'+formatTime(target)+'）へ移動中…');
-  try{
-   video.currentTime=target;
-  }catch(error){
-   if(seekAttempts>MAX_RESEEKS){failSeek();return}
-   later(()=>seekToGoal(true),400);
-   return;
-  }
-  // Event-driven completion only: Safari may expose the requested
-  // currentTime immediately even when the MOV is still showing frame 0.
-  // A genuine seeked event, or loadeddata for an already-seeked frame,
-  // is needed. If seeked never arrives, show a retry instead of playing t=0.
-  later(()=>{if(awaitSeek)failSeek()},12000);
- }
- function guardWrongStart(){
-  if(!wantPlay||!sourceKey)return;
-  if(clock()>=target-TOLERANCE)return;
-  if(awaitSeek||video.seeking){
-   try{video.pause()}catch(_){}
-   if(!awaitSeek&&video.seeking){
-    // Safari initiated a NEW seek back to zero while starting playback.
-    // Wait for that seek to settle, then seek back to the goal timestamp.
-    prepared=false;awaitSeek=true;phase='seeking';
-    resetSeekFromZero=true;
-    say('再生が元動画の先頭へ戻ったため、ゴール位置に移動し直しています…');
-    later(()=>{if(awaitSeek)failSeek()},12000);
+  gestureNeeded=false;
+  // Exact same seek + immediate play operation as highlight scrub/replay.
+  // No extra seeked/canplay gate, and no continuous forced re-seeks.
+  const moved=seekScenePreview(video,requested,{
+   start:requested,end:Math.max(requested+.3,Number(video.duration)||0)
+  },{
+   autoPlay:true,
+   onBeforePlay:()=>{
+    beforePlay();
+    phase='playing';
+    say('動画を再生中…');
+   },
+   onError:error=>{
+    gestureNeeded=String(error?.name||'')==='NotAllowedError';
+    phase='paused';
+    say('再生できませんでした。▶ リプレイをもう一度押してください。'+
+      (error?.name?'（'+error.name+'）':''));
    }
-   return;
+  });
+  if(moved===null){
+   phase='seek-failed';
+   say('動画の開始位置に移動できません。▶ リプレイをもう一度押してください。');
+  }else{
+   prepared=true;
   }
-  try{video.pause()}catch(_){}
-  playingRequest=false;prepared=false;awaitSeek=false;
-  gestureNeeded=false;
-  if(seekAttempts>MAX_RESEEKS){failSeek();return}
-  say('再生位置が先頭に戻ったため、ゴール位置を再設定しています…');
-  seekToGoal(true);
  }
- function inspectFrame(mediaTime){
-  frameCallback=null;
-  if(!sourceKey||!wantPlay)return;
-  // On some iPhones currentTime is correct while the displayed frame
-  // is still from 0. Guard the decoded frame time independently.
-  if(Number.isFinite(mediaTime)&&mediaTime<target-TOLERANCE){
-   guardWrongFrame();
-   return;
-  }
-  watchFirstFrame();
- }
- function guardWrongFrame(){
-  if(!wantPlay)return;
-  try{video.pause()}catch(_){}
-  playingRequest=false;prepared=false;awaitSeek=false;
-  gestureNeeded=false;
-  if(seekAttempts>MAX_RESEEKS){failSeek();return}
-  say('ゴール以外の映像が出たため再調整しています…');
-  seekToGoal(true);
- }
- function watchFirstFrame(){
-  if(frameCallback!==null||typeof video.requestVideoFrameCallback!=='function')return;
-  try{frameCallback=video.requestVideoFrameCallback((_now,metadata)=>{
-   inspectFrame(metadata?.mediaTime);
-  })}catch(_){frameCallback=null}
- }
- function prepareSource(){
-  if(!sourceKey||video.readyState<1)return;
-  if(awaitSeek||prepared)return;
-  seekToGoal();
- }
- function stopIntent(){
-  wantPlay=false;playingRequest=false;gestureNeeded=false;
-  cancelTimer();cancelFrame();
-  try{video.pause()}catch(_){}
- }
- function open({sourceKey:key,sourceUrl:url,at,autoplay=false,fromStart=false}){
+ function open({sourceKey:key,sourceUrl:url,at,autoplay=false,fromStart=false}={}){
   if(!key||!url)return false;
-  // The target is ALWAYS an actual clip start (except an explicit
-  // debugging fromStart call), never a source-relative fallback to zero.
   const requested=fromStart?0:Math.max(0,Number(at)||0);
-  const change=sourceKey!==key||sourceUrl!==url;
-  const changedTarget=Math.abs(target-requested)>TOLERANCE;
+  const changed=sourceKey!==key||sourceUrl!==url;
   serial++;
-  cancelTimer();cancelFrame();
-  const alreadyPrepared=!change&&!changedTarget&&prepared&&!video.seeking;
-  const alreadySeeking=!change&&!changedTarget&&(awaitSeek||video.seeking);
-  stopIntent();
-  // The prior decoder's reset/seek must not leak into a newly selected goal.
-  resetSeekFromZero=false;
   sourceKey=key;sourceUrl=url;target=requested;
-  wantPlay=Boolean(autoplay);
-  gestureNeeded=false;playingRequest=false;
-  if(!alreadySeeking)seekAttempts=0;
-  playAttempts=0;
-  video.hidden=false;video.playsInline=true;
+  stop();
+  gestureNeeded=false;
+  if(!autoplay){
+   // Passive render must NOT decode/seek a 400MB iPhone MOV. This was the
+   // important difference from the functioning highlight player.
+   video.hidden=true;
+   phase='idle';
+   prepared=false;
+   say('▶ リプレイを押すとゴール付近を再生します（'+formatTime(target)+'から）。');
+   return changed;
+  }
+  // This happens directly inside a Replay / goal-choice user tap.
+  video.hidden=false;
+  video.playsInline=true;
   video.setAttribute('playsinline','');
   video.setAttribute('webkit-playsinline','');
-  if(autoplay)beforePlay(); // synchronous user-gesture dependent cleanup
-  if(change){
-   prepared=false;awaitSeek=false;phase='loading';
-   video.preload='auto';
-   video.src=url; // only when changing source: no extra MOV reload
-   say('動画を読み込み、ゴール位置を準備しています…');
-  }else if(alreadySeeking){
-   // The user tapped Replay while the preview's initial deep seek was
-   // still in flight. Keep that pending seek; do NOT clear its completion
-   // listener or queue a competing seek into the same large MOV.
-   prepared=false;awaitSeek=true;phase='seeking';
-   say('ゴール位置へ移動中…');
-   later(()=>{if(awaitSeek)failSeek()},12000);
-  }else if(alreadyPrepared&&nearTarget()){
-   // This is the fast path: user tapped ▶ after initial paused preview
-   // already sought to the correct goal start.
-   prepared=true;awaitSeek=false;phase='ready';
-   beginPlayback(); // synchronously inside the Replay button tap
+  pendingPlay=true;
+  if(loadedUrl!==url){
+   loadedUrl=url;
+   prepared=false;
+   phase='loading';
+   video.preload='metadata';
+   say('元動画を読み込んでいます…');
+   video.src=url; // no reload on Replay of the SAME MOV
+   if(ready())playAtTarget();
+  }else if(ready()){
+   playAtTarget();
   }else{
-   prepared=false;awaitSeek=false;phase='loading';
-   prepareSource();
+   phase='loading';
+   say('動画を準備しています…');
   }
-  return change;
+  return changed;
  }
  function pause(){
-  stopIntent();phase='paused';
+  stop();
+  phase='paused';
  }
  function dispose(){
-  serial++;stopIntent();
-  sourceKey='';sourceUrl='';target=0;
-  prepared=false;awaitSeek=false;phase='idle';
+  serial++;stop();sourceKey='';sourceUrl='';loadedUrl='';target=0;
+  prepared=false;phase='idle';gestureNeeded=false;
   try{video.removeAttribute('src');video.load()}catch(_){}
   video.hidden=true;
  }
  video.addEventListener('loadedmetadata',()=>{
-  if(!sourceKey)return;
-  prepareSource();
- });
- video.addEventListener('loadeddata',()=>{
-  // 'loadeddata' can still refer to frame 0 when currentTime already reads
-  // the *requested* goal time; never mistake that for seek completion.
-  if(awaitSeek&&target<=TOLERANCE&&!video.seeking)finishSeek();
-  else if(!prepared)prepareSource();
- });
- video.addEventListener('seeked',()=>{
-  if(resetSeekFromZero){
-   resetSeekFromZero=false;awaitSeek=false;
-   seekToGoal(true);
-   return;
-  }
-  if(awaitSeek)finishSeek();
- });
- video.addEventListener('canplay',()=>{
-  // A deep MOV is ready only on 'seeked', not on generic canplay.
-  if(awaitSeek&&target<=TOLERANCE&&!video.seeking)finishSeek();
+  if(pendingPlay && sourceKey && loadedUrl===sourceUrl)playAtTarget();
  });
  video.addEventListener('playing',()=>{
-  if(!wantPlay)return;
-  if(!prepared||awaitSeek||video.seeking||clock()<target-TOLERANCE){
-   guardWrongStart();
-   return;
-  }
-  phase='playing';watchFirstFrame();
+  if(!sourceKey)return;
+  phase='playing';prepared=true;
+  say('');
  });
- video.addEventListener('timeupdate',()=>{
-  if(!wantPlay)return;
-  if(clock()<target-TOLERANCE)guardWrongStart();
- });
- video.addEventListener('pause',()=>{
-  if(!wantPlay)return;
-  if(phase==='playing')phase='paused';
+ video.addEventListener('waiting',()=>{
+  if(!sourceKey||video.hidden)return;
+  say('動画を読み込み中…');
  });
  video.addEventListener('error',()=>{
-  if(!sourceKey)return;
-  phase='error';wantPlay=false;prepared=false;awaitSeek=false;cancelTimer();
+  if(!sourceKey||video.hidden)return;
+  stop();phase='error';prepared=false;
   const code=video.error?.code;
-  say(code===4?'このMOV形式をSafariで再生できません。元動画の形式を確認してください。':
-   '動画の読み込みに失敗しました。元動画を選び直してください。');
+  say(code===4?'このMOV形式をSafariで再生できません。':
+   '動画を読み込めませんでした。元動画を選び直してください。');
  });
  function currentSourceKey(){return sourceKey}
  function diagnostic(){
-  return {player:'PeakStamp goal replay v60',sourceKey,
-   currentTime:Number(video.currentTime)||0,targetTime:target,
-   readyState:video.readyState,seeking:video.seeking,paused:video.paused,
-   phase,prepared,awaitSeek,resetSeekFromZero,seekAttempts,playAttempts,
-   gestureNeeded,lastMessage,lastAttemptedTime};
- }
- function formatTime(t){
-  const m=Math.floor(t/60),s=Math.floor(t%60);
-  return m+':'+String(s).padStart(2,'0');
+  return {player:'PeakStamp goal replay highlight-parity v1',sourceKey,
+   currentTime:clock(),targetTime:target,readyState:video.readyState,
+   seeking:video.seeking,paused:video.paused,phase,prepared,
+   pendingPlay,playAttempts,gestureNeeded,lastMessage,lastAttemptedTime};
  }
  return {open,pause,dispose,currentSourceKey,diagnostic};
 }
