@@ -473,3 +473,25 @@ test('goal custom Replay also explicitly loads source only once on Safari',async
   assert.equal(stats.plays,2);
  }finally{await restore()}
 });
+
+test('native Safari controls detach crop pointer capture, restore it for custom Replay',async()=>{
+ const {dom,one,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]});
+  const viewport=find(dom.goalStatsViewer,'goal-scene-viewport zoom-video-viewport');
+  const custom=find(dom.goalStatsViewer,'play-btn goal-scene-replay');
+  const native=find(dom.goalStatsViewer,'goal-native-playback');
+  assert.equal(typeof viewport.events.pointerdown,'function','custom editor has pinch handlers');
+  native.events.click();
+  await settleMedia();
+  assert.equal(viewport.events.pointerdown,undefined,'no native-control taps intercepted');
+  assert.equal(viewport.style.touchAction,'manipulation');
+  assert.equal(dom.goalStatsPreview.style.transform,'none');
+  assert.equal(dom.goalStatsPreview.controls,true);
+  custom.events.click();
+  await settleMedia();
+  assert.equal(typeof viewport.events.pointerdown,'function','return to custom zoom restores handlers');
+  assert.equal(viewport.style.touchAction,'');
+  assert.equal(dom.goalStatsPreview.controls,false);
+ }finally{await restore()}
+});
