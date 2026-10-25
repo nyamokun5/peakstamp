@@ -125,7 +125,7 @@ export function prefillDetectedGoalFields(goal,event,utterances=[]){
  };
  const context=matchContext(utterances,event.time_seconds);
  fill('scorer',event.scorer);
- if(!edited.has('assistStatus')&&goal.assistStatus!=='none'){
+ if(!edited.has('assistStatus')&&!edited.has('assist')&&goal.assistStatus!=='none'){
   fill('assist',event.assist);
   if(clip(goal.assist)&&goal.assistStatus!=='named')goal.assistStatus='named';
   else if(goal.assistStatus==='unknown'&&!clip(goal.assist)&&
