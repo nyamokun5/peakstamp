@@ -17,6 +17,9 @@ export function actualGoalTime(item){
  return item?.origin==='manual'?Number(item.timeSeconds):estimateGoalTime(item?.timeSeconds||0);
 }
 const TRANSCRIPT_PREFIXES=['peakstamp_callout_pilot_v2:','peakstamp_callout_pilot_v1:'];
+const GEMINI_RESULT_CACHE_KEY='peakstamp_gemini_primary_json_v1';
+const GEMINI_GOAL_CONFIDENCES=new Set(['high','medium']);
+const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const clip=(value,max=120)=>typeof value==='string'?value.trim().slice(0,max):'';
 const validTime=x=>Number.isFinite(Number(x))&&x!==''&&x!==null&&x!==undefined&&Number(x)>=0;
 export function goalSourceKey(source){
@@ -34,12 +37,66 @@ const readJson=(storage,key)=>{
 export function readGoalTranscript(source,storage){
  const key=goalSourceKey(source);
  if(!key)return null;
- for(const prefix of TRANSCRIPT_PREFIXES)for(const scope of ['whole','first']){
-  const data=readJson(storage,prefix+key+'::'+scope);
-  if(Array.isArray(data?.utterances))
-   return {data,scope,legacy:prefix===TRANSCRIPT_PREFIXES[1]};
+ const cached=readJson(storage,GEMINI_RESULT_CACHE_KEY)?.[key];
+ const unified=Array.isArray(cached?.utterances)?cached.utterances:null;
+ let legacy=null;
+ for(const prefix of TRANSCRIPT_PREFIXES){
+  for(const scope of ['whole','first']){
+   const data=readJson(storage,prefix+key+'::'+scope);
+   if(Array.isArray(data?.utterances)){
+    legacy={data,scope,legacy:prefix===TRANSCRIPT_PREFIXES[1]};break;
+   }
+  }
+  if(legacy)break;
  }
- return null;
+ if(!unified)return legacy;
+ // One request produces independent highlight events and explicit goal calls.
+ // Bring over distinct old pilot utterances without reanalyzing or guessing.
+ const rows=unified.map(x=>({...x}));
+ for(const extra of legacy?.data?.utterances||[]){
+  const prior=rows.find(x=>x.kind===extra.kind &&
+   Math.abs(Number(x.time_seconds)-Number(extra.time_seconds))<=4 &&
+   (!x.scorer||!extra.scorer||x.scorer===extra.scorer));
+  if(prior){
+   for(const key of ['scorer','assist','match_label','team_a','team_b'])
+    if(!prior[key]&&extra[key])prior[key]=extra[key];
+  }else rows.push(extra);
+ }
+ rows.sort((a,b)=>Number(a.time_seconds)-Number(b.time_seconds));
+ return {data:{utterances:rows},scope:'unified',legacy:false};
+}
+/** Promote audio-only Gemini goal_reaction results to UNCONFIRMED video-review candidates. */
+export function readGeminiGoalReactions(source,storage){
+ const key=goalSourceKey(source);
+ if(!key)return [];
+ const all=readJson(storage,GEMINI_RESULT_CACHE_KEY);
+ const cached=all&&typeof all==='object'?all[key]:null;
+ const duration=Number(source?.duration)||Number(cached?.duration_seconds)||0;
+ const normalize=(e,fromEditor=false)=>{
+  const kind=fromEditor?e?.geminiType:e?.type;
+  const confidence=fromEditor?e?.geminiConfidence:e?.confidence;
+  const rawTime=fromEditor?e?.peakSeconds:e?.reaction_time_seconds;
+  const t=Number(rawTime);
+  if(kind!=='goal_reaction'||!GEMINI_GOAL_CONFIDENCES.has(confidence)||
+   !Number.isFinite(t)||rawTime==null||t<0||(duration>0&&t>duration+2))return null;
+  const time=roundTime(duration>0?Math.min(duration,t):t);
+  const requestedStart=e?.suggested_clip_start_seconds;
+  const requestedEnd=e?.suggested_clip_end_seconds;
+  const start=typeof requestedStart==='number'&&Number.isFinite(requestedStart)?requestedStart:time-8;
+  const end=typeof requestedEnd==='number'&&Number.isFinite(requestedEnd)?requestedEnd:time+5;
+  const upper=Math.max(duration,time);
+  return {time,confidence,
+   quote:clip(fromEditor?e.geminiQuote:e.quote,240),
+   clue:clip(fromEditor?e.geminiReason:e.audible_clue,400),
+   start:roundTime(clamp(start,0,upper)),end:roundTime(clamp(end,0,upper))};
+ };
+ if(Array.isArray(cached?.events))
+  return cached.events.map(event=>normalize(event)).filter(Boolean);
+ // Safari may preserve editor proposals even when localStorage is unavailable.
+ if(source?.analysisEngine==='gemini'&&Array.isArray(source?.candidates))
+  return source.candidates.filter(e=>e?.origin==='gemini')
+   .map(e=>normalize(e,true)).filter(Boolean);
+ return [];
 }
 export function goalCandidateId(time,quote){
  // Deterministic per source. No tie to highlight edits or Gemini candidate index.
@@ -79,10 +136,22 @@ export function createGoalDrafts(source,storage){
   if(event?.kind!=='goal_call'||!validTime(event.time_seconds))continue;
   const time=Number(event.time_seconds),id=goalCandidateId(time,event.quote||'');
   // Re-analysis may shift timestamp; do not generate duplicate confirmed goals.
-  const already=items.find(r=>r.id===id || (r.origin==='audio'&&
-   Math.abs(Number(r.timeSeconds)-time)<=4 &&
-   clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase()));
-  if(already)continue;
+  const already=items.find(r=>r.id===id ||
+   (r.origin==='manual'?
+    Math.abs(actualGoalTime(r)-estimateGoalTime(time))<=6:
+    Math.abs(Number(r.timeSeconds)-time)<=6 &&
+    (!clip(r.scorer)||!clip(event.scorer)||
+     clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase())));
+  if(already){
+   // A prior Gemini candidate is enriched only if still a draft.
+   if(already.origin==='gemini'&&already.status==='draft'){
+    if(!already.scorer&&clip(event.scorer))already.scorer=clip(event.scorer);
+    if(!already.assist&&clip(event.assist)){
+     already.assist=clip(event.assist);already.assistStatus='named';
+    }
+   }
+   continue;
+  }
   const match=matchContext(events,time);
   items.push({id,origin:'audio',timeSeconds:time,
    goalTimeSeconds:estimateGoalTime(time),goalTimeVerified:false,goalTimeEdited:false,
@@ -91,6 +160,24 @@ export function createGoalDrafts(source,storage){
    assistStatus:clip(event.assist)?'named':'unknown',
    matchLabel:match?.label||'',teamA:match?.teamA||'',teamB:match?.teamB||'',
    matchSeq:'',status:'draft',confirmedAt:null,note:''});
+ }
+ // Keep existing commentary and manual goal decisions; never create duplicates.
+ for(const event of readGeminiGoalReactions(source,storage)){
+  const existing=items.find(item=>
+   item.origin==='manual'
+    ? Math.abs(actualGoalTime(item)-event.time)<=8
+    : Math.abs(Number(item.timeSeconds)-event.time)<=8);
+  if(existing)continue;
+  items.push({
+   id:'gemini-goal-'+Math.round(event.time*10),origin:'gemini',
+   timeSeconds:event.time,goalTimeSeconds:roundTime(Math.max(0,event.time-3)),
+   goalTimeVerified:false,goalTimeEdited:false,
+   clipStartSeconds:event.start,clipEndSeconds:Math.max(event.start+.3,event.end),
+   quote:event.quote,audioClue:event.clue,geminiConfidence:event.confidence,
+   scorer:'',assist:'',assistStatus:'unknown',
+   matchLabel:'',teamA:'',teamB:'',matchSeq:'',
+   status:'draft',confirmedAt:null,note:''
+  });
  }
  items.sort((a,b)=>Number(a.timeSeconds)-Number(b.timeSeconds));
  return {items,transcript};
@@ -137,9 +224,9 @@ export function confirmedGoalExport(sources,storage){
     // v2: timeSeconds is now the estimated or reviewed PLAY time.
     timeSeconds:actualGoalTime(x),
     goalTimeSeconds:actualGoalTime(x),
-    reactionTimeSeconds:x.origin==='audio'?Number(x.timeSeconds):null,
+    reactionTimeSeconds:['audio','gemini'].includes(x.origin)?Number(x.timeSeconds):null,
     goalTimeVerified:x.goalTimeVerified===true,
-    timingMethod:x.origin==='audio'?(x.goalTimeVerified===true?'video-reviewed':'comment-minus-10s'):'manual',
+    timingMethod:x.origin==='audio'?(x.goalTimeVerified===true?'video-reviewed':'comment-minus-10s'):x.origin==='gemini'?(x.goalTimeVerified===true?'video-reviewed':'audio-reaction-estimate'):'manual',
     quote:clip(x.quote,240),scorer:clip(x.scorer),
     assistStatus:x.assistStatus,
     assist:x.assistStatus==='named'?clip(x.assist):null,
