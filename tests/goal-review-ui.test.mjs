@@ -351,7 +351,7 @@ test('after first video Reject, next candidate starts automatically; final view 
   find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
   await settleMedia();
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'rejected');
-  assert.equal(stats.loads,2);
+  assert.equal(stats.loads,1,'next goal is the first MOV decoded after Reject');
   assert.equal(stats.plays,1);
   assert.match(dom.goalStatsStep.textContent,/2 \/ 2/);
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
@@ -406,7 +406,7 @@ test('Keep advances to next unjudged goal even when save callback synchronously 
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
   assert.match(dom.goalStatsPlayingLabel.textContent,/IMG_5293/);
   assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
-  assert.equal(stats.loads,2);
+  assert.equal(stats.loads,1,'next goal alone loads a MOV when first was never replayed');
   find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
   assert.equal(dom.goalStatsDone.hidden,false);
