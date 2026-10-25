@@ -62,3 +62,9 @@ test('main app activates current modules and avoids stale Safari caches',()=>{
  assert.match(primary,/gemini-fast-waveform\.mjs\?v=long30/);
  assert.match(primary,/gemini-waveform-recovery\.mjs\?v=long30/);
 });
+
+test('secondary settings links open separately so Safari does not discard imported MOV File handles',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ assert.match(html,/<a href="\.\/reset-goals\.html[^"]*"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
+ assert.match(html,/<a href="\.\/sposched-review\.html[^"]*"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
+});
