@@ -43,7 +43,8 @@ export function createGoalPlaybackController(video,{
  function playAtTarget(){
   if(!pendingPlay||!sourceKey||loadedUrl!==sourceUrl||!ready())return;
   pendingPlay=false;
-  cancelLoadTimer();
+  // Keep the loading watchdog armed until the browser fires "playing".
+  // iOS may accept play() but never advance the decoded MOV frame.
   const requested=target;
   lastAttemptedTime=requested;
   phase='seeking';
@@ -57,8 +58,8 @@ export function createGoalPlaybackController(video,{
    autoPlay:true,
    onBeforePlay:()=>{
     beforePlay();
-    phase='playing';
-    say('動画を再生中…');
+    phase='starting';
+    say('再生を開始しています…');
    },
    onError:error=>{
     gestureNeeded=String(error?.name||'')==='NotAllowedError';
@@ -84,6 +85,7 @@ export function createGoalPlaybackController(video,{
   gestureNeeded=false;
   nativeMode=Boolean(native);
   if(nativeMode){
+   beforePlay(); // pause competing highlight playback inside this tap
    video.hidden=false;video.controls=true;video.playsInline=true;
    video.setAttribute('playsinline','');
    video.setAttribute('webkit-playsinline','');
