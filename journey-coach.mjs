@@ -110,7 +110,7 @@ export function initJourneyCoach({
  function exportFinished(){
   show({
    title:'MP4の書き出しが完了しました！',
-   body:'① 完成した動画を再生して確認。② iPhoneに保存。③「HS向けJSON」を保存して幹事にLINEなどで共有してください（Instagramリール制作に使用します）。',
+   body:'MP4が完成しました。① 完成した動画を再生して確認。② iPhoneに保存。③「HS向けJSON」を保存して幹事にLINEなどで共有してください（Instagramリール制作に使用します）。',
    main:{label:'▶ 完成動画を確認',run:()=>actions.showExportPreview?.()},
    other:{label:'HS向けJSONを保存',run:()=>actions.saveHSJson?.()}
   });
