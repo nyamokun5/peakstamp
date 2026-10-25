@@ -68,3 +68,15 @@ test('secondary settings links open separately so Safari does not discard import
  assert.match(html,/<a href="\.\/reset-goals\.html[^"]*"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
  assert.match(html,/<a href="\.\/sposched-review\.html[^"]*"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
 });
+
+test('settings and match result pages instruct returning to original tab, not resetting video import',()=>{
+ for(const path of ['reset-goals.html','sposched-review.html']){
+  const html=readFileSync(new URL('../'+path,import.meta.url),'utf8');
+  assert.match(html,/URLSearchParams\(location\.search\)\.has\('returnTab'\)/);
+  assert.match(html,/Safariのタブ一覧から元のPeakStampタブ/);
+  assert.match(html,/back\.hidden=true/);
+ }
+ const peakstamp=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ assert.match(peakstamp,/reset-goals\.html\?v=reset59&returnTab=1/);
+ assert.match(peakstamp,/sposched-review\.html\?v=external65&returnTab=1/);
+});
