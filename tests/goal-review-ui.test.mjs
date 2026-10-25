@@ -1,3 +1,4 @@
+import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initGoalStatsReview} from '../goal-stats-ui.mjs';
@@ -800,6 +801,29 @@ test('last video decision calls completion once and preserves automatic Keep nav
   dom.goalQueueKept.events.click();
   dom.goalStatsList.children[0].events.click();
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
-  assert.equal(completed.length,1,'re-editing an already judged goal must not repeat completion dialog');
+  assert.equal(completed.length,1,'re-editing an earlier judged goal must not interrupt review');
+  // Revisiting ALL (already judged) and reaching the last goal should show
+  // the completion choice on EVERY final Keep/Reject judgment.
+  dom.goalQueueAll.events.click();
+  dom.goalStatsList.children.at(-1).events.click();
+  find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
+  assert.equal(completed.length,2,'last already-reviewed goal must reopen completion options');
+  find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
+  assert.equal(completed.length,3,'last goal decision should offer next/review again repeatedly');
  }finally{await restore()}
+});
+
+test('manual goal entry lives only at end of highlight review, not on the goal completion card',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const done=html.slice(html.indexOf('id="goalStatsDone"'),html.indexOf('id="goalStatsViewer"'));
+ const review=html.slice(html.indexOf('id="standardReviewArea"'),html.indexOf('class="extra-analysis-tools"'));
+ assert.match(done,/ハイライトを確認/);
+ assert.doesNotMatch(done,/見逃したゴールを追加/);
+ assert.match(done,/id="goalStatsDoneAdd"[^>]*hidden/);
+ assert.match(review,/id="missingGoalFallback"/);
+ assert.match(review,/ゴール一覧にもハイライトにも見つからない場合/);
+ assert.match(review,/id="goalStatsManualSource"/);
+ assert.match(review,/id="goalStatsAdd"/);
+ assert.ok(review.indexOf('id="missingGoalFallback"')>review.indexOf('id="highlightList"'));
+ assert.ok(review.indexOf('id="missingGoalFallback"')>review.indexOf('このシーンをゴールとして追加'));
 });
