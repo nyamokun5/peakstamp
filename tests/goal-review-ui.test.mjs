@@ -495,3 +495,111 @@ test('native Safari controls detach crop pointer capture, restore it for custom 
   assert.equal(dom.goalStatsPreview.controls,false);
  }finally{await restore()}
 });
+
+test('adjust goal trim and pinch zoom, Keep, Replay: playback/export must retain the edits',async()=>{
+ const {dom,storage,one,stats,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onRejectClip:(src,item)=>rejectGoalClip(src,item),
+   onClipEdit:(src,item)=>keepGoalClip(src,item)
+  });
+  // This queue click previously mounted a NEW scene object while the Keep
+  // button remained bound to the previous rendered object.
+  dom.goalStatsList.children[0].events.click();
+  await settleMedia();
+  const viewer=dom.goalStatsViewer;
+  const controls=find(viewer,'range-inputs');
+  assert.ok(controls);
+  const beginning=controls.children[0].children[1];
+  const ending=controls.children[1].children[1];
+  beginning.value='06:02.0';beginning.events.change();
+  ending.value='06:28.0';ending.events.change();
+  const viewport=find(viewer,'goal-scene-viewport zoom-video-viewport');
+  const touch=(pointerId,x)=>({pointerId,pointerType:'touch',clientX:x,clientY:90,preventDefault(){}});
+  viewport.events.pointerdown(touch(1,120));
+  viewport.events.pointerdown(touch(2,240));
+  viewport.events.pointermove(touch(1,70));
+  viewport.events.pointermove(touch(2,300));
+  viewport.events.pointerup(touch(1,70));
+  viewport.events.pointerup(touch(2,300));
+  const adjusted=createGoalDrafts(one,storage).items[0];
+  assert.equal(adjusted.clipStartSeconds,362);
+  assert.equal(adjusted.clipEndSeconds,388);
+  assert.ok(adjusted.clipZoom>1);
+  const savedZoom=adjusted.clipZoom,savedX=adjusted.clipZoomX,savedY=adjusted.clipZoomY;
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  let kept=createGoalDrafts(one,storage).items[0];
+  assert.equal(kept.videoDecision,'kept');
+  assert.equal(kept.clipStartSeconds,362);
+  assert.equal(kept.clipEndSeconds,388);
+  assert.equal(kept.clipZoom,savedZoom);
+  assert.equal(kept.clipZoomX,savedX);
+  assert.equal(kept.clipZoomY,savedY);
+  assert.equal(one.candidates.length,1);
+  assert.equal(one.candidates[0].time,362);
+  assert.equal(one.candidates[0].manualEnd,388);
+  assert.equal(one.candidates[0].zoom,savedZoom);
+  const replay=find(viewer,'play-btn goal-scene-replay');
+  replay.events.click();
+  await settleMedia();
+  kept=createGoalDrafts(one,storage).items[0];
+  assert.equal(dom.goalStatsPreview.currentTime,362);
+  assert.equal(kept.clipStartSeconds,362);
+  assert.equal(kept.clipEndSeconds,388);
+  assert.equal(kept.clipZoom,savedZoom);
+  assert.match(find(viewer,'range-start-label').textContent,/06:02/);
+  assert.match(find(viewer,'range-end-label').textContent,/06:28/);
+  assert.ok(stats.plays>=2);
+ }finally{await restore()}
+});
+test('Keep on first video auto-advances, reopening it preserves start/end and crop',async()=>{
+ const {dom,storage,one,two,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one,two]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onRejectClip:(src,item)=>rejectGoalClip(src,item),
+   onClipEdit:(src,item)=>keepGoalClip(src,item)
+  });
+  dom.goalStatsList.children[0].events.click();
+  await settleMedia();
+  const input=find(dom.goalStatsViewer,'range-inputs').children[0].children[1];
+  input.value='06:00.0';input.events.change();
+  let saved=createGoalDrafts(one,storage).items[0];
+  assert.equal(saved.clipStartSeconds,360);
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  await settleMedia();
+  assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
+  assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,360);
+  dom.goalStatsList.children[0].events.click();
+  await settleMedia();
+  const replay=find(dom.goalStatsViewer,'play-btn goal-scene-replay');
+  replay.events.click();
+  await settleMedia();
+  assert.equal(dom.goalStatsPreview.currentTime,360);
+  assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,360);
+  assert.equal(one.candidates[0].time,360);
+ }finally{await restore()}
+});
+test('replaying before Keep never changes the editor object or discards subsequent edits',async()=>{
+ const {dom,storage,one,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onClipEdit:(src,item)=>keepGoalClip(src,item)
+  });
+  dom.goalStatsList.children[0].events.click();
+  await settleMedia();
+  find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
+  await settleMedia();
+  const start=find(dom.goalStatsViewer,'range-inputs').children[0].children[1];
+  start.value='06:01.0';start.events.change();
+  assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,361);
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,361);
+  find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
+  await settleMedia();
+  assert.equal(dom.goalStatsPreview.currentTime,361);
+  assert.equal(one.candidates[0].time,361);
+ }finally{await restore()}
+});
