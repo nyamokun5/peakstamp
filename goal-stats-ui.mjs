@@ -49,7 +49,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  const sources=()=>state.sources.filter(s=>s?.file&&s?.objectUrl);
  const goalData=s=>createGoalDrafts(s,cache());
  const queue=()=>collectGoalQueue(sources(),cache());
- let activeKey='',displayedKey='',hadGoalCandidates=false;
+ let activeKey='',displayedKey='',hadGoalCandidates=false,liveEntry=null;
  const say=s=>{status.textContent=s;};
  const player=createGoalPlaybackController(video,{
   notify:s=>{$('goalStatsVideoStatus').textContent=s;},
@@ -62,11 +62,11 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    write(src,rows);
    if(record.videoDecision==='kept')onClipEdit(src,record);
   },
-  onReplay:()=>seekTo(locate(activeKey),{autoplay:true}),
-  onSeek:time=>seekTo(locate(activeKey),{autoplay:true,at:time}),
+  onReplay:()=>seekTo(liveEntry||locate(activeKey),{autoplay:true}),
+  onSeek:time=>seekTo(liveEntry||locate(activeKey),{autoplay:true,at:time}),
   onPause:()=>player.pause(),
   onNative:()=>{
-   const entry=locate(activeKey);
+   const entry=liveEntry||locate(activeKey);
    if(!entry)return;
    const {source,item}=entry;
    scene.setNativePlayback(true);
@@ -83,7 +83,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  video.addEventListener('loadedmetadata',()=>{
   // Goal transcripts may exist before the normal waveform analyzer runs.
   // Obtain duration from the shared video so the clip can be kept directly.
-  const active=locate(activeKey);
+  const active=liveEntry||locate(activeKey);
   if(active&&player.currentSourceKey()===goalSourceKey(active.source)&&
     !(Number(active.source.duration)>0)&&Number.isFinite(video.duration)&&video.duration>0){
    active.source.duration=video.duration;
@@ -96,9 +96,11 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   }
  });
  function pausePlayback(){player.pause();}
- function disposeVideo(){player.dispose();viewer.hidden=true;displayedKey='';}
+ function disposeVideo(){player.dispose();viewer.hidden=true;displayedKey='';liveEntry=null;}
  function seekTo(entry,{autoplay=false,at=null}={}){
   if(!entry)return;
+  // Use exactly the same goal object as the mounted trim/pinch editor.
+  if(liveEntry?.key===entry.key)entry=liveEntry;
   displayedKey=entry.key;
   const {source,item}=entry;
   // Keep the editor controls visible. The MOV itself is opened lazily only
@@ -128,16 +130,20 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   // The first preview is opened by this actual user tap. Do not let the
   // passive render seek first, which can interrupt iPhone Safari playback.
   displayedKey=entry.key;
-  render();
-  seekTo(entry,{autoplay});
+  const mounted=render();
+  seekTo(mounted||entry,{autoplay});
   if(scroll)panel.scrollIntoView({behavior:'smooth',block:'start'});
  }
  function write(source,items){
   if(!saveGoalDrafts(source,cache(),items))
    say('端末に自動保存できませんでした。空き容量などを確認し、JSONも保存してください。');
  }
+ // Never overwrite recently edited ranges/crop using a stale button snapshot.
+ function latestGoal(entry){
+  return goalData(entry.source).items.find(x=>x.id===entry.item.id)||entry.item;
+ }
  function edit(entry,name,value){
-  const {source,item}=entry;
+  const source=entry.source,item=latestGoal(entry);
   if(String(item[name]??'')===String(value??''))return;
   item[name]=value;
   if(name==='goalTimeSeconds'){
@@ -150,7 +156,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   render();
  }
  function setVideoDecision(entry,decision){
-  const {source,item}=entry,previous=item.videoDecision||null;
+  const source=entry.source,item=latestGoal(entry),previous=item.videoDecision||null;
   if(decision!=='kept'&&decision!=='rejected')return;
   if(decision==='kept' && !(Number(source.duration)>0)){
    say('動画の読み込みが終わってからキープしてください。');return;
@@ -334,7 +340,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   panel.hidden=all.length===0 || (!entries.length &&
     !all.some(source=>Boolean(goalData(source).transcript)||Boolean(source.bins)));
   if(!all.length){
-   disposeVideo();list.replaceChildren();editor.replaceChildren();return;
+   disposeVideo();list.replaceChildren();editor.replaceChildren();return null;
   }
   if(player.currentSourceKey()&&!all.some(s=>goalSourceKey(s)===player.currentSourceKey()))disposeVideo();
   const pending=entries.filter(row=>row.item.status==='draft').length;
@@ -352,6 +358,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    activeKey=(firstToReview||entries[0])?.key||'';
   }
   const active=entries.find(row=>row.key===activeKey);
+  liveEntry=active||null;
   if(!active){viewer.hidden=true;displayedKey='';player.pause();}
   if(active)scene.activate(active.source,active.item);
   const index=active?entries.findIndex(row=>row.key===active.key):-1;
@@ -403,6 +410,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   }
   // One player/decoder is mounted for all candidates. Rerendering fields
   // does not force a MOV reload or restart a scene already being edited.
+  return active;
  }
  function hasRecords(){return sources().some(s=>Boolean(goalData(s).transcript)||goalData(s).items.length>0);}
  function nearby(source,time,start,end){
@@ -439,7 +447,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const data=goalData(src),record=makeManualGoal(Math.round(seconds*10)/10,src,cache());
   data.items.push(record);write(src,data.items);
   activeKey=goalSourceKey(src)+'::'+record.id;
-  render();seekTo({source:src,item:record},{autoplay:false});
+  const mounted=render();if(mounted)seekTo(mounted,{autoplay:false});
   viewer.scrollIntoView({behavior:'auto',block:'start'});
   say('手動ゴールを追加しました。プレーと選手名を確認してください。');
  });
