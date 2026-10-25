@@ -38,6 +38,10 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  const panel=$('goalStatsPanel');
  if(!panel)return {refresh:()=>{},nearby:()=>[],openAt:()=>{},hasRecords:()=>false,pausePlayback:()=>{}};
  const list=$('goalStatsList'),editor=$('goalStatsEditor'),video=$('goalStatsPreview');
+ const libraryFilters={
+  pending:$('goalQueuePending'),kept:$('goalQueueKept'),all:$('goalQueueAll')
+ };
+ const libraryEmpty=$('goalQueueEmpty');
  const summary=$('goalStatsSummary'),status=$('goalStatsStatus');
  const label=$('goalStatsPlayingLabel'),viewer=$('goalStatsViewer');
  const done=$('goalStatsDone'),doneText=$('goalStatsDoneText');
@@ -50,6 +54,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  const goalData=s=>createGoalDrafts(s,cache());
  const queue=()=>collectGoalQueue(sources(),cache());
  let activeKey='',displayedKey='',hadGoalCandidates=false,liveEntry=null;
+ let queueFilter='all',scoreDetailsOpen=false;
  const say=s=>{status.textContent=s;};
  const player=createGoalPlaybackController(video,{
   notify:s=>{$('goalStatsVideoStatus').textContent=s;},
@@ -132,7 +137,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   displayedKey=entry.key;
   const mounted=render();
   seekTo(mounted||entry,{autoplay});
-  if(scroll)panel.scrollIntoView({behavior:'smooth',block:'start'});
+  if(scroll)(viewer.hidden?panel:viewer).scrollIntoView({behavior:'smooth',block:'start'});
  }
  function write(source,items){
   if(!saveGoalDrafts(source,cache(),items))
@@ -222,6 +227,16 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    editor.append(quote);
   }
   const fields=make('div','goal-review-fields');
+  // Primary controls: movie, trim/zoom, Keep/Reject.
+  // Detailed scorer/assist and official match inputs stay one tap away.
+  const scoreDetails=make('details','goal-score-details');
+  scoreDetails.open=scoreDetailsOpen;
+  scoreDetails.addEventListener('toggle',()=>{scoreDetailsOpen=Boolean(scoreDetails.open);});
+  const summaryNames=(item.scorer||'得点者未入力')+' ／ '+
+   (item.assistStatus==='named'?(item.assist||'アシスト者未入力'):
+    item.assistStatus==='none'?'アシストなし':'アシスト未確認');
+  scoreDetails.append(make('summary','',
+   (item.status==='confirmed'?'✓ 得点情報確定済み':'✎ 得点情報を確認・編集')+'　'+summaryNames));
   const timing=make('details','goal-review-time-adjust');
   timing.append(make('summary','','⏱ ゴール時刻を修正（切り抜きとは別）'));
   const timingTools=make('div','goal-review-time-tools');
@@ -279,7 +294,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   inputRow(optionalBody,'チームB',item.teamB||'',v=>edit(entry,'teamB',v),{placeholder:'例：4'});
   inputRow(optionalBody,'メモ（任意）',item.note||'',v=>edit(entry,'note',v),{maxLength:400});
   optional.append(optionalBody);
-  editor.append(fields,timing,optional);
+  scoreDetails.append(fields,timing,optional);
   const actions=make('div','goal-review-actions');
   const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'✓ 得点情報は確定済み':'✓ 得点情報を確定');
   confirm.type='button';confirm.disabled=item.status==='confirmed'||disabled;
@@ -316,6 +331,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    onUpdate();
   });
   actions.append(confirm,reject);
+  scoreDetails.append(actions);
   // Video selection happens HERE. No second Keep/Reject in the normal list.
   // Score confirmation and clip inclusion are intentionally independent.
   const videoActions=make('div','goal-review-video-actions');
@@ -338,7 +354,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   videoKeep.addEventListener('click',()=>setVideoDecision(entry,'kept'));
   videoReject.addEventListener('click',()=>setVideoDecision(entry,'rejected'));
   videoActions.append(videoKeep,videoReject);
-  editor.append(videoStatus,videoActions,actions);
+  editor.append(videoStatus,videoActions,scoreDetails);
  }
  function render(){
   const all=sources(),entries=queue();
@@ -384,8 +400,32 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    doneRegular.hidden=$('resultsPanel').hidden||$('standardReviewArea').hidden;
   }
   renderEditor(active);
+  const counts={
+   pending:entries.filter(row=>goalNeedsVideoReview(row.item)).length,
+   kept:entries.filter(row=>row.item.videoDecision==='kept').length,
+   all:entries.length
+  };
+  for(const [filter,button] of Object.entries(libraryFilters)){
+   if(!button)continue;
+   const count=$('goalQueue'+filter[0].toUpperCase()+filter.slice(1)+'Count');
+   if(count)count.textContent=String(counts[filter]);
+   const activeFilter=filter===queueFilter;
+   button.classList.toggle('is-active',activeFilter);
+   button.setAttribute('aria-pressed',String(activeFilter));
+  }
+  const filtered=entries.filter(({item})=>queueFilter==='all'||
+   (queueFilter==='kept'?item.videoDecision==='kept':goalNeedsVideoReview(item)));
+  if(libraryEmpty){
+   libraryEmpty.hidden=filtered.length>0;
+   libraryEmpty.textContent=queueFilter==='pending'
+    ?'未確認のゴールはありません。キープ済み・すべてから再編集できます。'
+    :queueFilter==='kept'
+     ?'まだキープしたゴールはありません。すべてから確認できます。'
+     :'ゴール候補はまだありません。解析後にここへ表示されます。';
+  }
   const cards=[];
-  for(const [index,entry] of entries.entries()){
+  for(const entry of filtered){
+   const index=entries.findIndex(row=>row.key===entry.key);
    const {item,source,key}=entry;
    const row=make('button','goal-queue-row'+(key===activeKey?' is-active':''),undefined);
    row.type='button';row.dataset.goalKey=key;
@@ -504,6 +544,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   if(!textBox.hidden){textBox.hidden=true;showButton.textContent='JSONを表示';}
   else reveal(snapshot().text);
  });
+ for(const [filter,button] of Object.entries(libraryFilters)){
+  button?.addEventListener('click',()=>{
+   queueFilter=filter;
+   // Never replace current player or edit state solely to filter the list.
+   render();
+  });
+ }
  refresh();
  return {refresh,nearby,openAt,hasRecords,pausePlayback};
 }
