@@ -754,3 +754,52 @@ test('empty kept filter explains where to find all editable goals',async()=>{
   assert.equal(dom.goalStatsList.children.length,1);
  }finally{await restore()}
 });
+
+test('highlight missed goal can be added at the selected video timestamp and fully scored',async()=>{
+ const {dom,storage,one,restore}=setup();
+ try{
+  const review=initGoalStatsReview({sources:[one]});
+  const originalFile=one.file,originalVideoUrl=one.objectUrl;
+  assert.equal(review.addFromScene(one,205.4),true);
+  await settleMedia();
+  assert.equal(one.file,originalFile,'must preserve original MOV File object');
+  assert.equal(one.objectUrl,originalVideoUrl);
+  let items=createGoalDrafts(one,storage).items;
+  assert.equal(items.length,2,'one AI goal and one manually added goal');
+  const added=items.find(item=>item.origin==='manual');
+  assert.ok(added);
+  assert.equal(added.goalTimeSeconds,205.4);
+  assert.equal(added.matchSeq,'1','match number is inferred from original video');
+  assert.equal(added.status,'draft');
+  assert.equal(added.videoDecision,undefined);
+  assert.match(dom.goalStatsPlayingLabel.textContent,/第1試合.*03:25/);
+  assert.equal(review.addFromScene(one,205.4),true,'should open same goal rather than duplicate it');
+  assert.equal(createGoalDrafts(one,storage).items.length,2);
+  assert.ok(find(dom.goalStatsEditor,'goal-review-confirm'));
+  assert.ok(find(dom.goalStatsEditor,'goal-review-video-keep'));
+ }finally{await restore()}
+});
+test('last video decision calls completion once and preserves automatic Keep navigation',async()=>{
+ const {dom,one,two,restore}=setup();
+ try{
+  const completed=[];
+  initGoalStatsReview({sources:[one,two]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onRejectClip:(src,item)=>rejectGoalClip(src,item),
+   onVideoReviewCompleted:record=>completed.push(record)
+  });
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  await settleMedia();
+  assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
+  assert.equal(completed.length,0);
+  find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
+  await settleMedia();
+  assert.equal(completed.length,1);
+  assert.equal(completed[0].total,2);
+  assert.equal(completed[0].unconfirmed,2,'do not imply unconfirmed AI scorer data is official');
+  dom.goalQueueKept.events.click();
+  dom.goalStatsList.children[0].events.click();
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  assert.equal(completed.length,1,'re-editing an already judged goal must not repeat completion dialog');
+ }finally{await restore()}
+});
