@@ -23,7 +23,7 @@ import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-pl
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
 import {initWorkflowSteps} from './workflow-steps.mjs?v=workflowui1';
-import {assignMatchNumber,setMatchNumber,sourceDisplayName} from './match-label.mjs?v=match1';
+import {assignMatchNumber,setMatchNumber,sourceDisplayName,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from './match-label.mjs?v=matchsort1';
 
 const $ = id => document.getElementById(id);
 // Keep one video decoder across scene cards, independent of Gemini/candidate data.
@@ -106,6 +106,7 @@ function progress(message, value) {
   $('progressBar').style.width = percentage + '%';
 }
 let nextSourceId = 0;
+let sourceOrderWasManuallyChanged=false;
 let appendOnPick = false;
 let filePickerOpenedAt = null;
 let importTimingSequence = 0;
@@ -251,10 +252,11 @@ function renderSourceList() {
       syncSources();
     });
     label.append(input);
-    const original=make('details','source-original-file');
-    original.append(make('summary','','ファイル名'));
-    original.append(make('small','',source.file.name));
-    info.append(filename,make('small','',status),original);
+    // At import the organizer needs to match the clip to its match. Show the
+    // ORIGINAL filename directly, rather than hiding it behind a disclosure.
+    const original=make('small','source-original-filename',source.file.name);
+    original.title=source.file.name;
+    info.append(filename,original,make('small','source-state',status));
     card.append(num,info,label);
     const controls = make('div','source-controls');
     const move = (label,diff) => {
@@ -264,6 +266,7 @@ function renderSourceList() {
       button.addEventListener('click', () => {
         const other = i + diff;
         [sources[i],sources[other]]=[sources[other],sources[i]];
+        sourceOrderWasManuallyChanged=true;
         syncSources();
       });
       controls.append(button);
@@ -289,8 +292,8 @@ function renderSourceList() {
 }
 function chooseFiles(files, append = false) {
   if (state.working || state.exporting || state.geminiProcessing || !files?.length) return;
-  const incoming = Array.from(files).filter(file => /\.(mp4|mov|m4v)$/i.test(file.name) ||
-    /^video\//.test(file.type));
+  const incoming = sortFilesByFilename(Array.from(files).filter(file =>
+    /\.(mp4|mov|m4v)$/i.test(file.name)||/^video\//.test(file.type)));
   if (!incoming.length) {
     error('loadError','動画ファイル（MOV / MP4）を選んでください。');
     return;
@@ -301,6 +304,7 @@ function chooseFiles(files, append = false) {
     sceneReplayMedia.dispose();
     state.sources.forEach(source => URL.revokeObjectURL(source.objectUrl));
     state.sources = [];
+    sourceOrderWasManuallyChanged=false;
   }
   const seen = new Set(state.sources.map(s =>
     s.file.name + ':' + s.file.size + ':' + s.file.lastModified));
@@ -312,17 +316,29 @@ function chooseFiles(files, append = false) {
     const source={id:'video-'+(++nextSourceId),file,
       objectUrl:URL.createObjectURL(file),duration:0,
       bins:null,candidates:[],error:''};
-    assignMatchNumber(source,state.sources.length,window.localStorage);
     state.sources.push(source);
     seen.add(key);
     added++;
   }
+  // The browser's multi-file selection order isn't reliably lexical on iOS.
+  // Sort the whole set by numeric filename until the organizer manually moves
+  // clips. Append subsequent files without scrambling a manual ordering.
+  if(!sourceOrderWasManuallyChanged)sortSourcesByFilename(state.sources);
+  state.sources.forEach((src,index)=>assignMatchNumber(src,index,window.localStorage));
   error('loadError',state.sources.length === 12 && incoming.length > added
     ? '一度に選べる動画は最大12本です。' : '');
   $('progressArea').hidden = true;
   error('analysisError','');
   syncSources();
 }
+$('sortFilesByName')?.addEventListener('click',()=>{
+  if(state.working||state.exporting||state.geminiProcessing)return;
+  // Intentional reset: clears only manually assigned match display numbers,
+  // not edits, clips, File identities or any Gemini cache.
+  resetMatchNumbersToFilenameOrder(state.sources,window.localStorage);
+  sourceOrderWasManuallyChanged=false;
+  syncSources();
+});
 $('fileInput').addEventListener('change', e => {
   const receivedAt = performance.now();
   const pickerMs = filePickerOpenedAt === null ? null : receivedAt - filePickerOpenedAt;
