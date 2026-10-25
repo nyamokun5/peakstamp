@@ -44,7 +44,7 @@ function saveChunk(source,range,answer){
   const key=SEGMENT_CACHE_KEY+'::'+segmentCacheId(source);
   const cache=getSavedChunks(source);
   cache[range.startSeconds+':'+range.durationSeconds]={
-   startSeconds:range.startSeconds,events:answer.events,utterances:answer.utterances,
+   startSeconds:range.startSeconds,events:answer.events,utterances:answer.utterances,unifiedGoalCalls:answer?.meta?.unifiedGoalCalls===true,
    model:answer?.meta?.model||'unknown'
   };
   localStorage.setItem(key,JSON.stringify(cache));
@@ -174,7 +174,7 @@ export function refreshGeminiPrimary(state) {
  $('geminiMainCancel').hidden=!processing;
  const sourceHelp=$('geminiMainFileHelp');
  if(sourceHelp){
-  const isLegacy=Boolean(cache&&!Array.isArray(cache.utterances));
+  const isLegacy=Boolean(cache&&(cache.meta?.unifiedGoalCalls!==true || !Array.isArray(cache.utterances)));
   sourceHelp.textContent=isLegacy
    ? 'この動画は旧方式の解析済みです。ゴール・アシストもまとめて検出するには「Geminiで再解析」が必要です（追加料金が発生する場合があります）。'
    : source&&sources.length>1?'選択中：'+source.file.name:'';
@@ -197,7 +197,7 @@ async function callApi(audio,duration,access,signal,format='m4a') {
  let result=null;
  try{result=await response.json();}catch(_){}
  if(!response.ok)throw Error(result?.error||('Geminiサーバーの応答エラー HTTP '+response.status));
- if(!result || !Array.isArray(result.events) || !Array.isArray(result.utterances))
+ if(!result || !Array.isArray(result.events))
   throw Error('Geminiからの候補データを読み取れませんでした。');
  return result;
 }
@@ -424,7 +424,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
        try{return await callApi(wav,range.durationSeconds,access,signal,'wav');}
        finally{apiWaitSum+=(performance.now()-started)/1000;}
       },
-      cached:range=>{const chunk=previous[range.startSeconds+':'+range.durationSeconds];return Array.isArray(chunk?.utterances)?chunk:null;},
+      cached:range=>{const chunk=previous[range.startSeconds+':'+range.durationSeconds];return chunk?.unifiedGoalCalls===true&&Array.isArray(chunk.utterances)?chunk:null;},
       save:(range,response)=>{alive();saveChunk(source,range,response);},
       isCancelled:()=>signal.aborted||id!==generation,
       onFailure:()=>{if(id===generation)abortController?.abort();},
