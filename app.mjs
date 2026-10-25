@@ -1476,6 +1476,36 @@ $('lineShareCopy').addEventListener('click',async()=>{
   }
 });
 
+async function saveHSJson(){
+ const status=$('hsJsonReminderStatus')||$('exportEditStatus');
+ try{
+  const plan=buildMultiClipPlan(state.sources,currentClipOptions());
+  if(!plan.length){
+   status.textContent='保存するキープ済みシーンがありません。';
+   return false;
+  }
+  const payload=createEditTransfer(state.sources,plan);
+  const name='PeakStamp_HS_'+new Date().toISOString().slice(0,10)+'.json';
+  const file=new File([JSON.stringify(payload,null,2)],name,{type:'application/json'});
+  if(typeof navigator!=='undefined'&&navigator.share&&
+    (!navigator.canShare||navigator.canShare({files:[file]}))){
+   await navigator.share({files:[file],title:'HS向け編集データ'});
+   status.textContent='共有先で「ファイルに保存」またはLINEを選んで幹事に送ってください。';
+  }else{
+   const url=URL.createObjectURL(file);
+   const link=document.createElement('a');
+   link.href=url;link.download=name;document.body.append(link);link.click();link.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+   status.textContent='JSONをダウンロードしました。「ファイル」に保存して幹事へ共有してください。';
+  }
+  return true;
+ }catch(e){
+  status.textContent=e?.name==='AbortError'?'共有はキャンセルされました。':
+   '保存できませんでした：'+(e?.message||String(e));
+  return false;
+ }
+}
+$('hsJsonShareFinal').addEventListener('click',()=>{void saveHSJson();});
 $('exportEditData').addEventListener('click',()=>{
   const status=$('exportEditStatus');
   status.textContent='';
