@@ -118,7 +118,7 @@ test('dispose detaches media and resets shared goal decoder',async()=>{
  controller.dispose();
  assert.equal(video.hidden,true);
  assert.equal(controller.currentSourceKey(),'');
- assert.equal(calls.loads,1);
+ assert.equal(calls.loads,2,'explicit source load and decoder cleanup both invoke load()');
 });
 
 test('new goal Replay explicitly calls HTMLVideoElement.load like working highlight cards',async()=>{
