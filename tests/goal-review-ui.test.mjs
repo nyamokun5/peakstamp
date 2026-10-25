@@ -64,7 +64,7 @@ function setup(){
    });
   }
   get src(){return this._src}
-  load(){stats.loads++}
+  load(){stats.explicitLoads=(stats.explicitLoads||0)+1}
   play(){stats.plays++;this.paused=false;return Promise.resolve()}
   webkitEnterFullscreen(){stats.nativeFullscreen=(stats.nativeFullscreen||0)+1}
  }
