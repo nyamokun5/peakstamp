@@ -138,7 +138,7 @@ export function createGoalDrafts(source,storage){
   // Re-analysis may shift timestamp; do not generate duplicate confirmed goals.
   const already=items.find(r=>r.id===id ||
    (r.origin==='manual'?
-    Math.abs(actualGoalTime(r)-estimateGoalTime(time))<=6:
+    time-actualGoalTime(r)>=-2 && time-actualGoalTime(r)<=15:
     Math.abs(Number(r.timeSeconds)-time)<=6 &&
     (!clip(r.scorer)||!clip(event.scorer)||
      clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase())));
