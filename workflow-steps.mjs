@@ -4,7 +4,7 @@
  */
 const STAGES=['analysis','edit','export'];
 const idToStage=['choosePanel','goalStatsPanel','montagePanel'];
-export function initWorkflowSteps({document:doc=globalThis.document,onChange=()=>{},hasMedia=()=>false,hasReview=()=>false}={}){
+export function initWorkflowSteps({document:doc=globalThis.document,onChange=()=>{},hasMedia=()=>false,hasReview=()=>false,hasExport=()=>false}={}){
  const body=doc.body, nav=doc.getElementById('journeyNav');
  const notice=doc.getElementById('workflowStageNotice');
  const buttons=[...nav.querySelectorAll('[data-journey-step]')];
@@ -12,7 +12,7 @@ export function initWorkflowSteps({document:doc=globalThis.document,onChange=()=
  const visible=()=>({
   analysis:true,
   edit:hasMedia()&&hasReview(),
-  export:hasMedia()&&hasReview()
+  export:hasMedia()&&hasReview()&&hasExport()
  });
  const refresh=()=>{
   const allowed=visible();
@@ -23,6 +23,10 @@ export function initWorkflowSteps({document:doc=globalThis.document,onChange=()=
    button.disabled=stage!=='analysis'&&!allowed[stage];
    button.setAttribute('aria-disabled',String(button.disabled));
   });
+  for(const button of doc.querySelectorAll('[data-editor-jump]')){
+   const target=doc.getElementById(button.getAttribute('data-editor-jump'));
+   button.disabled=!target||target.hidden;
+  }
   if(notice){
    if(current==='analysis')notice.textContent='動画を選び、AIで見どころを検出します。';
    else if(current==='edit')notice.textContent='⚽ ゴールと通常ハイライトを確認し、切り取り・ズームを調整します。';
@@ -57,6 +61,13 @@ export function initWorkflowSteps({document:doc=globalThis.document,onChange=()=
   refresh();
  };
  buttons.forEach((button,index)=>button.addEventListener('click',()=>setStage(STAGES[index])));
+ for(const button of doc.querySelectorAll('[data-editor-jump]')){
+  button.addEventListener('click',()=>{
+   if(current!=='edit')setStage('edit',{scroll:false});
+   const target=doc.getElementById(button.getAttribute('data-editor-jump'));
+   if(target&&!target.hidden)target.scrollIntoView?.({behavior:'smooth',block:'start'});
+  });
+ }
  doc.getElementById('workflowToExport')?.addEventListener('click',()=>setStage('export'));
  doc.getElementById('workflowBackToEdit')?.addEventListener('click',()=>setStage('edit'));
  body.dataset.psStage=current;
