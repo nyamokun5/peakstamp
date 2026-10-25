@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=matchui1" />
+  <link rel="stylesheet" href="styles.css?v=matchsort1" />
 </head>
 <body>
   <header class="topbar">
@@ -50,7 +50,7 @@
       <p id="fileImportTiming" class="file-import-timing" role="status" aria-live="polite" hidden></p>
       <p id="fileImportHelp" class="file-import-help" hidden>「ファイル選択」には写真を探す・選ぶ時間や、iCloudからの取得・iOS側の変換があればその時間も含まれます。iCloud取得だけを個別に計測することはできません。</p>
       <div class="source-board" id="sourceBoard" hidden>
-        <div class="source-board-header"><strong>試合番号を確認 · <span id="sourceCount">0</span>本</strong><small>番号は変更できます</small></div>
+        <div class="source-board-header"><strong>試合番号を確認 · <span id="sourceCount">0</span>本</strong><button id="sortFilesByName" class="source-sort-btn" type="button">ファイル名順に並べ直す</button></div>
         <div id="sourceList" class="source-list"></div>
         <p class="fine-print">ファイルごとに音声解析し、ここに並んだ順番でハイライトを結合します。</p>
       </div>
@@ -532,6 +532,6 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=matchui1"></script>
+  <script type="module" src="app.mjs?v=matchsort1"></script>
 </body>
 </html>
