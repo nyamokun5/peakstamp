@@ -181,3 +181,44 @@ test('a late spoken goal/assist call still uses the preceding actual-play scene,
  assert.equal(goals[0].assist,'佐藤さん');
  assert.deepEqual(goalSceneBounds(goals[0],v.duration),{start:233,end:246});
 });
+
+test('scorer and assist calls seven seconds apart merge without another Gemini request',()=>{
+ const out=mergeWavSegmentEvents([
+  {startSeconds:0,meta:{unifiedGoalCalls:true},events:[],utterances:[
+   {time_seconds:61,kind:'goal_call',quote:'山田さんゴール',
+    scorer:'山田さん',assist:null,confidence:'high'}]},
+  {startSeconds:65,meta:{unifiedGoalCalls:true},events:[],utterances:[
+   {time_seconds:3.5,kind:'goal_call',quote:'アシスト佐藤さん',
+    scorer:null,assist:'佐藤さん',confidence:'medium'}]}
+ ],135);
+ assert.equal(out.utterances.length,1);
+ assert.equal(out.utterances[0].time_seconds,61);
+ assert.equal(out.utterances[0].scorer,'山田さん');
+ assert.equal(out.utterances[0].assist,'佐藤さん');
+ assert.equal(out.meta.goalCallCount,1);
+});
+test('two different scorers remain separate even with a nearby assist call',()=>{
+ const out=mergeWavSegmentEvents([{
+  startSeconds:0,meta:{unifiedGoalCalls:true},events:[],utterances:[
+   {time_seconds:40,kind:'goal_call',quote:'Aさんゴール',scorer:'Aさん',assist:null},
+   {time_seconds:49,kind:'goal_call',quote:'Bさんゴール',scorer:'Bさん',assist:null},
+   {time_seconds:55,kind:'goal_call',quote:'アシストCさん',scorer:null,assist:'Cさん'}
+  ]
+ }],120);
+ assert.equal(out.utterances.length,2);
+ assert.equal(out.utterances[0].scorer,'Aさん');
+ assert.equal(out.utterances[0].assist,null);
+ assert.equal(out.utterances[1].scorer,'Bさん');
+ assert.equal(out.utterances[1].assist,'Cさん');
+});
+test('a standalone assist phrase is not silently discarded',()=>{
+ const out=mergeWavSegmentEvents([{
+  startSeconds:0,meta:{unifiedGoalCalls:true},events:[],utterances:[
+   {time_seconds:32,kind:'goal_call',quote:'アシスト佐藤さん',
+    scorer:null,assist:'佐藤さん',confidence:'low'}
+  ]
+ }],100);
+ assert.equal(out.utterances.length,1);
+ assert.equal(out.utterances[0].scorer,null);
+ assert.equal(out.utterances[0].assist,'佐藤さん');
+});

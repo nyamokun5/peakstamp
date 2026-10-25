@@ -169,7 +169,35 @@ export function mergeWavSegmentEvents(responses,duration){
   if(entry.quote&&!String(prev.quote||'').includes(entry.quote))
    prev.quote=String(prev.quote||'')+' / '+entry.quote;
  }
- const utterances=joined.map(({_segmentStart,...u})=>u);
+ // A scorer and an assist announcement can be spoken several seconds apart.
+ // Pair complementary fragments, without collapsing different scorers.
+ const consolidated=[];
+ for(const entry of joined){
+  const previous=[...consolidated].reverse().find(old=>{
+   if(old.kind!=='goal_call'||entry.kind!=='goal_call')return false;
+   const delta=entry.time_seconds-old.time_seconds;
+   if(delta<0||delta>15)return false;
+   const conflicts=key=>old[key]&&entry[key]&&
+    String(old[key]).trim().toLowerCase()!==String(entry[key]).trim().toLowerCase();
+   if(conflicts('scorer')||conflicts('assist'))return false;
+   return Boolean(
+    (old.scorer&&!old.assist&&!entry.scorer&&entry.assist)||
+    (entry.scorer&&!entry.assist&&!old.scorer&&old.assist)||
+    (old.scorer&&!old.assist&&entry.scorer&&entry.assist&&
+     String(old.scorer).trim().toLowerCase()===String(entry.scorer).trim().toLowerCase())||
+    (entry.scorer&&!entry.assist&&old.scorer&&old.assist&&
+     String(old.scorer).trim().toLowerCase()===String(entry.scorer).trim().toLowerCase())
+   );
+  });
+  if(!previous){consolidated.push(entry);continue;}
+  for(const key of ['scorer','assist','match_label','team_a','team_b'])
+   if(!previous[key]&&entry[key])previous[key]=entry[key];
+  if((confRank[entry.confidence]||0)>(confRank[previous.confidence]||0))
+   previous.confidence=entry.confidence;
+  if(entry.quote&&!String(previous.quote||'').includes(entry.quote))
+   previous.quote=String(previous.quote||'')+' / '+entry.quote;
+ }
+ const utterances=consolidated.map(({_segmentStart,...u})=>u);
  const unifiedGoalCalls=(responses||[]).length>0&&
   (responses||[]).every(segment=>segment?.unifiedGoalCalls===true||segment?.meta?.unifiedGoalCalls===true);
  return {duration_seconds:fullLength,events:merged,utterances,
