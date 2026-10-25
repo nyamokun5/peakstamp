@@ -221,6 +221,13 @@ export function createGoalDrafts(source,storage){
    status:'draft',confirmedAt:null,note:''
   });
  }
+ // The organizer assigns a match number to the VIDEO, once.
+ // Match-number edits are reflected across all auto-filled goal drafts.
+ if(Number.isInteger(source?.matchNumber)&&source.matchNumber>=1)
+  for(const item of items)
+   if(!Array.isArray(item.userEditedGoalFields)||
+      !item.userEditedGoalFields.includes('matchSeq'))
+    item.matchSeq=String(source.matchNumber);
  items.sort((a,b)=>Number(a.timeSeconds)-Number(b.timeSeconds));
  return {items,transcript};
 }
@@ -239,7 +246,7 @@ export function makeManualGoal(time,source,storage){
  return {id:'manual-'+String(Date.now())+'-'+Math.random().toString(36).slice(2,9),
   origin:'manual',timeSeconds:t,goalTimeSeconds:t,goalTimeVerified:false,goalTimeEdited:false,
   quote:'手動で追加',
-  scorer:'',assist:'',assistStatus:'unknown',matchSeq:'',
+  scorer:'',assist:'',assistStatus:'unknown',matchSeq:source?.matchNumber?String(source.matchNumber):'',
   matchLabel:match?.label||'',teamA:match?.teamA||'',teamB:match?.teamB||'',
   status:'draft',confirmedAt:null,note:''};
 }
