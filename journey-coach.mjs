@@ -65,7 +65,7 @@ export function initJourneyCoach({
  }
  function analysisFinished({success=true,error='',failures=0}={}){
   const {goals,highlights}=counts();
-  if(!success&&(!goals&&!highlights)){
+  if(!success){
    show({
     title:'解析できませんでした',
     body:'解析を完了できませんでした。'+(error?'\n原因：'+String(error).slice(0,260):'')+
