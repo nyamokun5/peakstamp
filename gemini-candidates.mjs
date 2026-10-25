@@ -10,6 +10,23 @@ const kinds={
   uncertain:{title:'ナイスプレイ！',rank:0}
 };
 const confidenceValue={high:0.86,medium:0.65,low:0.44};
+/** Ignore mere surprise/shouting. A quote with a football-specific word
+ * (goal, save, shot, 惜しい, ナイシュー...) is NOT filtered.
+ * This is deliberately separate from explicit scorer/assist utterances. */
+export function isReactionOnlyInterjection(event){
+ const raw=String(event?.quote||'').normalize('NFKC').trim().toLowerCase();
+ const parts=raw.split(/[\s、。!！?？,，.．…～~ー―\-]+/u).filter(Boolean);
+ const isNoise=p=>/^(?:[あぁアァ]+|[うぅウゥ][わぁあァア]*|[わぁワァ]+|[おぉオォ]+|[えぇエェ]+|ah+|oh+|wow+|whoa+|woah+|ooh+|ugh+)$/iu.test(p);
+ if(parts.length&&parts.every(isNoise))return true;
+ // An empty quote with vague cheering (no identifiable football call)
+ // is not enough to propose a highlight.
+ if(!parts.length){
+  const clue=String(event?.audibleClue||event?.audible_clue||'').trim();
+  if(/^(?:歓声|叫び声|感嘆|驚き|声|cheering|cheers|crowd noise|shouting|shouts|scream|yell)(?:だけ|のみ|\W.*)?$/iu.test(clue))
+   return true;
+ }
+ return false;
+}
 function normalize(event,duration){
  const time=Number(event?.timeSeconds);
  if(!Number.isFinite(time)||time<0||time>duration+2)return null;
@@ -25,7 +42,8 @@ function normalize(event,duration){
 export function geminiEventsToCandidates(events,sourceId,duration,prior=[]){
  const videoLength=Number(duration);
  if(!(videoLength>0))throw Error('動画の長さが不正です。');
- const ordered=(events||[]).map(event=>normalize(event,videoLength)).filter(Boolean)
+ const ordered=(events||[]).filter(event=>!isReactionOnlyInterjection(event))
+  .map(event=>normalize(event,videoLength)).filter(Boolean)
   .sort((a,b)=>a.time-b.time);
  const groups=[];
  for(const event of ordered){

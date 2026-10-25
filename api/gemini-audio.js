@@ -26,6 +26,8 @@ export function prompt(duration){
   'Run ONE INTEGRATED AUDIO ANALYSIS returning both (A) all highlight reactions and (B) all spoken goal, assist and match-start calls. Keep both outputs independent.',
   'Return up to 24 DISTINCT audible reactions associated with goals, shots, near misses, goalkeeper saves and good play.',
   'Listen for Japanese ナイシュー、ナイスシュート、惜しい、ゴール、ナイスキー、うまい、打て and English comments. Use language and nearby audio context, not loudness alone.',
+  'DO NOT create highlight events from isolated non-informative shouts/interjections such as 「あー」「うわー」「わー」 or English ah/oh/wow by themselves. Require discernible play-specific speech or distinct meaningful audible action context (e.g. goal, shot, save); mere volume, excitement, screams or moans are not highlights.',
+  'An isolated shout does NOT justify type goal_reaction, excited_reaction, other or uncertain. Keep separately announced scorer/assist goal_call utterances even when no highlight event qualifies.',
   'Do not infer actual visual events as certainty: you CANNOT see the video. Do not invent words, timestamps, or goals.',
   'Use reaction onset seconds from recording start as reaction_time_seconds, not estimated kick time.',
   'Deduplicate cheers and remarks referring to the SAME play, particularly within 6 seconds.',

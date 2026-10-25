@@ -1,3 +1,4 @@
+import {sourceDisplayName} from './match-label.mjs?v=match1';
 /**
  * Unified, goal-first video review. All source files appear in one ordered
  * queue. One persistent HTMLVideoElement serves every candidate. No video
@@ -114,8 +115,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   viewer.classList?.remove('goal-native-player');
   scene.setNativePlayback(false);
   scene.showVideo(autoplay);
-  label.textContent=source.file.name+' · ゴール '+fmt(actualGoalTime(item))+
-   '（'+(item.origin==='audio'?'実況 '+fmt(item.timeSeconds):item.origin==='gemini'?'Geminiの音声反応 '+fmt(item.timeSeconds):'手動追加')+'）';
+  label.textContent=sourceDisplayName(source)+' · ゴール '+fmt(actualGoalTime(item));
   scene.activate(source,item);
   const bounds=scene.clipBounds();
   player.open({
@@ -153,7 +153,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   item[name]=value;
   // Clearing a name or choosing an assist state is also a deliberate edit.
   // Do not let subsequent Gemini refresh silently refill it.
-  if(['scorer','assist','assistStatus','matchLabel','teamA','teamB'].includes(name)){
+  if(['scorer','assist','assistStatus','matchLabel','teamA','teamB','matchSeq'].includes(name)){
    const fields=new Set(Array.isArray(item.userEditedGoalFields)?item.userEditedGoalFields:[]);
    fields.add(name);
    item.userEditedGoalFields=[...fields];
@@ -208,15 +208,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   }
   const {source,item}=entry,disabled=item.status==='excluded';
   const head=make('div','goal-editor-title');
-  head.append(make('strong','',source.file.name+' · ゴール '+fmt(actualGoalTime(item))));
-  const detail=make('small','',
-   item.origin==='audio'
-    ? '実況 '+fmt(item.timeSeconds)+' ／ ゴール推定 '+fmt(actualGoalTime(item))+
-      (item.goalTimeVerified?'（映像確認済み）':'（10秒前の仮時刻）')
-    : item.origin==='gemini'
-    ? 'Gemini音声からのゴール候補 '+fmt(item.timeSeconds)+
-      '（確信度：'+(item.geminiConfidence||'不明')+'）／映像で確認が必要'
-    : '手動入力 · ゴール '+fmt(actualGoalTime(item)));
+  head.append(make('strong','',sourceDisplayName(source)+' · ゴール '+fmt(actualGoalTime(item))));
+  const detail=make('small','',item.origin==='manual'?'手動追加':
+   item.goalTimeVerified?'映像確認済み':'AI候補 · 要確認');
   head.append(detail);editor.append(head);
   if(item.quote){
    const quote=make('details','goal-review-quote-details');
@@ -347,10 +341,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   videoKeep.className='goal-review-video-keep'+(decision==='kept'?' is-active':'');
   videoReject.className='goal-review-video-reject'+(decision==='rejected'?' is-active':'');
   videoStatus.textContent=decision==='kept'
-   ?'動画：キープ済み（完成ハイライトに自動追加）'
-   :decision==='rejected'
-    ?'動画：不採用（完成ハイライトには含めません）'
-    :'動画：未判断（ここでキープ／不採用を選択）';
+   ?'✓ キープ済み'
+   :decision==='rejected'?'不採用':'動画を確認して選択';
   videoKeep.addEventListener('click',()=>setVideoDecision(entry,'kept'));
   videoReject.addEventListener('click',()=>setVideoDecision(entry,'rejected'));
   videoActions.append(videoKeep,videoReject);
@@ -371,9 +363,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const excluded=entries.filter(row=>row.item.status==='excluded').length;
   const videoKept=entries.filter(x=>x.item.videoDecision==='kept').length;
   const videoRejected=entries.filter(x=>x.item.videoDecision==='rejected').length;
-  summary.textContent='ゴール候補 '+entries.length+'件  ·  得点未確定 '+pending+
-   '件  ·  得点確定 '+confirmed+'件'+(excluded?'  ·  除外 '+excluded+'件':'')+
-   '  ·  動画キープ '+videoKept+'件  ·  動画不採用 '+videoRejected+'件';
+  summary.textContent='ゴール '+entries.length+'件 · キープ '+videoKept+'件 · 未確認 '+
+   entries.filter(row=>goalNeedsVideoReview(row.item)).length+'件';
   exportButton.disabled=copyButton.disabled=showButton.disabled=confirmed===0;
   const previous=entries.find(row=>row.key===activeKey);
   if(!previous){
@@ -388,10 +379,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const waiting=entries.filter(row=>goalNeedsVideoReview(row.item)).length;
   const complete=entries.length>0&&waiting===0;
   $('goalStatsStep').textContent=active
-   ?'⚽ ゴール '+(index+1)+' / '+entries.length+
-     (waiting?'　·　動画未判断 '+waiting+'件':'　·　全'+entries.length+'件の動画判定完了')+
-     (waiting?'　·　リプレイで確認 → キープ／不採用':'　·　残り0件')
-   :entries.length?'すべての候補を確認しました':'まだゴール候補はありません';
+   ?'ゴール '+(index+1)+' / '+entries.length+(waiting?' · 未確認 '+waiting:' · 全件確認済み')
+   :entries.length?'確認済み':'候補なし';
   done.hidden=!complete;
   if(complete){
    doneText.textContent='✓ ゴール動画 '+entries.length+'件の判定が完了しました（残り0件）';
@@ -431,7 +420,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    row.type='button';row.dataset.goalKey=key;
    row.setAttribute('aria-current',key===activeKey?'true':'false');
    const main=make('span','goal-queue-primary',
-    (index+1)+'.  '+source.file.name+'   ·   '+fmt(actualGoalTime(item)));
+    (index+1)+'.  '+sourceDisplayName(source)+'   ·   '+fmt(actualGoalTime(item)));
    const names=make('span','goal-queue-secondary',
     (item.scorer||'得点者未入力')+' ／ '+(item.assistStatus==='named'
       ?(item.assist||'アシスト未入力')+' アシスト'
@@ -503,7 +492,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const old=manualSource.value;
   manualSource.replaceChildren();
   for(const src of all){
-   const option=make('option','',src.file.name);
+   const option=make('option','',sourceDisplayName(src));
    option.value=goalSourceKey(src);manualSource.append(option);
   }
   manualSource.value=all.some(s=>goalSourceKey(s)===old)?old:goalSourceKey(all[0]);
