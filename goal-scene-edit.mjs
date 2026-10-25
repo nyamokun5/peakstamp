@@ -1,6 +1,6 @@
 /** Pure goal scene trim/zoom state, compatible with regular highlight clips. */
 import {normalizeSceneZoom,normalizeSceneFocus} from './editing-rules.mjs?v=peak52';
-import {actualGoalTime} from './goal-stats.mjs?v=40';
+import {actualGoalTime} from './goal-stats.mjs?v=unifiedga1';
 const finite=n=>typeof n==='number'&&Number.isFinite(n);
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const round=n=>Math.round(n*10)/10;
@@ -11,15 +11,15 @@ export const GOAL_COMMENTARY_TAIL_SECONDS=2;
  * Manually added goals do not have a commentary timestamp; use goal time.
  */
 export function goalSceneReferenceTime(item){
- if(item?.origin==='audio'&&finite(item.timeSeconds)&&item.timeSeconds>=0)
+ if((item?.origin==='audio'||item?.origin==='gemini')&&finite(item.timeSeconds)&&item.timeSeconds>=0)
   return item.timeSeconds;
  return Number(actualGoalTime(item))||0;
 }
 export function goalSceneBounds(item,duration){
  const max=Math.max(0,Number(duration)||0);
  const voiceTime=clamp(goalSceneReferenceTime(item),0,max);
- const defaults={start:Math.max(0,voiceTime-GOAL_COMMENTARY_LEAD_SECONDS),
-  end:Math.min(max,voiceTime+GOAL_COMMENTARY_TAIL_SECONDS)};
+ const defaults={start:Math.max(0,voiceTime-(item?.origin==='gemini'?8:GOAL_COMMENTARY_LEAD_SECONDS)),
+  end:Math.min(max,voiceTime+(item?.origin==='gemini'?5:GOAL_COMMENTARY_TAIL_SECONDS))};
  let start=finite(item?.clipStartSeconds)?clamp(item.clipStartSeconds,0,max):defaults.start;
  let end=finite(item?.clipEndSeconds)?clamp(item.clipEndSeconds,0,max):defaults.end;
  if(max>0){
