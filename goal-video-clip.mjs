@@ -34,7 +34,10 @@ export function keepGoalClip(source,goal){
     enabled:match.enabled,rejected:match.rejected
    };
   }
-  match.time=start;match.manualEnd=end;match.peakSeconds=goalTime;
+  // Keep detector peak stable so a later Gemini rescan matches this same scene.
+  // Actual goal time remains in the goal record, not the highlight locator.
+  match.time=start;match.manualEnd=end;
+  if(!Number.isFinite(match.peakSeconds))match.peakSeconds=goalTime;
   match.zoom=crop.zoom;match.zoomX=crop.zoomX;match.zoomY=crop.zoomY;
   match.goalVideoOwned=true;
   match.enabled=true;match.rejected=false;match.goalRecordId=goal.id;
