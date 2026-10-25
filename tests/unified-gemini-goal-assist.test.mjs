@@ -90,6 +90,7 @@ test('one analysis displays announced scorer and assist in priority goal review'
  assert.equal(goals[0].assistStatus,'named');
  assert.equal(goals[0].matchLabel,'3と4');
  assert.equal(goals[0].status,'draft');
+ assert.deepEqual(goalSceneBounds(goals[0],v.duration),{start:233,end:246});
  assert.equal(confirmedGoalExport([v],c).goals.length,0);
 });
 test('old scan goal reaction still appears as tentative video candidate',()=>{
@@ -163,4 +164,20 @@ test('legacy highlight-only segments do not claim integrated goal-call coverage'
  const joined=mergeWavSegmentEvents([{startSeconds:0,events:[]}],70);
  assert.equal(joined.meta.unifiedGoalCalls,false);
  assert.equal(joined.utterances.length,0);
+});
+
+test('a late spoken goal/assist call still uses the preceding actual-play scene, not a duplicate',()=>{
+ const c=store(),v=source('late-call.mov');
+ put(c,v,{duration_seconds:v.duration,events:[{
+  reaction_time_seconds:241,type:'goal_reaction',confidence:'high',
+  suggested_clip_start_seconds:233,suggested_clip_end_seconds:246
+ }],utterances:[{
+  time_seconds:252,kind:'goal_call',quote:'山田さんゴール、佐藤さんアシスト',
+  scorer:'山田さん',assist:'佐藤さん',confidence:'high'
+ }]});
+ const goals=createGoalDrafts(v,c).items;
+ assert.equal(goals.length,1);
+ assert.equal(goals[0].scorer,'山田さん');
+ assert.equal(goals[0].assist,'佐藤さん');
+ assert.deepEqual(goalSceneBounds(goals[0],v.duration),{start:233,end:246});
 });
