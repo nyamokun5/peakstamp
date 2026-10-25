@@ -3,12 +3,12 @@ import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experime
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=goalprefill1';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=matchui1';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=workflowui1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=matchui1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
-import {createGoalDrafts} from './goal-stats.mjs?v=goalprefill1';
-import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=goaltrim1';
+import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
+import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title62';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=peak52';
@@ -255,7 +255,7 @@ function renderSourceList() {
     original.append(make('summary','','ファイル名'));
     original.append(make('small','',source.file.name));
     info.append(filename,make('small','',status),original);
-    card.append(info,label);
+    card.append(num,info,label);
     const controls = make('div','source-controls');
     const move = (label,diff) => {
       const button = make('button','source-control',label);
@@ -283,7 +283,7 @@ function renderSourceList() {
       syncSources();
     });
     controls.append(del);
-    card.append(num,controls);
+    card.append(controls);
     return card;
   }));
 }
