@@ -106,7 +106,7 @@ function makeShareFile() {
   if (!lastBlob || !lastName || typeof File !== 'function') return null;
   return new File([lastBlob], lastName, { type: 'video/mp4', lastModified: Date.now() });
 }
-export function initMontageEditor(state) {
+export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{}}={}) {
   activeState = state;
   $('titleSize').addEventListener('input', () => {
     $('titleSizeValue').textContent = $('titleSize').value + '%';
@@ -206,10 +206,13 @@ export function initMontageEditor(state) {
       $('montageSaveStatus').textContent = $('montageShare').hidden
         ? '下の「MP4をダウンロード」で保存してください。'
         : '「iPhoneに保存・共有」をタップして保存先を選んでください。';
-      $('montageDownload').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      $('hsJsonReminder').hidden=false;
+      onComplete();
     } catch (err) {
       $('montageProgress').hidden = true;
-      displayError(formatExportFailure(err));
+      const message=formatExportFailure(err);
+      displayError(message);
+      if(!cancelRequested)onFailure(message);
     } finally {
       setWorking(false);
       const planAfter = buildMultiClipPlan(activeState?.sources || [], clipOptions());
