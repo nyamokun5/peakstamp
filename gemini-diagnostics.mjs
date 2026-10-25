@@ -10,6 +10,11 @@ export function buildAnalysisDiagnostic(source,geminiResult,goalReview){
   suggested_clip_start_seconds:e.suggested_clip_start_seconds??null,
   suggested_clip_end_seconds:e.suggested_clip_end_seconds??null
  }));
+ const unifiedUtterances=(Array.isArray(geminiResult?.utterances)?geminiResult.utterances:[]).map(u=>({
+  time_seconds:u.time_seconds??null,kind:u.kind||'',
+  confidence:u.confidence||'',quote:String(u.quote||''),
+  scorer:u.scorer??null,assist:u.assist??null,match_label:u.match_label??null
+ }));
  const byType={};
  for(const event of events)byType[event.type]=(byType[event.type]||0)+1;
  const candidates=(Array.isArray(source?.candidates)?source.candidates:[]).map(c=>({
@@ -28,13 +33,15 @@ export function buildAnalysisDiagnostic(source,geminiResult,goalReview){
    durationSeconds:Number(source?.duration||geminiResult?.duration_seconds||0)},
   analysisEngine:source?.analysisEngine||'unknown',
   gemini:{stored:!!geminiResult,segments:Number(geminiResult?.meta?.segments||0),
-   rawEventCount:events.length,byType,events},
+   rawEventCount:events.length,byType,events,
+   unifiedGoalCallsEnabled:geminiResult?.meta?.unifiedGoalCalls===true,
+   rawUtteranceCount:unifiedUtterances.length,utterances:unifiedUtterances},
   editor:{candidateCount:candidates.length,candidates},
   goalReview:{explicitGoalCallCount:utterances.filter(x=>x?.kind==='goal_call').length,
    transcriptAvailable:!!goalReview?.transcript,
    draftCount:goalItems.length,
    confirmedCount:goalItems.filter(x=>x.status==='confirmed').length,
    manualCount:goalItems.filter(x=>x.origin==='manual').length,
-   note:'Priority goal review receives explicit spoken goal calls and manual goals; generic Gemini goal_reaction scenes do not automatically become goal drafts.'}
+   note:'Unified explicit goal calls and Gemini goal_reaction scenes both enter the priority review as unconfirmed goals.'}
  },null,2);
 }
