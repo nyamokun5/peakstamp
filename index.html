@@ -103,6 +103,12 @@
       </div>
       <button id="geminiMainCancel" class="cancel-button" type="button" hidden>解析を中止</button>
       <p id="geminiMainStatus" role="status" aria-live="polite" class="gemini-main-status"></p>
+      <div class="gemini-diagnostic-export">
+        <button id="geminiMainResultCopy" class="whisper-run" type="button" hidden>診断用の解析結果をコピー</button>
+        <p id="geminiMainCopyStatus" class="fine-print" role="status" aria-live="polite"></p>
+        <textarea id="geminiMainCopyFallback" readonly rows="7" hidden aria-label="診断用解析結果JSON"></textarea>
+        <p class="fine-print">音声・動画・APIアクセスコードは含みません。認識された発話やファイル名を含むため共有前に確認してください。</p>
+      </div>
       <details class="compact-details gemini-diagnostics">
         <summary>解析方法と注意事項</summary>
         <p class="fine-print">元動画は端末内に残ります。約70秒ごとに音声だけをGoogleへ送信。成功した区間は再利用できます。API利用料や通信料が発生することがあります。Safariを離れると解析が中断される場合があります。</p>

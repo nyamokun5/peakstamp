@@ -12,6 +12,8 @@ import { createGeminiProgressUI } from './gemini-progress-ui.mjs?v=1';
 import { updateGeminiScreenNotice } from './gemini-screen-notice.mjs?v=1';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
 import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=long30';
+import { createGoalDrafts } from './goal-stats.mjs?v=40';
+import { buildAnalysisDiagnostic } from './gemini-diagnostics.mjs?v=1';
 
 // Verified owner project: Vercel production domain for nyamokun5/peakstamp.
 const API_ENDPOINT = 'https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
@@ -146,6 +148,8 @@ export function refreshGeminiPrimary(state) {
  picker.value=sources.length?String(selected):'';
  const source=sources[selected]||null;
  const cache=source&&cachedResult(source);
+ const diagnosticCopy=$('geminiMainResultCopy');
+ if(diagnosticCopy)diagnosticCopy.hidden=!(source && (cache || source.bins?.length));
  const batchButton=$('geminiMainBatch');
  if(batchButton){
   const finished=sources.filter(s=>s.analysisEngine==='gemini'&&s.bins?.length).length;
@@ -226,6 +230,25 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
        :'全体の推定残り時間：'+approx(estimate.totalSeconds);
   }
  };
+ const diagnosticCopy=$('geminiMainResultCopy');
+ diagnosticCopy?.addEventListener('click',async()=>{
+  const source=selectedSource(state),cache=source?cachedResult(source):null;
+  const status=$('geminiMainCopyStatus'),fallback=$('geminiMainCopyFallback');
+  if(!source || (!cache && !source.bins?.length)){
+   if(status)status.textContent='この動画には保存済みの解析結果がありません。';
+   return;
+  }
+  const report=buildAnalysisDiagnostic(source,cache,createGoalDrafts(source,window.localStorage));
+  if(fallback)fallback.hidden=true;
+  try{
+   if(!navigator.clipboard?.writeText)throw Error('Clipboard unsupported');
+   await navigator.clipboard.writeText(report);
+   if(status)status.textContent='診断用JSONをコピーしました。ChatGPTに貼り付けて送信してください。';
+  }catch(_){
+   if(fallback){fallback.value=report;fallback.hidden=false;fallback.focus();fallback.select();}
+   if(status)status.textContent='自動コピーできませんでした。下のJSONを長押ししてコピーしてください。';
+  }
+ });
  const checkConnection=$('geminiMainCheck');
  if(checkConnection)checkConnection.addEventListener('click',async()=>{
   const access=$('geminiMainAccess').value.trim();
