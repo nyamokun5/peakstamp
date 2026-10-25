@@ -112,6 +112,31 @@ export function matchContext(utterances,time){
  return {label:clip(r.match_label||r.quote),teamA:clip(r.team_a),teamB:clip(r.team_b),
   time:Number(r.time_seconds)};
 }
+/**
+ * Prefill only explicitly detected names/matchup facts. Keep user edits,
+ * manually added goals, and already confirmed goals authoritative.
+ */
+export function prefillDetectedGoalFields(goal,event,utterances=[]){
+ if(!goal||!event||goal.status!=='draft'||goal.origin==='manual')return goal;
+ const edited=new Set(Array.isArray(goal.userEditedGoalFields)?goal.userEditedGoalFields:[]);
+ const fill=(field,value)=>{
+  const proposed=clip(value);
+  if(proposed&&!edited.has(field)&&!clip(goal[field]))goal[field]=proposed;
+ };
+ const context=matchContext(utterances,event.time_seconds);
+ fill('scorer',event.scorer);
+ if(!edited.has('assistStatus')&&goal.assistStatus!=='none'){
+  fill('assist',event.assist);
+  if(clip(goal.assist)&&goal.assistStatus!=='named')goal.assistStatus='named';
+  else if(goal.assistStatus==='unknown'&&!clip(goal.assist)&&
+   /アシストなし|アシスト無し|no assist/i.test(String(event.quote||'')))
+   goal.assistStatus='none';
+ }
+ fill('matchLabel',event.match_label||context?.label);
+ fill('teamA',event.team_a||context?.teamA);
+ fill('teamB',event.team_b||context?.teamB);
+ return goal;
+}
 export function createGoalDrafts(source,storage){
  const key=goalSourceKey(source);
  if(!key)return {items:[],transcript:null};
@@ -146,13 +171,9 @@ export function createGoalDrafts(source,storage){
      (!clip(r.scorer)||!clip(event.scorer)||
       clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase())));
   if(already){
-   // A prior Gemini candidate is enriched only if still a draft.
-   if(already.status==='draft'&&already.origin!=='manual'){
-    if(!already.scorer&&clip(event.scorer))already.scorer=clip(event.scorer);
-    if(!already.assist&&clip(event.assist)){
-     already.assist=clip(event.assist);already.assistStatus='named';
-    }
-   }
+   // Goal scenes may have been stored before Gemini learned the names.
+   // Add only newly detected details, never overwrite confirmed/manual edits.
+   prefillDetectedGoalFields(already,event,events);
    continue;
   }
   const match=matchContext(events,time);
@@ -169,7 +190,9 @@ export function createGoalDrafts(source,storage){
    quote:clip(event.quote,240),
    scorer:clip(event.scorer),assist:clip(event.assist),
    assistStatus:clip(event.assist)?'named':(/アシストなし|アシスト無し|no assist/i.test(String(event.quote||''))?'none':'unknown'),
-   matchLabel:match?.label||'',teamA:match?.teamA||'',teamB:match?.teamB||'',
+   matchLabel:clip(event.match_label||match?.label),
+   teamA:clip(event.team_a||match?.teamA),
+   teamB:clip(event.team_b||match?.teamB),
    matchSeq:'',status:'draft',confirmedAt:null,note:''});
  }
  // Keep existing commentary and manual goal decisions; never create duplicates.
