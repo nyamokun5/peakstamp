@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {assignMatchNumber,setMatchNumber,sourceDisplayName,matchStorageKey,validMatchNumber} from '../match-label.mjs';
 import {createGoalDrafts,saveGoalDrafts,goalSourceKey,confirmedGoalExport} from '../goal-stats.mjs';
+import {buildMultiClipPlan,sourceTimestampComments} from '../multi-plan.mjs';
 const make=(name='IMG_0287.MOV')=>({
  id:'video1',file:{name,size:45230011,lastModified:1792900000000},duration:420,
  objectUrl:'blob:original',candidates:[],bins:[{time:0,rms:.1}]
@@ -49,4 +50,16 @@ test('a single video match number pre-fills every goal but preserves historical 
  assert.equal(second[0].matchSeq,'4');
  assert.equal(second[1].matchSeq,'8');
  assert.deepEqual(confirmedGoalExport([src],storage).goals.map(g=>g.matchSeq),[4,8]);
+});
+
+test('chapters and timestamp comments say 第N試合, while actual file remains unchanged',()=>{
+ const src=make();src.matchNumber=7;src.candidates=[{
+  id:'v1',enabled:true,time:60,peakSeconds:64,manualEnd:70,zoom:1
+ }];
+ const plan=buildMultiClipPlan([src]);
+ assert.equal(plan.length,1);
+ assert.equal(plan[0].sourceName,'第7試合');
+ assert.equal(sourceTimestampComments([src])[0].name,'第7試合');
+ assert.match(sourceTimestampComments([src])[0].text,/第7試合/);
+ assert.equal(src.file.name,'IMG_0287.MOV');
 });
