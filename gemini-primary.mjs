@@ -44,7 +44,7 @@ function saveChunk(source,range,answer){
   const key=SEGMENT_CACHE_KEY+'::'+segmentCacheId(source);
   const cache=getSavedChunks(source);
   cache[range.startSeconds+':'+range.durationSeconds]={
-   startSeconds:range.startSeconds,events:answer.events,
+   startSeconds:range.startSeconds,events:answer.events,utterances:answer.utterances,
    model:answer?.meta?.model||'unknown'
   };
   localStorage.setItem(key,JSON.stringify(cache));
@@ -197,7 +197,7 @@ async function callApi(audio,duration,access,signal,format='m4a') {
  let result=null;
  try{result=await response.json();}catch(_){}
  if(!response.ok)throw Error(result?.error||('Geminiサーバーの応答エラー HTTP '+response.status));
- if(!result || !Array.isArray(result.events))
+ if(!result || !Array.isArray(result.events) || !Array.isArray(result.utterances))
   throw Error('Geminiからの候補データを読み取れませんでした。');
  return result;
 }
@@ -424,7 +424,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
        try{return await callApi(wav,range.durationSeconds,access,signal,'wav');}
        finally{apiWaitSum+=(performance.now()-started)/1000;}
       },
-      cached:range=>previous[range.startSeconds+':'+range.durationSeconds],
+      cached:range=>{const chunk=previous[range.startSeconds+':'+range.durationSeconds];return Array.isArray(chunk?.utterances)?chunk:null;},
       save:(range,response)=>{alive();saveChunk(source,range,response);},
       isCancelled:()=>signal.aborted||id!==generation,
       onFailure:()=>{if(id===generation)abortController?.abort();},
