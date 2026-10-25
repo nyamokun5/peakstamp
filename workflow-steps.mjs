@@ -52,7 +52,7 @@ export function initWorkflowSteps({document:doc=globalThis.document,onChange=()=
   if(ready&&!seenReview&&!busy&&current==='analysis'){
    seenReview=true;
    setStage('edit',{scroll:false});
-  }else if(ready)seenReview=true;
+  }else if(ready&&!busy)seenReview=true;
   if(!ready)seenReview=false;
   refresh();
  };
