@@ -20,13 +20,12 @@
       <h1>あの瞬間を、<br/><em>音で見つける。</em></h1>
       <p>試合動画を選ぶだけ。AIで見どころを探して、好きなシーンを1本に。</p>
     </section>
-    <nav id="journeyNav" class="journey-nav" aria-label="作成ステップ">
-      <button type="button" data-journey-step="0" class="current">1 <span>動画</span></button>
-      <span aria-hidden="true">›</span>
-      <button type="button" data-journey-step="1">2 <span>AI解析</span></button>
-      <span aria-hidden="true">›</span>
-      <button type="button" data-journey-step="2">3 <span>編集・保存</span></button>
+    <nav id="journeyNav" class="journey-nav workflow-nav" aria-label="PeakStampの作業ステップ">
+      <button type="button" data-journey-step="0" class="current" aria-current="step">1 <span>解析</span></button>
+      <button type="button" data-journey-step="1" disabled>2 <span>編集</span></button>
+      <button type="button" data-journey-step="2" disabled>3 <span>書き出し</span></button>
     </nav>
+    <p id="workflowStageNotice" class="workflow-stage-notice" role="status" aria-live="polite">動画を選び、AIで見どころを検出します。</p>
     <section class="panel choose-panel" id="choosePanel">
       <div class="panel-label"><span class="number">01</span><h2>動画を選ぶ</h2></div>
       <label class="upload" id="uploadZone">
@@ -103,6 +102,10 @@
       </div>
       <button id="geminiMainCancel" class="cancel-button" type="button" hidden>解析を中止</button>
       <p id="geminiMainStatus" role="status" aria-live="polite" class="gemini-main-status"></p>
+      <details id="geminiAdvancedTools" class="workflow-advanced-settings">
+        <summary>詳細設定・再解析・接続診断</summary>
+        <p class="fine-print">通常の解析には不要です。再解析・接続テスト・診断ログ・予備の音量解析を利用する場合だけ開いてください。</p>
+      </details>
       <div class="gemini-diagnostic-export">
         <button id="geminiMainResultCopy" class="whisper-run" type="button" hidden>診断用の解析結果をコピー</button>
         <p id="geminiMainCopyStatus" class="fine-print" role="status" aria-live="polite"></p>
@@ -119,8 +122,20 @@
          experimental tools and all regular highlight editing. -->
     <section class="panel goal-stats-panel" id="goalStatsPanel" aria-label="PeakStamp内でゴールとアシストを確定" hidden>
       <div class="panel-label"><span class="number">⚽</span><h2>ゴールシーンを先に確認</h2></div>
-      <p class="fine-print">最初のゴールを表示します。実況があるゴール動画の初期範囲は実況の5秒前〜2秒後（計7秒）です。<strong>▶ リプレイで確認 → 得点・アシストを確認 → 動画をキープ／不採用で次のゴールへ。</strong> 切り抜き・2本指での画角調整もここでできます。得点情報の確定は別操作です。</p>
+      <p class="fine-print">動画を再生して範囲・ズームを調整し、キープ／不採用を選択。得点者・アシストは「得点情報の確認」から編集できます。キープ後は従来どおり次の未確認ゴールに進みます。</p>
       <p id="goalStatsSummary" class="goal-review-summary" aria-live="polite"></p>
+      <section class="goal-review-library" aria-label="すべてのゴールシーン">
+        <div class="goal-review-library-head"><strong>⚽ ゴール一覧・再編集</strong><small>キープ後もここから戻れます</small></div>
+        <div class="goal-review-library-tabs" role="group" aria-label="ゴール一覧の絞り込み">
+          <button id="goalQueuePending" type="button" data-goal-filter="pending" aria-pressed="false">未確認 <span id="goalQueuePendingCount">0</span></button>
+          <button id="goalQueueKept" type="button" data-goal-filter="kept" aria-pressed="false">キープ済み <span id="goalQueueKeptCount">0</span></button>
+          <button id="goalQueueAll" type="button" data-goal-filter="all" class="is-active" aria-pressed="true">すべて <span id="goalQueueAllCount">0</span></button>
+        </div>
+        <div class="goal-review-queue-fold">
+          <div id="goalStatsList" class="goal-review-list"></div>
+          <p id="goalQueueEmpty" class="goal-review-library-empty" hidden></p>
+        </div>
+      </section>
       <div id="goalStatsStep" class="goal-review-step" aria-live="polite"></div>
       <div id="goalStatsDone" class="goal-review-completed" hidden role="status">
         <strong id="goalStatsDoneText">すべてのゴール動画を判定しました。</strong>
@@ -136,10 +151,6 @@
         <p id="goalStatsVideoStatus" class="fine-print" role="status" aria-live="polite"></p>
       </div>
       <div id="goalStatsEditor" class="goal-review-editor"></div>
-      <details class="goal-review-queue-fold">
-        <summary>ほかのゴール候補を見る・確認済みを再編集</summary>
-        <div id="goalStatsList" class="goal-review-list"></div>
-      </details>
       <div class="goal-review-manual-add">
         <div id="goalStatsManualWrap" hidden>
           <label for="goalStatsManualSource">手動追加先の動画</label>
@@ -164,6 +175,7 @@
         </div>
       </details>
       <p id="goalStatsStatus" role="status" aria-live="polite" class="gemini-main-status"></p>
+      <button id="workflowToExport" class="workflow-next-btn" type="button">書き出しへ進む →</button>
     </section>
 
     <details class="panel gemini-callout-panel" id="geminiCalloutPanel" hidden>
@@ -357,8 +369,13 @@
       </div>
     </section>
 
+    <details id="advancedTools" class="panel workflow-experiments">
+      <summary>詳細設定・実験ツール</summary>
+      <p class="fine-print">実況テスト、映像探索、旧式の解析などは必要なときだけ利用してください。通常のゴール／ハイライト編集では開く必要はありません。</p>
+    </details>
     <section class="panel montage-panel" id="montagePanel" hidden>
-      <div class="panel-label"><span class="number">04</span><h2>ハイライト動画を作成</h2></div>
+      <div class="panel-label"><span class="number">03</span><h2>ハイライト動画を書き出す</h2></div>
+      <button id="workflowBackToEdit" class="workflow-back-btn" type="button">← 編集に戻る</button>
       <p class="list-help">キープしたシーンをつなげて、1本の動画に。</p>
 
       <fieldset class="intro-presentation-picker">
@@ -511,6 +528,6 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=settingskeep1"></script>
+  <script type="module" src="app.mjs?v=workflowui1"></script>
 </body>
 </html>
