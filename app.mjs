@@ -72,6 +72,7 @@ const workflow=initWorkflowSteps({
   src.bins?.length||src.candidates?.length||
   createGoalDrafts(src,window.localStorage).items.length
  )),
+ hasExport:()=>state.sources.some(src=>src.candidates?.some(item=>item.enabled===true)),
  onChange:()=>{
   // Moving among steps must not delete any File/Blob URLs, edit ranges or AI
   // metadata. Pause only conflicting decoders.
