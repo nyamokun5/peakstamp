@@ -11,7 +11,7 @@ import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title62';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=peak52';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=matchui1';
 import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
 import { attachScenePinchEditor } from './scene-gesture.mjs?v=compact49';
