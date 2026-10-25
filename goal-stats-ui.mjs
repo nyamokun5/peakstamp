@@ -7,7 +7,7 @@ import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
  confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=unifiedga1';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
-import {createGoalPlaybackController} from './goal-playback.mjs?v=replay60';
+import {createGoalPlaybackController} from './goal-playback.mjs?v=highlightparity1';
 import {createGoalSceneControls} from './goal-scene-editor.mjs?v=unifiedga1';
 
 const $=id=>document.getElementById(id);
@@ -87,8 +87,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   if(!entry)return;
   displayedKey=entry.key;
   const {source,item}=entry;
-  // Safari suspends media loading while parent is display:none or hidden.
-  // Unhide first, then set src and start playing from this user interaction.
+  // Keep the editor controls visible. The MOV itself is opened lazily only
+  // when Replay is tapped, exactly like normal highlight cards.
   viewer.hidden=false;
   label.textContent=source.file.name+' · ゴール '+fmt(actualGoalTime(item))+
    '（'+(item.origin==='audio'?'実況 '+fmt(item.timeSeconds):item.origin==='gemini'?'Geminiの音声反応 '+fmt(item.timeSeconds):'手動追加')+'）';
@@ -380,9 +380,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     'ゴール候補がありません。統合Gemini解析を実行するか、手動で追加してください。'));
    viewer.hidden=true;displayedKey='';player.pause();
   }else if(!panel.hidden && active && displayedKey!==active.key){
-   // Opening the first candidate MUST NOT require tapping the queue.
-   // Pause at the initial scene frame: iPhone Safari allows a visible
-   // video preview without attempting gesture-restricted autoplay.
+   // Show metadata and Replay button immediately, but do NOT begin a
+   // heavyweight MOV seek before the first explicit user tap.
    seekTo(active,{autoplay:false});
   }
   // One player/decoder is mounted for all candidates. Rerendering fields
@@ -442,8 +441,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   hadGoalCandidates=nowHasGoals;
   render();
   if(justDetected&&!panel.hidden){
-   // The callout analysis tool lives BELOW goal review. Bring the actual
-   // first visible player into view when new results first become available.
+   // The callout analysis tool lives BELOW goal review. Show the first
+   // goal's Replay button; loading the MOV is deferred until it is tapped.
    const go=()=>panel.scrollIntoView({behavior:'smooth',block:'start'});
    if(typeof requestAnimationFrame==='function')requestAnimationFrame(go);
    else go();
