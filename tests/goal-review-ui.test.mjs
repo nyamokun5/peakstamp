@@ -690,7 +690,7 @@ test('existing generic goal review displays names and teams recognized by Gemini
   const field=label=>fields.find(row=>row.children[0]?.textContent===label);
   assert.equal(field('得点者（ゴール）')?.children[1]?.value,'若さん');
   assert.equal(field('アシスト者')?.children[1]?.value,'野田さん');
-  assert.equal(field('対戦名（任意）')?.children[1]?.value,'チーム3対4');
+  assert.equal(field('対戦カード')?.children[1]?.value,'チーム3対4');
   assert.equal(dom.goalStatsList.children.length,1);
  }finally{await restore()}
 });
