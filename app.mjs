@@ -5,7 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=guided1';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=guided1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=reviewagain1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
@@ -23,7 +23,7 @@ import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-pl
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
 import {initWorkflowSteps} from './workflow-steps.mjs?v=workflowui1';
-import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=guided1';
+import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=reviewagain1';
 import {assignMatchNumber,setMatchNumber,sourceDisplayName,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from './match-label.mjs?v=matchsort1';
 
 const $ = id => document.getElementById(id);
