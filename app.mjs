@@ -3,14 +3,14 @@ import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experime
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=matchui1';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=guided1';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=matchui1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=guided1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title62';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=guided1';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=matchui1';
 import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
@@ -1525,7 +1525,10 @@ $('exportEditData').addEventListener('click',()=>{
   } catch(e) { status.textContent='書き出し失敗：'+(e?.message||String(e)); }
 });
 
-initMontageEditor(state);
+initMontageEditor(state,{
+ onComplete:()=>coaching.exportFinished(),
+ onFailure:message=>coaching.exportFailed(message)
+});
 initWhisperExperiment(state);
 initAIReview(state);
 initVideoExplore(state);
