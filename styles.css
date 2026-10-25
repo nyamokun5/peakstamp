@@ -1500,3 +1500,119 @@ body:has(#undoReview:not([hidden])) .page{
  .settings-inline-head strong{font-size:12px}
  .settings-inline-close{font-size:12px}
 }
+
+/* PeakStamp workflow UI v1. Hide stage sections without unmounting players,
+   keeping the original JS File/Blob URL and scene edits in memory. */
+body[data-ps-stage="analysis"] #goalStatsPanel,
+body[data-ps-stage="analysis"] #resultsPanel,
+body[data-ps-stage="analysis"] #montagePanel,
+body[data-ps-stage="analysis"] #advancedTools,
+body[data-ps-stage="edit"] #choosePanel,
+body[data-ps-stage="edit"] #geminiPrimaryPanel,
+body[data-ps-stage="edit"] #montagePanel,
+body[data-ps-stage="export"] #choosePanel,
+body[data-ps-stage="export"] #geminiPrimaryPanel,
+body[data-ps-stage="export"] #goalStatsPanel,
+body[data-ps-stage="export"] #resultsPanel,
+body[data-ps-stage="export"] #advancedTools{display:none!important}
+.workflow-nav{
+ position:sticky;top:0;z-index:60;
+ margin:0 0 5px;padding:5px;
+ background:#102c3a;border:1px solid #487978;
+ box-shadow:0 4px 16px rgba(0,0,0,.32);
+}
+.workflow-nav button{min-height:43px;font-size:13px;font-weight:850}
+.workflow-nav button.current{background:#26765f;color:#eafff2;border:1px solid #5bcaa7}
+.workflow-nav button:disabled{opacity:.45;cursor:not-allowed}
+.workflow-stage-notice{
+ color:#bedbdc;margin:4px 3px 14px;
+ padding:4px 5px;font-size:12px;line-height:1.5;
+}
+.workflow-next-btn,.workflow-back-btn{
+ min-height:46px;width:100%;box-sizing:border-box;
+ padding:11px;border-radius:10px;font-size:14px;font-weight:850;
+ border:1px solid #6bc9ad;background:#1f5e50;color:#edfff5;
+ margin:12px 0;
+}
+.workflow-back-btn{
+ border-color:#568c9a;background:#183c4a;color:#dcf6fa;
+ text-align:left;min-height:42px;
+}
+.workflow-advanced-settings,.workflow-experiments{
+ border:1px solid #3c6572;border-radius:11px;
+ margin:14px 0 6px;padding:11px 12px;background:#102a38;
+}
+.workflow-advanced-settings>summary,
+.workflow-experiments>summary{
+ font-weight:850;color:#d4f3f0;cursor:pointer;
+ padding:5px 3px;font-size:13px;
+}
+.workflow-advanced-settings>*:not(summary),
+.workflow-experiments>*:not(summary){margin-top:12px}
+.workflow-advanced-settings .legacy-audio-details{padding:10px;border-top:1px solid #365c68}
+.workflow-experiments .extra-analysis-tools{margin:10px 0;padding:8px}
+.workflow-experiments .gemini-callout-panel{margin:10px 0}
+.goal-review-library{
+ margin:12px 0 14px;padding:11px 10px;
+ border:1px solid #3e877b;border-radius:12px;
+ background:#0d2937;
+}
+.goal-review-library-head{
+ display:flex;justify-content:space-between;align-items:center;
+ flex-wrap:wrap;gap:4px 8px;margin-bottom:9px;
+}
+.goal-review-library-head strong{font-size:14px;color:#e2fff2}
+.goal-review-library-head small{font-size:11px;color:#b0cdd2}
+.goal-review-library-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.goal-review-library-tabs button{
+ min-width:0;min-height:42px;white-space:normal;
+ padding:8px 3px;color:#cde9e9;font-size:12px;font-weight:800;
+ background:#1a4350;border:1px solid #426e78;border-radius:8px;
+}
+.goal-review-library-tabs button.is-active{
+ background:#206b57;border-color:#6de0b0;color:#fff;
+ box-shadow:inset 0 -2px 0 #83e5be;
+}
+.goal-review-library-tabs button span{
+ display:inline-block;min-width:1.2em;padding:1px 3px;
+ font-variant-numeric:tabular-nums;font-weight:900;
+}
+.goal-review-library .goal-review-queue-fold{
+ border-top:0;padding-top:2px;margin:0;
+}
+.goal-review-library #goalStatsList{
+ max-height:clamp(116px,29dvh,230px);overflow-y:auto;
+ overscroll-behavior:contain;padding:2px 3px;
+ scroll-padding-top:7px;
+}
+.goal-review-library .goal-queue-row{
+ min-height:61px;padding:9px 10px;
+}
+.goal-review-library-empty{
+ color:#bcd7da;text-align:center;font-size:12px;margin:15px 2px 7px;
+}
+.goal-review-editor .goal-score-details{
+ border:1px solid #426a76;border-radius:10px;
+ background:#102f3b;padding:9px 11px;margin:11px 0 2px;
+}
+.goal-review-editor .goal-score-details>summary{
+ font-size:13px;line-height:1.6;cursor:pointer;
+ color:#e6f9ed;font-weight:850;
+ overflow-wrap:anywhere;padding:5px 1px;
+}
+.goal-review-editor .goal-score-details[open]>summary{
+ padding-bottom:9px;border-bottom:1px solid #406773;
+}
+.goal-review-editor .goal-score-details .goal-review-fields{margin-top:12px}
+.goal-review-editor .goal-score-details .goal-review-actions{
+ margin:12px 0 4px;
+}
+.goal-review-editor .goal-review-video-status{margin:7px 0 6px}
+.goal-review-editor .goal-review-video-actions{margin-bottom:5px}
+@media(max-width:480px){
+ .workflow-nav{top:0;border-radius:9px}
+ .goal-review-library{padding:9px 7px}
+ .goal-review-library-tabs button{font-size:11px}
+ .goal-review-library #goalStatsList{max-height:24dvh}
+ .goal-review-editor .goal-score-details>summary{font-size:12px}
+}
