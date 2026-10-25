@@ -1675,6 +1675,31 @@ body{background:#0b1828}
 .source-original-file{font-size:10px;opacity:.78}
 .source-original-file summary{cursor:pointer;color:#b4cad4}
 .source-original-file small{display:block;overflow-wrap:anywhere;padding-top:5px;font-size:10px}
+.source-original-filename{
+ display:block!important;color:#e1edf5!important;font-size:12px!important;
+ overflow-wrap:anywhere;word-break:break-word;line-height:1.35;
+}
+.source-state{color:#97b3c5!important;font-size:10px!important}
+.source-sort-btn{
+ border:1px solid #648d9d;border-radius:8px;background:#1b4455;
+ color:#e1f4f6;min-height:37px;padding:6px 9px;
+ font-size:11px;font-weight:700;text-align:center;
+}
+@media(max-width:480px){
+ .source-board-header{gap:5px}
+ .source-board-header strong{font-size:12px}
+ .source-sort-btn{font-size:10px;min-height:37px;max-width:132px}
+ .source-item{
+  grid-template-columns:24px minmax(0,1fr) 70px;
+  grid-template-areas:"ordinal details match" ". buttons buttons";
+  column-gap:9px;row-gap:7px;align-items:center;
+ }
+ .source-item .source-order{grid-area:ordinal}
+ .source-item .source-info{grid-area:details}
+ .source-item .source-match-editor{grid-area:match}
+ .source-item .source-controls{grid-area:buttons;justify-self:end}
+ .source-original-filename{font-size:12px!important}
+}
 .source-controls{gap:2px}
 .gemini-brief{font-size:12px;line-height:1.5}
 .goal-review-library #goalStatsList{max-height:min(25dvh,185px)}
