@@ -28,7 +28,7 @@ test('invalid match numbers rejected and plain filename stays hidden in common d
   assert.equal(setMatchNumber(src,val,storage),false);
  }
  assert.equal(src.matchNumber,3);
- assert.equal(sourceDisplayName(make(),'5'),'動画6'); // no assigned number
+ assert.equal(sourceDisplayName(make(),5),'動画6'); // no assigned number
 });
 test('a single video match number pre-fills every goal but preserves historical manual match values',()=>{
  const storage=store(),src=make();
