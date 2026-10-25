@@ -1716,3 +1716,74 @@ body{background:#0b1828}
  .source-match-number{font-size:16px;padding:7px 3px}
  .source-match-title{font-size:14px!important}
 }
+
+/* Guided post-analysis, goal, highlight and export next actions. */
+.journey-dialog[hidden]{display:none!important}
+.journey-dialog{
+ position:fixed;inset:0;z-index:2100;
+ display:flex;align-items:center;justify-content:center;
+ padding:calc(18px + env(safe-area-inset-top,0px)) 15px
+         calc(18px + env(safe-area-inset-bottom,0px));
+ background:rgba(2,12,25,.84);
+}
+.journey-dialog-card{
+ background:#152d40;color:#f2f9fc;
+ border:1px solid #6b9b9d;border-radius:17px;
+ box-shadow:0 16px 52px #0008;
+ width:min(100%,460px);max-height:88dvh;
+ overflow:auto;padding:21px 17px 19px;position:relative;
+}
+.journey-dialog-card h2{
+ font-size:19px;line-height:1.4;padding-right:32px;margin:7px 0 14px;
+}
+#journeyDialogBody{
+ white-space:pre-line;font-size:14px;line-height:1.8;color:#e1edf4;
+ overflow-wrap:anywhere;margin:0 0 21px;
+}
+.journey-dialog-dismiss{
+ position:absolute;right:9px;top:8px;width:36px;height:36px;
+ border-radius:50%;border:1px solid #647e91;
+ color:#eaf4fb;background:#294456;font-size:24px;
+}
+.journey-dialog-actions{display:grid;gap:9px}
+.journey-dialog-actions button{width:100%;min-height:48px;font-weight:800;margin:0}
+.journey-dialog-actions .whisper-run{
+ background:#28485a;color:#eff9fa;border:1px solid #698a99;
+}
+.goal-first-guide{
+ border:1px solid #619c9b;border-radius:12px;
+ padding:10px 12px;margin:0 0 13px;
+ background:#173646;color:#e2f4f2;
+}
+.goal-first-guide summary{font-size:13px;cursor:pointer;font-weight:850}
+.goal-first-guide ol{padding-left:22px;margin:12px 0 5px;line-height:1.75;font-size:12px}
+.goal-first-guide li+li{margin-top:7px}
+.goal-review-editor .goal-review-actions{margin:12px 0 8px}
+.goal-review-editor .goal-review-actions .goal-review-confirm{
+ min-height:45px;border:2px solid #80dab8;
+}
+.goal-review-editor .goal-review-video-actions{margin:8px 0 6px}
+.missed-goal-add{
+ display:block;width:100%;border-radius:8px;
+ background:#1c3e4f;color:#f0fbff;border:1px solid #598b9a;
+ font-size:12px;font-weight:800;padding:9px;margin:8px 0;
+}
+.export-steps{
+ background:#153847;border:1px solid #5c9898;
+ border-radius:13px;padding:13px;margin:6px 0 14px;
+ color:#e6f9f9;
+}
+.export-steps strong{display:block;font-size:15px;margin-bottom:8px}
+.export-steps p{font-size:13px;line-height:1.55;margin:8px 0}
+.hs-json-reminder{
+ padding:13px;background:#173d43;border:1px solid #83b2ac;
+ border-radius:12px;margin:16px 0;
+}
+.hs-json-reminder strong{display:block;color:#e4fff2;font-size:15px}
+.hs-json-reminder p{font-size:12px;line-height:1.7;color:#dfefed}
+#hsJsonReminderStatus{font-size:12px}
+@media(max-width:480px){
+ .journey-dialog-card{padding:18px 13px 15px}
+ .journey-dialog-card h2{font-size:18px}
+ #journeyDialogBody{font-size:13px;line-height:1.7}
+}
