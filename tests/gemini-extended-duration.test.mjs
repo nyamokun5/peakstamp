@@ -52,12 +52,12 @@ test('15-minute segmented Gemini events preserve timestamps after the 10-minute 
  assert.ok(first.reaction_time_seconds>600,'must preserve event after 10 minutes');
  assert.ok(first.reaction_time_seconds<900);
 });
-test('main app actually activates bumped modules for 15-minute analysis on Safari',()=>{
+test('main app activates current modules and avoids stale Safari caches',()=>{
  const main=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
  const primary=readFileSync(new URL('../gemini-primary.mjs',import.meta.url),'utf8');
- assert.match(main,/app\.mjs\?v=long30/);
- assert.match(app,/gemini-primary\.mjs\?v=long30/);
+ assert.match(main,/app\.mjs\?v=diagnostic1/);
+ assert.match(app,/gemini-primary\.mjs\?v=diagnostic1/);
  assert.match(primary,/gemini-wav-stream\.mjs\?v=long30/);
  assert.match(primary,/gemini-fast-waveform\.mjs\?v=long30/);
  assert.match(primary,/gemini-waveform-recovery\.mjs\?v=long30/);
