@@ -147,3 +147,20 @@ test('legacy separate explicit goal-call coexists without duplication',()=>{
  assert.equal(goals[0].scorer,'Aさん');
  assert.equal(goals[0].assist,'Bさん');
 });
+
+test('explicit アシストなし is distinct from an unintelligible assist',()=>{
+ const c=store(),v=source('none-assist.mov');
+ put(c,v,{events:[],utterances:[{
+  time_seconds:170,kind:'goal_call',
+  quote:'山田さんゴール、アシストなし',scorer:'山田さん',assist:null,
+  confidence:'high'}]});
+ const goal=createGoalDrafts(v,c).items[0];
+ assert.equal(goal.scorer,'山田さん');
+ assert.equal(goal.assistStatus,'none');
+ assert.equal(goal.assist,'');
+});
+test('legacy highlight-only segments do not claim integrated goal-call coverage',()=>{
+ const joined=mergeWavSegmentEvents([{startSeconds:0,events:[]}],70);
+ assert.equal(joined.meta.unifiedGoalCalls,false);
+ assert.equal(joined.utterances.length,0);
+});
