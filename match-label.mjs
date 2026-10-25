@@ -29,3 +29,28 @@ export function sourceDisplayName(source,index=null){
  if(index!==null&&Number.isFinite(index)&&index>=0)return '動画'+(index+1);
  return '動画';
 }
+
+/**
+ * Natural numeric filename ordering, never the browser's selected-file order.
+ * IMG_9.MOV comes before IMG_10.MOV. Sorting references (not File objects)
+ * leaves all source IDs, object URLs, Gemini caches and goal drafts intact.
+ */
+const filenameCollator=new Intl.Collator('en',{numeric:true,sensitivity:'base'});
+const compareNames=(a,b)=>filenameCollator.compare(String(a||''),String(b||''));
+export function sortFilesByFilename(files){
+ return [...(files||[])].sort((a,b)=>compareNames(a?.name,b?.name));
+}
+export function sortSourcesByFilename(sources){
+ sources.sort((a,b)=>compareNames(a?.file?.name,b?.file?.name));
+ return sources;
+}
+/** Used only for an explicit user request to restore automatic 1,2,3... */
+export function resetMatchNumbersToFilenameOrder(sources,storage=null){
+ sortSourcesByFilename(sources);
+ for(const [index,source] of sources.entries()){
+  const key=matchStorageKey(source);
+  try{if(key)storage?.removeItem?.(key)}catch{}
+  source.matchNumber=index+1;
+ }
+ return sources;
+}
