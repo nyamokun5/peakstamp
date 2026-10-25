@@ -18,7 +18,7 @@ export function actualGoalTime(item){
 }
 const TRANSCRIPT_PREFIXES=['peakstamp_callout_pilot_v2:','peakstamp_callout_pilot_v1:'];
 const GEMINI_RESULT_CACHE_KEY='peakstamp_gemini_primary_json_v1';
-const GEMINI_GOAL_CONFIDENCES=new Set(['high','medium']);
+const GEMINI_GOAL_CONFIDENCES=new Set(['high','medium','low']);
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const clip=(value,max=120)=>typeof value==='string'?value.trim().slice(0,max):'';
 const validTime=x=>Number.isFinite(Number(x))&&x!==''&&x!==null&&x!==undefined&&Number(x)>=0;
