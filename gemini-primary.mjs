@@ -2,7 +2,7 @@
  * Primary Gemini-only workflow: local MOV -> streamed PCM WAV -> authenticated API
  * -> on-device scene review. Never calls Whisper or acoustic peak detection.
  */
-import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=long30';
+import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=unifiedga1';
 import { runGeminiFastPipeline } from './gemini-fast-pipeline.mjs?v=1';
 import { runGeminiVideoBatch } from './gemini-video-batch.mjs?v=1';
 import { createGeminiEta, formatGeminiEta } from './gemini-eta.mjs?v=1';
@@ -11,8 +11,8 @@ import {usableWaveform,restoreGeminiReviewWaveform,isUnavailableFileError} from 
 import { createGeminiProgressUI } from './gemini-progress-ui.mjs?v=1';
 import { updateGeminiScreenNotice } from './gemini-screen-notice.mjs?v=1';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
-import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=long30';
-import { createGoalDrafts } from './goal-stats.mjs?v=40';
+import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=unifiedga1';
+import { createGoalDrafts } from './goal-stats.mjs?v=unifiedga1';
 import { buildAnalysisDiagnostic } from './gemini-diagnostics.mjs?v=1';
 
 // Verified owner project: Vercel production domain for nyamokun5/peakstamp.
@@ -44,7 +44,7 @@ function saveChunk(source,range,answer){
   const key=SEGMENT_CACHE_KEY+'::'+segmentCacheId(source);
   const cache=getSavedChunks(source);
   cache[range.startSeconds+':'+range.durationSeconds]={
-   startSeconds:range.startSeconds,events:answer.events,
+   startSeconds:range.startSeconds,events:answer.events,utterances:answer.utterances,unifiedGoalCalls:answer?.meta?.unifiedGoalCalls===true,
    model:answer?.meta?.model||'unknown'
   };
   localStorage.setItem(key,JSON.stringify(cache));
@@ -174,8 +174,11 @@ export function refreshGeminiPrimary(state) {
  $('geminiMainCancel').hidden=!processing;
  const sourceHelp=$('geminiMainFileHelp');
  if(sourceHelp){
-  sourceHelp.textContent=source&&sources.length>1?'選択中：'+source.file.name:'';
-  sourceHelp.hidden=!source||sources.length<2;
+  const isLegacy=Boolean(cache&&(cache.meta?.unifiedGoalCalls!==true || !Array.isArray(cache.utterances)));
+  sourceHelp.textContent=isLegacy
+   ? 'この動画は旧方式の解析済みです。ゴール・アシストもまとめて検出するには「Geminiで再解析」が必要です（追加料金が発生する場合があります）。'
+   : source&&sources.length>1?'選択中：'+source.file.name:'';
+  sourceHelp.hidden=!isLegacy&&(!source||sources.length<2);
  }
  if(!API_ENDPOINT && !cache && !processing){
   status('現在はAPIサーバーのデプロイ権限とGemini APIキーの設定待ちです。手動解析は「旧Gemini手動比較」から継続できます。');
@@ -421,7 +424,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
        try{return await callApi(wav,range.durationSeconds,access,signal,'wav');}
        finally{apiWaitSum+=(performance.now()-started)/1000;}
       },
-      cached:range=>previous[range.startSeconds+':'+range.durationSeconds],
+      cached:range=>{const chunk=previous[range.startSeconds+':'+range.durationSeconds];return chunk?.unifiedGoalCalls===true&&Array.isArray(chunk.utterances)?chunk:null;},
       save:(range,response)=>{alive();saveChunk(source,range,response);},
       isCancelled:()=>signal.aborted||id!==generation,
       onFailure:()=>{if(id===generation)abortController?.abort();},

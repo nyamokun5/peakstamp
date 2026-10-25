@@ -56,9 +56,9 @@ test('main app activates current modules and avoids stale Safari caches',()=>{
  const main=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
  const primary=readFileSync(new URL('../gemini-primary.mjs',import.meta.url),'utf8');
- assert.match(main,/app\.mjs\?v=diagnostic1/);
- assert.match(app,/gemini-primary\.mjs\?v=diagnostic1/);
- assert.match(primary,/gemini-wav-stream\.mjs\?v=long30/);
+ assert.match(main,/app\.mjs\?v=unifiedga1/);
+ assert.match(app,/gemini-primary\.mjs\?v=unifiedga1/);
+ assert.match(primary,/gemini-wav-stream\.mjs\?v=unifiedga1/);
  assert.match(primary,/gemini-fast-waveform\.mjs\?v=long30/);
  assert.match(primary,/gemini-waveform-recovery\.mjs\?v=long30/);
 });

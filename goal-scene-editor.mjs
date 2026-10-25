@@ -3,8 +3,8 @@
  */
 import {clipMarkerPositions,timelineTimeAt,formatTimelineTime} from './editing-rules.mjs?v=peak52';
 import {attachScenePinchEditor} from './scene-gesture.mjs?v=compact49';
-import {actualGoalTime} from './goal-stats.mjs?v=40';
-import {goalSceneBounds,goalSceneZoom,setGoalSceneEdge,goalSceneReferenceTime} from './goal-scene-edit.mjs?v=commentary61';
+import {actualGoalTime} from './goal-stats.mjs?v=unifiedga1';
+import {goalSceneBounds,goalSceneZoom,setGoalSceneEdge,goalSceneReferenceTime} from './goal-scene-edit.mjs?v=unifiedga1';
 const make=(tag,cls,text)=>{
  const el=document.createElement(tag);if(cls)el.className=cls;
  if(text!==undefined)el.textContent=text;return el;

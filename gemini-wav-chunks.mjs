@@ -10,7 +10,7 @@ export const WAV_CHUNK_SECONDS=70;
 export const WAV_OVERLAP_SECONDS=5;
 // Per-file AI duration; 70s WAV chunks keep each request below the API body limit.
 export const MAX_GEMINI_DURATION_SECONDS=1800;
-export const WAV_SEGMENT_VERSION='pcm16-wav-direct-source-70s-5s-v2';
+export const WAV_SEGMENT_VERSION='pcm16-wav-direct-source-70s-5s-goalassist-v3';
 export function wavSegmentRanges(duration,{length=WAV_CHUNK_SECONDS,overlap=WAV_OVERLAP_SECONDS}={}){
  const total=Number(duration);
  if(!Number.isFinite(total)||total<=0||total>MAX_GEMINI_DURATION_SECONDS)
@@ -132,6 +132,49 @@ export function mergeWavSegmentEvents(responses,duration){
    }
   }else merged.push(ev);
  }
- return {duration_seconds:fullLength,events:merged,limitations:'Audio-only; cannot verify visual plays.',
-   meta:{model:'gemini-3.8-flash',api:'generateContent-wav',segments:(responses||[]).length}};
+ // The SAME Gemini response carries spoken goal/assist calls independently.
+ const speech=[];
+ for(const segment of responses||[]){
+  const start=Number(segment?.startSeconds);
+  if(!Number.isFinite(start)||start<0)continue;
+  for(const utterance of Array.isArray(segment.utterances)?segment.utterances:[]){
+   const local=Number(utterance?.time_seconds);
+   if(utterance?.time_seconds==null||!Number.isFinite(local)||local<0)continue;
+   const abs=start+local;
+   if(abs>fullLength+2||!['goal_call','match_start'].includes(utterance.kind))continue;
+   speech.push({...utterance,time_seconds:+Math.min(fullLength,abs).toFixed(1),
+    _segmentStart:start});
+  }
+ }
+ speech.sort((a,b)=>a.time_seconds-b.time_seconds);
+ const joined=[];
+ const confRank={high:3,medium:2,low:1};
+ for(const entry of speech){
+  const prev=[...joined].reverse().find(old=>{
+   const gap=entry.time_seconds-old.time_seconds;
+   if(gap>4||entry.kind!==old.kind)return false;
+   if(old.kind==='match_start')
+    return gap<=2&&(old.quote===entry.quote||old._segmentStart!==entry._segmentStart);
+   const differs=(k)=>old[k]&&entry[k]&&
+    String(old[k]).trim().toLowerCase()!==String(entry[k]).trim().toLowerCase();
+   if(differs('scorer')||differs('assist'))return false;
+   return old.quote===entry.quote||
+     (old._segmentStart!==entry._segmentStart&&gap<=4);
+  });
+  if(!prev){joined.push(entry);continue;}
+  for(const key of ['scorer','assist','match_label','team_a','team_b'])
+   if(!prev[key]&&entry[key])prev[key]=entry[key];
+  if((confRank[entry.confidence]||0)>(confRank[prev.confidence]||0))
+   prev.confidence=entry.confidence;
+  if(entry.quote&&!String(prev.quote||'').includes(entry.quote))
+   prev.quote=String(prev.quote||'')+' / '+entry.quote;
+ }
+ const utterances=joined.map(({_segmentStart,...u})=>u);
+ const unifiedGoalCalls=(responses||[]).length>0&&
+  (responses||[]).every(segment=>segment?.unifiedGoalCalls===true||segment?.meta?.unifiedGoalCalls===true);
+ return {duration_seconds:fullLength,events:merged,utterances,
+  limitations:'Audio-only; spoken calls and goal reactions require video verification.',
+  meta:{model:'gemini-3.8-flash',api:'generateContent-wav',
+   segments:(responses||[]).length,unifiedGoalCalls,
+   goalCallCount:utterances.filter(x=>x.kind==='goal_call').length}};
 }

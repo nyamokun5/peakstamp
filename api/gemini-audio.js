@@ -19,11 +19,12 @@ const equalSecret=(value,secret)=>{
  const a=Buffer.from(value,'utf8'),b=Buffer.from(secret,'utf8');
  return a.length===b.length&&timingSafeEqual(a,b);
 };
-function prompt(duration){
+export function prompt(duration){
  return [
   'You hear AUDIO ONLY recorded at a Japanese/English amateur football/futsal match.',
   'Audio recording length: '+Math.round(duration)+' seconds. Analyze the WHOLE recording.',
-  'Return a single JSON object listing up to 24 DISTINCT audible reactions associated with goals, shots, near misses, goalkeeper saves and good play.',
+  'Run ONE INTEGRATED AUDIO ANALYSIS returning both (A) all highlight reactions and (B) all spoken goal, assist and match-start calls. Keep both outputs independent.',
+  'Return up to 24 DISTINCT audible reactions associated with goals, shots, near misses, goalkeeper saves and good play.',
   'Listen for Japanese ナイシュー、ナイスシュート、惜しい、ゴール、ナイスキー、うまい、打て and English comments. Use language and nearby audio context, not loudness alone.',
   'Do not infer actual visual events as certainty: you CANNOT see the video. Do not invent words, timestamps, or goals.',
   'Use reaction onset seconds from recording start as reaction_time_seconds, not estimated kick time.',
@@ -34,11 +35,39 @@ function prompt(duration){
   'If nothing noteworthy is audible, events must be empty. No fabricated example events.',
   'The limitations field must state that audio reactions cannot verify the video plays.',
   'Return VALID JSON text only, not Markdown and not an explanation.',
-  'The top-level JSON keys MUST be exactly duration_seconds, events, limitations.',
-  'duration_seconds is a number. limitations is a string. events is an array.',
+  'Independently detect each audible goal/assist announcement, EVEN IF THE CROWD IS QUIET or the call occurs several seconds after the shot. Japanese patterns include 「〇〇さんゴール」「ゴール！〇〇さん」「〇〇さんが決めた」「得点は〇〇さん」「△△さんアシスト」「アシスト△△さん」「アシストなし」 and English equivalents.',
+  'In a second array called utterances return one goal_call item per distinct announced goal, merging associated scorer and assist statements about the same goal (up to 15 seconds apart). When only assist is intelligible, include a low-confidence goal_call with scorer null rather than deleting it.',
+  'Also collect clearly spoken match_start announcements of teams playing, when recognizable, but never confuse a score with a matchup.',
+  'Each utterance has time_seconds (local time in THIS CHUNK), kind (goal_call or match_start), quote (audible words verbatim), scorer (string or null), assist (string or null), match_label, team_a, team_b (strings or null), confidence (high/medium/low).',
+  'Treat 「ナイシュー」 and cheers alone as a highlight event, not an explicit goal call. Do not mistake a miss, prediction, joke or negation for a scored goal.',
+  'Never guess or fabricate names, goals or assists. Return null for uncertain names, do not create placeholder names. Low-confidence explicit goal/assist calls should remain for HUMAN VIDEO REVIEW.',
+  'Up to 24 highlights and 30 spoken calls independently per audio chunk. Do NOT require the goal to rank among highlight events to include its spoken call.',
+  'The top-level JSON keys MUST be exactly duration_seconds, events, utterances, limitations.',
+  'duration_seconds is a number. limitations is a string. events and utterances are arrays, each present even if empty.',
   'Each object in events MUST contain numeric reaction_time_seconds, string type, string confidence, string quote, string audible_clue, numeric suggested_clip_start_seconds and numeric suggested_clip_end_seconds.',
-  'If there are no valid scenes, return this structure: {"duration_seconds":'+Math.round(duration)+',"events":[],"limitations":"Audio-only; no visual verification."}.'
+  'If no highlights were audible use events: []; if no explicit speech was audible use utterances: []. NEVER omit either array.'
  ].join('\n');
+}
+/** Normalize goal/assist speech evidence from the same Gemini response. */
+export function normalizeUnifiedUtterances(rows,duration){
+ const seconds=Math.max(0,Number(duration)||0),items=[],seen=new Set();
+ if(!Array.isArray(rows))return items;
+ for(const row of rows.slice(0,60)){
+  const t=Number(row?.time_seconds),kind=row?.kind;
+  if(row?.time_seconds==null||!Number.isFinite(t)||t<0||t>seconds+1||
+     !['goal_call','match_start'].includes(kind))continue;
+  const quote=typeof row?.quote==='string'?row.quote.trim().slice(0,240):'';
+  if(!quote)continue;
+  const field=name=>typeof row?.[name]==='string'?(row[name].trim().slice(0,100)||null):null;
+  const item={time_seconds:round(Math.min(seconds,t)),kind,quote,
+   match_label:field('match_label'),team_a:field('team_a'),team_b:field('team_b'),
+   scorer:field('scorer'),assist:field('assist'),
+   confidence:['high','medium','low'].includes(row.confidence)?row.confidence:'low'};
+  const key=kind+'::'+item.time_seconds+'::'+quote;
+  if(seen.has(key))continue;
+  seen.add(key);items.push(item);
+ }
+ return items.sort((a,b)=>a.time_seconds-b.time_seconds);
 }
 export function calloutPrompt(duration){
  return [
@@ -334,6 +363,7 @@ export default async function handler(req,res){
    meta:{model:MODEL,api:result.api,mode:'callout-test'}});
  }
  if(!Array.isArray(parsed?.events))return reply(res,502,'Geminiの回答にevents配列がありません。');
+ if(!Array.isArray(parsed?.utterances))return reply(res,502,'統合解析のゴール・アシスト結果（utterances）がありません。保存せずに停止しました。');
  const validTypes=new Set(['goal_reaction','shot_reaction','save_reaction','excited_reaction','other','uncertain']);
  const clamp=n=>Math.max(0,Math.min(seconds,n));
  const events=[];
@@ -353,9 +383,9 @@ export default async function handler(req,res){
   });
  }
  return res.status(200).json({
-  duration_seconds:seconds,events,
+  duration_seconds:seconds,events,utterances:normalizeUnifiedUtterances(parsed.utterances,seconds),
   limitations:'Audio-only results are not evidence that these shots or goals occurred.',
-  meta:{model:MODEL,api:result.api,audioFormat:format,usedFallback:result.fallback,
+  meta:{model:MODEL,api:result.api,audioFormat:format,usedFallback:result.fallback,unifiedGoalCalls:true,
    inputTokens:result.api==='interactions'?(google?.usage?.total_input_tokens??null):
     (google?.usageMetadata?.promptTokenCount??null),
    outputTokens:result.api==='interactions'?(google?.usage?.total_output_tokens??null):
