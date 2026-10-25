@@ -2,7 +2,7 @@
 export const MATCH_NUMBER_PREFIX='peakstamp_match_number_v1:';
 export const validMatchNumber=value=>{
  const v=String(value??'').trim();
- return /^\\d{1,3}$/.test(v)&&Number(v)>=1&&Number(v)<=999;
+ return /^[0-9]{1,3}$/.test(v)&&Number(v)>=1&&Number(v)<=999;
 };
 export function matchStorageKey(source){
  const f=source?.file;
