@@ -661,3 +661,36 @@ test('previously kept goal + regular highlight: re-edit, Keep and Replay preserv
   assert.equal(restored.clipZoomY,crop.clipZoomY);
  }finally{await restore()}
 });
+
+test('existing generic goal review displays names and teams recognized by Gemini before user edits',async()=>{
+ const {dom,storage,one,restore}=setup();
+ try{
+  storage.values.delete('peakstamp_callout_pilot_v2:'+goalSourceKey(one)+'::whole');
+  storage.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({
+   [goalSourceKey(one)]:{duration_seconds:one.duration,events:[{
+    reaction_time_seconds:374.2,type:'goal_reaction',confidence:'high'
+   }],utterances:[
+    {kind:'match_start',time_seconds:3,quote:'チーム3と4',match_label:'チーム3対4',
+     team_a:'チーム3',team_b:'チーム4'},
+    {kind:'goal_call',time_seconds:379.2,quote:'若さんゴール、野田さんアシスト',
+     scorer:'若さん',assist:'野田さん',confidence:'medium'}
+   ]}
+  }));
+  initGoalStatsReview({sources:[one]});
+  const goals=createGoalDrafts(one,storage).items;
+  assert.equal(goals.length,1);
+  assert.equal(goals[0].scorer,'若さん');
+  assert.equal(goals[0].assist,'野田さん');
+  assert.equal(goals[0].assistStatus,'named');
+  assert.equal(goals[0].matchLabel,'チーム3対4');
+  assert.equal(goals[0].status,'draft');
+  const fields=[];
+  const walk=node=>{if(node.className==='goal-review-field')fields.push(node);for(const c of node.children)walk(c)};
+  walk(dom.goalStatsEditor);
+  const field=label=>fields.find(row=>row.children[0]?.textContent===label);
+  assert.equal(field('得点者（ゴール）')?.children[1]?.value,'若さん');
+  assert.equal(field('アシスト者')?.children[1]?.value,'野田さん');
+  assert.equal(field('対戦名（任意）')?.children[1]?.value,'チーム3対4');
+  assert.equal(dom.goalStatsList.children.length,1);
+ }finally{await restore()}
+});
