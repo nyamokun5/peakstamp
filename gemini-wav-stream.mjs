@@ -3,7 +3,7 @@
  * Avoids encoding a temporary mono AAC/M4A and Safari's decodeAudioData path.
  * The video is never uploaded; only each small WAV segment leaves the device.
  */
-import { WAV_SAMPLE_RATE, wavSegmentRanges } from './gemini-wav-chunks.mjs?v=long30';
+import { WAV_SAMPLE_RATE, wavSegmentRanges } from './gemini-wav-chunks.mjs?v=unifiedga1';
 
 const MEDIABUNNY_URL='https://cdn.jsdelivr.net/npm/mediabunny@1.61.3/dist/bundles/mediabunny.min.mjs';
 const MAX_WAV_BYTES=2_900_000;
