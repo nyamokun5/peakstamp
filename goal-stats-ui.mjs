@@ -198,7 +198,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    // Distinguish a completed one-goal queue from a broken auto-advance:
    // no new candidate exists until the user adds or detects another goal.
    render();panel.scrollIntoView({behavior:'smooth',block:'start'});
-   say('ゴール動画の確認が完了しました。');
+   say('ゴール動画は全件判定済みです。確認が完了しました。');
    if(wasUnjudged){
     const rows=queue();
     const unconfirmed=rows.filter(x=>x.item.status==='draft').length;
