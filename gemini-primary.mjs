@@ -202,7 +202,7 @@ async function callApi(audio,duration,access,signal,format='m4a') {
   throw Error('Geminiからの候補データを読み取れませんでした。');
  return result;
 }
-export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
+export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()=>{}}) {
  if(!$('geminiMainRun')||typeof decodeAudio!=='function'||typeof commitResults!=='function')return;
  const progressUI=createGeminiProgressUI();
  const eta=createGeminiEta();
@@ -512,9 +512,11 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
   if(previousBatch)previousBatch.hidden=true;
   abortController=new AbortController();
   setGeminiWorking(true);
+  let finished=false,failure='';
   try{
-   await analyzeOne({source,access,id,signal:abortController.signal,force});
+   finished=Boolean(await analyzeOne({source,access,id,signal:abortController.signal,force}));
   }catch(e){
+   failure=e?.message||String(e);
    if(id===generation){
     const unavailable=isUnavailableFileError(e);
     status(unavailable?
@@ -528,6 +530,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
    setGeminiWorking(false);
    abortController=null;
    eta.clear();
+   if(id===generation)onComplete({success:finished,error:failure,failures:finished?0:1});
   }
  };
  const runBatch=async()=>{
@@ -550,6 +553,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
   });
   setGeminiWorking(true);
   refreshBatchProgress({total:videos.length});
+  let outcome=null;
   try{
    const result=await runGeminiVideoBatch({
     videos,
@@ -575,6 +579,9 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
      if(progress.phase==='starting')status('解析を開始しています…');
     }
    });
+   outcome={success:result.success+result.skipped>0,
+    failures:result.failures.length,
+    error:result.failures.map(f=>f.name+'：'+f.error).join(' ／ ')};
    activeBatchStep=null;
    if(result.cancelled){
     status('一括解析を中止しました。'+result.processed+'/'+result.total+
@@ -590,12 +597,17 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
      $('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
     }
    }
+  }catch(e){
+   outcome={success:false,failures:videos.length,error:e?.message||String(e)};
+   status('解析失敗：'+outcome.error);
+   progressUI.fail('一括解析が完了しませんでした');
   }finally{
    activeBatchStep=null;
    setGeminiWorking(false);
    abortController=null;
    inBatch=false;
    eta.clear();
+   if(outcome)onComplete(outcome);
   }
  };
  $('geminiMainRun').addEventListener('click',()=>run(false));
