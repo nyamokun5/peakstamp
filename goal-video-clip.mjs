@@ -23,14 +23,23 @@ export function keepGoalClip(source,goal){
  const {start,end}=goalSceneBounds(goal,duration),crop=goalSceneZoom(goal);
  const match=matchGoalCandidate(source,goal);
  if(match){
-  const wasIndependentKeep=match.enabled===true&&match.goalVideoOwned!==true;
-  if(!wasIndependentKeep){
-   // The exact range/crop already selected above in the goal editor wins.
-   // Never make the user re-trim this scene in the regular review section.
-   match.time=start;match.manualEnd=end;match.peakSeconds=goalTime;
-   match.zoom=crop.zoom;match.zoomX=crop.zoomX;match.zoomY=crop.zoomY;
-   match.goalVideoOwned=true;
+  // An explicit Goal Keep means the Goal timeline IS the export timeline.
+  // Before, independently kept highlight proposals were linked to this goal
+  // but kept their old trim, silently ignoring the edited goal start/end.
+  // Preserve the prior highlight settings if Goal Reject is chosen later.
+  if(match.enabled===true&&match.goalVideoOwned!==true){
+   match.goalPriorHighlight={
+    time:match.time,manualEnd:match.manualEnd,peakSeconds:match.peakSeconds,
+    zoom:match.zoom,zoomX:match.zoomX,zoomY:match.zoomY,
+    enabled:match.enabled,rejected:match.rejected
+   };
   }
+  // Keep detector peak stable so a later Gemini rescan matches this same scene.
+  // Actual goal time remains in the goal record, not the highlight locator.
+  match.time=start;match.manualEnd=end;
+  if(!Number.isFinite(match.peakSeconds))match.peakSeconds=goalTime;
+  match.zoom=crop.zoom;match.zoomX=crop.zoomX;match.zoomY=crop.zoomY;
+  match.goalVideoOwned=true;
   match.enabled=true;match.rejected=false;match.goalRecordId=goal.id;
   return match;
  }
@@ -54,6 +63,14 @@ export function rejectGoalClip(source,goal){
  const match=matchGoalCandidate(source,goal);
  if(!match)return true; // No offline candidate yet; persisted goal decision wins later.
  if(match.enabled===true && match.goalVideoOwned!==true)return true;
+ if(match.goalRecordId===goal.id&&match.goalPriorHighlight){
+  // Reject only the goal video, not the pre-existing kept highlight.
+  Object.assign(match,match.goalPriorHighlight);
+  delete match.goalPriorHighlight;
+  delete match.goalRecordId;
+  delete match.goalVideoOwned;
+  return true;
+ }
  match.enabled=false;match.rejected=true;
  match.goalRecordId=goal.id;match.goalVideoOwned=true;
  return true;

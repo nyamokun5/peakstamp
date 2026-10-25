@@ -112,7 +112,7 @@ test('per-goal trim and pinch zoom are saved when adding the goal to MP4 highlig
  assert.equal(updated.zoom,1.4);
  assert.equal(source.candidates.length,1);
 });
-test('already-kept unrelated highlight does not have its trim overwritten by goal edit',()=>{
+test('explicit Goal Keep updates an independently selected highlight and Reject restores it',()=>{
  const source=src();
  const existing={id:'audio-scene',time:56,peakSeconds:60,manualEnd:73,
   enabled:true,zoom:1.5,zoomX:.3,zoomY:.5};
@@ -120,6 +120,11 @@ test('already-kept unrelated highlight does not have its trim overwritten by goa
  const goal={id:'g',origin:'manual',goalTimeSeconds:60,timeSeconds:60,
   clipStartSeconds:58,clipEndSeconds:62,clipZoom:2};
  assert.equal(keepGoalClip(source,goal),existing);
+ assert.equal(existing.time,58);
+ assert.equal(existing.manualEnd,62);
+ assert.equal(existing.zoom,2);
+ assert.equal(existing.goalPriorHighlight.time,56);
+ rejectGoalClip(source,goal);
  assert.equal(existing.time,56);
  assert.equal(existing.manualEnd,73);
  assert.equal(existing.zoom,1.5);

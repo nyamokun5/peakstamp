@@ -58,6 +58,10 @@ export function geminiEventsToCandidates(events,sourceId,duration,prior=[]){
      db:null,title:kind.title,geminiType:group.type,geminiConfidence:group.confidence,
      geminiQuote:quote,geminiReason:group.merged.map(e=>e.clue).filter(Boolean).join(' / ').slice(0,600),
      mergedReactions:group.merged.length,enabled:old?.enabled===true,rejected:old?.rejected===true,
+     // Reanalysis must not unlink the goal editor from the exported scene.
+     ...(old?.goalRecordId?{goalRecordId:old.goalRecordId}:{}),
+     ...(old?.goalVideoOwned===true?{goalVideoOwned:true}:{}),
+     ...(old?.goalPriorHighlight?{goalPriorHighlight:{...old.goalPriorHighlight}}:{}),
      zoom:old?.zoom??1,zoomX:old?.zoomX??.5,zoomY:old?.zoomY??.5
    };
  });
