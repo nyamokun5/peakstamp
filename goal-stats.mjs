@@ -157,7 +157,7 @@ export function createGoalDrafts(source,storage){
    goalTimeSeconds:estimateGoalTime(time),goalTimeVerified:false,goalTimeEdited:false,
    quote:clip(event.quote,240),
    scorer:clip(event.scorer),assist:clip(event.assist),
-   assistStatus:clip(event.assist)?'named':'unknown',
+   assistStatus:clip(event.assist)?'named':(/アシストなし|アシスト無し|no assist/i.test(String(event.quote||''))?'none':'unknown'),
    matchLabel:match?.label||'',teamA:match?.teamA||'',teamB:match?.teamB||'',
    matchSeq:'',status:'draft',confirmedAt:null,note:''});
  }
