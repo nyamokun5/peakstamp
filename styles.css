@@ -1616,3 +1616,20 @@ body[data-ps-stage="export"] #advancedTools{display:none!important}
  .goal-review-library #goalStatsList{max-height:24dvh}
  .goal-review-editor .goal-score-details>summary{font-size:12px}
 }
+
+.editor-quick-nav{display:none;position:sticky;top:55px;z-index:55;
+ grid-template-columns:1fr 1fr;gap:7px;
+ padding:7px;background:#0d2635;
+ border:1px solid #386672;border-radius:9px;
+ box-shadow:0 5px 13px rgba(0,0,0,.2);margin:2px 0 10px;
+}
+body[data-ps-stage="edit"] .editor-quick-nav{display:grid}
+.editor-quick-nav button{
+ border:1px solid #527f7f;border-radius:8px;
+ color:#e2fff4;background:#185344;font-weight:850;
+ font-size:12px;padding:10px 7px;min-height:40px;
+}
+.editor-quick-nav button:disabled{opacity:.4}
+body[data-ps-stage="analysis"] .editor-quick-nav,
+body[data-ps-stage="export"] .editor-quick-nav{display:none!important}
+#goalStatsPanel,#resultsPanel,#montagePanel{scroll-margin-top:114px}
