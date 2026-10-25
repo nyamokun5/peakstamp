@@ -171,7 +171,7 @@ export function mergeWavSegmentEvents(responses,duration){
  }
  const utterances=joined.map(({_segmentStart,...u})=>u);
  const unifiedGoalCalls=(responses||[]).length>0&&
-  (responses||[]).every(segment=>Array.isArray(segment?.utterances));
+  (responses||[]).every(segment=>segment?.unifiedGoalCalls===true||segment?.meta?.unifiedGoalCalls===true);
  return {duration_seconds:fullLength,events:merged,utterances,
   limitations:'Audio-only; spoken calls and goal reactions require video verification.',
   meta:{model:'gemini-3.8-flash',api:'generateContent-wav',
