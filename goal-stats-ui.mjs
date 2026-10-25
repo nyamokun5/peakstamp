@@ -71,7 +71,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const {source,item}=entry;
    scene.activate(source,item);
    const bounds=scene.clipBounds();
-   viewer.classList.add('goal-native-player');
+   viewer.classList?.add('goal-native-player');
    viewer.hidden=false;
    scene.showVideo(true);
    player.open({sourceKey:goalSourceKey(source),sourceUrl:source.objectUrl,
@@ -103,7 +103,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   // Keep the editor controls visible. The MOV itself is opened lazily only
   // when Replay is tapped, exactly like normal highlight cards.
   viewer.hidden=false;
-  viewer.classList.remove('goal-native-player');
+  viewer.classList?.remove('goal-native-player');
   scene.showVideo(autoplay);
   label.textContent=source.file.name+' · ゴール '+fmt(actualGoalTime(item))+
    '（'+(item.origin==='audio'?'実況 '+fmt(item.timeSeconds):item.origin==='gemini'?'Geminiの音声反応 '+fmt(item.timeSeconds):'手動追加')+'）';
