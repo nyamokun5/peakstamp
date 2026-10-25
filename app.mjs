@@ -5,7 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=goalprefill1';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goalprefill1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=workflowui1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=goalprefill1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=goaltrim1';
@@ -22,6 +22,7 @@ import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
 import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=autoplay51';
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
+import {initWorkflowSteps} from './workflow-steps.mjs?v=workflowui1';
 
 const $ = id => document.getElementById(id);
 // Keep one video decoder across scene cards, independent of Gemini/candidate data.
@@ -49,6 +50,36 @@ const state = {
   sensitivity: 'normal', leadSeconds: 4, maxResults: 8,
   working: false, cancelled: false, exporting: false, geminiProcessing: false
 };
+// Keep ALL optional functions mounted and their listeners intact. Only move
+// panels into disclosure containers before the modules initialize.
+const geminiExtras=$('geminiAdvancedTools');
+for(const node of [
+  document.querySelector('#geminiPrimaryPanel .gemini-diagnostics'),
+  $('geminiMainForce'),
+  document.querySelector('#geminiPrimaryPanel .gemini-diagnostic-export'),
+  ...document.querySelectorAll('#geminiPrimaryPanel .gemini-diagnostics'),
+  document.querySelector('.legacy-audio-details')
+]){
+ if(node && !geminiExtras.contains(node))geminiExtras.append(node);
+}
+const advancedTools=$('advancedTools');
+for(const node of [$('geminiCalloutPanel'),document.querySelector('.extra-analysis-tools')]){
+ if(node)advancedTools.append(node);
+}
+const workflow=initWorkflowSteps({
+ hasMedia:()=>state.sources.length>0,
+ hasReview:()=>state.sources.some(src=>Boolean(
+  src.bins?.length||src.candidates?.length||
+  createGoalDrafts(src,window.localStorage).items.length
+ )),
+ hasExport:()=>state.sources.some(src=>src.candidates?.some(item=>item.enabled===true)),
+ onChange:()=>{
+  // Moving among steps must not delete any File/Blob URLs, edit ranges or AI
+  // metadata. Pause only conflicting decoders.
+  closeInlinePreview();
+  sceneReplayMedia.dispose();
+ }
+});
 const guide=initFirstRunGuide({hasPriorAnalysis:()=>{
   try {return Object.keys(JSON.parse(localStorage.getItem('peakstamp_gemini_primary_json_v1')||'{}')).length>0;}
   catch{return false;}
@@ -154,6 +185,7 @@ function syncSources({skipGoalReviewRefresh=false}={}) {
   if (state.bins) drawResults();
   else updateMontageEditor(state);
   renderSourceList();
+  workflow.autoAdvance({busy:state.geminiProcessing||state.working||state.exporting});
   guide.update({hasVideo:state.sources.length>0,hasResults:!!state.bins});
 }
 function renderSourceList() {
@@ -1336,6 +1368,7 @@ $('copyButton').addEventListener('click', async () => {
 
 window.addEventListener('gemini-processing-state',()=>{
   const locked=state.geminiProcessing||state.working||state.exporting;
+  workflow.autoAdvance({busy:locked});
   $('fileInput').disabled=locked;
   $('changeFile').disabled=locked;
   $('addFiles').disabled=locked;

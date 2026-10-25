@@ -10,7 +10,9 @@ const ids=[
  'goalStatsDone','goalStatsDoneText','goalStatsDoneToRegular','goalStatsDoneAdd','resultsPanel','standardReviewArea',
  'goalStatsPreview','goalStatsPlayingLabel','goalStatsViewer','goalStatsVideoStatus',
  'goalStatsAdd','goalStatsManualSource','goalStatsManualWrap','goalStatsExport',
- 'goalStatsCopy','goalStatsShow','goalStatsJson','goalStatsJsonArea'
+ 'goalStatsCopy','goalStatsShow','goalStatsJson','goalStatsJsonArea',
+ 'goalQueuePending','goalQueueKept','goalQueueAll','goalQueueEmpty',
+ 'goalQueuePendingCount','goalQueueKeptCount','goalQueueAllCount'
 ];
 const settleMedia=async()=>{for(let i=0;i<10;i++)await Promise.resolve()};
 function setup(){
@@ -22,6 +24,15 @@ function setup(){
    this.readyState=0;this._currentTime=0;this.paused=true;
    this.seeking=false;
    this.style={};this.videoWidth=1920;this.videoHeight=1080;
+   this.classList={
+    toggle:(value,on)=>{
+     const classes=new Set(String(this.className).split(/\s+/).filter(Boolean));
+     if(on)classes.add(value);else classes.delete(value);
+     this.className=[...classes].join(' ');
+    },
+    add:value=>{this.className=[...new Set([...String(this.className).split(/\s+/).filter(Boolean),value])].join(' ')},
+    remove:value=>{this.className=String(this.className).split(/\s+/).filter(x=>x&&x!==value).join(' ')}
+   };
   }
   append(...items){this.children.push(...items)}
   replaceChildren(...items){this.children=items}
@@ -691,6 +702,55 @@ test('existing generic goal review displays names and teams recognized by Gemini
   assert.equal(field('得点者（ゴール）')?.children[1]?.value,'若さん');
   assert.equal(field('アシスト者')?.children[1]?.value,'野田さん');
   assert.equal(field('対戦カード')?.children[1]?.value,'チーム3対4');
+  assert.equal(dom.goalStatsList.children.length,1);
+ }finally{await restore()}
+});
+
+test('all goals remain visible in filters when Keep automatically advances to the next goal',async()=>{
+ const {dom,one,two,storage,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one,two]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onRejectClip:rejectGoalClip,onClipEdit:(src,item)=>keepGoalClip(src,item)
+  });
+  assert.equal(dom.goalStatsList.children.length,2);
+  assert.equal(dom.goalQueueAllCount.textContent,'2');
+  assert.equal(dom.goalQueuePendingCount.textContent,'2');
+  assert.equal(dom.goalQueueKeptCount.textContent,'0');
+  const details=find(dom.goalStatsEditor,'goal-score-details');
+  assert.ok(details,'score metadata is grouped under one disclosure');
+  assert.equal(details.open,false);
+  assert.ok(find(dom.goalStatsEditor,'goal-review-video-keep'));
+  assert.ok(find(details,'goal-review-field'));
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  await settleMedia();
+  assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/,
+   'Keep must still auto-advance: UI proposal #2 was explicitly excluded');
+  assert.equal(dom.goalQueuePendingCount.textContent,'1');
+  assert.equal(dom.goalQueueKeptCount.textContent,'1');
+  dom.goalQueueKept.events.click();
+  assert.equal(dom.goalStatsList.children.length,1);
+  assert.match(dom.goalStatsList.children[0].children[0].textContent,/IMG_5292/);
+  dom.goalStatsList.children[0].events.click();
+  await settleMedia();
+  assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
+  dom.goalQueuePending.events.click();
+  assert.equal(dom.goalStatsList.children.length,1);
+  assert.match(dom.goalStatsList.children[0].children[0].textContent,/IMG_5293/);
+  dom.goalQueueAll.events.click();
+  assert.equal(dom.goalStatsList.children.length,2);
+ }finally{await restore()}
+});
+test('empty kept filter explains where to find all editable goals',async()=>{
+ const {dom,one,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]});
+  dom.goalQueueKept.events.click();
+  assert.equal(dom.goalStatsList.children.length,0);
+  assert.equal(dom.goalQueueEmpty.hidden,false);
+  assert.match(dom.goalQueueEmpty.textContent,/すべて/);
+  dom.goalQueueAll.events.click();
+  assert.equal(dom.goalQueueEmpty.hidden,true);
   assert.equal(dom.goalStatsList.children.length,1);
  }finally{await restore()}
 });
