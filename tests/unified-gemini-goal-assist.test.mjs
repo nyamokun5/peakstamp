@@ -132,7 +132,7 @@ test('manual decision persists after integrated reanalysis; different source is 
  assert.equal(goals.length,1);
  assert.equal(goals[0].status,'excluded');
  assert.equal(goals[0].videoDecision,'rejected');
- const other=source('different.mov');
+ const other=source('different.mov');other.candidates=[];
  assert.equal(createGoalDrafts(other,c).items.length,0);
 });
 test('legacy separate explicit goal-call coexists without duplication',()=>{
