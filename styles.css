@@ -1468,3 +1468,35 @@ body:has(#undoReview:not([hidden])) .page{
 .goal-review-viewer.goal-native-player #goalStatsPreview{
  pointer-events:auto!important;object-fit:contain!important;
 }
+
+/* Secondary pages are embedded rather than navigating away from uploaded MOVs.
+   iPhone safe areas and a persistent close control are essential. */
+.settings-inline-overlay[hidden]{display:none!important}
+.settings-inline-overlay{
+ position:fixed;inset:0;z-index:1250;background:rgba(0,12,24,.78);
+ display:flex;align-items:stretch;justify-content:center;
+ padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);
+}
+.settings-inline-sheet{
+ display:flex;flex-direction:column;width:100%;max-width:920px;min-height:0;
+ background:#091927;border:1px solid #386371;
+}
+.settings-inline-head{
+ flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+ gap:12px;padding:11px 14px;background:#123243;
+ border-bottom:1px solid #42717b;color:#e8f8f2;min-height:58px;
+}
+.settings-inline-head strong{font-size:14px}
+.settings-inline-close{
+ border:1px solid #82cdbb;border-radius:9px;color:#e8fff6;background:#20594c;
+ padding:9px 11px;min-height:44px;font-size:13px;font-weight:750;
+}
+#settingsOverlayFrame{
+ display:block;width:100%;flex:1 1 auto;min-height:0;border:0;
+ background:#091927;
+}
+@media (max-width:480px){
+ .settings-inline-head{padding:8px 10px}
+ .settings-inline-head strong{font-size:12px}
+ .settings-inline-close{font-size:12px}
+}
