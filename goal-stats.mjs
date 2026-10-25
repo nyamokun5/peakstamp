@@ -169,7 +169,12 @@ export function createGoalDrafts(source,storage){
      time-Number(r.timeSeconds)>=-2 && time-Number(r.timeSeconds)<=15:
      Math.abs(Number(r.timeSeconds)-time)<=6 &&
      (!clip(r.scorer)||!clip(event.scorer)||
-      clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase())));
+      clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase()||
+      // An organizer corrected this scorer, or already confirmed the goal.
+      // Keep that human decision rather than generating another AI goal.
+      r.status==='confirmed'||
+      (Array.isArray(r.userEditedGoalFields)&&
+       r.userEditedGoalFields.includes('scorer')))));
   if(already){
    // Goal scenes may have been stored before Gemini learned the names.
    // Add only newly detected details, never overwrite confirmed/manual edits.
