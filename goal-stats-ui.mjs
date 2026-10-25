@@ -8,7 +8,7 @@ import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=goalnative1';
-import {createGoalSceneControls} from './goal-scene-editor.mjs?v=unifiedga1';
+import {createGoalSceneControls} from './goal-scene-editor.mjs?v=goalnative2';
 
 const $=id=>document.getElementById(id);
 const make=(tag,cls,text)=>{
@@ -69,6 +69,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const entry=locate(activeKey);
    if(!entry)return;
    const {source,item}=entry;
+   scene.setNativePlayback(true);
    scene.activate(source,item);
    const bounds=scene.clipBounds();
    viewer.classList?.add('goal-native-player');
@@ -104,6 +105,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   // when Replay is tapped, exactly like normal highlight cards.
   viewer.hidden=false;
   viewer.classList?.remove('goal-native-player');
+  scene.setNativePlayback(false);
   scene.showVideo(autoplay);
   label.textContent=source.file.name+' · ゴール '+fmt(actualGoalTime(item))+
    '（'+(item.origin==='audio'?'実況 '+fmt(item.timeSeconds):item.origin==='gemini'?'Geminiの音声反応 '+fmt(item.timeSeconds):'手動追加')+'）';
