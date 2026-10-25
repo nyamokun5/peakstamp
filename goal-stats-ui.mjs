@@ -4,7 +4,7 @@
  * gets reset merely because a card, field or summary rerenders.
  */
 import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
- confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=unifiedga1';
+ confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=goalprefill1';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=goalnative1';
@@ -146,6 +146,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const source=entry.source,item=latestGoal(entry);
   if(String(item[name]??'')===String(value??''))return;
   item[name]=value;
+  // Clearing a name or choosing an assist state is also a deliberate edit.
+  // Do not let subsequent Gemini refresh silently refill it.
+  if(['scorer','assist','assistStatus','matchLabel','teamA','teamB'].includes(name)){
+   const fields=new Set(Array.isArray(item.userEditedGoalFields)?item.userEditedGoalFields:[]);
+   fields.add(name);
+   item.userEditedGoalFields=[...fields];
+  }
   if(name==='goalTimeSeconds'){
    item.goalTimeEdited=true;item.goalTimeVerified=false;
   }
