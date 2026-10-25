@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {initGoalStatsReview} from '../goal-stats-ui.mjs';
 import {createGoalDrafts,goalSourceKey,confirmedGoalExport} from '../goal-stats.mjs';
 import {keepGoalClip,rejectGoalClip} from '../goal-video-clip.mjs';
+import {buildMultiClipPlan} from '../multi-plan.mjs';
 
 const ids=[
  'goalStatsPanel','goalStatsList','goalStatsEditor','goalStatsSummary','goalStatsStep','goalStatsStatus',
@@ -493,5 +494,170 @@ test('native Safari controls detach crop pointer capture, restore it for custom 
   assert.equal(typeof viewport.events.pointerdown,'function','return to custom zoom restores handlers');
   assert.equal(viewport.style.touchAction,'');
   assert.equal(dom.goalStatsPreview.controls,false);
+ }finally{await restore()}
+});
+
+test('adjust goal trim and pinch zoom, Keep, Replay: playback/export must retain the edits',async()=>{
+ const {dom,storage,one,stats,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onRejectClip:(src,item)=>rejectGoalClip(src,item),
+   onClipEdit:(src,item)=>keepGoalClip(src,item)
+  });
+  // This queue click previously mounted a NEW scene object while the Keep
+  // button remained bound to the previous rendered object.
+  dom.goalStatsList.children[0].events.click();
+  await settleMedia();
+  const viewer=dom.goalStatsViewer;
+  const controls=find(viewer,'range-inputs');
+  assert.ok(controls);
+  const beginning=controls.children[0].children[1];
+  const ending=controls.children[1].children[1];
+  beginning.value='06:02.0';beginning.events.change();
+  ending.value='06:28.0';ending.events.change();
+  const viewport=find(viewer,'goal-scene-viewport zoom-video-viewport');
+  const touch=(pointerId,x)=>({pointerId,pointerType:'touch',clientX:x,clientY:90,preventDefault(){}});
+  viewport.events.pointerdown(touch(1,120));
+  viewport.events.pointerdown(touch(2,240));
+  viewport.events.pointermove(touch(1,70));
+  viewport.events.pointermove(touch(2,300));
+  viewport.events.pointerup(touch(1,70));
+  viewport.events.pointerup(touch(2,300));
+  const adjusted=createGoalDrafts(one,storage).items[0];
+  assert.equal(adjusted.clipStartSeconds,362);
+  assert.equal(adjusted.clipEndSeconds,388);
+  assert.ok(adjusted.clipZoom>1);
+  const savedZoom=adjusted.clipZoom,savedX=adjusted.clipZoomX,savedY=adjusted.clipZoomY;
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  let kept=createGoalDrafts(one,storage).items[0];
+  assert.equal(kept.videoDecision,'kept');
+  assert.equal(kept.clipStartSeconds,362);
+  assert.equal(kept.clipEndSeconds,388);
+  assert.equal(kept.clipZoom,savedZoom);
+  assert.equal(kept.clipZoomX,savedX);
+  assert.equal(kept.clipZoomY,savedY);
+  assert.equal(one.candidates.length,1);
+  assert.equal(one.candidates[0].time,362);
+  assert.equal(one.candidates[0].manualEnd,388);
+  assert.equal(one.candidates[0].zoom,savedZoom);
+  const replay=find(viewer,'play-btn goal-scene-replay');
+  replay.events.click();
+  await settleMedia();
+  kept=createGoalDrafts(one,storage).items[0];
+  assert.equal(dom.goalStatsPreview.currentTime,362);
+  assert.equal(kept.clipStartSeconds,362);
+  assert.equal(kept.clipEndSeconds,388);
+  assert.equal(kept.clipZoom,savedZoom);
+  assert.match(find(viewer,'range-start-label').textContent,/06:02/);
+  assert.match(find(viewer,'range-end-label').textContent,/06:28/);
+  assert.ok(stats.plays>=2);
+ }finally{await restore()}
+});
+test('Keep on first video auto-advances, reopening it preserves start/end and crop',async()=>{
+ const {dom,storage,one,two,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one,two]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onRejectClip:(src,item)=>rejectGoalClip(src,item),
+   onClipEdit:(src,item)=>keepGoalClip(src,item)
+  });
+  dom.goalStatsList.children[0].events.click();
+  await settleMedia();
+  const input=find(dom.goalStatsViewer,'range-inputs').children[0].children[1];
+  input.value='06:00.0';input.events.change();
+  let saved=createGoalDrafts(one,storage).items[0];
+  assert.equal(saved.clipStartSeconds,360);
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  await settleMedia();
+  assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
+  assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,360);
+  dom.goalStatsList.children[0].events.click();
+  await settleMedia();
+  const replay=find(dom.goalStatsViewer,'play-btn goal-scene-replay');
+  replay.events.click();
+  await settleMedia();
+  assert.equal(dom.goalStatsPreview.currentTime,360);
+  assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,360);
+  assert.equal(one.candidates[0].time,360);
+ }finally{await restore()}
+});
+test('replaying before Keep never changes the editor object or discards subsequent edits',async()=>{
+ const {dom,storage,one,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onClipEdit:(src,item)=>keepGoalClip(src,item)
+  });
+  dom.goalStatsList.children[0].events.click();
+  await settleMedia();
+  find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
+  await settleMedia();
+  const start=find(dom.goalStatsViewer,'range-inputs').children[0].children[1];
+  start.value='06:01.0';start.events.change();
+  assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,361);
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  assert.equal(createGoalDrafts(one,storage).items[0].clipStartSeconds,361);
+  find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
+  await settleMedia();
+  assert.equal(dom.goalStatsPreview.currentTime,361);
+  assert.equal(one.candidates[0].time,361);
+ }finally{await restore()}
+});
+
+test('previously kept goal + regular highlight: re-edit, Keep and Replay preserve exact MP4 bounds/zoom',async()=>{
+ const {dom,storage,one,restore}=setup();
+ try{
+  one.candidates.push({
+   id:'already-kept',sourceId:one.id,origin:'gemini',
+   peakSeconds:379.2,time:375.2,manualEnd:381.2,
+   zoom:1.25,zoomX:.45,zoomY:.55,enabled:true,rejected:false
+  });
+  initGoalStatsReview({sources:[one]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onRejectClip:(src,item)=>rejectGoalClip(src,item),
+   onClipEdit:(src,item)=>keepGoalClip(src,item)
+  });
+  // Link this already-kept normal highlight to the goal, then edit it.
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  dom.goalStatsList.children[0].events.click();
+  await settleMedia();
+  const inputs=find(dom.goalStatsViewer,'range-inputs');
+  const start=inputs.children[0].children[1],end=inputs.children[1].children[1];
+  start.value='06:04.0';start.events.change();
+  end.value='06:27.0';end.events.change();
+  const viewport=find(dom.goalStatsViewer,'goal-scene-viewport zoom-video-viewport');
+  const event=(pointerId,x)=>({pointerId,pointerType:'touch',clientX:x,clientY:90,preventDefault(){}});
+  viewport.events.pointerdown(event(1,120));
+  viewport.events.pointerdown(event(2,240));
+  viewport.events.pointermove(event(1,65));
+  viewport.events.pointermove(event(2,305));
+  viewport.events.pointerup(event(1,65));
+  viewport.events.pointerup(event(2,305));
+  const crop=createGoalDrafts(one,storage).items[0];
+  assert.ok(crop.clipZoom>1);
+  // User explicitly taps Keep again after editing.
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  const after=createGoalDrafts(one,storage).items[0];
+  assert.equal(after.clipStartSeconds,364);
+  assert.equal(after.clipEndSeconds,387);
+  assert.equal(after.clipZoom,crop.clipZoom);
+  assert.equal(after.clipZoomX,crop.clipZoomX);
+  assert.equal(after.clipZoomY,crop.clipZoomY);
+  const exportPlan=buildMultiClipPlan([one]);
+  assert.equal(exportPlan.length,1);
+  assert.equal(exportPlan[0].start,364);
+  assert.equal(exportPlan[0].end,387);
+  assert.equal(exportPlan[0].zoom,crop.clipZoom);
+  assert.equal(one.candidates.length,1);
+  find(dom.goalStatsViewer,'play-btn goal-scene-replay').events.click();
+  await settleMedia();
+  assert.equal(dom.goalStatsPreview.currentTime,364);
+  const restored=createGoalDrafts(one,storage).items[0];
+  assert.equal(restored.clipStartSeconds,364);
+  assert.equal(restored.clipEndSeconds,387);
+  assert.equal(restored.clipZoom,crop.clipZoom);
+  assert.equal(restored.clipZoomX,crop.clipZoomX);
+  assert.equal(restored.clipZoomY,crop.clipZoomY);
  }finally{await restore()}
 });
