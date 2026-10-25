@@ -224,10 +224,16 @@ export function createGoalDrafts(source,storage){
  // The organizer assigns a match number to the VIDEO, once.
  // Match-number edits are reflected across all auto-filled goal drafts.
  if(Number.isInteger(source?.matchNumber)&&source.matchNumber>=1)
-  for(const item of items)
-   if(!Array.isArray(item.userEditedGoalFields)||
-      !item.userEditedGoalFields.includes('matchSeq'))
+  for(const item of items){
+   // Legacy data can contain a manually selected matchSeq with no edit flag.
+   // Preserve that value. Only update blank or already auto-filled fields.
+   if(Array.isArray(item.userEditedGoalFields)&&
+      item.userEditedGoalFields.includes('matchSeq'))continue;
+   if(!String(item.matchSeq||'').trim()||item.sourceMatchSeqAutofill===true){
     item.matchSeq=String(source.matchNumber);
+    item.sourceMatchSeqAutofill=true;
+   }
+  }
  items.sort((a,b)=>Number(a.timeSeconds)-Number(b.timeSeconds));
  return {items,transcript};
 }
@@ -247,6 +253,7 @@ export function makeManualGoal(time,source,storage){
   origin:'manual',timeSeconds:t,goalTimeSeconds:t,goalTimeVerified:false,goalTimeEdited:false,
   quote:'手動で追加',
   scorer:'',assist:'',assistStatus:'unknown',matchSeq:source?.matchNumber?String(source.matchNumber):'',
+  sourceMatchSeqAutofill:Boolean(source?.matchNumber),
   matchLabel:match?.label||'',teamA:match?.teamA||'',teamB:match?.teamB||'',
   status:'draft',confirmedAt:null,note:''};
 }
