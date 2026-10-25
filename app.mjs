@@ -21,6 +21,7 @@ import { createSceneReplayMedia } from './scene-replay-media.mjs?v=1';
 import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
 import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=autoplay51';
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
+import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
 
 const $ = id => document.getElementById(id);
 // Keep one video decoder across scene cards, independent of Gemini/candidate data.
@@ -1435,3 +1436,19 @@ const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
       $('standardReviewArea').hidden=true;
     }
   }});
+
+const settingsNavigation=initSettingsNavigation({
+ onOpen:()=>{
+  // Keep sources (File objects, object URLs and analysis results) untouched.
+  // Only pause decoders while a secondary settings iframe is visible.
+  closeInlinePreview();
+  goalReview.pausePlayback();
+  sceneReplayMedia.dispose();
+  $('preview').pause();
+ },
+ onClose:page=>{
+  // Deleted goal metadata may have changed localStorage inside same-origin
+  // iframe; reload the goal review without reselecting files or reanalysing.
+  if(page==='reset-goals.html')goalReview.refresh();
+ }
+});

@@ -499,6 +499,18 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=goalprefill1"></script>
+  <!-- Secondary settings stay in this document: iPhone Safari must not lose
+       browser-owned MOV File objects when coming back from another page. -->
+  <div id="settingsOverlay" class="settings-inline-overlay" role="dialog"
+       aria-modal="true" aria-labelledby="settingsOverlayTitle" hidden>
+    <div class="settings-inline-sheet">
+      <header class="settings-inline-head">
+        <strong id="settingsOverlayTitle">詳細設定</strong>
+        <button id="settingsOverlayClose" class="settings-inline-close" type="button">← 編集中の動画に戻る</button>
+      </header>
+      <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
+    </div>
+  </div>
+  <script type="module" src="app.mjs?v=settingskeep1"></script>
 </body>
 </html>
