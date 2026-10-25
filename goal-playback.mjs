@@ -15,16 +15,35 @@ export function createGoalPlaybackController(video,{
 }={}){
  let sourceKey='',sourceUrl='',loadedUrl='',target=0;
  let pendingPlay=false,prepared=false,phase='idle',playAttempts=0;
+ let nativeMode=false,nativeSeekPending=false,loadingTimer=null;
  let serial=0,lastMessage='',lastAttemptedTime=null,gestureNeeded=false;
  const say=message=>{lastMessage=message;notify(message)};
  const ready=()=>video.readyState>=1;
  const clock=()=>Number(video.currentTime)||0;
- const stop=()=>{pendingPlay=false;try{video.pause()}catch(_){}};
+ const cancelLoadTimer=()=>{if(loadingTimer!==null)clearTimeout(loadingTimer);loadingTimer=null};
+ const stop=()=>{pendingPlay=false;cancelLoadTimer();try{video.pause()}catch(_){}};
+ const armLoadTimer=()=>{
+  cancelLoadTimer();
+  const token=serial;
+  loadingTimer=setTimeout(()=>{
+   loadingTimer=null;
+   if(token!==serial||nativeMode||!sourceKey||video.paused===false)return;
+   say('動画を読み込み中です。再生できない場合は「Safari標準で再生」を押してください。');
+  },8500);
+  if(typeof loadingTimer?.unref==='function')loadingTimer.unref();
+ };
  const formatTime=time=>Math.floor(time/60)+':'+String(Math.floor(time%60)).padStart(2,'0');
 
+ function seekNativeToTarget(){
+  if(!nativeMode||!nativeSeekPending||!ready())return;
+  nativeSeekPending=false;
+  try{video.currentTime=target;prepared=true}
+  catch(_){say('ゴール位置に移動できません。標準プレーヤーで再生位置を調整してください。')}
+ }
  function playAtTarget(){
   if(!pendingPlay||!sourceKey||loadedUrl!==sourceUrl||!ready())return;
   pendingPlay=false;
+  cancelLoadTimer();
   const requested=target;
   lastAttemptedTime=requested;
   phase='seeking';
@@ -55,7 +74,7 @@ export function createGoalPlaybackController(video,{
    prepared=true;
   }
  }
- function open({sourceKey:key,sourceUrl:url,at,autoplay=false,fromStart=false}={}){
+ function open({sourceKey:key,sourceUrl:url,at,autoplay=false,fromStart=false,native=false}={}){
   if(!key||!url)return false;
   const requested=fromStart?0:Math.max(0,Number(at)||0);
   const changed=sourceKey!==key||sourceUrl!==url;
@@ -63,6 +82,22 @@ export function createGoalPlaybackController(video,{
   sourceKey=key;sourceUrl=url;target=requested;
   stop();
   gestureNeeded=false;
+  nativeMode=Boolean(native);
+  if(nativeMode){
+   video.hidden=false;video.controls=true;video.playsInline=true;
+   video.setAttribute('playsinline','');
+   video.setAttribute('webkit-playsinline','');
+   pendingPlay=false;nativeSeekPending=true;phase='native';
+   if(loadedUrl!==url){
+    loadedUrl=url;prepared=false;video.preload='auto';
+    video.src=url;video.load();
+   }
+   seekNativeToTarget();
+   say('Safari標準プレーヤーに切り替えました。動画内の▶を押して再生してください。');
+   return changed;
+  }
+  nativeSeekPending=false;
+  video.controls=false;
   if(!autoplay){
    // Passive render must NOT decode/seek a 400MB iPhone MOV. This was the
    // important difference from the functioning highlight player.
@@ -85,11 +120,14 @@ export function createGoalPlaybackController(video,{
    video.preload='metadata';
    say('元動画を読み込んでいます…');
    video.src=url; // no reload on Replay of the SAME MOV
+   video.load(); // Unlike the old goal player, this matches working highlight playback.
+   armLoadTimer();
    if(ready())playAtTarget();
   }else if(ready()){
    playAtTarget();
   }else{
    phase='loading';
+   armLoadTimer();
    say('動画を準備しています…');
   }
   return changed;
@@ -101,14 +139,17 @@ export function createGoalPlaybackController(video,{
  function dispose(){
   serial++;stop();sourceKey='';sourceUrl='';loadedUrl='';target=0;
   prepared=false;phase='idle';gestureNeeded=false;
+  nativeMode=false;nativeSeekPending=false;video.controls=false;
   try{video.removeAttribute('src');video.load()}catch(_){}
   video.hidden=true;
  }
  video.addEventListener('loadedmetadata',()=>{
+  if(nativeMode){seekNativeToTarget();return}
   if(pendingPlay && sourceKey && loadedUrl===sourceUrl)playAtTarget();
  });
  video.addEventListener('playing',()=>{
   if(!sourceKey)return;
+  cancelLoadTimer();
   phase='playing';prepared=true;
   say('');
  });
@@ -125,10 +166,10 @@ export function createGoalPlaybackController(video,{
  });
  function currentSourceKey(){return sourceKey}
  function diagnostic(){
-  return {player:'PeakStamp goal replay highlight-parity v1',sourceKey,
+  return {player:'PeakStamp goal replay highlight-parity v2',sourceKey,
    currentTime:clock(),targetTime:target,readyState:video.readyState,
    seeking:video.seeking,paused:video.paused,phase,prepared,
-   pendingPlay,playAttempts,gestureNeeded,lastMessage,lastAttemptedTime};
+   nativeMode,pendingPlay,playAttempts,gestureNeeded,lastMessage,lastAttemptedTime};
  }
  return {open,pause,dispose,currentSourceKey,diagnostic};
 }
