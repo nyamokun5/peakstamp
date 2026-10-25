@@ -3,14 +3,14 @@ import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experime
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=matchui1';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=guided1';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=matchui1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=guided1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title62';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=guided1';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=matchui1';
 import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
@@ -23,6 +23,7 @@ import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-pl
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
 import {initWorkflowSteps} from './workflow-steps.mjs?v=workflowui1';
+import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=guided1';
 import {assignMatchNumber,setMatchNumber,sourceDisplayName,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from './match-label.mjs?v=matchsort1';
 
 const $ = id => document.getElementById(id);
@@ -79,6 +80,29 @@ const workflow=initWorkflowSteps({
   // metadata. Pause only conflicting decoders.
   closeInlinePreview();
   sceneReplayMedia.dispose();
+ }
+});
+const coaching=initJourneyCoach({
+ counts:()=>analysisCounts(state.sources,state.sources.flatMap(src=>
+  createGoalDrafts(src,window.localStorage).items.map(item=>({item})))),
+ actions:{
+  goAnalysis:()=>{workflow.setStage('analysis',{scroll:false});$('geminiPrimaryPanel').scrollIntoView({behavior:'smooth',block:'start'});},
+  goGoals:()=>{workflow.setStage('edit',{scroll:false});$('goalStatsPanel').scrollIntoView({behavior:'smooth',block:'start'});},
+  showGoalList:()=>{$('goalQueueAll').click();$('goalStatsList').scrollIntoView({behavior:'smooth',block:'start'});},
+  goHighlights:()=>{
+   workflow.setStage('edit',{scroll:false});
+   reviewTab='all';drawResults();
+   const target=$('resultsPanel');
+   if(!target.hidden)target.scrollIntoView({behavior:'smooth',block:'start'});
+  },
+  reviewAllHighlights:()=>{
+   workflow.setStage('edit',{scroll:false});
+   reviewTab='reviewed';drawResults();
+   $('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
+  },
+  goExport:()=>workflow.setStage('export'),
+  showExportPreview:()=>{$('montagePreview').scrollIntoView({behavior:'smooth',block:'start'});},
+  saveHSJson:()=>{void saveHSJson();}
  }
 });
 const guide=initFirstRunGuide({hasPriorAnalysis:()=>{
@@ -521,7 +545,6 @@ $('analyzeButton').addEventListener('click', async () => {
       error('analysisError', '一部の動画は解析できませんでした：' + failures.join(' / '));
     }
     $('resultsPanel').hidden = false;
-    $('resultsPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     const message = e?.message || String(e);
     error('analysisError', message);
@@ -529,6 +552,13 @@ $('analyzeButton').addEventListener('click', async () => {
     busy(false);
     $('progressArea').hidden = true;
     renderSourceList();
+    if(!state.cancelled){
+     coaching.analysisFinished({
+      success:Boolean(state.bins),
+      failures:failures.length,
+      error:$('analysisError').textContent
+     });
+    }
   }
 });
 function rebuild() {
@@ -600,12 +630,10 @@ function nextSceneAfter(current) {
     $('reviewProgress').textContent=kept
       ?'すべての候補を確認しました。ハイライト動画の作成へ進みます。'
       :'すべての候補を確認しました。動画を作成するにはシーンをキープしてください。';
-    // The final decision completes review; navigate to the START of the
-    // highlight-creation section, never directly to its export button.
-    // Keep export as a separate explicit user action.
-    requestAnimationFrame(()=>{
-      const section=$('montagePanel');
-      if(!section.hidden)section.scrollIntoView({behavior:'smooth',block:'start'});
+    // Never silently jump past export setup. Offer review-all or export.
+    const ordinary=state.candidates.filter(c=>!c.goalRecordId&&!c.goalVideoOwned);
+    coaching.highlightReviewFinished({
+     total:ordinary.length,kept:ordinary.filter(c=>c.enabled===true).length
     });
     return;
   }
@@ -1217,6 +1245,14 @@ function row(item, index) {
     source.candidates = source.candidates.filter(x => x !== item);
     syncSources();
   });
+  const missedGoal=make('button','missed-goal-add','＋ このシーンをゴールとして追加');
+  missedGoal.type='button';
+  missedGoal.addEventListener('click',()=>{
+   closeInlinePreview();
+   workflow.setStage('edit',{scroll:false});
+   goalReview.addFromScene(source,Number.isFinite(item.peakSeconds)?item.peakSeconds:item.time);
+  });
+  wrap.append(missedGoal);
   const actions=make('div','review-decision-actions');
   const keep=make('button','review-keep','✓ キープ');
   keep.type='button';
@@ -1286,8 +1322,8 @@ function drawResults() {
     });
     // Keep and Reject both remove a scene from the undecided queue.
     // Kept scenes remain available in the dedicated Keep tab.
-    const visible=source.candidates.filter(candidate=>reviewTab==='kept'
-      ? candidate.enabled===true
+    const visible=source.candidates.filter(candidate=>reviewTab==='reviewed'
+      ? true : reviewTab==='kept'?candidate.enabled===true
       : candidate.enabled!==true && candidate.rejected!==true);
     if (visible.length === 0) { pos += source.candidates.length; continue; }
     headTitle.querySelector('small').textContent=visible.length+'件を表示';
@@ -1300,6 +1336,7 @@ function drawResults() {
   const remainingCount=state.candidates.filter(x=>x.enabled!==true && x.rejected!==true).length;
   $('tabAllCount').textContent=String(remainingCount);
   $('tabKeptCount').textContent=String(keptCount);
+  $('tabReviewedCount').textContent=String(state.candidates.length);
   $('reviewEmpty').hidden=reviewTab!=='kept' || keptCount>0;
   if(reviewTab==='all' && remainingCount===0 && state.candidates.length>0){
     $('reviewProgress').textContent='すべて確認しました。キープ済みタブで選んだシーンを確認できます。';
@@ -1439,6 +1476,36 @@ $('lineShareCopy').addEventListener('click',async()=>{
   }
 });
 
+async function saveHSJson(){
+ const status=$('hsJsonReminderStatus')||$('exportEditStatus');
+ try{
+  const plan=buildMultiClipPlan(state.sources,currentClipOptions());
+  if(!plan.length){
+   status.textContent='保存するキープ済みシーンがありません。';
+   return false;
+  }
+  const payload=createEditTransfer(state.sources,plan);
+  const name='PeakStamp_HS_'+new Date().toISOString().slice(0,10)+'.json';
+  const file=new File([JSON.stringify(payload,null,2)],name,{type:'application/json'});
+  if(typeof navigator!=='undefined'&&navigator.share&&
+    (!navigator.canShare||navigator.canShare({files:[file]}))){
+   await navigator.share({files:[file],title:'HS向け編集データ'});
+   status.textContent='共有先で「ファイルに保存」またはLINEを選んで幹事に送ってください。';
+  }else{
+   const url=URL.createObjectURL(file);
+   const link=document.createElement('a');
+   link.href=url;link.download=name;document.body.append(link);link.click();link.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+   status.textContent='JSONをダウンロードしました。「ファイル」に保存して幹事へ共有してください。';
+  }
+  return true;
+ }catch(e){
+  status.textContent=e?.name==='AbortError'?'共有はキャンセルされました。':
+   '保存できませんでした：'+(e?.message||String(e));
+  return false;
+ }
+}
+$('hsJsonShareFinal').addEventListener('click',()=>{void saveHSJson();});
 $('exportEditData').addEventListener('click',()=>{
   const status=$('exportEditStatus');
   status.textContent='';
@@ -1458,17 +1525,23 @@ $('exportEditData').addEventListener('click',()=>{
   } catch(e) { status.textContent='書き出し失敗：'+(e?.message||String(e)); }
 });
 
-initMontageEditor(state);
+initMontageEditor(state,{
+ onComplete:()=>coaching.exportFinished(),
+ onFailure:message=>coaching.exportFailed(message)
+});
 initWhisperExperiment(state);
 initAIReview(state);
 initVideoExplore(state);
 initCloudAudioPilot(state);
-initGeminiPrimary(state,{decodeAudio:decodeStreaming,commitResults:commitGeminiResults});
+initGeminiPrimary(state,{decodeAudio:decodeStreaming,commitResults:commitGeminiResults,
+ onComplete:result=>coaching.analysisFinished(result)
+});
 const goalReview=initGoalStatsReview(state,{
   // Avoid rebuilding every regular scene (and interrupting its video decoder)
   // when the organizer edits a name or verifies a goal.
   onUpdate:()=>{},
   onSourceReady:()=>syncSources(),
+  onVideoReviewCompleted:details=>coaching.goalReviewFinished(details),
   onBeforePlay:()=>{
     closeInlinePreview();
     // Free the competing decoder before playing large local iPhone MOV files.

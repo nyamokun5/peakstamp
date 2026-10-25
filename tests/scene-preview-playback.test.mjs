@@ -97,13 +97,13 @@ test('normal scene editing UI uses one combined draggable timeline and no quiet/
  assert.doesNotMatch(app,/make\('input','scene-seek-slider'\)/);
 });
 
-test('last review scrolls to start of highlight creation section without starting MP4',()=>{
+test('last review opens a choice dialog instead of silently jumping into export',()=>{
  const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
  const tail=app.split('function nextSceneAfter(current) {')[1].split('function decideReview(')[0];
  assert.match(tail,/if \(!next\)/);
- assert.match(tail,/\$\('montagePanel'\)/);
- assert.match(tail,/scrollIntoView\(\{behavior:'smooth',block:'start'\}\)/);
- assert.equal(tail.includes("montageExport').click("),false);
+ assert.match(tail,/coaching\.highlightReviewFinished\(/);
+ assert.doesNotMatch(tail,/montageExport'\)\.click/);
+ assert.doesNotMatch(tail,/\$\('montagePanel'\)\.scrollIntoView/);
 });
 
 test('obsolete bottom sticky Settings and Create buttons are removed',()=>{

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=matchsort1" />
+  <link rel="stylesheet" href="styles.css?v=guided1" />
 </head>
 <body>
   <header class="topbar">
@@ -126,7 +126,14 @@
          experimental tools and all regular highlight editing. -->
     <section class="panel goal-stats-panel" id="goalStatsPanel" aria-label="PeakStamp内でゴールとアシストを確定" hidden>
       <div class="panel-label"><span class="number">⚽</span><h2>ゴールを編集</h2></div>
-      <p class="fine-print">▶ 再生 → 範囲・ズームを調整 → キープ。得点情報は下から編集できます。</p>
+      <details id="goalReviewFirstGuide" class="goal-first-guide" open>
+        <summary>初回ガイド：ゴールの確認方法</summary>
+        <ol>
+          <li>▶ 再生し、画角（2本指）と切り取り秒数を調整。</li>
+          <li>AIが読み取った得点者・アシストを<strong>映像で確認</strong>し、「得点情報を確定」。</li>
+          <li>最後に動画のキープ／不採用を押すと次のゴールへ。</li>
+        </ol>
+      </details>
       <p id="goalStatsSummary" class="goal-review-summary" aria-live="polite"></p>
       <section class="goal-review-library" aria-label="すべてのゴールシーン">
         <div class="goal-review-library-head"><strong>⚽ ゴール一覧</strong><small>タップで再編集</small></div>
@@ -274,10 +281,12 @@
       <div class="review-tabs" role="group" aria-label="シーンの表示切り替え">
         <button id="tabAll" type="button" class="review-tab active" data-review-tab="all" aria-pressed="true">未判断 <span id="tabAllCount">0</span></button>
         <button id="tabKept" type="button" class="review-tab" data-review-tab="kept" aria-pressed="false">キープ済み <span id="tabKeptCount">0</span></button>
+        <button id="tabReviewed" type="button" class="review-tab" data-review-tab="reviewed" aria-pressed="false">すべて <span id="tabReviewedCount">0</span></button>
       </div>
       <p id="reviewProgress" class="review-progress" role="status" aria-live="polite"></p>
       <p id="reviewEmpty" class="empty-results" hidden>キープしたシーンはまだありません。「未判断」タブから選んでください。</p>
       <div id="highlightList" class="highlight-list"></div>
+      <p class="fine-print">見逃したゴールがあれば、該当ハイライトの「＋ ゴールとして追加」から得点者・アシストを登録できます。</p>
       </div>
       <details class="extra-analysis-tools">
         <summary>その他の実験ツール（詳細を開く）</summary>
@@ -380,7 +389,12 @@
     <section class="panel montage-panel" id="montagePanel" hidden>
       <div class="panel-label"><span class="number">03</span><h2>動画を書き出す</h2></div>
       <button id="workflowBackToEdit" class="workflow-back-btn" type="button">← 編集に戻る</button>
-      <p class="list-help">キープしたシーンをつなげて、1本の動画に。</p>
+      <div class="export-steps">
+        <strong>仕上げは3ステップ</strong>
+        <p><b>① タイトル</b> 最初の数秒に文字を入れます。タイトルだけ、または画像・動画を使ったイントロも選べます。</p>
+        <p><b>② 書き出す</b> MP4を作成したら完成動画を再生して確認。</p>
+        <p><b>③ 保存・共有</b> iPhoneに保存し、HS向けJSONを幹事に共有してください。</p>
+      </div>
 
       <fieldset class="intro-presentation-picker">
         <legend>タイトルの見せ方</legend>
@@ -487,6 +501,12 @@
       <a id="montageOpen" class="save-fallback" target="_blank" rel="noopener" hidden>動画を別タブで開く（保存できない場合）</a>
       <p id="montageSaveHelp" class="save-help" hidden>iPhoneでは「iPhoneに保存・共有」から共有メニューを開き、「ビデオを保存」または「ファイルに保存」を選択してください。うまくいかない場合は「動画を別タブで開く」を試してください。</p>
       <p id="montageSaveStatus" class="save-status" role="status" aria-live="polite"></p>
+      <section id="hsJsonReminder" class="hs-json-reminder" hidden>
+        <strong>最後に：HS用JSONを幹事へ</strong>
+        <p>Instagramリール制作に必要な、キープ済みシーンの開始・終了時刻と編集情報です。完成動画とあわせて共有してください。</p>
+        <button id="hsJsonShareFinal" class="main-button" type="button">HS向けJSONを保存・共有</button>
+        <p id="hsJsonReminderStatus" role="status" aria-live="polite"></p>
+      </section>
       <p class="fine-print">動画・音声は端末内で処理し、PeakStampのサーバーには送信しません。最初は30秒ほどの素材で試してください。iPhoneのOS・動画形式によってはMP4の書き出しに対応しない場合があります。長時間の処理中はSafariを閉じないでください。</p>
     </section>
     <footer><strong>PEAKSTAMP</strong><span>Enjoy the game. Capture the moment.</span>
@@ -520,6 +540,17 @@
       <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
     </div>
   </div>
+  <div id="journeyDialog" class="journey-dialog" role="dialog" aria-modal="true" aria-labelledby="journeyDialogTitle" aria-describedby="journeyDialogBody" hidden>
+    <div class="journey-dialog-card">
+      <button id="journeyDialogDismiss" type="button" class="journey-dialog-dismiss" aria-label="閉じる">×</button>
+      <h2 id="journeyDialogTitle"></h2>
+      <p id="journeyDialogBody"></p>
+      <div class="journey-dialog-actions">
+        <button id="journeyDialogPrimary" class="main-button" type="button"></button>
+        <button id="journeyDialogSecondary" class="whisper-run" type="button" hidden></button>
+      </div>
+    </div>
+  </div>
   <!-- Secondary settings stay in this document: iPhone Safari must not lose
        browser-owned MOV File objects when coming back from another page. -->
   <div id="settingsOverlay" class="settings-inline-overlay" role="dialog"
@@ -532,6 +563,6 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=matchsort1"></script>
+  <script type="module" src="app.mjs?v=journeyflow1"></script>
 </body>
 </html>
