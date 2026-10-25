@@ -18,7 +18,7 @@ const parseClock=value=>{
 };
 export function createGoalSceneControls({viewer,video,label,status,
  onChange=()=>{},onReplay=()=>{},onSeek=()=>{},onPause=()=>{},onNative=()=>{}}){
- let source=null,item=null,teardownZoom=null,drag=null;
+ let source=null,item=null,teardownZoom=null,drag=null,nativePlayback=false;
  const viewport=make('div','goal-scene-viewport zoom-video-viewport');
  viewport.hidden=true; // The MOV is only displayed after the user taps Replay.
  viewport.setAttribute('aria-label','2本指で画角の拡大・縮小、拡大後は1本指で移動');
@@ -208,11 +208,8 @@ export function createGoalSceneControls({viewer,video,label,status,
  };
  for(const name of ['timeupdate','seeked','loadedmetadata','play','pause'])
   video.addEventListener(name,onTime);
- const activate=(nextSource,nextItem)=>{
-  if(!nextSource||!nextItem)return;
-  if(source===nextSource&&item===nextItem){redraw();return;}
-  teardownZoom?.();teardownZoom=null;
-  source=nextSource;item=nextItem;
+ const attachCrop=()=>{
+  if(!source||!item||nativePlayback)return;
   teardownZoom=attachScenePinchEditor({
    viewport,video,read:()=>goalSceneZoom(item),
    write:next=>{
@@ -221,10 +218,40 @@ export function createGoalSceneControls({viewer,video,label,status,
    },
    commit:()=>onChange(source,item),readout:zoomValue
   });
-  tip.hidden=goalSceneZoom(item).zoom>1.02;
+ };
+ const setNativePlayback=enabled=>{
+  const next=Boolean(enabled);
+  if(nativePlayback===next)return;
+  nativePlayback=next;
+  teardownZoom?.();teardownZoom=null;
+  if(nativePlayback){
+   // Pointer capture on the crop viewport intercepts taps on Safari's
+   // native video controls. Detach ALL pinch/pan listeners while enabled.
+   video.style.transform='none';
+   video.style.transformOrigin='center center';
+   viewport.style.touchAction='manipulation';
+   viewport.style.cursor='auto';
+   tip.hidden=true;zoomRow.hidden=true;
+  }else{
+   viewport.style.touchAction='';
+   viewport.style.cursor='';
+   zoomRow.hidden=false;
+   if(source&&item)attachCrop();
+   if(item)tip.hidden=goalSceneZoom(item).zoom>1.02;
+  }
+  redraw();
+ };
+ const activate=(nextSource,nextItem)=>{
+  if(!nextSource||!nextItem)return;
+  if(source===nextSource&&item===nextItem){redraw();return;}
+  teardownZoom?.();teardownZoom=null;
+  source=nextSource;item=nextItem;
+  attachCrop();
+  tip.hidden=nativePlayback||goalSceneZoom(item).zoom>1.02;
   redraw();
  };
  return {activate,redraw,clipBounds:bounds,playButton:replay,
   showVideo:visible=>{viewport.hidden=!visible},
+  setNativePlayback,
   destroy:()=>{teardownZoom?.();teardownZoom=null}};
 }
