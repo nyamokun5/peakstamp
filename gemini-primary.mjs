@@ -540,6 +540,9 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()
   const pending=videos.filter(src=>!(src.analysisEngine==='gemini'&&src.bins?.length));
   if(!pending.length){
    status('選んだ動画はすべてGemini解析済みです。');
+   // Reusing fully analyzed local videos is still a completed analysis flow.
+   // Show the next-action dialog instead of leaving first-time testers stuck.
+   onComplete({success:true,failures:0,cached:true});
    return;
   }
   const access=verifyAccess(pending);
