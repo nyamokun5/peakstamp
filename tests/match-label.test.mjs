@@ -1,6 +1,7 @@
+import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assignMatchNumber,setMatchNumber,sourceDisplayName,matchStorageKey,validMatchNumber} from '../match-label.mjs';
+import {assignMatchNumber,setMatchNumber,sourceDisplayName,matchStorageKey,validMatchNumber,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from '../match-label.mjs';
 import {createGoalDrafts,saveGoalDrafts,goalSourceKey,confirmedGoalExport} from '../goal-stats.mjs';
 import {buildMultiClipPlan,sourceTimestampComments} from '../multi-plan.mjs';
 const make=(name='IMG_0287.MOV')=>({
@@ -62,4 +63,64 @@ test('chapters and timestamp comments say 第N試合, while actual file remains 
  assert.equal(sourceTimestampComments([src])[0].name,'第7試合');
  assert.match(sourceTimestampComments([src])[0].text,/第7試合/);
  assert.equal(src.file.name,'IMG_0287.MOV');
+});
+
+test('initial multi-select is naturally sorted by numbered MOV filename before default 1-4 match assignments',()=>{
+ const incoming=[
+  {name:'IMG_0301.MOV',size:22,lastModified:3},
+  {name:'IMG_0289.MOV',size:22,lastModified:3},
+  {name:'IMG_0299.mov',size:22,lastModified:3},
+  {name:'IMG_0287.MOV',size:22,lastModified:3}
+ ];
+ const sorted=sortFilesByFilename(incoming);
+ assert.deepEqual(sorted.map(f=>f.name),['IMG_0287.MOV','IMG_0289.MOV','IMG_0299.mov','IMG_0301.MOV']);
+ assert.deepEqual(incoming.map(f=>f.name),['IMG_0301.MOV','IMG_0289.MOV','IMG_0299.mov','IMG_0287.MOV'],
+  'sorting must never mutate browser-owned input list');
+ const sources=sorted.map((file,index)=>({id:'video-'+(index+1),file,
+  objectUrl:'blob:'+(index+1),candidates:[]}));
+ const storage=store();
+ sources.forEach((src,index)=>assignMatchNumber(src,index,storage));
+ assert.deepEqual(sources.map(src=>sourceDisplayName(src)),
+  ['第1試合','第2試合','第3試合','第4試合']);
+ assert.deepEqual(sources.map(src=>src.file.name),sorted.map(f=>f.name));
+});
+test('numeric-aware sorting handles IMG_9 before IMG_10 and keeps manual data attached',()=>{
+ const one=make('IMG_10.MOV');one.id='ten';one.objectUrl='blob:ten';one.candidates=[{id:'edited-goal',time:101}];
+ const two=make('IMG_9.MOV');two.id='nine';two.objectUrl='blob:nine';
+ const list=[one,two];sortSourcesByFilename(list);
+ assert.deepEqual(list.map(s=>s.id),['nine','ten']);
+ assert.equal(list[1],one,'sort must keep the edited source object intact');
+ assert.equal(list[1].candidates[0].id,'edited-goal');
+ assert.equal(list[1].objectUrl,'blob:ten');
+});
+test('explicit reset fixes prior saved 1,3,1,2 mappings without touching original MOVs',()=>{
+ const storage=store();
+ storage.removeItem=key=>storage.map.delete(key);
+ const list=['IMG_0400.MOV','IMG_0100.MOV','IMG_0300.MOV','IMG_0200.MOV'].map(make);
+ const originalFileRefs=list.map(s=>s.file);
+ const originalUrls=list.map(s=>s.objectUrl);
+ for(const [i,s] of list.entries()){
+  assignMatchNumber(s,i,storage);
+  setMatchNumber(s,[1,3,1,2][i],storage);
+ }
+ resetMatchNumbersToFilenameOrder(list,storage);
+ assert.deepEqual(list.map(s=>s.file.name),
+  ['IMG_0100.MOV','IMG_0200.MOV','IMG_0300.MOV','IMG_0400.MOV']);
+ assert.deepEqual(list.map(s=>s.matchNumber),[1,2,3,4]);
+ assert.ok(list.every(s=>originalFileRefs.includes(s.file)));
+ assert.ok(list.every(s=>originalUrls.includes(s.objectUrl)));
+ assert.ok(list.every(s=>storage.getItem(matchStorageKey(s))===null),
+  'old manual match overrides are intentionally removed only by explicit reset');
+});
+test('upload list visibly includes raw filename and filename sort is wired without resetting reviewed clips',()=>{
+ const index=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
+ const styles=readFileSync(new URL('../styles.css',import.meta.url),'utf8');
+ assert.match(index,/id="sortFilesByName"/);
+ assert.match(app,/make\('small','source-original-filename',source\.file\.name\)/);
+ assert.match(app,/sortFilesByFilename\(Array\.from\(files\)/);
+ assert.match(app,/sortSourcesByFilename\(state\.sources\)/);
+ assert.match(app,/sourceOrderWasManuallyChanged=true/);
+ assert.match(styles,/\.source-original-filename/);
+ assert.match(styles,/grid-template-areas:"ordinal details match" "\. buttons buttons"/);
 });
