@@ -23,6 +23,7 @@ import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-pl
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
 import {initWorkflowSteps} from './workflow-steps.mjs?v=workflowui1';
+import {assignMatchNumber,setMatchNumber,sourceDisplayName} from './match-label.mjs?v=match1';
 
 const $ = id => document.getElementById(id);
 // Keep one video decoder across scene cards, independent of Gemini/candidate data.
@@ -234,11 +235,27 @@ function renderSourceList() {
     const card = make('div','source-item');
     const num = make('span','source-order',String(i + 1));
     const info = make('div','source-info');
-    const filename = make('strong','',source.file.name);
-    const status = source.error ? '解析失敗：' + source.error
-      : source.bins ? '解析済み・候補 ' + source.candidates.length + '件'
-      : '未解析';
-    info.append(filename,make('small','',status));
+    const filename=make('strong','source-match-title',sourceDisplayName(source,i));
+    const status=source.error?'解析に失敗':source.bins?'解析済み':'解析待ち';
+    const label=make('label','source-match-editor','試合番号');
+    const input=make('input','source-match-number');
+    input.type='number';input.inputMode='numeric';input.min='1';input.max='999';
+    input.step='1';input.value=String(source.matchNumber||i+1);
+    input.setAttribute('aria-label','動画の試合番号');
+    input.addEventListener('change',()=>{
+      if(!setMatchNumber(source,input.value,window.localStorage)){
+        input.value=String(source.matchNumber||i+1);
+        error('loadError','試合番号は1〜999で入力してください。');return;
+      }
+      error('loadError','');
+      syncSources();
+    });
+    label.append(input);
+    const original=make('details','source-original-file');
+    original.append(make('summary','','ファイル名'));
+    original.append(make('small','',source.file.name));
+    info.append(filename,make('small','',status),original);
+    card.append(info,label);
     const controls = make('div','source-controls');
     const move = (label,diff) => {
       const button = make('button','source-control',label);
@@ -266,7 +283,7 @@ function renderSourceList() {
       syncSources();
     });
     controls.append(del);
-    card.append(num,info,controls);
+    card.append(num,controls);
     return card;
   }));
 }
@@ -292,9 +309,11 @@ function chooseFiles(files, append = false) {
     const key = file.name + ':' + file.size + ':' + file.lastModified;
     if (seen.has(key)) continue;
     if (state.sources.length >= 12) break; // Keep memory manageable on iPhone.
-    state.sources.push({ id: 'video-' + (++nextSourceId), file,
-      objectUrl: URL.createObjectURL(file), duration: 0,
-      bins: null, candidates: [], error: '' });
+    const source={id:'video-'+(++nextSourceId),file,
+      objectUrl:URL.createObjectURL(file),duration:0,
+      bins:null,candidates:[],error:''};
+    assignMatchNumber(source,state.sources.length,window.localStorage);
+    state.sources.push(source);
     seen.add(key);
     added++;
   }
@@ -459,7 +478,7 @@ $('analyzeButton').addEventListener('click', async () => {
       // Keep already edited results when adding more videos; re-run only unprocessed.
       if (source.bins) continue;
       const segmentProgress = (label, percent) => progress(
-        '動画 ' + (i + 1) + '/' + files.length + '：' + source.file.name + ' — ' + label,
+        sourceDisplayName(source,i)+' ('+(i+1)+'/'+files.length+') · '+label,
         (i + Math.min(100, percent) / 100) / files.length * 100);
       try {
         segmentProgress('解析準備中',0);
@@ -1222,7 +1241,7 @@ function refreshComment() {
   summary.replaceChildren(...selected.map((item,i)=>{
     const src = state.sources.find(s => s.id === item.sourceId);
     return make('span','selected-chip', String(i+1) + '. ' +
-      (isMulti ? src?.file.name + ' · ' : '') +
+      (isMulti ? sourceDisplayName(src) + ' · ' : '') +
       formatTime(item.time));
   }));
   summary.hidden = selected.length === 0;
@@ -1236,7 +1255,7 @@ function drawResults() {
     if (!source.bins) continue;
     const heading = make('div','source-scenes-header');
     const headTitle=make('div','source-scenes-name');
-    headTitle.append(make('strong','',source.file.name),
+    headTitle.append(make('strong','',sourceDisplayName(source)),
       make('small','',source.candidates.length+'件の候補'));
     const copy=make('button','source-copy','この動画の時刻をコピー');
     copy.type='button';
