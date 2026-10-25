@@ -109,7 +109,9 @@ render();
   if(back)back.hidden=true;
   const note=document.createElement('p');
   note.style.cssText='padding:12px;border:1px solid #548d83;border-radius:10px;background:#183d40;color:#e6fbf4;font-size:14px';
-  note.textContent='動画データを保持するため、この画面は別タブで開きました。Safariのタブ一覧から元のPeakStampタブに切り替えて戻ってください。';
+  note.textContent=new URLSearchParams(location.search).has('embedded')
+   ?'元動画を保持したまま開いています。終わったら画面上部の「編集中の動画に戻る」を押してください。'
+   :'動画データを保持するため、この画面は別タブで開きました。Safariのタブ一覧から元のPeakStampタブに切り替えて戻ってください。';
   (back||document.body.firstElementChild)?.insertAdjacentElement('afterend',note);
  }
 </script>
