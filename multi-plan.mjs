@@ -1,3 +1,4 @@
+import {sourceDisplayName} from './match-label.mjs?v=match1';
 import { INTRO_SECONDS } from './exporter.mjs?v=pinch18';
 import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
 import { prepareIntroPlan } from './intro-layout.mjs?v=scene15';
@@ -28,7 +29,7 @@ export function buildMultiClipPlan(sources, options = {}) {
       zoomY:normalizeSceneZoom(candidate.zoom)>1 ? normalizeSceneFocus(candidate.zoomY) : .5,
     })), source.duration);
     for(const span of spans) plan.push({
-      sourceId:source.id,sourceName:source.file.name,start:span.start,end:span.end,
+      sourceId:source.id,sourceName:source?.matchNumber?sourceDisplayName(source):source.file.name,start:span.start,end:span.end,
       ...(span.zoom !== 1 ? { zoom:span.zoom,
         ...(span.zoomX!==.5 ? {zoomX:span.zoomX} : {}),
         ...(span.zoomY!==.5 ? {zoomY:span.zoomY} : {}) } : {})
@@ -65,9 +66,9 @@ export function sourceTimestampComments(sources){
       .slice().sort((a,b)=>a.time-b.time);
     return {
       id:source.id,
-      name:source.file.name,
+      name:source?.matchNumber?sourceDisplayName(source):source.file.name,
       count:list.length,
-      text:list.length ? '⚽ '+source.file.name+' — Highlights\n'
+      text:list.length ? '⚽ '+(source?.matchNumber?sourceDisplayName(source):source.file.name)+' — Highlights\n'
         +list.map(c=>formatLocalTime(c.time)+' '+(c.title?.trim()||'ナイスプレイ！')).join('\n')
         : ''
     };
