@@ -17,9 +17,10 @@ const parseClock=value=>{
  return Number.isFinite(time)?time:null;
 };
 export function createGoalSceneControls({viewer,video,label,status,
- onChange=()=>{},onReplay=()=>{},onSeek=()=>{},onPause=()=>{}}){
+ onChange=()=>{},onReplay=()=>{},onSeek=()=>{},onPause=()=>{},onNative=()=>{}}){
  let source=null,item=null,teardownZoom=null,drag=null;
  const viewport=make('div','goal-scene-viewport zoom-video-viewport');
+ viewport.hidden=true; // The MOV is only displayed after the user taps Replay.
  viewport.setAttribute('aria-label','2本指で画角の拡大・縮小、拡大後は1本指で移動');
  viewport.setAttribute('role','group');viewport.tabIndex=0;
  video.controls=false;video.className='inline-player';
@@ -36,6 +37,9 @@ export function createGoalSceneControls({viewer,video,label,status,
  const pause=make('button','scene-pause-button','▶ 再生');pause.type='button';
  const mute=make('button','scene-mute-button','🔊');mute.type='button';
  replay.addEventListener('click',()=>onReplay());
+ const native=make('button','goal-native-playback','Safari標準で再生');
+ native.type='button';
+ native.addEventListener('click',()=>onNative());
  pause.addEventListener('click',()=>{
   if(video.paused)onSeek(Number.isFinite(video.currentTime)?video.currentTime:bounds().start);
   else onPause();
@@ -76,7 +80,7 @@ export function createGoalSceneControls({viewer,video,label,status,
  };
  const inputStart=field('開始');const inputEnd=field('終了');
  range.append(heading,legend,track,hint,inputs);
- viewer.replaceChildren(label,viewport,zoomRow,playRow,range,status);
+ viewer.replaceChildren(label,viewport,zoomRow,playRow,native,range,status);
  const duration=()=>{
   const sourceLength=Number(source?.duration);
   if(sourceLength>0)return sourceLength;
@@ -221,5 +225,6 @@ export function createGoalSceneControls({viewer,video,label,status,
   redraw();
  };
  return {activate,redraw,clipBounds:bounds,playButton:replay,
+  showVideo:visible=>{viewport.hidden=!visible},
   destroy:()=>{teardownZoom?.();teardownZoom=null}};
 }

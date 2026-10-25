@@ -118,5 +118,43 @@ test('dispose detaches media and resets shared goal decoder',async()=>{
  controller.dispose();
  assert.equal(video.hidden,true);
  assert.equal(controller.currentSourceKey(),'');
+ assert.equal(calls.loads,2,'explicit source load and decoder cleanup both invoke load()');
+});
+
+test('new goal Replay explicitly calls HTMLVideoElement.load like working highlight cards',async()=>{
+ const {video,calls,controller,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:241,autoplay:true});
+ await flush();
+ assert.equal(video.src,'blob:a');
+ assert.equal(calls.loads,1,'Safari requires the source load to be explicitly requested');
+ assert.equal(calls.plays.length,1);
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:237,autoplay:true});
+ await flush();
+ assert.equal(calls.loads,1,'repeat replay must not reload a large MOV');
+ assert.equal(calls.plays.at(-1).time,237);
+});
+test('native Safari fallback reveals controls and loads media without an autoplay request',async()=>{
+ const {video,calls,controller,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:233,native:true});
+ await flush();
+ assert.equal(video.controls,true);
+ assert.equal(video.hidden,false);
+ assert.equal(video.currentTime,233);
+ assert.equal(video.src,'blob:a');
  assert.equal(calls.loads,1);
+ assert.equal(calls.plays.length,0,'native controls leave playback to direct Safari user tap');
+ assert.equal(controller.diagnostic().nativeMode,true);
+ assert.match(calls.messages.at(-1),/Safari標準プレーヤー/);
+});
+test('native fallback can recover previously rejected custom autoplay without reloading the MOV',async()=>{
+ const {video,calls,controller,flush}=fixture();
+ calls.nextError={name:'NotAllowedError'};
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:100,autoplay:true});
+ await flush();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:100,native:true});
+ await flush();
+ assert.equal(video.controls,true);
+ assert.equal(video.currentTime,100);
+ assert.equal(calls.loads,1);
+ assert.equal(calls.plays.length,1);
 });

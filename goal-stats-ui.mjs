@@ -7,7 +7,7 @@ import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
  confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=unifiedga1';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
-import {createGoalPlaybackController} from './goal-playback.mjs?v=highlightparity1';
+import {createGoalPlaybackController} from './goal-playback.mjs?v=goalnative1';
 import {createGoalSceneControls} from './goal-scene-editor.mjs?v=unifiedga1';
 
 const $=id=>document.getElementById(id);
@@ -64,7 +64,20 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   },
   onReplay:()=>seekTo(locate(activeKey),{autoplay:true}),
   onSeek:time=>seekTo(locate(activeKey),{autoplay:true,at:time}),
-  onPause:()=>player.pause()
+  onPause:()=>player.pause(),
+  onNative:()=>{
+   const entry=locate(activeKey);
+   if(!entry)return;
+   const {source,item}=entry;
+   scene.activate(source,item);
+   const bounds=scene.clipBounds();
+   viewer.classList?.add('goal-native-player');
+   viewer.hidden=false;
+   scene.showVideo(true);
+   player.open({sourceKey:goalSourceKey(source),sourceUrl:source.objectUrl,
+    at:bounds.start,native:true});
+   scene.redraw();
+  }
  });
  video.addEventListener('loadedmetadata',()=>{
   // Goal transcripts may exist before the normal waveform analyzer runs.
@@ -90,6 +103,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   // Keep the editor controls visible. The MOV itself is opened lazily only
   // when Replay is tapped, exactly like normal highlight cards.
   viewer.hidden=false;
+  viewer.classList?.remove('goal-native-player');
+  scene.showVideo(autoplay);
   label.textContent=source.file.name+' · ゴール '+fmt(actualGoalTime(item))+
    '（'+(item.origin==='audio'?'実況 '+fmt(item.timeSeconds):item.origin==='gemini'?'Geminiの音声反応 '+fmt(item.timeSeconds):'手動追加')+'）';
   scene.activate(source,item);

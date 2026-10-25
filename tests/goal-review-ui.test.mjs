@@ -64,7 +64,7 @@ function setup(){
    });
   }
   get src(){return this._src}
-  load(){stats.loads++}
+  load(){stats.explicitLoads=(stats.explicitLoads||0)+1}
   play(){stats.plays++;this.paused=false;return Promise.resolve()}
   webkitEnterFullscreen(){stats.nativeFullscreen=(stats.nativeFullscreen||0)+1}
  }
@@ -430,5 +430,46 @@ test('goal editing timeline marks COMMENTARY and Replay starts 5sec before comme
   await settleMedia();
   assert.equal(dom.goalStatsPreview.currentTime,374.2);
   assert.equal(stats.plays,1);
+ }finally{await restore()}
+});
+
+test('goal first-pass has no blank video; Safari native button is a usable playback fallback',async()=>{
+ const {dom,one,stats,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]});
+  await settleMedia();
+  const viewport=find(dom.goalStatsViewer,'goal-scene-viewport zoom-video-viewport');
+  assert.ok(viewport);
+  assert.equal(viewport.hidden,true,'do not show a blank MOV frame before Replay');
+  assert.equal(stats.loads,0,'do not preload the iPhone MOV just to show goals');
+  const native=find(dom.goalStatsViewer,'goal-native-playback');
+  assert.ok(native);
+  native.events.click();
+  await settleMedia();
+  assert.equal(viewport.hidden,false);
+  assert.equal(dom.goalStatsPreview.controls,true);
+  assert.equal(dom.goalStatsPreview.hidden,false);
+  assert.equal(dom.goalStatsPreview.currentTime,374.2);
+  assert.equal(stats.loads,1);
+  assert.equal(stats.explicitLoads,1,'match highlight player using video.load()');
+  assert.equal(stats.plays,0,'native Safari button does not silently autoplay');
+ }finally{await restore()}
+});
+test('goal custom Replay also explicitly loads source only once on Safari',async()=>{
+ const {dom,one,stats,restore}=setup();
+ try{
+  initGoalStatsReview({sources:[one]});
+  const replay=find(dom.goalStatsViewer,'play-btn goal-scene-replay');
+  assert.ok(replay);
+  replay.events.click();
+  await settleMedia();
+  assert.equal(stats.loads,1);
+  assert.equal(stats.explicitLoads,1);
+  assert.equal(stats.plays,1);
+  replay.events.click();
+  await settleMedia();
+  assert.equal(stats.loads,1);
+  assert.equal(stats.explicitLoads,1);
+  assert.equal(stats.plays,2);
  }finally{await restore()}
 });

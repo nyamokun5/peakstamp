@@ -1454,3 +1454,17 @@ body:has(#undoReview:not([hidden])) .page{
  .goal-review-completed{padding:10px}
  .goal-review-completed-actions{grid-template-columns:1fr}
 }
+
+/* Goal video visibility/native player: iPhone Safari fallback.
+ * The old goal element blocked all taps even when native controls were enabled.
+ * Highlight video remains untouched. */
+.goal-scene-viewport[hidden],#goalStatsPreview[hidden]{display:none!important}
+.goal-review-viewer .goal-native-playback{
+ display:block;width:100%;margin:7px 0 6px;padding:10px 12px;
+ border:1px solid #80c7be;border-radius:9px;background:#183f4b;
+ color:#effefa;font-size:13px;font-weight:700;min-height:44px;
+}
+.goal-review-viewer.goal-native-player .goal-scene-viewport{touch-action:manipulation}
+.goal-review-viewer.goal-native-player #goalStatsPreview{
+ pointer-events:auto!important;object-fit:contain!important;
+}
