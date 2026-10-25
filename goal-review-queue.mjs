@@ -1,5 +1,5 @@
 /** All recognized goal candidates across files in original upload order. */
-import {createGoalDrafts,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=unifiedga1';
+import {createGoalDrafts,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=goalprefill1';
 export function collectGoalQueue(sources,storage){
  const rows=[];
  for(const [index,source]of (sources||[]).entries()){
