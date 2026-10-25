@@ -50,12 +50,12 @@ test('sanitizer keeps uncertain speaker fields empty, not guessed',()=>{
 });
 test('overlapped segments merge same call, preserve scorer/assist, no duplicated score',()=>{
  const r=mergeWavSegmentEvents([
-  {startSeconds:0,events:[{reaction_time_seconds:62,type:'goal_reaction',
+  {startSeconds:0,meta:{unifiedGoalCalls:true},events:[{reaction_time_seconds:62,type:'goal_reaction',
     confidence:'high',quote:'ナイシュー',
     suggested_clip_start_seconds:54,suggested_clip_end_seconds:67}],
    utterances:[{time_seconds:67,kind:'goal_call',quote:'山田さんゴール',
     scorer:'山田さん',assist:null,confidence:'medium'}]},
-  {startSeconds:65,events:[],
+  {startSeconds:65,meta:{unifiedGoalCalls:true},events:[],
    utterances:[{time_seconds:2.4,kind:'goal_call',quote:'山田さんゴール、佐藤さんアシスト',
     scorer:'山田さん',assist:'佐藤さん',confidence:'high'}]}
  ],130);
