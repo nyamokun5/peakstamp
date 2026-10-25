@@ -132,6 +132,7 @@ export function createGoalDrafts(source,storage){
     goalTimeVerified:x.goalTimeVerified===true};
   });
  const events=transcript?.data?.utterances||[];
+ const reactions=readGeminiGoalReactions(source,storage);
  for(const event of events){
   if(event?.kind!=='goal_call'||!validTime(event.time_seconds))continue;
   const time=Number(event.time_seconds),id=goalCandidateId(time,event.quote||'');
@@ -139,12 +140,14 @@ export function createGoalDrafts(source,storage){
   const already=items.find(r=>r.id===id ||
    (r.origin==='manual'?
     time-actualGoalTime(r)>=-2 && time-actualGoalTime(r)<=15:
-    Math.abs(Number(r.timeSeconds)-time)<=6 &&
-    (!clip(r.scorer)||!clip(event.scorer)||
-     clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase())));
+    r.origin==='gemini'?
+     time-Number(r.timeSeconds)>=-2 && time-Number(r.timeSeconds)<=15:
+     Math.abs(Number(r.timeSeconds)-time)<=6 &&
+     (!clip(r.scorer)||!clip(event.scorer)||
+      clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase())));
   if(already){
    // A prior Gemini candidate is enriched only if still a draft.
-   if(already.origin==='gemini'&&already.status==='draft'){
+   if(already.status==='draft'&&already.origin!=='manual'){
     if(!already.scorer&&clip(event.scorer))already.scorer=clip(event.scorer);
     if(!already.assist&&clip(event.assist)){
      already.assist=clip(event.assist);already.assistStatus='named';
@@ -153,7 +156,15 @@ export function createGoalDrafts(source,storage){
    continue;
   }
   const match=matchContext(events,time);
+  // Relate voice announcements to the earlier goal reaction, keeping the shot.
+  const linked=reactions.filter(r=>r.time<=time+2&&time-r.time<=15)
+   .sort((a,b)=>Math.abs(time-a.time)-Math.abs(time-b.time))[0];
+  const fresh=transcript?.scope==='unified';
+  const start=linked?.start??(fresh?Math.max(0,time-12):null);
+  const end=linked?.end??(fresh?Math.min(Number(source.duration)||time+2,time+2):null);
   items.push({id,origin:'audio',timeSeconds:time,
+   ...(start!==null?{clipStartSeconds:roundTime(start)}:{}),
+   ...(end!==null?{clipEndSeconds:roundTime(end)}:{}),
    goalTimeSeconds:estimateGoalTime(time),goalTimeVerified:false,goalTimeEdited:false,
    quote:clip(event.quote,240),
    scorer:clip(event.scorer),assist:clip(event.assist),
@@ -162,11 +173,14 @@ export function createGoalDrafts(source,storage){
    matchSeq:'',status:'draft',confirmedAt:null,note:''});
  }
  // Keep existing commentary and manual goal decisions; never create duplicates.
- for(const event of readGeminiGoalReactions(source,storage)){
+ for(const event of reactions){
   const existing=items.find(item=>
    item.origin==='manual'
     ? Math.abs(actualGoalTime(item)-event.time)<=8
-    : Math.abs(Number(item.timeSeconds)-event.time)<=8);
+    : item.origin==='audio'
+     ? Number(item.timeSeconds)-event.time>=-2 &&
+       Number(item.timeSeconds)-event.time<=15
+     : Math.abs(Number(item.timeSeconds)-event.time)<=8);
   if(existing)continue;
   items.push({
    id:'gemini-goal-'+Math.round(event.time*10),origin:'gemini',
