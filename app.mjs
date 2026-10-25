@@ -6,9 +6,9 @@ import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=unifiedga2';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
 import { initGoalStatsReview } from './goal-stats-ui.mjs?v=goalnative2';
-import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=unifiedga1';
+import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=unifiedga1';
-import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=peak52';
+import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=goaltrim1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=title62';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=peak52';
