@@ -1,3 +1,4 @@
+import {sourceDisplayName} from './match-label.mjs?v=match1';
 /**
  * Primary Gemini-only workflow: local MOV -> streamed PCM WAV -> authenticated API
  * -> on-device scene review. Never calls Whisper or acoustic peak detection.
@@ -87,7 +88,7 @@ function refreshBatchProgress({processed=0,total=0,index=0,video=null,phase='sta
  $('geminiBatchPercent').textContent=percentage+'%';
  $('geminiBatchBar').style.width=percentage+'%';
  root.setAttribute('aria-valuenow',String(percentage));
- const name=video?.file?.name||'動画';
+ const name=sourceDisplayName(video);
  $('geminiBatchLabel').textContent=phase==='starting'
    ? '動画 '+(index+1)+'/'+total+' を解析中 · '+name
    : '処理済み '+processed+'/'+total+' 本';
@@ -139,7 +140,7 @@ export function refreshGeminiPrimary(state) {
  for(const [i,source] of sources.entries()){
   const opt=document.createElement('option');
   opt.value=String(i);
-  opt.textContent=source.file.name;
+  opt.textContent=sourceDisplayName(source,i);
   picker.append(opt);
  }
  selected=Math.min(selected,Math.max(0,sources.length-1));
@@ -177,7 +178,7 @@ export function refreshGeminiPrimary(state) {
   const isLegacy=Boolean(cache&&(cache.meta?.unifiedGoalCalls!==true || !Array.isArray(cache.utterances)));
   sourceHelp.textContent=isLegacy
    ? 'この動画は旧方式の解析済みです。ゴール・アシストもまとめて検出するには「Geminiで再解析」が必要です（追加料金が発生する場合があります）。'
-   : source&&sources.length>1?'選択中：'+source.file.name:'';
+   : source&&sources.length>1?'選択中：'+sourceDisplayName(source):'';
   sourceHelp.hidden=!isLegacy&&(!source||sources.length<2);
  }
  if(!API_ENDPOINT && !cache && !processing){
@@ -560,7 +561,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults}) {
     },
     onProgress:progress=>{
      activeBatchStep=progress.phase==='starting'?{
-      index:progress.index,total:progress.total,name:progress.video?.file?.name||'動画'
+      index:progress.index,total:progress.total,name:sourceDisplayName(progress.video)
      }:activeBatchStep;
      if(progress.phase==='starting')eta.begin(progress.video);
      else if(['complete','failed','skipped'].includes(progress.phase))
