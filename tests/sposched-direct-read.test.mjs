@@ -69,8 +69,8 @@ test('second confirmed goal stays editable after first sent and official SS refr
  assert.match(html,/const saved=row\.updateGoalId\|\|updateSelect\.value/);
  assert.match(html,/article\.id='review-goal-'/);
  // Only the row being edited is updated: rerendering goal #2 does not reset all fields.
- assert.match(html,/row\.scorer=scorerSelect\.value;invalidate\(\)/);
- assert.match(html,/row\.assist=assistSelect\.value;invalidate\(\)/);
+ assert.match(html,/row\.scorer=scorerSelect\.value;invalidate\('scorer'\)/);
+ assert.match(html,/row\.assist=assistSelect\.value;invalidate\('assist'\)/);
  assert.doesNotMatch(html,/scorerSelect\.addEventListener\('change',[^\n]*rebuild\(/);
 });
 
