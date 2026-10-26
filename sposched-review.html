@@ -103,7 +103,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
  <p><strong>まだ送信していません。</strong>新規得点登録・既存得点の修正候補・試合結果の変更をJSONとして確認できます。<code>record_goal</code> と <code>patch_goal</code> は、テスト用SSに直接読み込んだ場合だけ、下の専用画面から1件ずつ確認して送信できます。本番SSには送信しません。</p>
  <textarea id="planJson" readonly></textarea>
  <div class="line"><button class="primary" id="copyPlan">JSONをコピー</button><span class="small" id="copyStatus"></span></div>
- <p class="small">コピー後、ChatGPTに「Shoot SundayのこのJSONを確認して、登録前に差分と重複を見せて」と貼り付けると、接続済みアプリ経由で進められます。</p>
+ <p class="small">このJSONは記録・確認用です。テストへの反映は下の専用操作から1件ずつ行います。ChatGPTのMCP接続は不要です。</p>
 </section>
 <section class="panel" id="stagingSendArea" hidden>
  <h2>5. <span class="staging-badge">TEST ONLY</span> SSテスト環境への1件反映</h2>
@@ -463,6 +463,11 @@ $('ssLoadEvents').addEventListener('click',async()=>{
  } catch(error){statusSS('取得失敗：'+error.message);}
  finally{$('ssLoadEvents').disabled=false;}
 });
+$('ssEventSelect').addEventListener('change',()=>{
+ snapshot=null;loadedFromStagingDirect=false;
+ $('reviewArea').hidden=true;touch();
+ statusSS('イベントが変わりました。「選んだイベントの試合・得点を読み込む」を押してください。');
+});
 $('ssLoadSnapshot').addEventListener('click',async()=>{
  const eventId=$('ssEventSelect').value;
  if(!SS_EVENT_ID.test(eventId)){statusSS('イベントを選択してください。');return;}
@@ -514,7 +519,8 @@ $('buildPlan').addEventListener('click',()=>{
     $('stagingStatus').textContent='テスト環境のみ。新規ゴール・既存ゴール修正を1件ずつプレビューします。';
    }else $('reviewStatus').textContent='試合結果の書き込みは未対応です（JSONの確認のみ）。';
   }
-  $('reviewStatus').textContent='登録操作 '+payload.operations.length+'件の確認データを作成しました（未送信）';
+  if(!$('reviewStatus').textContent.includes('未対応'))
+   $('reviewStatus').textContent='登録操作 '+payload.operations.length+'件の確認データを作成しました（未送信）';
   $('exportArea').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(error){
   $('exportArea').hidden=true;
@@ -557,13 +563,13 @@ $('stagingPreview').addEventListener('click',async()=>{
   approvedAction=request;previewToken=response.preview_token;
   const plan=response.plan;
   $('stagingPlan').textContent=
-   '環境：TEST ONLY / SpoSchedテスト団体\\n'+
-   '団体ID：'+response.team_id+'\\n試合：'+plan.title+
-   '\\n操作：'+plan.action+
-   '\\n変更前：'+JSON.stringify(plan.before)+
-   '\\n変更後：'+JSON.stringify(plan.after)+
-   (plan.warning?'\\n⚠ '+plan.warning:'')+
-   '\\n確認有効期限：'+response.expires_in_seconds+'秒';
+   '環境：TEST ONLY / SpoSchedテスト団体\n'+
+   '団体ID：'+response.team_id+'\n試合：'+plan.title+
+   '\n操作：'+plan.action+
+   '\n変更前：'+JSON.stringify(plan.before)+
+   '\n変更後：'+JSON.stringify(plan.after)+
+   (plan.warning?'\n⚠ '+plan.warning:'')+
+   '\n確認有効期限：'+response.expires_in_seconds+'秒';
   $('stagingConfirmPanel').hidden=false;
   $('stagingStatus').textContent='プレビュー完了。まだ書き込んでいません。内容を確認してください。';
  }catch(e){$('stagingStatus').textContent='確認できません：'+e.message}
