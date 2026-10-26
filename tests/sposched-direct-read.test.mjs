@@ -71,3 +71,19 @@ test('second confirmed goal stays editable after first sent and official SS refr
  assert.match(html,/row\.assist=assistSelect\.value;invalidate\(\)/);
  assert.doesNotMatch(html,/scorerSelect\.addEventListener\('change',[^\n]*rebuild\(/);
 });
+
+test('manual goal without video is available in TEST-only review and existing batch',()=>{
+ assert.match(html,/id="manualAddWrap"/);
+ assert.match(html,/id="manualAddGoal"/);
+ assert.match(html,/id="manualAddStatus"/);
+ assert.match(html,/makeManualGoal\(crypto\.randomUUID\(\)\)/);
+ assert.match(html,/unsentManualGoals\(manualGoals\)/);
+ assert.match(html,/prepareGoalRows\(\{goals:source\},snapshot\)/);
+ assert.match(html,/storeManualGoals\(localStorage,'staging'/);
+ assert.match(html,/restoreManualGoals\(localStorage,'staging'/);
+ assert.match(html,/manualGoals=markManualCompleted\(manualGoals/);
+ assert.match(html,/g\.manual\?'SS手動登録（動画なし）'/);
+ assert.match(html,/loadedFromStagingDirect&&\$\('ssEnvironment'\)\.value==='staging'/);
+ assert.match(html,/id="batchPreview"/);
+ assert.match(html,/id="batchExecute"/);
+});
