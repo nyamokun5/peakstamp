@@ -413,7 +413,7 @@ test('editing goal #2 cannot leak into goal #1 and changing event resets all edi
 test('preserved goal correction target must exist in latest official match',()=>{
  const raw=event();
  const goalId='6b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e';
- raw.matches[1].goals[0].goal_id=goalId;
+ raw.matches.find(m=>m.seq===2).goals[0].goal_id=goalId;
  const snap=normalizeSpoSnapshot(raw);
  const prior=prepareGoalRows(exported(),snap);
  prior[1].updateGoalId=goalId;
