@@ -164,7 +164,7 @@ import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,se
 import {toStagingAction,writeableReviewOperations} from './sposched-staging-client.mjs?v=ss-stage1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
-import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt} from './sposched-write-journal.mjs?v=ss-recovery1';
+import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy} from './sposched-write-journal.mjs?v=ss-recovery2';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -579,6 +579,7 @@ $('recoveryReload').addEventListener('click',async()=>{
   if(latest.eventId!==eventId)throw Error('取得したイベントIDが異なります');
   const match=await fetchSS('/match?match_id='+encodeURIComponent(entry.match_id));
   const evidence=inspectAttempt(entry,match);
+  const policy=recoveryDecisionPolicy(evidence);
   snapshot=latest;
   rebuild({preserveEdits:true});
   // Build recovery choices only from an actual read of the official test API.
@@ -592,6 +593,7 @@ $('recoveryReload').addEventListener('click',async()=>{
    ?'今回の送信が反映された証拠は見つかりませんでした。ただし通信切断の直後は確定できません。'
    :'他の変更や対象ゴールの消失があり、送信結果を自動判定できません。';
   details.append(node('p','照合結果：'+status,'warning'));
+  details.append(node('p',policy.reason,'details'));
   if(evidence.goalIds?.length)details.append(node('p','一致した新規ゴールID：'+evidence.goalIds.join('、'),'details'));
   details.append(node('p','試合ID：'+entry.match_id+' / 処理：'+entry.action+' / ゴール識別子：'+entry.goalKey,'details'));
   const decision=mkInput('checkbox');
@@ -601,9 +603,9 @@ $('recoveryReload').addEventListener('click',async()=>{
   const actions=node('div','','line'),done=node('button','SSに登録済みと確認 → 再送せず終了');
   const retry=node('button','SSに未登録と確認 → 再審査に戻す');
   done.type=retry.type='button';done.disabled=retry.disabled=true;
-  const change=()=>{done.disabled=retry.disabled=!decision.checked};decision.addEventListener('change',change);
+  const change=()=>{done.disabled=!decision.checked;retry.disabled=!decision.checked||!policy.allowReturnToReview;};decision.addEventListener('change',change);
   const finish=(already)=>{
-   if(!decision.checked)return;
+   if(!decision.checked||(!already&&!policy.allowReturnToReview))return;
    try{
     // Never send here. This only clears a one-attempt lock after explicit
     // operator review; a later write needs a NEW goal review and token.
