@@ -89,3 +89,17 @@ test('manual goal without video is available in TEST-only review and existing ba
  assert.match(html,/id="batchPreview"/);
  assert.match(html,/id="batchExecute"/);
 });
+
+test('staging write recovery cannot silently retry failed requests',()=>{
+ assert.match(html,/id="recoveryPanel"/);
+ assert.match(html,/id="recoveryReload"/);
+ assert.match(html,/id="recoveryDetails"/);
+ assert.match(html,/pendingAttempts\(localStorage,snapshot\.eventId\)/);
+ assert.match(html,/beginAttempt\(localStorage,snapshot\.eventId,goalKeyOfOperation\(item\.operation\),action,before\)/);
+ assert.match(html,/beginAttempt\(localStorage,snapshot\.eventId,completedKey,request,before\)/);
+ assert.match(html,/clearAttempt\(localStorage,snapshot\.eventId,goalKeyOfOperation\(item\.operation\)\)/);
+ assert.match(html,/inspectAttempt\(entry,match\)/);
+ assert.match(html,/SSに登録済みと確認 → 再送せず終了/);
+ assert.match(html,/SSに未登録と確認 → 再審査に戻す/);
+ assert.match(html,/前回の送信結果が未確認です/);
+});
