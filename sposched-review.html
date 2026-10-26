@@ -222,7 +222,7 @@ function sourcesLoad(){
  for(const [i,item] of saved.entries()){
   const label=node('label','','select-source'),checkbox=mkInput('checkbox');
   checkbox.value=item.key;checkbox.checked=i===0;
-  checkbox.addEventListener('change',()=>{touch();if(snapshot)rebuild()});
+  checkbox.addEventListener('change',()=>{touch();if(snapshot)rebuild({preserveEdits:true})});
   label.append(checkbox,node('span',' '+item.source.name+' · 確定ゴール '+item.count+'件'));
   $('sources').append(label);
  }
@@ -542,13 +542,13 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   // Built-in existing duplicate detector receives exactly this normalised shape.
   snapshot=normalizeSpoSnapshot(data);
   loadedFromStagingDirect=$('ssEnvironment').value==='staging';
-  rebuild();
+  rebuild({preserveEdits:true});
   statusSS((loadedFromStagingDirect?'テスト':'本番')+'読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
  }catch(error){statusSS('読み込み失敗：'+error.message);}
  finally{$('ssLoadSnapshot').disabled=false;}
 });
 
-$('refreshSources').addEventListener('click',()=>{sourcesLoad();if(snapshot)rebuild()});
+$('refreshSources').addEventListener('click',()=>{sourcesLoad();if(snapshot)rebuild({preserveEdits:true})});
 $('snapshotFile').addEventListener('change',async e=>{
  const f=e.target.files?.[0];if(!f)return;
  try{$('snapshotText').value=await f.text();$('snapshotStatus').textContent=f.name+' を読み込みました';}
