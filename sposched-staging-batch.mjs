@@ -61,7 +61,8 @@ export class BatchStopped extends Error {
   super(message);this.name='BatchStopped';this.completed=completed;this.failedIndex=failedIndex;
  }
 }
-export async function executeReviewedBatch({entries,resolveAction,previewAction,executeAction,onProgress=()=>{}}){
+export async function executeReviewedBatch({entries,resolveAction,previewAction,executeAction,
+ beforeExecute=async()=>{},afterExecute=async()=>{},onProgress=()=>{}}){
  if(!Array.isArray(entries)||entries.length===0||entries.length>20)
   abort('プレビュー済みの一括登録データがありません');
  const completed=[];
@@ -80,6 +81,8 @@ export async function executeReviewedBatch({entries,resolveAction,previewAction,
     // scorer/assist/side must match the reviewed preview.
     abort('SSの登録前後の内容が一括確認時から変わりました。再確認してください');
    }
+   // Persist a crash-safe attempt before POST; never retry an uncertain result.
+   await beforeExecute(item,action);
    const result=await executeAction({...action,
     preview_token:confirmed.preview_token,confirm:'TEST-ONLY WRITE'});
    if(result?.write_sent!==true||result?.readback?.verified!==true)
@@ -87,6 +90,7 @@ export async function executeReviewedBatch({entries,resolveAction,previewAction,
    const confirmedItem={index:item.index,operation:item.operation,
     readback:result.readback};
    completed.push(confirmedItem);
+   await afterExecute(item,result);
    onProgress({phase:'verified',current:i+1,total:entries.length,item,
     completed:[...completed]});
   }catch(error){
