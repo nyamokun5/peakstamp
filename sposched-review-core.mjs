@@ -293,6 +293,14 @@ export function buildReviewPayload(snapshot,rows,scoreRows=[]){
    if(row.guest)throw Error('ゲストの得点変更はこの画面では対応していません。');
    if(normalizeTeam(team)!==normalizeTeam(original.team))
     throw Error('得点チームが異なります。PATCHでは得点側を変更できません。');
+   const scorerSide=snapshot.playerTeam.get(row.scorer);
+   if(scorerSide&&normalizeTeam(scorerSide)!==normalizeTeam(team))
+    throw Error('得点者が得点側のチームにいません。オウンゴールへの変更は未対応です。');
+   if(row.assistMode==='named'){
+    const assistSide=snapshot.playerTeam.get(row.assist);
+    if(assistSide&&normalizeTeam(assistSide)!==normalizeTeam(team))
+     throw Error('アシスト者が得点側のチームにいません。');
+   }
    const expected={scorer:original.scorer,assist:original.assist||null,
     team:original.team,scored_at:original.scoredAt||null,own_goal:original.ownGoal};
    const patch={};
