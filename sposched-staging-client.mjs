@@ -43,6 +43,8 @@ export function toStagingAction(snapshot,draftOperation,officialMatch){
  if(!snapshot?.eventId || !draftOperation?.args || !officialMatch)
   fail('SSの試合情報と確認済み操作が必要です');
  const op=draftOperation,args=op.args;
+ if(args.event_id&&args.event_id!==snapshot.eventId)
+  fail('確認済み操作のイベントIDが現在のSSイベントと異なります');
  if(!UUID.test(officialMatch.match_id||'')||!UUID.test(officialMatch.event_id||'')||
     officialMatch.event_id!==snapshot.eventId||
     !UUID.test(args.match_id||officialMatch.match_id)||
@@ -68,7 +70,8 @@ export function toStagingAction(snapshot,draftOperation,officialMatch){
   if(!expected||!sameName(expected.team,officialMatch[goal.side]?.name)||
      !sameName(expected.scorer,goal.scorer?.name)||
      normalizedName(expected.assist||'')!==normalizedName(goal.assist?.name||'')||
-     expected.own_goal!==false)
+     expected.own_goal!==false||
+     Boolean(expected.scored_at)&&expected.scored_at!==goal.scored_at)
    fail('登録済みゴールの内容が前回の照合から変わっています。最新のSSデータを読み込んでください');
   const patch=args.patch||{};
   if(Object.keys(patch).some(key=>!['scorer','assist'].includes(key)))
