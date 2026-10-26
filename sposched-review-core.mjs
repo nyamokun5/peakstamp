@@ -230,7 +230,7 @@ export function prepareGoalRows(rawGoals,snapshot){
  * goals have changed. Never restore edits when the event changes.
  */
 export function preserveReviewRows(nextRows,priorRows,{
- sameEvent=false,completedKeys=[]
+ sameEvent=false,completedKeys=[],snapshot=null
 }={}){
  if(!sameEvent||!Array.isArray(priorRows)||!Array.isArray(nextRows))return nextRows;
  const previous=new Map(priorRows.map(row=>[row.key,row]));
@@ -245,9 +245,9 @@ export function preserveReviewRows(nextRows,priorRows,{
   if(completed.has(row.key))row.include=false;
   row.confirmed=false;
   row.duplicateApproved=false;
-  row.updateGoalId=old.updateGoalId||'';
-  const match=nextRows.length&&row.seq;
-  if(!match)row.updateGoalId='';
+  const match=snapshot?.matches?.find(m=>m.seq===Number(row.seq));
+  row.updateGoalId=match?.existingGoals?.some(g=>g.id===old.updateGoalId)
+   ?old.updateGoalId:'';
   return row;
  });
 }
