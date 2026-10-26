@@ -21,15 +21,21 @@ export function quickGoalDecisions(snapshot,rows) {
   if(row.guest)return {...item,reason:'ゲスト得点は現在のTEST一括登録で対応していません'};
   const issue=validateGoalRow({...row,confirmed:true},snapshot);
   if(issue)return {...item,reason:issue};
-  const manualCorrection=row.quickEdited===true;
-  if(!manualCorrection && (row.matchGuess?.ambiguous||row.matchGuess?.conflict))
+  // An edit to an unrelated field must never clear AI ambiguity.
+  // Only the field actually edited (or an explicit whole-row review)
+  // can satisfy that field's human verification requirement.
+  const fullReview=row.quickReviewedAll===true;
+  const matchReviewed=fullReview||row.quickReviewedFields?.match===true;
+  const scorerReviewed=fullReview||row.quickReviewedFields?.scorer===true;
+  const assistReviewed=fullReview||row.quickReviewedFields?.assist===true;
+  if(!matchReviewed && (row.matchGuess?.ambiguous||row.matchGuess?.conflict))
    return {...item,reason:'実況と試合の対戦カードが曖昧です'};
-  if(!manualCorrection && row.matchGuess?.confidence!=='high' &&
+  if(!matchReviewed && row.matchGuess?.confidence!=='high' &&
       !(snapshot.matches.length===1&&Number(row.seq)===Number(snapshot.matches[0].seq)))
    return {...item,reason:'試合番号の特定が不確かです'};
-  if(!manualCorrection && row.scorerGuess?.confidence!=='high')
+  if(!scorerReviewed && row.scorerGuess?.confidence!=='high')
    return {...item,reason:'得点者の候補を確認・修正してください'};
-  if(!manualCorrection && row.assistMode==='named' && row.assistGuess?.confidence!=='high')
+  if(!assistReviewed && row.assistMode==='named' && row.assistGuess?.confidence!=='high')
    return {...item,reason:'アシスト者の候補を確認・修正してください'};
   return {...item,state:'ready',reason:'最終一覧で確認してください'};
  });
