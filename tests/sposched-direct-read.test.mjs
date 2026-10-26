@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 // Compile its script separately to catch syntax errors without loading the DOM.
 const html = readFileSync(new URL('../sposched-review.html', import.meta.url),'utf8');
 
-test('SpoSched direct import is present and accepts only read-only gateway routes',()=>{
+test('SpoSched direct import defaults to production read-only with an explicit staging switch',()=>{
   assert.match(html,/id="ssBridgeToken"/);
   assert.match(html,/id="ssLoadEvents"/);
   assert.match(html,/id="ssEventSelect"/);
@@ -46,5 +46,14 @@ test('existing-goal correction requires selecting a real goal ID and explicit co
  assert.match(html,/row\.confirmed=false;confirm\.checked=false/);
  assert.match(html,/この登録済みゴールを修正対象に指定/);
  assert.match(html,/未送信/);
- assert.doesNotMatch(html,/method:\s*['"](POST|PATCH|PUT|DELETE)['"]/i);
+ assert.match(html,/id="ssEnvironment"/);
+ assert.match(html,/id="stagingPreview"/);
+ assert.match(html,/id="stagingApprove"/);
+ assert.match(html,/id="stagingExecute"/);
+ assert.match(html,/confirm:'TEST-ONLY WRITE'/);
+ assert.match(html,/SS_GATEWAYS/);
+ assert.match(html,/staging:'https:\/\/shoot-sunday-sync-staging\.yomax1979\.workers\.dev'/);
+ assert.match(html,/production:'https:\/\/shoot-sunday-sync\.yomax1979\.workers\.dev'/);
+ assert.match(html,/if\(\$\('ssEnvironment'\)\.value!=='staging'\|\|!loadedFromStagingDirect\)/);
+ assert.doesNotMatch(html,/fetch\(SS_GATEWAYS\.production\s*\+\s*path\s*,\s*\{[^}]*method:'POST'/);
 });
