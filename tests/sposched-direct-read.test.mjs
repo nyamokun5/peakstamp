@@ -57,3 +57,17 @@ test('existing-goal correction requires selecting a real goal ID and explicit co
  assert.match(html,/if\(\$\('ssEnvironment'\)\.value!=='staging'\|\|!loadedFromStagingDirect\)/);
  assert.doesNotMatch(html,/fetch\(SS_GATEWAYS\.production\s*\+\s*path\s*,\s*\{[^}]*method:'POST'/);
 });
+
+test('second confirmed goal stays editable after first sent and official SS refresh',()=>{
+ assert.match(html,/id="goalJump"/);
+ assert.match(html,/rows=preserveReviewRows\(prepareGoalRows\(/);
+ assert.match(html,/completedKeys:completedKey\?\[completedKey\]:\[\]/);
+ assert.match(html,/completedKeys:completed\.map\(x=>goalKeyOfOperation\(x\.operation\)\)/);
+ assert.match(html,/rebuild\(\{preserveEdits:true\}\)/);
+ assert.match(html,/const saved=row\.updateGoalId\|\|updateSelect\.value/);
+ assert.match(html,/article\.id='review-goal-'/);
+ // Only the row being edited is updated: rerendering goal #2 does not reset all fields.
+ assert.match(html,/row\.scorer=scorerSelect\.value;invalidate\(\)/);
+ assert.match(html,/row\.assist=assistSelect\.value;invalidate\(\)/);
+ assert.doesNotMatch(html,/scorerSelect\.addEventListener\('change',[^\n]*rebuild\(/);
+});
