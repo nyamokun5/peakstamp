@@ -166,7 +166,11 @@ const setBatchBusy=busy=>{
  for(const id of ['ssEnvironment','ssBridgeToken','ssLoadEvents','ssEventSelect',
   'ssLoadSnapshot','refreshSources','buildPlan','stagingPreview','stagingExecute',
   'batchPreview','batchApprove','batchExecute']){
-  $(id).disabled=busy||(id==='batchExecute'&&(!batchPrepared||!$('batchApprove').checked));
+  $(id).disabled=busy||
+   (id==='batchExecute'&&(!batchPrepared||!$('batchApprove').checked))||
+   (id==='batchPreview'&&!lastPayload)||
+   (id==='stagingPreview'&&!lastPayload)||
+   (id==='stagingExecute'&&(!approvedAction||!previewToken||!$('stagingApprove').checked));
  }
  $('sources').inert=busy;$('reviewArea').inert=busy;
  $('batchGoals').inert=busy;
@@ -644,6 +648,7 @@ $('batchExecute').addEventListener('click',async()=>{
  setBatchBusy(true);
  $('batchStatus').textContent='テスト環境に送信中。通信エラー時は自動再送しません。';
  const messages=[];
+ let verifiedCount=0;
  try{
   const completed=await executeReviewedBatch({entries,
    resolveAction:resolveReviewedAction,
@@ -651,6 +656,7 @@ $('batchExecute').addEventListener('click',async()=>{
    executeAction:payload=>postStaging('/staging/execute',payload),
    onProgress:progress=>{
     if(progress.phase==='verified'){
+     verifiedCount=progress.completed.length;
      messages.push('✓ '+progress.current+'/'+progress.total+'：照合済み');
      $('batchProgress').textContent=messages.join('\n');
     }else if(progress.phase==='sending'){
@@ -667,12 +673,12 @@ $('batchExecute').addEventListener('click',async()=>{
   statusSS(finished);$('reviewStatus').textContent=finished;
   $('reviewArea').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){
-  const complete=e.completed?.length??0;
+  const complete=e.completed?.length??verifiedCount;
   // A successful POST might have been committed even if its reply was lost.
   // Freeze the old draft and require a full SS refresh. Never retry here.
   lastPayload=null;resetTestPreview();$('stagingConfirmPanel').hidden=true;
-  $('batchStatus').textContent='一括登録停止：確認済み'+complete+'件。'+e.message+
-   '。残りは送信していません。必ずSSの最新イベントを再取得してください。';
+  $('batchStatus').textContent='一括登録停止：照合済み'+complete+'件。'+e.message+
+   '。失敗した操作は送信済みの可能性もあります。自動再送・残りの処理は行っていません。必ずSSの最新イベントを再取得してください。';
   $('batchProgress').textContent=messages.join('\n');
   statusSS('一括登録は途中停止しました。SSのイベント・試合を再取得してください。');
  }finally{setBatchBusy(false)}
