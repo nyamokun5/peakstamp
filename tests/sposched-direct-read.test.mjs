@@ -31,3 +31,10 @@ test('embedded module JavaScript parses without runtime DOM initialization',()=>
   const body = module[1].split('\n').filter(line=>!line.startsWith('import ')).join('\n');
   assert.doesNotThrow(()=>new Function(body));
 });
+
+test('verified already-registered goals show no update rather than an error',()=>{
+  assert.match(html,/matchingAndSkipped/);
+  assert.match(html,/rows\.every\(row=>!row\.include&&matchingExistingGoals\(row,snapshot\)\.length>0\)/);
+  assert.match(html,/noScoreChanges/);
+  assert.match(html,/追加・更新する操作はありません/);
+});

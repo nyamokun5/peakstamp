@@ -398,7 +398,15 @@ $('buildPlan').addEventListener('click',()=>{
   $('exportArea').hidden=false;
   $('reviewStatus').textContent='登録操作 '+payload.operations.length+'件の確認データを作成しました（未送信）';
   $('exportArea').scrollIntoView({behavior:'smooth',block:'start'});
- }catch(error){$('exportArea').hidden=true;$('reviewStatus').textContent=error.message}
+ }catch(error){
+  $('exportArea').hidden=true;
+  const matchingAndSkipped=rows.length>0 &&
+   rows.every(row=>!row.include&&matchingExistingGoals(row,snapshot).length>0);
+  const noScoreChanges=scores.every(row=>!row.include);
+  $('reviewStatus').textContent=matchingAndSkipped&&noScoreChanges
+   ?'✓ 照合完了：選択したゴールはすべてSSの登録済みゴールと同じ得点者・アシスト・チームです。追加・更新する操作はありません（動画との同一性は確認済みとして扱います）。'
+   :error.message;
+ }
 });
 $('copyPlan').addEventListener('click',async()=>{
  try{
