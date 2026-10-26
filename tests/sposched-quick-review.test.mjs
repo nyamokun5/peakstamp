@@ -38,11 +38,44 @@ test('missing scorer, unknown assist, wrong match and AI ambiguity are held, nev
  r[0].scorer='西村';r[0].matchGuess.conflict=true;
  r[1].assistMode='none';
  assert.equal(quickGoalDecisions(s,r)[0].state,'attention');
+ // Changing a player or team does NOT approve an ambiguous match.
  r[0].quickEdited=true;
+ r[0].quickReviewedFields={team:true};
+ assert.equal(quickGoalDecisions(s,r)[0].state,'attention');
+ r[0].quickReviewedFields={match:true};
  assert.equal(quickGoalDecisions(s,r)[0].state,'ready',
-  'human-changed selections still undergo strict row and final validation');
+  'explicit match-field verification does not bypass strict final validation');
  r[0].seq=99;
  assert.equal(quickGoalDecisions(s,r)[0].state,'attention');
+});
+test('editing team cannot silently approve an uncertain scorer or assist',()=>{
+ const s=snap(),r=rows(s);
+ r[0].scorerGuess={confidence:'medium'};
+ r[0].assistGuess={confidence:'medium'};
+ r[0].quickEdited=true;
+ r[0].quickReviewedFields={team:true};
+ assert.equal(quickGoalDecisions(s,r)[0].state,'attention');
+ r[0].quickReviewedFields={team:true,scorer:true};
+ assert.equal(quickGoalDecisions(s,r)[0].state,'attention',
+  'uncertain assist remains blocked after only scorer review');
+ r[0].quickReviewedFields={team:true,scorer:true,assist:true};
+ assert.equal(quickGoalDecisions(s,r)[0].state,'ready');
+ r[0].quickReviewedAll=true;
+ r[0].scorer='';
+ assert.equal(quickGoalDecisions(s,r)[0].state,'attention',
+  'explicit review never bypasses a missing required field');
+});
+test('reviewing an uncertain row requires explicit action and is not inherited by a different event',()=>{
+ const s=snap(),r=rows(s);
+ r[0].matchGuess.conflict=true;
+ r[0].scorerGuess={confidence:'medium'};
+ assert.equal(quickGoalDecisions(s,r)[0].state,'attention');
+ r[0].quickReviewedAll=true;
+ assert.equal(quickGoalDecisions(s,r)[0].state,'ready');
+ const next=preserveReviewRows(rows(s),r,{sameEvent:true,snapshot:s});
+ assert.equal(next[0].quickReviewedAll,true);
+ const different=preserveReviewRows(rows(s),r,{sameEvent:false,snapshot:s});
+ assert.equal(different[0].quickReviewedAll,undefined);
 });
 test('existing duplicates are omitted while unrelated goals remain available',()=>{
  const s=snap();s.matches[0].existingGoals.push({
@@ -73,10 +106,11 @@ test('manual, PATCH and deliberately excluded rows do not enter default video bu
  assert.equal(p.payload.operations.length,2);
 });
 test('human editor fixes can be retained after same-event refresh but not after event change',()=>{
- const s=snap(),a=rows(s);a[0].quickEdited=true;
+ const s=snap(),a=rows(s);a[0].quickEdited=true;a[0].quickReviewedFields={scorer:true};
  const b=rows(s);
  const stayed=preserveReviewRows(b,a,{sameEvent:true,snapshot:s});
  assert.equal(stayed[0].quickEdited,true);
+ assert.deepEqual(stayed[0].quickReviewedFields,{scorer:true});
  const changed=preserveReviewRows(rows(s),a,{sameEvent:false,snapshot:s});
  assert.equal(changed[0].quickEdited,undefined);
 });
