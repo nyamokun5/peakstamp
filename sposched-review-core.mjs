@@ -225,6 +225,32 @@ export function prepareGoalRows(rawGoals,snapshot){
    guest:false,scoreConfirmed:false,duplicateApproved:false,updateGoalId:''};
  });
 }
+/** Carry forward edits to OTHER goals after one confirmed SpoSched write.
+ * Rechecking every row is mandatory because the official score and registered
+ * goals have changed. Never restore edits when the event changes.
+ */
+export function preserveReviewRows(nextRows,priorRows,{
+ sameEvent=false,completedKeys=[],snapshot=null
+}={}){
+ if(!sameEvent||!Array.isArray(priorRows)||!Array.isArray(nextRows))return nextRows;
+ const previous=new Map(priorRows.map(row=>[row.key,row]));
+ const completed=new Set(completedKeys);
+ return nextRows.map(row=>{
+  const old=previous.get(row.key);
+  if(!old)return row;
+  const fields=['seq','scorer','assist','assistMode','team','guest','include'];
+  for(const field of fields)row[field]=old[field];
+  // A finished goal cannot be queued again after its successful readback.
+  // Preserve other goals' edits but invalidate every confirmation/override.
+  if(completed.has(row.key))row.include=false;
+  row.confirmed=false;
+  row.duplicateApproved=false;
+  const match=snapshot?.matches?.find(m=>m.seq===Number(row.seq));
+  row.updateGoalId=match?.existingGoals?.some(g=>g.id===old.updateGoalId)
+   ?old.updateGoalId:'';
+  return row;
+ });
+}
 export function validateGoalRow(row,snapshot){
  if(!row.include)return null;
  if(!row.confirmed)return '選手・試合の確認が必要です';

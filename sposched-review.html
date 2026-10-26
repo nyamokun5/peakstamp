@@ -98,6 +98,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
  <h2>3. 1ゴールずつ照合・確認</h2>
  <p id="eventTitle" class="status"></p>
  <p>実況の対戦カードと当日の選手名簿から試合・得点者・アシストを初期選択します。<strong>対外試合で選手名が名簿にない場合は「外部選手（ゲスト）を手入力」を選んで名前を入力</strong>できます。初期選択は未確定です。ゴールが0件でも試合スコアの確認・JSON出力はできます。</p>
+ <nav id="goalJump" class="line" aria-label="照合するゴールを切り替え"></nav>
  <div id="goalRows"></div>
  <h3>試合スコアを修正する場合（任意）</h3>
  <p>得点集計の見逃しを考慮して、ゴール件数からスコアを勝手に決めません。試合の得点を更新する場合にだけ選択し、明示的に確認します。未選択ならゴール登録のみ。</p>
@@ -146,14 +147,14 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </main>
 <script type="module">
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
-import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=external65';
+import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=ss-second-goal2';
 import {toStagingAction,writeableReviewOperations} from './sposched-staging-client.mjs?v=ss-stage1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
-let snapshot=null,rows=[],scores=[],goalExports=[];
-let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='';
+let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='';
+let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='',previewOperationKey='';
 let batchPrepared=null,batchBusy=false;
 const resetBatchPreview=()=>{
  batchPrepared=null;
@@ -175,8 +176,12 @@ const setBatchBusy=busy=>{
  $('sources').inert=busy;$('reviewArea').inert=busy;
  $('batchGoals').inert=busy;
 };
+const goalKeyOfOperation=operation=>{
+ const ref=operation?.fromPeakStamp;
+ return ref?.source&&ref?.goalId!=null?String(ref.source)+'::'+String(ref.goalId):'';
+};
 const resetTestPreview=()=>{
- approvedAction=null;previewToken='';
+ approvedAction=null;previewToken='';previewOperationKey='';
  $('stagingConfirmPanel').hidden=true;$('stagingApprove').checked=false;$('stagingExecute').disabled=true;
 };
 const touch=()=>{
@@ -217,7 +222,7 @@ function sourcesLoad(){
  for(const [i,item] of saved.entries()){
   const label=node('label','','select-source'),checkbox=mkInput('checkbox');
   checkbox.value=item.key;checkbox.checked=i===0;
-  checkbox.addEventListener('change',()=>{touch();if(snapshot)rebuild()});
+  checkbox.addEventListener('change',()=>{touch();if(snapshot)rebuild({preserveEdits:true})});
   label.append(checkbox,node('span',' '+item.source.name+' · 確定ゴール '+item.count+'件'));
   $('sources').append(label);
  }
@@ -227,11 +232,16 @@ function chosenGoals(){
  const files=checks();if(!files.length)return [];
  return confirmedGoalExport(files,localStorage).goals;
 }
-function rebuild(){
+function rebuild({preserveEdits=false,completedKeys=[]}={}){
+ const prior=rows;
+ const sameEvent=preserveEdits&&snapshot?.eventId===reviewedEventId;
  touch();
  const source=chosenGoals();
- if(!snapshot){$('reviewArea').hidden=true;return}
- rows=prepareGoalRows({goals:source},snapshot);
+ if(!snapshot){reviewedEventId='';$('reviewArea').hidden=true;return}
+ rows=preserveReviewRows(prepareGoalRows({goals:source},snapshot),prior,{
+  sameEvent,completedKeys,snapshot
+ });
+ reviewedEventId=snapshot.eventId;
  scores=snapshot.matches.map(m=>({
   seq:m.seq,leftScore:m.leftScore,rightScore:m.rightScore,
   winner:m.leftScore===m.rightScore?'draw':'',
@@ -244,9 +254,15 @@ function rebuild(){
 }
 function renderGoals(){
  $('goalRows').replaceChildren();
+ $('goalJump').replaceChildren();
  const options=[...snapshot.players].map(name=>({value:name,label:name+'　'+(snapshot.playerTeam.get(name)||'')}));
  for(const [i,row] of rows.entries()){
   const g=row.goal,article=node('article','','grid-item');
+  article.id='review-goal-'+(i+1);
+  const jump=node('button','ゴール '+(i+1)+(row.include?'':'（除外）'));
+  jump.type='button';
+  jump.addEventListener('click',()=>article.scrollIntoView({behavior:'smooth',block:'start'}));
+  $('goalJump').append(jump);
   const h=node('h3','#'+(i+1)+'　'+(g.source?.name||'')+' '+String(g.goalTimeSeconds??'')+'秒');
   const quote=node('p','実況「'+(g.quote||'—')+'」　AI: 得点 '+(g.scorer||'不明')+' ／ アシスト '+(g.assist||'不明'),'details');
   const guess=node('div','','registered-goals');
@@ -329,7 +345,10 @@ function renderGoals(){
   const updateStatus=node('p','','decision-status');
   updateFields.append(updateLabel,updateSelect,updateButton,updateStatus);
   const refreshUpdateChoices=()=>{
-   const existing=existingGoalsForMatch(row,snapshot),saved=row.updateGoalId;
+   // Editing the scorer of goal #2 must not clear the selected existing
+   // goal before the user explicitly clicks "修正対象に指定".
+   const existing=existingGoalsForMatch(row,snapshot);
+   const saved=row.updateGoalId||updateSelect.value;
    updateSelect.replaceChildren();
    const blank=node('option','修正対象を選択する');blank.value='';updateSelect.append(blank);
    for(const [i,g] of existing.entries()){
@@ -477,7 +496,7 @@ $('ssEnvironment').addEventListener('change',()=>{
  $('ssBridgeToken').value='';
  $('ssSelectWrap').hidden=true;$('ssLoadSnapshot').hidden=true;
  $('ssEventSelect').replaceChildren();
- snapshot=null;loadedFromStagingDirect=false;
+ snapshot=null;reviewedEventId='';loadedFromStagingDirect=false;
  $('reviewArea').hidden=true;touch();
  statusSS($('ssEnvironment').value==='staging'
   ?'テスト環境を選択しました。テスト用BRIDGE_TOKENを入力してイベントを取得してください。'
@@ -509,7 +528,7 @@ $('ssLoadEvents').addEventListener('click',async()=>{
  finally{$('ssLoadEvents').disabled=false;}
 });
 $('ssEventSelect').addEventListener('change',()=>{
- snapshot=null;loadedFromStagingDirect=false;
+ snapshot=null;reviewedEventId='';loadedFromStagingDirect=false;
  $('reviewArea').hidden=true;touch();
  statusSS('イベントが変わりました。「選んだイベントの試合・得点を読み込む」を押してください。');
 });
@@ -523,13 +542,13 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   // Built-in existing duplicate detector receives exactly this normalised shape.
   snapshot=normalizeSpoSnapshot(data);
   loadedFromStagingDirect=$('ssEnvironment').value==='staging';
-  rebuild();
+  rebuild({preserveEdits:true});
   statusSS((loadedFromStagingDirect?'テスト':'本番')+'読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
  }catch(error){statusSS('読み込み失敗：'+error.message);}
  finally{$('ssLoadSnapshot').disabled=false;}
 });
 
-$('refreshSources').addEventListener('click',()=>{sourcesLoad();if(snapshot)rebuild()});
+$('refreshSources').addEventListener('click',()=>{sourcesLoad();if(snapshot)rebuild({preserveEdits:true})});
 $('snapshotFile').addEventListener('change',async e=>{
  const f=e.target.files?.[0];if(!f)return;
  try{$('snapshotText').value=await f.text();$('snapshotStatus').textContent=f.name+' を読み込みました';}
@@ -668,7 +687,8 @@ $('batchExecute').addEventListener('click',async()=>{
   const refreshed=await fetchSS('/snapshot?event_id='+encodeURIComponent(snapshot.eventId));
   setBatchBusy(false);
   snapshot=normalizeSpoSnapshot(refreshed);
-  rebuild();
+  rebuild({preserveEdits:true,
+   completedKeys:completed.map(x=>goalKeyOfOperation(x.operation)).filter(Boolean)});
   const finished='✓ テストSSへ'+completed.length+'件の一括登録・再取得・照合が完了しました。';
   statusSS(finished);$('reviewStatus').textContent=finished;
   $('reviewArea').scrollIntoView({behavior:'smooth',block:'start'});
@@ -712,6 +732,7 @@ $('stagingPreview').addEventListener('click',async()=>{
   if(response.environment!=='STAGING ONLY'||!response.preview_token)
    throw Error('テスト環境の確認に失敗しました');
   approvedAction=request;previewToken=response.preview_token;
+  previewOperationKey=goalKeyOfOperation(operation);
   const plan=response.plan;
   $('stagingPlan').textContent=
    '環境：TEST ONLY / SpoSchedテスト団体\n'+
@@ -728,7 +749,7 @@ $('stagingPreview').addEventListener('click',async()=>{
 });
 $('stagingExecute').addEventListener('click',async()=>{
  if(!approvedAction||!previewToken||!$('stagingApprove').checked)return;
- const request=approvedAction,token=previewToken;
+ const request=approvedAction,token=previewToken,completedKey=previewOperationKey;
  resetTestPreview();
  $('stagingExecute').disabled=true;$('stagingPreview').disabled=true;
  $('stagingStatus').textContent='テストSSへ1件送信しています…';
@@ -740,8 +761,8 @@ $('stagingExecute').addEventListener('click',async()=>{
    throw Error('送信済みですが照合が完了していません。再送信せずSSの最新情報を確認してください');
   const updated=await fetchSS('/snapshot?event_id='+encodeURIComponent(snapshot.eventId));
   snapshot=normalizeSpoSnapshot(updated);
-  rebuild();
-  $('reviewStatus').textContent='✓ テストSSへの1件送信と再取得が成功しました。スコアと登録済みゴールを確認してください。';
+  rebuild({preserveEdits:true,completedKeys:completedKey?[completedKey]:[]});
+  $('reviewStatus').textContent='✓ 1件登録しました。ほかのゴールの編集内容は保持しましたが、最新SSとの再確認が必要です。';
   statusSS('テスト環境に1件反映済み。現在の登録済みゴールを再取得しました。');
   $('reviewArea').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){

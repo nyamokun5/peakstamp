@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-import {normalizePerson,normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,
+import {normalizePerson,normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,
  selectPlayerCandidates,findPotentialDuplicate,existingGoalsForMatch,matchingExistingGoals,
  inferMatchFromCommentary,spokenNameTokens,scoredPlayerCandidates,suggestedPlayer,
  validateGoalRow,buildReviewPayload}
@@ -372,4 +372,54 @@ test('goal updates reject unknown and non-UUID registered targets',()=>{
  assert.throws(()=>buildReviewPayload(snap,[row]),/goal_id/);
  row.updateGoalId='6b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e';
  assert.throws(()=>buildReviewPayload(snap,[row]),/goal_id/);
+});
+
+test('first SS goal write preserves second goal scorer and assist edits in the same event',()=>{
+ const snap=normalizeSpoSnapshot(event());
+ const old=prepareGoalRows(exported(),snap);
+ assert.equal(old.length,2);
+ Object.assign(old[0],{seq:1,scorer:'Tyler Takasaki',team:'Team1',
+  assistMode:'none',confirmed:true,include:true});
+ Object.assign(old[1],{seq:2,scorer:'Hiroyuki Kawata',assist:'Yuki Noda',
+  team:'Team4',assistMode:'named',confirmed:true,include:true,duplicateApproved:true});
+ const latest=normalizeSpoSnapshot({...event(),matches:event().matches.map(m=>
+  m.seq===1?{...m,left_score:2,goals:[...m.goals,
+  {goal_id:'new',scorer:'Tyler Takasaki',assist:null,team:'Team1'}]}:m)});
+ const next=preserveReviewRows(prepareGoalRows(exported(),latest),old,{
+  sameEvent:true,completedKeys:[old[0].key],snapshot:latest});
+ assert.equal(next[0].include,false,'already written first goal is excluded from the next batch');
+ assert.equal(next[0].confirmed,false,'confirmation must be repeated after refresh');
+ assert.equal(next[1].include,true);
+ assert.equal(next[1].seq,2);
+ assert.equal(next[1].scorer,'Hiroyuki Kawata');
+ assert.equal(next[1].assist,'Yuki Noda');
+ assert.equal(next[1].assistMode,'named');
+ assert.equal(next[1].team,'Team4');
+ assert.equal(next[1].confirmed,false,'fresh official SS state requires renewed confirmation');
+ assert.equal(next[1].duplicateApproved,false,'no stale duplicate bypass');
+ assert.equal(old[1].confirmed,true,'original row object remains untouched');
+});
+test('editing goal #2 cannot leak into goal #1 and changing event resets all edits',()=>{
+ const snap=normalizeSpoSnapshot(event()),rows=prepareGoalRows(exported(),snap);
+ rows[1].scorer='Gasuke.Y';rows[1].assistMode='none';rows[1].confirmed=true;
+ const fresh=preserveReviewRows(prepareGoalRows(exported(),snap),rows,{sameEvent:true,snapshot:snap});
+ assert.equal(fresh[1].scorer,'Gasuke.Y');
+ assert.equal(fresh[1].assistMode,'none');
+ assert.equal(fresh[0].scorer,rows[0].scorer);
+ const changed=preserveReviewRows(prepareGoalRows(exported(),snap),rows,{sameEvent:false,snapshot:snap});
+ assert.notEqual(changed[1].scorer,'Gasuke.Y');
+ assert.notEqual(changed[1].assistMode,'none');
+});
+test('preserved goal correction target must exist in latest official match',()=>{
+ const raw=event();
+ const goalId='6b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e';
+ raw.matches.find(m=>m.seq===2).goals[0].goal_id=goalId;
+ const snap=normalizeSpoSnapshot(raw);
+ const prior=prepareGoalRows(exported(),snap);
+ prior[1].updateGoalId=goalId;
+ const kept=preserveReviewRows(prepareGoalRows(exported(),snap),prior,{sameEvent:true,snapshot:snap});
+ assert.equal(kept[1].updateGoalId,goalId);
+ const newer=normalizeSpoSnapshot({...raw,matches:raw.matches.map(m=>m.seq===2?{...m,goals:[]}:m)});
+ const removed=preserveReviewRows(prepareGoalRows(exported(),newer),prior,{sameEvent:true,snapshot:newer});
+ assert.equal(removed[1].updateGoalId,'');
 });
