@@ -103,3 +103,13 @@ test('staging write recovery cannot silently retry failed requests',()=>{
  assert.match(html,/SSに未登録と確認 → 再審査に戻す/);
  assert.match(html,/前回の送信結果が未確認です/);
 });
+
+test('production remains read-only review and manual-detail editor stays open after refresh',()=>{
+ assert.match(html,/const quickMode=loadedFromStagingDirect&&\$\('ssEnvironment'\)\.value==='staging'/);
+ assert.match(html,/\$\('reviewArea'\)\.hidden=quickMode&&!\(preserveEdits&&wasEditing\)/);
+ assert.match(html,/const wasEditing=!\$\('reviewArea'\)\.hidden/);
+ assert.match(html,/\$\('quickPanel'\)\.hidden=!active/);
+ assert.match(html,/renderGoals\(\);renderScores\(\);renderQuick\(\)/);
+ // Production SS is still never used for a POST.
+ assert.doesNotMatch(html,/fetch\(SS_GATEWAYS\.production\s*\+\s*path\s*,\s*\{[^}]*method:'POST'/);
+});

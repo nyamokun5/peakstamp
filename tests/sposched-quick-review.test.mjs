@@ -145,7 +145,7 @@ test('default UI has no row confirmation and only final explicit TEST submit can
  assert.match(html,/prepareQuickGoalBatch\(snapshot,rows\)/);
  assert.match(html,/quickSending=true/);
  assert.match(html,/\$\('batchExecute'\)\.click\(\)/);
- assert.match(html,/\$\('reviewArea'\)\.hidden=true/);
+ assert.match(html,/\$\('reviewArea'\)\.hidden=quickMode&&!\(preserveEdits&&wasEditing\)/);
  const preview=html.split("$('quickPreview').addEventListener('click',async()=>{")[1]
   .split("$('quickExecute').addEventListener('click'")[0];
  assert.doesNotMatch(preview,/\/staging\/execute/);
