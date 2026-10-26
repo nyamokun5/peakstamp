@@ -49,7 +49,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 <a href="./?v=external65">← PeakStampに戻る</a>
 <header class="top"><h1>⚽ Shoot Sundayへ試合・ゴールを登録</h1><span class="step">確認・登録準備版</span></header>
 <p>PeakStampで確認したゴール・アシストとShoot Sundayの試合／選手名簿を照合します。<strong>誤登録を防ぐため、すべての行で試合・選手を人が選択して確認</strong>してください。</p>
-<p class="warning"><strong>現在は書き込み前の確認機能です。</strong>開発者APIのHTTP仕様を確認できていないため、この画面からShoot Sundayへの直接送信は行いません。最終JSONをコピーして、接続済みのChatGPTで登録できます。保存済みデータの削除・上書きも行いません。</p>
+<p class="warning"><strong>SSのデータを直接読み取れますが、書き込みはまだ行いません。</strong>確定したゴールは人が確認したうえで登録用のJSONを作成します。既存の得点・アシストを勝手に修正しません。</p>
 <section class="panel">
  <h2>1. PSのゴールデータを選択</h2>
  <p>このiPhoneのブラウザに保存された確定済みゴールを読み込みます。複数の日付のデータがある場合は、対象動画だけ選んでください。</p>
@@ -58,10 +58,24 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </section>
 <section class="panel">
  <h2>2. Shoot Sunday当日の試合／選手名簿を読み込む</h2>
- <p>Shoot Sundayの <code>get_match_results</code> のJSON（<code>event_id / matches / roster</code>）をインポートしてください。アプリ連携用のAPI認証が整うまでの暫定方式です。</p>
+ <div class="grid-item" id="ssDirectPanel">
+  <strong>SSアプリから直接読み込む（おすすめ）</strong>
+  <p>Cloudflareに設定したBRIDGE_TOKENを入力すると、SSのイベント一覧と試合・得点・選手情報を取得できます。APIキーは入力しないでください。パスワードは保存されません。</p>
+  <label class="field">SS連携用パスワード（BRIDGE_TOKEN）
+    <input id="ssBridgeToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="BRIDGE_TOKEN">
+  </label>
+  <div class="line"><button id="ssLoadEvents" type="button">イベント一覧を取得</button><span id="ssDirectStatus" class="small" role="status" aria-live="polite"></span></div>
+  <label class="field" id="ssSelectWrap" hidden>開催日・イベント
+    <select id="ssEventSelect" aria-label="SSイベント選択"></select>
+  </label>
+  <button id="ssLoadSnapshot" type="button" class="primary" hidden>選んだイベントの試合・得点を読み込む</button>
+ </div>
+ <details><summary>手元に保存したSSのJSONファイルから読み込む（従来方式）</summary>
+ <p class="small">SS連携が使えないときは、保存済みのJSONを読み込むこともできます。</p>
  <label class="field">JSONファイルを選択 <input type="file" accept=".json,application/json" id="snapshotFile"></label>
  <details><summary>またはJSONを貼り付ける</summary><textarea id="snapshotText" placeholder='{"event_id":"...","matches":[{"seq":1,...}],"roster":{"チーム1":["選手A"]}}'></textarea></details>
  <div class="line"><button id="loadSnapshot" class="primary">試合・名簿を読み込む</button><span id="snapshotStatus" class="status"></span></div>
+ </details>
 </section>
 <section class="panel" id="reviewArea" hidden>
  <h2>3. 1ゴールずつ照合・確認</h2>
@@ -311,6 +325,59 @@ function renderScores(){
   box.append(row,field('同点の場合',winner),check);$('matchRows').append(box);
  }
 }
+const SS_GATEWAY = 'https://shoot-sunday-sync.yomax1979.workers.dev';
+const SS_EVENT_ID = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i;
+const statusSS = (message) => { $('ssDirectStatus').textContent = message; };
+async function fetchSS(path) {
+ const token = $('ssBridgeToken').value.trim();
+ if(!token) throw Error('BRIDGE_TOKENを入力してください。');
+ const r = await fetch(SS_GATEWAY + path, {
+  method:'GET',
+  headers:{'X-SS-Bridge-Token':token},
+  mode:'cors',
+  cache:'no-store'
+ });
+ const data = await r.json();
+ if(!r.ok) throw Error(data?.error?.message||'SS API HTTP '+r.status);
+ return data;
+}
+$('ssLoadEvents').addEventListener('click',async()=>{
+ $('ssLoadEvents').disabled=true;
+ statusSS('イベント一覧を読み込み中…');
+ try {
+  const data=await fetchSS('/events?limit=100');
+  const events=Array.isArray(data.events)?data.events:[];
+  const select=$('ssEventSelect');select.replaceChildren();
+  const sorted=[...events].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Singapore'});
+  for(const e of sorted){
+   if(!SS_EVENT_ID.test(String(e.event_id||'')))continue;
+   const option=node('option',(e.date||'')+'｜'+(e.name||'イベント')+' ('+(e.status||'')+')');
+   option.value=e.event_id;select.append(option);
+  }
+  const past=sorted.find(e=>e.date&&e.date<=today&&SS_EVENT_ID.test(String(e.event_id||'')));
+  if(past)select.value=past.event_id;
+  $('ssSelectWrap').hidden=!select.options.length;
+  $('ssLoadSnapshot').hidden=!select.options.length;
+  statusSS(select.options.length+'件取得しました。日付を選択してください。');
+ } catch(error){statusSS('取得失敗：'+error.message);}
+ finally{$('ssLoadEvents').disabled=false;}
+});
+$('ssLoadSnapshot').addEventListener('click',async()=>{
+ const eventId=$('ssEventSelect').value;
+ if(!SS_EVENT_ID.test(eventId)){statusSS('イベントを選択してください。');return;}
+ $('ssLoadSnapshot').disabled=true;
+ statusSS('SSの試合と登録済み得点を照合用に読み込み中…');
+ try{
+  const data=await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId));
+  // Built-in existing duplicate detector receives exactly this normalised shape.
+  snapshot=normalizeSpoSnapshot(data);
+  rebuild();
+  statusSS('読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
+ }catch(error){statusSS('読み込み失敗：'+error.message);}
+ finally{$('ssLoadSnapshot').disabled=false;}
+});
+
 $('refreshSources').addEventListener('click',()=>{sourcesLoad();if(snapshot)rebuild()});
 $('snapshotFile').addEventListener('change',async e=>{
  const f=e.target.files?.[0];if(!f)return;
