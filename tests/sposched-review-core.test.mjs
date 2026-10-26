@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 import {normalizePerson,normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,
  selectPlayerCandidates,findPotentialDuplicate,existingGoalsForMatch,matchingExistingGoals,
  inferMatchFromCommentary,spokenNameTokens,scoredPlayerCandidates,suggestedPlayer,
@@ -123,22 +124,32 @@ test('match score is ONLY included after explicit include and human confirmation
  assert.equal(payload.operations[0].args.left_score,3);
  assert.equal(payload.operations[1].action,'record_goal');
 });
-test('portal never has direct write fetch, API secrets or automatic side effects',()=>{
+test('production remains read-only; test writes require distinct Worker and manual confirmation',()=>{
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
  const home=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.match(home,/sposched-review\.html/);
- assert.match(html,/record_goal/);
  assert.match(html,/人が選択/);
- // An authenticated READ from the dedicated SS gateway is now supported.
- // The editor still must never write goals, score changes or secrets.
  assert.match(html,/fetchSS\('/);
  assert.match(html,/method:'GET'/);
- assert.doesNotMatch(html,/method:\s*['"](POST|PATCH|PUT|DELETE)['"]/i);
+ assert.match(html,/method:'POST'/);
+ assert.match(html,/SS_GATEWAYS/);
+ assert.match(html,/production:'https:\/\/shoot-sunday-sync\.yomax1979\.workers\.dev'/);
+ assert.match(html,/staging:'https:\/\/shoot-sunday-sync-staging\.yomax1979\.workers\.dev'/);
+ assert.match(html,/if\(\$\('ssEnvironment'\)\.value!=='staging'\|\|!loadedFromStagingDirect\)/);
+ assert.match(html,/confirm:'TEST-ONLY WRITE'/);
+ assert.match(html,/resetTestPreview/);
+ assert.match(html,/テストSSへこの1件だけ書き込む/);
  assert.doesNotMatch(html,/localStorage\.setItem\([^)]*ssBridgeToken/);
  assert.doesNotMatch(html,/localStorage\.clear/);
  assert.doesNotMatch(html,/apiKey|api_key|Bearer\s+\w/i);
  assert.match(html,/未送信/);
+ const {Script}=requireVm();
+ // Syntax-check the inline module after eliding ESM imports; browser resolves them separately.
+ const inline=html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1]||'';
+ assert.ok(inline.length>2000);
+ assert.doesNotThrow(()=>new Script(inline.replace(/^import\s+[^;]+;$/gm,'')));
 });
+function requireVm(){return {Script:vm.Script}}
 
 test('spoken team matchup 2対3 identifies actual #3, not match #2 or score 2-3',()=>{
  const snap=normalizeSpoSnapshot({...event(),matches:[

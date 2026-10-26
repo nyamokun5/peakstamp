@@ -16,6 +16,10 @@ p{font-size:13px;line-height:1.65;color:#bbd1d5}label{font-size:13px}
 button{cursor:pointer;border:1px solid #669faf;background:#234c61;color:#fff;padding:10px 12px;border-radius:9px;font-weight:700;min-height:41px}
 button:disabled{cursor:default;opacity:.45}button.primary{background:#1a8f78;border-color:#78e2bc;color:#fff}
 button.danger{background:#73423f;border-color:#d49483}
+#stagingSendArea{border-color:#e1b36e;background:#2b2b35}
+#stagingSendArea button:disabled{opacity:.4}
+.staging-badge{background:#ac6630;color:#fff;padding:4px 8px;border-radius:8px;display:inline-block;font-weight:700}
+#stagingPlan{white-space:pre-wrap;word-break:break-word;background:#112839;padding:12px;border-radius:8px;border:1px solid #597584;font-size:12px}
 textarea,input,select{background:#0c1f2d;color:#fff;border:1px solid #567786;border-radius:7px;padding:9px;font-size:14px;max-width:100%}
 textarea{width:100%;min-height:110px;font-family:ui-monospace,monospace;font-size:11px}
 select{width:100%}input[type=number]{width:90px}input[type=checkbox]{width:18px;height:18px;accent-color:#70dcb8}
@@ -49,7 +53,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 <a href="./?v=external65">← PeakStampに戻る</a>
 <header class="top"><h1>⚽ Shoot Sundayへ試合・ゴールを登録</h1><span class="step">確認・登録準備版</span></header>
 <p>PeakStampで確認したゴール・アシストとShoot Sundayの試合／選手名簿を照合します。<strong>誤登録を防ぐため、すべての行で試合・選手を人が選択して確認</strong>してください。</p>
-<p class="warning"><strong>SSのデータを直接読み取れますが、書き込みはまだ行いません。</strong>確定したゴールは人が確認したうえで登録用のJSONを作成します。既存の得点・アシストを勝手に修正しません。</p>
+<p class="warning"><strong>本番のSSは読み取り専用です。</strong> テスト環境を明示的に選んだ場合のみ、人が確認したゴールを1件ずつプレビュー・送信できます。試合結果の確定とオウンゴールの更新は対象外です。</p>
 <section class="panel">
  <h2>1. PSのゴールデータを選択</h2>
  <p>このiPhoneのブラウザに保存された確定済みゴールを読み込みます。複数の日付のデータがある場合は、対象動画だけ選んでください。</p>
@@ -61,6 +65,13 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
  <div class="grid-item" id="ssDirectPanel">
   <strong>SSアプリから直接読み込む（おすすめ）</strong>
   <p>Cloudflareに設定したBRIDGE_TOKENを入力すると、SSのイベント一覧と試合・得点・選手情報を取得できます。APIキーは入力しないでください。パスワードは保存されません。</p>
+  <label class="field">接続先
+   <select id="ssEnvironment" aria-label="SpoSched接続先">
+    <option value="production">本番SS（読み取りのみ・書き込み不可）</option>
+    <option value="staging">テストSS（ダミーデータへの手動書き込み）</option>
+   </select>
+  </label>
+  <p id="ssEnvironmentNote" class="small">本番環境から読み取ります。書き込み操作は利用できません。</p>
   <label class="field">SS連携用パスワード（BRIDGE_TOKEN）
     <input id="ssBridgeToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="BRIDGE_TOKEN">
   </label>
@@ -89,20 +100,44 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </section>
 <section class="panel" id="exportArea" hidden>
  <h2>4. Shoot Sunday登録前の最終データ</h2>
- <p><strong>まだ送信していません。</strong>新規得点登録・既存得点の修正候補・試合結果の変更をJSONとして確認できます。<code>record_goal</code> は新規登録、<code>patch_goal</code> はAPIのPATCHに合わせた修正提案で、実際の更新機能は無効です。登録前にSSの最新状態と照合してください。</p>
+ <p><strong>まだ送信していません。</strong>新規得点登録・既存得点の修正候補・試合結果の変更をJSONとして確認できます。<code>record_goal</code> と <code>patch_goal</code> は、テスト用SSに直接読み込んだ場合だけ、下の専用画面から1件ずつ確認して送信できます。本番SSには送信しません。</p>
  <textarea id="planJson" readonly></textarea>
  <div class="line"><button class="primary" id="copyPlan">JSONをコピー</button><span class="small" id="copyStatus"></span></div>
- <p class="small">コピー後、ChatGPTに「Shoot SundayのこのJSONを確認して、登録前に差分と重複を見せて」と貼り付けると、接続済みアプリ経由で進められます。</p>
+ <p class="small">このJSONは記録・確認用です。テストへの反映は下の専用操作から1件ずつ行います。ChatGPTのMCP接続は不要です。</p>
+</section>
+<section class="panel" id="stagingSendArea" hidden>
+ <h2>5. <span class="staging-badge">TEST ONLY</span> SSテスト環境への1件反映</h2>
+ <p>選んだゴールの試合・選手IDをテスト用SSから毎回取得し、変更前の状態と照合します。<strong>新規登録と得点者・アシスト修正のみ対応します。</strong> 試合結果の更新は行いません。</p>
+ <label class="field">テスト反映する操作（1件だけ）
+  <select id="stagingOperation" aria-label="反映するゴール"></select>
+ </label>
+ <div class="line"><button id="stagingPreview" class="primary" type="button">選んだ1件をテスト環境でプレビュー</button></div>
+ <p id="stagingStatus" class="small" role="status" aria-live="polite"></p>
+ <div id="stagingConfirmPanel" hidden>
+  <pre id="stagingPlan"></pre>
+  <label class="line"><input type="checkbox" id="stagingApprove"><strong>本番ではなく、テスト団体にこの1件を記録する内容を確認した</strong></label>
+  <button id="stagingExecute" type="button" class="danger" disabled>テストSSへこの1件だけ書き込む</button>
+  <p class="small">プレビューは2分で期限切れになります。送信エラー時は二重登録防止のため再送信せず、SSの最新データを確認してください。</p>
+ </div>
 </section>
 </main>
 <script type="module">
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=external65';
+import {toStagingAction,writeableReviewOperations} from './sposched-staging-client.mjs?v=ss-stage1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
 let snapshot=null,rows=[],scores=[],goalExports=[];
-const touch=()=>{$('exportArea').hidden=true;$('planJson').value='';$('reviewStatus').textContent=''};
+let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='';
+const resetTestPreview=()=>{
+ approvedAction=null;previewToken='';
+ $('stagingConfirmPanel').hidden=true;$('stagingApprove').checked=false;$('stagingExecute').disabled=true;
+};
+const touch=()=>{
+ $('exportArea').hidden=true;$('planJson').value='';$('reviewStatus').textContent='';
+ $('stagingSendArea').hidden=true;lastPayload=null;resetTestPreview();
+};
 const select=(choices,value,placeholder='選択してください')=>{
  const el=document.createElement('select');
  const blank=node('option',placeholder);blank.value='';el.append(blank);
@@ -359,13 +394,17 @@ function renderScores(){
   box.append(row,field('同点の場合',winner),check);$('matchRows').append(box);
  }
 }
-const SS_GATEWAY = 'https://shoot-sunday-sync.yomax1979.workers.dev';
+const SS_GATEWAYS = Object.freeze({
+ production:'https://shoot-sunday-sync.yomax1979.workers.dev',
+ staging:'https://shoot-sunday-sync-staging.yomax1979.workers.dev'
+});
+const selectedGateway=()=>SS_GATEWAYS[$('ssEnvironment').value];
 const SS_EVENT_ID = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i;
 const statusSS = (message) => { $('ssDirectStatus').textContent = message; };
 async function fetchSS(path) {
  const token = $('ssBridgeToken').value.trim();
  if(!token) throw Error('BRIDGE_TOKENを入力してください。');
- const r = await fetch(SS_GATEWAY + path, {
+ const r = await fetch(selectedGateway() + path, {
   method:'GET',
   headers:{'X-SS-Bridge-Token':token},
   mode:'cors',
@@ -375,6 +414,33 @@ async function fetchSS(path) {
  if(!r.ok) throw Error(data?.error?.message||'SS API HTTP '+r.status);
  return data;
 }
+async function postStaging(path,payload) {
+ if($('ssEnvironment').value!=='staging'||!loadedFromStagingDirect)
+  throw Error('テスト環境のSS APIを直接読み込んでください');
+ const token=$('ssBridgeToken').value.trim();
+ if(!token)throw Error('テスト用BRIDGE_TOKENを入力してください');
+ const response=await fetch(SS_GATEWAYS.staging+path,{
+  method:'POST',mode:'cors',cache:'no-store',
+  headers:{'X-SS-Bridge-Token':token,'Content-Type':'application/json'},
+  body:JSON.stringify(payload)
+ });
+ const data=await response.json();
+ if(!response.ok)throw Error(data?.error?.message||'テストSS API HTTP '+response.status);
+ return data;
+}
+$('ssEnvironment').addEventListener('change',()=>{
+ $('ssBridgeToken').value='';
+ $('ssSelectWrap').hidden=true;$('ssLoadSnapshot').hidden=true;
+ $('ssEventSelect').replaceChildren();
+ snapshot=null;loadedFromStagingDirect=false;
+ $('reviewArea').hidden=true;touch();
+ statusSS($('ssEnvironment').value==='staging'
+  ?'テスト環境を選択しました。テスト用BRIDGE_TOKENを入力してイベントを取得してください。'
+  :'本番（読み取り専用）に切り替えました。書き込み操作はありません。');
+ $('ssEnvironmentNote').textContent=$('ssEnvironment').value==='staging'
+  ?'【テスト専用】ダミーデータを参照します。送信する場合はゴールごとに2段階の確認が必要です。'
+  :'本番環境から読み取ります。書き込み操作は利用できません。';
+});
 $('ssLoadEvents').addEventListener('click',async()=>{
  $('ssLoadEvents').disabled=true;
  statusSS('イベント一覧を読み込み中…');
@@ -397,6 +463,11 @@ $('ssLoadEvents').addEventListener('click',async()=>{
  } catch(error){statusSS('取得失敗：'+error.message);}
  finally{$('ssLoadEvents').disabled=false;}
 });
+$('ssEventSelect').addEventListener('change',()=>{
+ snapshot=null;loadedFromStagingDirect=false;
+ $('reviewArea').hidden=true;touch();
+ statusSS('イベントが変わりました。「選んだイベントの試合・得点を読み込む」を押してください。');
+});
 $('ssLoadSnapshot').addEventListener('click',async()=>{
  const eventId=$('ssEventSelect').value;
  if(!SS_EVENT_ID.test(eventId)){statusSS('イベントを選択してください。');return;}
@@ -406,8 +477,9 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   const data=await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId));
   // Built-in existing duplicate detector receives exactly this normalised shape.
   snapshot=normalizeSpoSnapshot(data);
+  loadedFromStagingDirect=$('ssEnvironment').value==='staging';
   rebuild();
-  statusSS('読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
+  statusSS((loadedFromStagingDirect?'テスト':'本番')+'読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
  }catch(error){statusSS('読み込み失敗：'+error.message);}
  finally{$('ssLoadSnapshot').disabled=false;}
 });
@@ -421,6 +493,7 @@ $('snapshotFile').addEventListener('change',async e=>{
 $('loadSnapshot').addEventListener('click',()=>{
  try{
   snapshot=normalizeSpoSnapshot(JSON.parse($('snapshotText').value));
+  loadedFromStagingDirect=false;
   $('snapshotStatus').textContent='試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人';
   rebuild();
  }catch(error){$('snapshotStatus').textContent='読み込みエラー：'+error.message}
@@ -430,7 +503,24 @@ $('buildPlan').addEventListener('click',()=>{
   const payload=buildReviewPayload(snapshot,rows,scores);
   $('planJson').value=JSON.stringify(payload,null,2);
   $('exportArea').hidden=false;
-  $('reviewStatus').textContent='登録操作 '+payload.operations.length+'件の確認データを作成しました（未送信）';
+  lastPayload=payload;resetTestPreview();
+  $('stagingSendArea').hidden=true;
+  if(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'){
+   const operations=writeableReviewOperations(payload);
+   const choices=$('stagingOperation');choices.replaceChildren();
+   for(const item of operations){
+    const option=node('option',item.label);
+    option.value=String(item.index);option.disabled=!item.enabled;choices.append(option);
+   }
+   const first=operations.find(item=>item.enabled);
+   if(first){
+    choices.value=String(first.index);
+    $('stagingSendArea').hidden=false;
+    $('stagingStatus').textContent='テスト環境のみ。新規ゴール・既存ゴール修正を1件ずつプレビューします。';
+   }else $('reviewStatus').textContent='試合結果の書き込みは未対応です（JSONの確認のみ）。';
+  }
+  if(!$('reviewStatus').textContent.includes('未対応'))
+   $('reviewStatus').textContent='登録操作 '+payload.operations.length+'件の確認データを作成しました（未送信）';
   $('exportArea').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(error){
   $('exportArea').hidden=true;
@@ -441,6 +531,72 @@ $('buildPlan').addEventListener('click',()=>{
    ?'✓ 照合完了：選択したゴールはすべてSSの登録済みゴールと同じ得点者・アシスト・チームです。追加・更新する操作はありません（動画との同一性は確認済みとして扱います）。'
    :error.message;
  }
+});
+$('stagingOperation').addEventListener('change',()=>{
+ resetTestPreview();$('stagingStatus').textContent='操作が変更されました。プレビューを作り直してください。';
+});
+$('stagingApprove').addEventListener('change',()=>{
+ $('stagingExecute').disabled=!$('stagingApprove').checked||!previewToken;
+});
+$('stagingPreview').addEventListener('click',async()=>{
+ resetTestPreview();
+ if(!loadedFromStagingDirect||$('ssEnvironment').value!=='staging'||!lastPayload){
+  $('stagingStatus').textContent='テストAPIから試合を直接取得し、内容を確定してください。';return;
+ }
+ const index=Number($('stagingOperation').value);
+ const operation=lastPayload.operations[index];
+ if(!operation||!['record_goal','patch_goal'].includes(operation.action)){
+  $('stagingStatus').textContent='試合結果の更新は未対応です。';return;
+ }
+ $('stagingPreview').disabled=true;
+ $('stagingStatus').textContent='テスト環境の最新データと選手IDを確認しています…';
+ try{
+  const seq=Number(operation.args?.seq);
+  const m=snapshot.matches.find(item=>item.seq===seq);
+  if(!m||!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(m.matchId))
+   throw Error('選択した試合の正式なmatch_idがありません');
+  const official=await fetchSS('/match?match_id='+encodeURIComponent(m.matchId));
+  const request=toStagingAction(snapshot,operation,official);
+  const response=await postStaging('/staging/preview',request);
+  if(response.environment!=='STAGING ONLY'||!response.preview_token)
+   throw Error('テスト環境の確認に失敗しました');
+  approvedAction=request;previewToken=response.preview_token;
+  const plan=response.plan;
+  $('stagingPlan').textContent=
+   '環境：TEST ONLY / SpoSchedテスト団体\n'+
+   '団体ID：'+response.team_id+'\n試合：'+plan.title+
+   '\n操作：'+plan.action+
+   '\n変更前：'+JSON.stringify(plan.before)+
+   '\n変更後：'+JSON.stringify(plan.after)+
+   (plan.warning?'\n⚠ '+plan.warning:'')+
+   '\n確認有効期限：'+response.expires_in_seconds+'秒';
+  $('stagingConfirmPanel').hidden=false;
+  $('stagingStatus').textContent='プレビュー完了。まだ書き込んでいません。内容を確認してください。';
+ }catch(e){$('stagingStatus').textContent='確認できません：'+e.message}
+ finally{$('stagingPreview').disabled=false;}
+});
+$('stagingExecute').addEventListener('click',async()=>{
+ if(!approvedAction||!previewToken||!$('stagingApprove').checked)return;
+ const request=approvedAction,token=previewToken;
+ resetTestPreview();
+ $('stagingExecute').disabled=true;$('stagingPreview').disabled=true;
+ $('stagingStatus').textContent='テストSSへ1件送信しています…';
+ try{
+  const result=await postStaging('/staging/execute',{
+   ...request,preview_token:token,confirm:'TEST-ONLY WRITE'
+  });
+  if(!result?.write_sent||!result?.readback?.verified)
+   throw Error('送信済みですが照合が完了していません。再送信せずSSの最新情報を確認してください');
+  const updated=await fetchSS('/snapshot?event_id='+encodeURIComponent(snapshot.eventId));
+  snapshot=normalizeSpoSnapshot(updated);
+  rebuild();
+  $('reviewStatus').textContent='✓ テストSSへの1件送信と再取得が成功しました。スコアと登録済みゴールを確認してください。';
+  statusSS('テスト環境に1件反映済み。現在の登録済みゴールを再取得しました。');
+  $('reviewArea').scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(e){
+  $('stagingStatus').textContent='送信または照合に問題があります：'+e.message+
+   '。再送信せず、イベントを再取得して登録済みゴールを確認してください。';
+ }finally{$('stagingPreview').disabled=false;}
 });
 $('copyPlan').addEventListener('click',async()=>{
  try{
