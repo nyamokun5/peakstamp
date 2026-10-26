@@ -95,3 +95,19 @@ export function inspectAttempt(attempt,match){
  if(fresh.length)return {state:'other_changes',count:fresh.length};
  return {state:'not_observed',count:0};
 }
+
+/** Whether a write can be re-reviewed as unregistered after a lost response.
+ * Evidence of a newly created matching goal or an applied PATCH is NEVER
+ * a basis for another POST. Unrelated concurrent changes also block a retry.
+ * A human must independently verify absence even when this allows retry.
+ */
+export function recoveryDecisionPolicy(evidence){
+ const state=evidence?.state||'';
+ const retryAllowed=state==='not_observed'||state==='not_applied';
+ const reason=retryAllowed
+  ?'最新のSS明細に反映を確認できません。SS側で未登録と確認した場合のみ、新しいプレビューから再審査できます。'
+  :state==='possible_created'||state==='possible_applied'
+  ?'SSに反映された可能性が高いため、二重登録防止のため「未登録として再審査」は許可しません。'
+  :'SS側に他の変更・対象の消失があります。この画面から再送準備を解除できません。管理者がSSの記録を確認してください。';
+ return {allowMarkSent:true,allowReturnToReview:retryAllowed,reason};
+}
