@@ -60,7 +60,8 @@ test('existing-goal correction requires selecting a real goal ID and explicit co
 
 test('second confirmed goal stays editable after first sent and official SS refresh',()=>{
  assert.match(html,/id="goalJump"/);
- assert.match(html,/rows=preserveReviewRows\(prepareGoalRows\(/);
+ assert.match(html,/const prepared=prepareGoalRows\(\{goals:source\},snapshot\)/);
+ assert.match(html,/rows=preserveReviewRows\(applyManualRowEdits\(prepared,manualGoals,snapshot\)/);
  assert.match(html,/completedKeys:completedKey\?\[completedKey\]:\[\]/);
  assert.match(html,/completedKeys:completed\.map\(x=>goalKeyOfOperation\(x\.operation\)\)/);
  assert.match(html,/rebuild\(\{preserveEdits:true\}\)/);
