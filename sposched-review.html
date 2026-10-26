@@ -39,6 +39,16 @@ select{width:100%}input[type=number]{width:90px}input[type=checkbox]{width:18px;
 .select-source{display:block;margin:9px 0;padding:8px;background:#0e2430;border-radius:8px}
 .error{color:#ffd1b7}a{color:#a9f8d6}summary{cursor:pointer;font-size:12px}
 details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
+.quick-goal{padding:10px 12px;border:1px solid #476775;border-radius:10px;background:#193446;margin:8px 0}
+.quick-goal-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.quick-goal-top strong{font-size:14px}.quick-goal .quick-meta{font-size:12px;color:#cadde2;margin:6px 0}
+.quick-ready{color:#a4f4cc}.quick-held{color:#ffcd9a}
+.quick-summary{font-weight:700;margin:10px 0 4px}
+.quick-main{width:100%;font-size:15px;margin-top:9px}
+.quick-goal button{font-size:11px;min-height:32px;padding:5px 9px}
+#quickReviewText{white-space:pre-wrap;word-break:break-word;background:#102938;border-radius:9px;padding:11px;font-size:12px}
+#quickConfirmPanel{margin:12px 0;padding:12px;border:1px solid #a57f5c;border-radius:12px}
+#quickConfirmPanel[hidden],#quickPanel[hidden],#reviewArea[hidden]{display:none!important}
 #goalRows:empty:after{content:'ゴールはまだありません。テストSSのイベントを読み込んだら、上の「＋ 新規ゴールを手動追加」で登録できます。';color:#9dabbc}
 #planJson{min-height:160px}
 @media(max-width:620px){.input-row,.fields{grid-template-columns:1fr}body{padding:12px 9px 40px}}
@@ -57,12 +67,12 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </head>
 <body><main>
 <a href="./?v=external65">← PeakStampに戻る</a>
-<header class="top"><h1>⚽ Shoot Sundayへ試合・ゴールを登録</h1><span class="step">確認・登録準備版</span></header>
-<p>PeakStampで確認したゴール・アシストとShoot Sundayの試合／選手名簿を照合します。<strong>誤登録を防ぐため、すべての行で試合・選手を人が選択して確認</strong>してください。</p>
+<header class="top"><h1>⚽ PeakStamp → SS ゴール一括登録</h1><span class="step">動画優先</span></header>
+<p>PeakStampで確認済みの複数ゴールをTESTの試合・選手と照合してまとめて登録します。<strong>不確かな試合・選手は人が選択して修正し、最後に一覧でまとめて承認します。</strong></p>
 <p class="warning"><strong>本番のSSは読み取り専用です。</strong> テスト環境を明示的に選んだ場合のみ、人が確認したゴールを1件ずつプレビュー・送信できます。試合結果の確定とオウンゴールの更新は対象外です。</p>
 <section class="panel">
  <h2>1. PSのゴールデータを選択</h2>
- <p>このiPhoneのブラウザに保存された確定済みゴールを読み込みます。複数の日付のデータがある場合は、対象動画だけ選んでください。</p>
+ <p>このiPhoneのブラウザに保存された動画の確定済みゴールを使います。最新の動画が初期選択されます。別の試合なら対象動画だけ選んでください。</p>
  <div id="sources"></div>
  <div class="line"><button id="refreshSources">保存データを再読み込み</button><span id="sourceStatus" class="small"></span></div>
 </section>
@@ -101,8 +111,27 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
  <p id="recoveryStatus" class="small" role="status" aria-live="polite"></p>
  <div id="recoveryDetails"></div>
 </section>
+<section class="panel" id="quickPanel" hidden>
+ <div class="top"><h2>3. 動画ゴールをまとめてSSへ</h2><span class="step">TEST ONLY</span></div>
+ <p>確定済み動画ゴールから登録候補を自動照合します。個別チェック不要です。曖昧な候補・重複・手動入力は自動送信しません。</p>
+ <p id="quickSummary" class="quick-summary"></p>
+ <div id="quickGoals"></div>
+ <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
+ <button id="quickPreview" class="primary quick-main" type="button">登録内容をまとめて確認</button>
+ <div id="quickConfirmPanel" hidden>
+  <strong id="quickConfirmTitle"></strong>
+  <p>以下の新規ゴールだけをTEST環境に登録します。保留・重複候補は含めません。</p>
+  <div id="quickReviewText"></div>
+  <button id="quickExecute" class="danger quick-main" type="button">上記をテストSSへ一括登録する</button>
+  <button id="quickCancel" type="button">戻って修正</button>
+ </div>
+ <p class="small">登録は1件ずつ実行・照合します。途中エラー時は停止し、自動再送しません。</p>
+ <button id="quickEdit" type="button">詳細編集・手動入力・既存ゴール修正（例外時のみ）</button>
+</section>
 <section class="panel" id="reviewArea" hidden>
- <h2>3. 1ゴールずつ照合・確認</h2>
+ <h2>詳細編集（必要なゴールのみ）</h2>
+ <p>選手・試合などの選択を直したら、上の「一括登録の一覧へ戻る」からまとめて確認できます。以下の個別チェック欄は従来の登録方法用で、一括登録では不要です。</p>
+ <button id="quickBack" type="button">一括登録の一覧へ戻る</button>
  <p id="eventTitle" class="status"></p>
  <p>実況の対戦カードと当日の選手名簿から試合・得点者・アシストを初期選択します。<strong>動画にゴールがなくても、手動で新規追加できます。</strong> 選手と試合を確認して登録してください。</p>
  <div id="manualAddWrap" class="grid-item" hidden>
@@ -165,12 +194,14 @@ import {toStagingAction,writeableReviewOperations} from './sposched-staging-clie
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy} from './sposched-write-journal.mjs?v=ss-recovery2';
+import {quickGoalDecisions,prepareQuickGoalBatch} from './sposched-quick-review.mjs?v=ss-quick1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
 let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='',manualGoals=[];
 let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='',previewOperationKey='';
 let batchPrepared=null,batchBusy=false,recoveryBusy=false;
+let quickPrepared=null,quickSending=false;
 const pendingForEvent=()=>snapshot?.eventId&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging'
  ?pendingAttempts(localStorage,snapshot.eventId):[];
 const renderPendingPanel=()=>{
@@ -199,7 +230,7 @@ const setBatchBusy=busy=>{
  batchBusy=busy;
  for(const id of ['ssEnvironment','ssBridgeToken','ssLoadEvents','ssEventSelect',
   'ssLoadSnapshot','refreshSources','buildPlan','stagingPreview','stagingExecute',
-  'batchPreview','batchApprove','batchExecute']){
+  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit']){
   $(id).disabled=busy||
    (id==='batchExecute'&&(!batchPrepared||!$('batchApprove').checked))||
    (id==='batchPreview'&&!lastPayload)||
@@ -207,6 +238,7 @@ const setBatchBusy=busy=>{
    (id==='stagingExecute'&&(!approvedAction||!previewToken||!$('stagingApprove').checked));
  }
  $('sources').inert=busy;$('reviewArea').inert=busy;
+ $('quickGoals').inert=busy;
  $('batchGoals').inert=busy;
 };
 const saveManual=()=>{
@@ -231,6 +263,7 @@ const resetTestPreview=()=>{
  $('stagingConfirmPanel').hidden=true;$('stagingApprove').checked=false;$('stagingExecute').disabled=true;
 };
 const touch=()=>{
+ quickPrepared=null;$('quickConfirmPanel').hidden=true;
  $('exportArea').hidden=true;$('planJson').value='';$('reviewStatus').textContent='';
  $('stagingSendArea').hidden=true;lastPayload=null;resetTestPreview();resetBatchPreview();
 };
@@ -295,12 +328,12 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
   winner:m.leftScore===m.rightScore?'draw':'',
   include:false,confirmed:false
  }));
- $('reviewArea').hidden=false;
+ $('reviewArea').hidden=true;
  renderPendingPanel();
  $('manualAddWrap').hidden=!(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&snapshot.matches.length);
  $('eventTitle').textContent=(snapshot.eventName||'イベント')+
   ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+'件 / 対象ゴール '+rows.length+'件';
- renderGoals();renderScores();
+ renderGoals();renderScores();renderQuick();
 }
 function renderGoals(){
  $('goalRows').replaceChildren();
@@ -343,7 +376,7 @@ function renderGoals(){
    '「'+g.scorer+'」→ '+row.scorer+'（推定）':'未選択。候補から選んでください')+
    ' ／ アシスト：'+(row.assist?
    '「'+g.assist+'」→ '+row.assist+'（推定）':'未選択、またはアシストなし'),'details'));
-  const include=mkInput('checkbox');include.checked=row.include;include.addEventListener('change',()=>{row.include=include.checked;touch();persistManualRow(row);updateDuplicate()});
+  const include=mkInput('checkbox');include.checked=row.include;include.addEventListener('change',()=>{row.include=include.checked;touch();persistManualRow(row);updateDuplicate();renderQuick()});
   const bar=node('div','','line');bar.append(include,node('span','このゴールをShoot Sundayへ登録・修正する（要確認）'));article.append(h,quote,guess,bar);
   const wrap=node('div','','fields');
   const matchSelect=select(snapshot.matches.map(m=>({value:m.seq,label:'#'+m.seq+' '+m.leftTeam+' vs '+m.rightTeam})),row.seq);
@@ -456,10 +489,11 @@ function renderGoals(){
    else warn.textContent='⚠ Shoot Sundayに同じ得点者・アシストのゴールがあります。同じゴールなら追加しないでください。';
   };
   const invalidate=()=>{
+   row.quickEdited=true;
    // Keep the explicitly chosen existing goal when scorer/assist is edited.
    // Selecting a different match is the only change that clears its goal ID.
    row.duplicateApproved=false;row.confirmed=false;confirm.checked=false;
-   decision.textContent='';touch();persistManualRow(row);updateDuplicate();
+   decision.textContent='';touch();persistManualRow(row);updateDuplicate();renderQuick();
    const selectedMatch=snapshot.matches.find(m=>m.seq===Number(row.seq));
    const who=row.scorer||'未選択',to=row.assist||'未選択';
    guess.replaceChildren();
@@ -472,7 +506,7 @@ function renderGoals(){
    row.include=false;include.checked=false;
    row.updateGoalId='';row.duplicateApproved=false;row.confirmed=false;confirm.checked=false;
    decision.textContent='登録対象から除外しました。元の記録は変更されません。';
-   touch();persistManualRow(row);updateDuplicate();
+   touch();persistManualRow(row);updateDuplicate();renderQuick();
   });
   anotherButton.addEventListener('click',()=>{
    row.include=true;include.checked=true;row.updateGoalId='';row.duplicateApproved=true;
@@ -554,6 +588,101 @@ async function postStaging(path,payload) {
  if(!response.ok)throw Error(data?.error?.message||'テストSS API HTTP '+response.status);
  return data;
 }
+
+function renderQuick(){
+ const active=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
+ $('quickPanel').hidden=!active;
+ if(!active)return;
+ const items=quickGoalDecisions(snapshot,rows);
+ const ready=items.filter(x=>x.state==='ready').length;
+ const attention=items.filter(x=>x.state==='attention').length;
+ const duplicates=items.filter(x=>x.state==='duplicate').length;
+ const other=items.length-ready-attention-duplicates;
+ $('quickSummary').textContent='登録候補 '+ready+'件 ／ 要修正 '+attention+
+   '件 ／ 重複 '+duplicates+'件'+(other?' ／ その他 '+other+'件':'');
+ const container=$('quickGoals');container.replaceChildren();
+ for(const item of items){
+  const el=node('div','','quick-goal'),top=node('div','','quick-goal-top');
+  top.append(node('strong','#'+(item.index+1)+' '+(item.scorer||'得点者未確定')+
+    ' → '+item.assist));
+  const label=item.state==='ready'?'登録候補':
+    item.state==='duplicate'?'重複候補・対象外':
+    item.state==='attention'?'要修正':'今回の一括登録から除外';
+  top.append(node('span',label,item.state==='ready'?'quick-ready':'quick-held'));
+  el.append(top,node('p','試合 #'+(item.seq||'—')+' / '+(item.team||'チーム未確定')+
+   ' / '+(item.source||'動画なし')+' '+(item.time==null?'':item.time+'秒'),'quick-meta'));
+  if(item.state!=='ready')el.append(node('p',item.reason,'quick-held'));
+  const edit=node('button',item.state==='ready'?'内容を修正':'このゴールを修正');
+  edit.type='button';
+  edit.addEventListener('click',()=>{
+   $('reviewArea').hidden=false;
+   $('review-goal-'+(item.index+1))?.scrollIntoView({behavior:'smooth',block:'start'});
+  });
+  el.append(edit);container.append(el);
+ }
+ $('quickPreview').disabled=batchBusy||ready===0;
+ if(!quickPrepared){
+  $('quickStatus').textContent=ready
+   ?'候補一覧に問題がなければ「登録内容をまとめて確認」を押してください。'
+   :'送信できる動画ゴールがありません。必要な行を修正してください。';
+ }
+}
+$('quickEdit').addEventListener('click',()=>{
+ $('reviewArea').hidden=false;
+ $('reviewArea').scrollIntoView({behavior:'smooth',block:'start'});
+});
+$('quickBack').addEventListener('click',()=>{
+ $('reviewArea').hidden=true;
+ $('quickPanel').scrollIntoView({behavior:'smooth',block:'start'});
+});
+$('quickCancel').addEventListener('click',()=>{
+ quickPrepared=null;$('quickConfirmPanel').hidden=true;
+ $('quickStatus').textContent='確認を取り消しました。送信していません。';
+});
+$('quickPreview').addEventListener('click',async()=>{
+ if(batchBusy||!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ quickPrepared=null;$('quickConfirmPanel').hidden=true;
+ setBatchBusy(true);
+ try{
+  if(pendingForEvent().length)throw Error('前回の送信結果が未確認です。復旧欄で照合してください');
+  const {payload,selected,held}=prepareQuickGoalBatch(snapshot,rows);
+  if(!payload||!selected.length)throw Error('送信可能な新規ゴールがありません。保留・重複候補を確認してください');
+  const chosen=selectBatchOperations(payload,payload.operations.map((_,index)=>index));
+  $('quickStatus').textContent='TESTの最新試合・選手IDを照合中…（書き込みなし）';
+  const entries=await previewReviewedBatch({
+   selected:chosen,resolveAction:resolveReviewedAction,
+   previewAction:action=>postStaging('/staging/preview',action)
+  });
+  quickPrepared={entries,heldCount:held.length,eventId:snapshot.eventId};
+  $('quickConfirmTitle').textContent='TESTへ'+entries.length+'件の新規ゴールを登録';
+  $('quickReviewText').textContent=entries.map((item,i)=>
+   (i+1)+'. 試合：'+(item.plan.title||item.action.match_id)+
+   '\n得点：'+(item.plan.after?.scorer||'—')+
+   ' / アシスト：'+(item.plan.after?.assist||'なし')+
+   '\n得点側：'+item.plan.side+
+   (item.plan.warning?'\n⚠ '+item.plan.warning:'')
+  ).join('\n\n');
+  $('quickConfirmPanel').hidden=false;
+  $('quickStatus').textContent='プレビュー完了。'+entries.length+'件が登録対象・'+
+   held.length+'件は保留（送信しません）。下の内容を確認して最終ボタンを押してください。';
+  $('quickConfirmPanel').scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(e){
+  $('quickStatus').textContent='確認できません：'+e.message+'（ゴールの書き込みなし）';
+ }finally{setBatchBusy(false)}
+});
+$('quickExecute').addEventListener('click',()=>{
+ if(batchBusy||!quickPrepared||!snapshot||quickPrepared.eventId!==snapshot.eventId||
+    !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ // Explicit single human approval. Existing sequential writer keeps all
+ // per-operation signed previews, SQLite protection and no-retry journal.
+ batchPrepared=quickPrepared.entries;quickPrepared=null;
+ $('quickConfirmPanel').hidden=true;
+ $('batchApprove').checked=true;$('batchExecute').disabled=false;
+ quickSending=true;
+ $('quickStatus').textContent='TESTへの順次登録を開始。送信エラー時は再送しません。';
+ $('batchExecute').click();
+});
+
 $('manualAddGoal').addEventListener('click',()=>{
  if(batchBusy||!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
  if(unsentManualGoals(manualGoals).length>=20){
@@ -830,6 +959,7 @@ $('batchExecute').addEventListener('click',async()=>{
      manualGoals=markManualCompleted(manualGoals,verifiedKeys);saveManual();
      messages.push('✓ '+progress.current+'/'+progress.total+'：照合済み');
      $('batchProgress').textContent=messages.join('\n');
+     if(quickSending)$('quickStatus').textContent='登録・照合済み '+progress.current+'/'+progress.total+'件';
     }else if(progress.phase==='sending'){
      $('batchStatus').textContent='SSへ登録中 '+progress.current+'/'+progress.total+'件目（前の'+progress.completed.length+'件は確認済み）';
     }
@@ -844,6 +974,7 @@ $('batchExecute').addEventListener('click',async()=>{
   rebuild({preserveEdits:true,completedKeys});
   const finished='✓ テストSSへ'+completed.length+'件の一括登録・再取得・照合が完了しました。';
   statusSS(finished);$('reviewStatus').textContent=finished;
+  if(quickSending)$('quickStatus').textContent=finished;
   $('reviewArea').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){
   const complete=e.completed?.length??verifiedCount;
@@ -859,7 +990,9 @@ $('batchExecute').addEventListener('click',async()=>{
   $('batchProgress').textContent=messages.join('\n');
   statusSS('一括登録は途中停止しました。SSのイベント・試合を再取得してください。');
   renderPendingPanel();
- }finally{setBatchBusy(false)}
+  if(quickSending)$('quickStatus').textContent='登録停止：'+e.message+
+   '。自動再送は行いません。復旧欄で確認してください。';
+ }finally{quickSending=false;setBatchBusy(false)}
 });
 $('stagingOperation').addEventListener('change',()=>{
  resetTestPreview();$('stagingStatus').textContent='操作が変更されました。プレビューを作り直してください。';
