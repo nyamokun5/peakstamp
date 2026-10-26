@@ -1,0 +1,65 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {toStagingAction,writeableReviewOperations} from '../sposched-staging-client.mjs';
+const eventId='5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e';
+const matchId='4a5b6c7d-8e9f-4a0b-9c1d-2e3f4a5b6c7d';
+const goalId='2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b';
+const a='7c1e2a4b-5d6f-4a8b-9c0d-1e2f3a4b5c6d';
+const b='0a9b8c7d-6e5f-4d3c-2b1a-0f9e8d7c6b5a';
+const c='8b9c0d1e-2f3a-4b4c-9d5e-6f7a8b9c0d1e';
+const snapshot={eventId};
+const match=()=>({event_id:eventId,match_id:matchId,status:'scheduled',
+ left:{name:'チーム1',players:[{player_id:a,name:'テスト 太郎'},{player_id:b,name:'テスト 花子'}],helpers:[]},
+ right:{name:'チーム2',players:[{player_id:c,name:'テスト 次郎'}],helpers:[]},
+ goals:[{goal_id:goalId,side:'left',scorer:{player_id:a,name:'テスト 太郎'},
+ assist:{player_id:b,name:'テスト 花子'},own_goal:false,scored_at:'2026-10-26T20:00:00+08:00'}]});
+test('create maps team and confirmed exact player names to UUIDs',()=>{
+ const op={action:'record_goal',args:{event_id:eventId,seq:1,team:'チーム1',scorer:'テスト 太郎',assist:'テスト 花子'}};
+ assert.deepEqual(toStagingAction(snapshot,op,match()),{
+  action:'create',match_id:matchId,side:'left',scorer_id:a,assist_id:b});
+});
+test('create uses other side when explicitly selected',()=>{
+ const op={action:'record_goal',args:{team:'チーム2',scorer:'テスト 次郎'}};
+ assert.deepEqual(toStagingAction(snapshot,op,match()),{
+  action:'create',match_id:matchId,side:'right',scorer_id:c,assist_id:null});
+});
+test('name ambiguities, guests, missing roster entries, own-team assists and mismatched teams fail closed',()=>{
+ const base={action:'record_goal',args:{team:'チーム1',scorer:'テスト 太郎',assist:'テスト 花子'}};
+ const m=match();m.left.players.push({player_id:c,name:'テスト 太郎'});
+ assert.throws(()=>toStagingAction(snapshot,base,m),/一意/);
+ assert.throws(()=>toStagingAction(snapshot,{...base,args:{...base.args,guest:true}},match()),/対象外/);
+ assert.throws(()=>toStagingAction(snapshot,{...base,args:{...base.args,assist:'テスト 次郎'}},match()),/一意/);
+ assert.throws(()=>toStagingAction(snapshot,{...base,args:{...base.args,team:'関係ないチーム'}},match()),/得点チーム/);
+ assert.throws(()=>toStagingAction(snapshot,{...base,args:{...base.args,scorer:'テストタロウ'}},match()),/一意/);
+});
+test('does not accept a match from another event or mismatched official match id',()=>{
+ const op={action:'record_goal',args:{team:'チーム1',scorer:'テスト 太郎',match_id:matchId}};
+ const wrong=match();wrong.event_id='6c7d8e9f-0a1b-4c2d-8e3f-4a5b6c7d8e9f';
+ assert.throws(()=>toStagingAction(snapshot,op,wrong),/一致しません/);
+ assert.throws(()=>toStagingAction(snapshot,{...op,args:{...op.args,match_id:goalId}},match()),/一致しません/);
+});
+test('PATCH retains original side and maps new scorer and assist to strict IDs',()=>{
+ const op={action:'patch_goal',args:{match_id:matchId,goal_id:goalId,patch:{assist:null}},
+  expected:{team:'チーム1',scorer:'テスト 太郎',assist:'テスト 花子',own_goal:false}};
+ assert.deepEqual(toStagingAction(snapshot,op,match()),{
+  action:'patch',match_id:matchId,goal_id:goalId,scorer_id:a,assist_id:null});
+});
+test('PATCH rejects changed original goal, wrong scorer, no-op and own goals',()=>{
+ const op={action:'patch_goal',args:{match_id:matchId,goal_id:goalId,patch:{assist:null}},
+  expected:{team:'チーム1',scorer:'テスト 太郎',assist:'テスト 花子',own_goal:false}};
+ const modified=match();modified.goals[0].assist=null;
+ assert.throws(()=>toStagingAction(snapshot,op,modified),/変わっています/);
+ const noOp={...op,args:{...op.args,patch:{assist:{name:'テスト 花子'}}}};
+ assert.throws(()=>toStagingAction(snapshot,noOp,match()),/同一です/);
+ const own=match();own.goals[0].own_goal=true;
+ assert.throws(()=>toStagingAction(snapshot,op,own),/対象外/);
+ const outsider={...op,args:{...op.args,patch:{scorer:{name:'テスト 次郎'}}}};
+ assert.throws(()=>toStagingAction(snapshot,outsider,match()),/一意/);
+});
+test('review list explicitly disables score result writes and unrelated operations',()=>{
+ const ops={operations:[{action:'record_goal',args:{seq:1,scorer:'テスト 太郎'}},
+ {action:'record_match',args:{seq:1}},{action:'patch_goal',args:{seq:2}}]};
+ const shown=writeableReviewOperations(ops);
+ assert.deepEqual(shown.map(x=>x.enabled),[true,false,true]);
+ assert.throws(()=>toStagingAction(snapshot,ops.operations[1],match()),/行いません/);
+});
