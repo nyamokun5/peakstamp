@@ -67,12 +67,12 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </head>
 <body><main>
 <a href="./?v=external65">← PeakStampに戻る</a>
-<header class="top"><h1>⚽ Shoot Sundayへ試合・ゴールを登録</h1><span class="step">確認・登録準備版</span></header>
-<p>PeakStampで確認したゴール・アシストとShoot Sundayの試合／選手名簿を照合します。<strong>誤登録を防ぐため、すべての行で試合・選手を人が選択して確認</strong>してください。</p>
+<header class="top"><h1>⚽ PeakStamp → SS ゴール一括登録</h1><span class="step">動画優先</span></header>
+<p>PeakStampで確認済みの複数ゴールをTESTの試合・選手と照合してまとめて登録します。<strong>問題のある行だけ修正し、最後に一覧でまとめて承認します。</strong></p>
 <p class="warning"><strong>本番のSSは読み取り専用です。</strong> テスト環境を明示的に選んだ場合のみ、人が確認したゴールを1件ずつプレビュー・送信できます。試合結果の確定とオウンゴールの更新は対象外です。</p>
 <section class="panel">
  <h2>1. PSのゴールデータを選択</h2>
- <p>このiPhoneのブラウザに保存された確定済みゴールを読み込みます。複数の日付のデータがある場合は、対象動画だけ選んでください。</p>
+ <p>このiPhoneのブラウザに保存された動画の確定済みゴールを使います。最新の動画が初期選択されます。別の試合なら対象動画だけ選んでください。</p>
  <div id="sources"></div>
  <div class="line"><button id="refreshSources">保存データを再読み込み</button><span id="sourceStatus" class="small"></span></div>
 </section>
@@ -130,6 +130,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </section>
 <section class="panel" id="reviewArea" hidden>
  <h2>詳細編集（必要なゴールのみ）</h2>
+ <p>選手・試合などの選択を直したら、上の「一括登録の一覧へ戻る」からまとめて確認できます。以下の個別チェック欄は従来の登録方法用で、一括登録では不要です。</p>
  <button id="quickBack" type="button">一括登録の一覧へ戻る</button>
  <p id="eventTitle" class="status"></p>
  <p>実況の対戦カードと当日の選手名簿から試合・得点者・アシストを初期選択します。<strong>動画にゴールがなくても、手動で新規追加できます。</strong> 選手と試合を確認して登録してください。</p>
