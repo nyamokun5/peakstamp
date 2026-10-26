@@ -60,9 +60,11 @@ test('existing-goal correction requires selecting a real goal ID and explicit co
 
 test('second confirmed goal stays editable after first sent and official SS refresh',()=>{
  assert.match(html,/id="goalJump"/);
- assert.match(html,/rows=preserveReviewRows\(prepareGoalRows\(/);
+ assert.match(html,/const prepared=prepareGoalRows\(\{goals:source\},snapshot\)/);
+ assert.match(html,/rows=preserveReviewRows\(applyManualRowEdits\(prepared,manualGoals,snapshot\)/);
  assert.match(html,/completedKeys:completedKey\?\[completedKey\]:\[\]/);
- assert.match(html,/completedKeys:completed\.map\(x=>goalKeyOfOperation\(x\.operation\)\)/);
+ assert.match(html,/const completedKeys=completed\.map\(x=>goalKeyOfOperation\(x\.operation\)\)/);
+ assert.match(html,/rebuild\(\{preserveEdits:true,completedKeys\}\)/);
  assert.match(html,/rebuild\(\{preserveEdits:true\}\)/);
  assert.match(html,/const saved=row\.updateGoalId\|\|updateSelect\.value/);
  assert.match(html,/article\.id='review-goal-'/);
@@ -70,4 +72,20 @@ test('second confirmed goal stays editable after first sent and official SS refr
  assert.match(html,/row\.scorer=scorerSelect\.value;invalidate\(\)/);
  assert.match(html,/row\.assist=assistSelect\.value;invalidate\(\)/);
  assert.doesNotMatch(html,/scorerSelect\.addEventListener\('change',[^\n]*rebuild\(/);
+});
+
+test('manual goal without video is available in TEST-only review and existing batch',()=>{
+ assert.match(html,/id="manualAddWrap"/);
+ assert.match(html,/id="manualAddGoal"/);
+ assert.match(html,/id="manualAddStatus"/);
+ assert.match(html,/makeManualGoal\(crypto\.randomUUID\(\)\)/);
+ assert.match(html,/unsentManualGoals\(manualGoals\)/);
+ assert.match(html,/prepareGoalRows\(\{goals:source\},snapshot\)/);
+ assert.match(html,/storeManualGoals\(localStorage,'staging'/);
+ assert.match(html,/restoreManualGoals\(localStorage,'staging'/);
+ assert.match(html,/manualGoals=markManualCompleted\(manualGoals/);
+ assert.match(html,/g\.manual\?'SS手動登録（動画なし）'/);
+ assert.match(html,/loadedFromStagingDirect&&\$\('ssEnvironment'\)\.value==='staging'/);
+ assert.match(html,/id="batchPreview"/);
+ assert.match(html,/id="batchExecute"/);
 });
