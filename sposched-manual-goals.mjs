@@ -16,9 +16,7 @@ export function makeManualGoal(id){
   scorer:'',assist:'',assistStatus:'unknown',matchSeq:null,goalTimeSeconds:null,
   manual:true,sent:false};
 }
-const validGoal=g=>g&&UUID.test(String(g.id||''))&&g.manual===true&&
- g.source?.name==='SS手動入力'&&g.sent!==true&&g.sent!==false?false:
- Boolean(g&&UUID.test(String(g.id||''))&&g.manual===true&&
+const validGoal=g=>Boolean(g&&UUID.test(String(g.id||''))&&g.manual===true&&
  g.source?.name==='SS手動入力'&&(g.sent===true||g.sent===false));
 export function restoreManualGoals(storage,environment,eventId){
  let entries=[];
@@ -28,9 +26,7 @@ export function restoreManualGoals(storage,environment,eventId){
  }catch{}
  const ids=new Set();
  return entries.filter(x=>!ids.has(x.id)&&ids.add(x.id))
-  .map(g=>makeManualGoal(g.id) instanceof Object?{
-   ...makeManualGoal(g.id),sent:g.sent===true
-  }:g);
+  .map(g=>({...makeManualGoal(g.id),sent:g.sent===true}));
 }
 export function storeManualGoals(storage,environment,eventId,goals){
  if(!Array.isArray(goals)||goals.length>100||goals.some(g=>!validGoal(g)))
