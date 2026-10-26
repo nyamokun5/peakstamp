@@ -63,7 +63,8 @@ test('second confirmed goal stays editable after first sent and official SS refr
  assert.match(html,/const prepared=prepareGoalRows\(\{goals:source\},snapshot\)/);
  assert.match(html,/rows=preserveReviewRows\(applyManualRowEdits\(prepared,manualGoals,snapshot\)/);
  assert.match(html,/completedKeys:completedKey\?\[completedKey\]:\[\]/);
- assert.match(html,/completedKeys:completed\.map\(x=>goalKeyOfOperation\(x\.operation\)\)/);
+ assert.match(html,/const completedKeys=completed\.map\(x=>goalKeyOfOperation\(x\.operation\)\)/);
+ assert.match(html,/rebuild\(\{preserveEdits:true,completedKeys\}\)/);
  assert.match(html,/rebuild\(\{preserveEdits:true\}\)/);
  assert.match(html,/const saved=row\.updateGoalId\|\|updateSelect\.value/);
  assert.match(html,/article\.id='review-goal-'/);
