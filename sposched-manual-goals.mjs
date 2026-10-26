@@ -26,13 +26,21 @@ export function restoreManualGoals(storage,environment,eventId){
  }catch{}
  const ids=new Set();
  return entries.filter(x=>!ids.has(x.id)&&ids.add(x.id))
-  .map(g=>({...makeManualGoal(g.id),sent:g.sent===true}));
+  .map(g=>({...makeManualGoal(g.id),sent:g.sent===true,
+   review:g.review&&typeof g.review==='object'?
+    {seq:g.review.seq??null,scorer:String(g.review.scorer||''),
+     assist:String(g.review.assist||''),assistMode:g.review.assistMode||'unknown',
+     team:String(g.review.team||''),guest:g.review.guest===true,
+     include:g.review.include!==false}:null}));
 }
 export function storeManualGoals(storage,environment,eventId,goals){
  if(!Array.isArray(goals)||goals.length>100||goals.some(g=>!validGoal(g)))
   throw Error('手動ゴールデータを保存できません');
  storage.setItem(manualStoreKey(environment,eventId),JSON.stringify(goals.map(
-  g=>({id:g.id,source:{name:'SS手動入力'},manual:true,sent:g.sent===true})
+  g=>({id:g.id,source:{name:'SS手動入力'},manual:true,sent:g.sent===true,
+   review:g.review?{seq:g.review.seq??null,scorer:g.review.scorer||'',
+    assist:g.review.assist||'',assistMode:g.review.assistMode||'unknown',
+    team:g.review.team||'',guest:g.review.guest===true,include:g.review.include!==false}:null})
  )));
 }
 export function markManualCompleted(goals,keys){
@@ -40,3 +48,23 @@ export function markManualCompleted(goals,keys){
  return goals.map(g=>done.has('SS手動入力::'+g.id)?{...g,sent:true}:g);
 }
 export function unsentManualGoals(goals){return goals.filter(g=>g.sent!==true)}
+
+export function applyManualRowEdits(rows,goals,snapshot){
+ const saved=new Map(goals.filter(g=>g.sent!==true).map(g=>[g.id,g.review]));
+ return rows.map(row=>{
+  const review=row.goal?.manual?saved.get(row.goal.id):null;
+  if(!review)return row;
+  for(const key of ['seq','scorer','assist','assistMode','team','guest','include'])
+   if(Object.hasOwn(review,key))row[key]=review[key];
+  const m=snapshot?.matches?.find(x=>x.seq===Number(row.seq));
+  if(!m){row.seq=null;row.team='';}
+  if(row.scorer&&!row.guest&&!snapshot?.players?.includes(row.scorer))
+   row.scorer='';
+  if(row.assist&&!row.guest&&!snapshot?.players?.includes(row.assist))
+   row.assist='';
+  if(row.team&&m&&![
+    m.leftTeam,m.rightTeam].includes(row.team))row.team='';
+  row.confirmed=false;row.duplicateApproved=false;
+  return row;
+ });
+}
