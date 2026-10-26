@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {journalKey,pendingAttempts,beginAttempt,clearAttempt,inspectAttempt}
+import {journalKey,pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy}
  from '../sposched-write-journal.mjs';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,BatchStopped}
  from '../sposched-staging-batch.mjs';
@@ -130,4 +130,18 @@ test('uncertain network error stops batch after first POST and blocks new attemp
   executeAction:async()=>{posts++;return {write_sent:true,readback:{verified:true}}}
  }),/未確認/);
  assert.equal(posts,1,'must not send again after ambiguous previous response');
+});
+
+test('recovery forbids retry when SS already shows a likely write or concurrent changes',()=>{
+ for(const state of ['possible_created','possible_applied','other_changes','target_missing']){
+  const policy=recoveryDecisionPolicy({state});
+  assert.equal(policy.allowReturnToReview,false,'must fail closed: '+state);
+  assert.equal(policy.allowMarkSent,true);
+ }
+ for(const state of ['not_observed','not_applied']){
+  const policy=recoveryDecisionPolicy({state});
+  assert.equal(policy.allowReturnToReview,true);
+  assert.match(policy.reason,/未登録と確認/);
+ }
+ assert.equal(recoveryDecisionPolicy(null).allowReturnToReview,false);
 });
