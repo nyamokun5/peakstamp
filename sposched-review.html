@@ -18,6 +18,12 @@ button:disabled{cursor:default;opacity:.45}button.primary{background:#1a8f78;bor
 button.danger{background:#73423f;border-color:#d49483}
 #stagingSendArea{border-color:#e1b36e;background:#2b2b35}
 #stagingSendArea button:disabled{opacity:.4}
+.batch-goal{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #45515f}
+.batch-goal span{flex:1;font-size:13px}
+#batchReviewText{white-space:pre-wrap;word-break:break-word;background:#112839;padding:12px;border-radius:8px;border:1px solid #597584;font-size:12px;max-height:320px;overflow:auto}
+#batchProgress{white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.7}
+.batch-confirm{border-top:1px solid #597584;padding-top:11px;margin-top:12px}
+
 .staging-badge{background:#ac6630;color:#fff;padding:4px 8px;border-radius:8px;display:inline-block;font-weight:700}
 #stagingPlan{white-space:pre-wrap;word-break:break-word;background:#112839;padding:12px;border-radius:8px;border:1px solid #597584;font-size:12px}
 textarea,input,select{background:#0c1f2d;color:#fff;border:1px solid #567786;border-radius:7px;padding:9px;font-size:14px;max-width:100%}
@@ -106,8 +112,24 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
  <p class="small">このJSONは記録・確認用です。テストへの反映は下の専用操作から1件ずつ行います。ChatGPTのMCP接続は不要です。</p>
 </section>
 <section class="panel" id="stagingSendArea" hidden>
- <h2>5. <span class="staging-badge">TEST ONLY</span> SSテスト環境への1件反映</h2>
- <p>選んだゴールの試合・選手IDをテスト用SSから毎回取得し、変更前の状態と照合します。<strong>新規登録と得点者・アシスト修正のみ対応します。</strong> 試合結果の更新は行いません。</p>
+ <h2>5. <span class="staging-badge">TEST ONLY</span> SSテスト環境への登録</h2>
+ <p>得点者と試合を確認したゴールだけ、テストSSへ書き込みます。<strong>本番SSへの書き込みは無効です。</strong> 試合結果の更新とオウンゴール修正は対象外です。</p>
+ <div id="batchArea" class="grid-item">
+  <h3>複数ゴールをまとめて確認・登録</h3>
+  <p>登録するゴールを選んで一括プレビューしてください。<strong>実際のAPI書き込みは、承認後に1件ずつ順番に実行・照合します。</strong></p>
+  <div id="batchGoals"></div>
+  <div class="line"><button id="batchPreview" class="primary" type="button">選んだゴールを一括プレビュー（送信なし）</button></div>
+  <p id="batchStatus" class="small" role="status" aria-live="polite"></p>
+  <div id="batchConfirmPanel" class="batch-confirm" hidden>
+   <pre id="batchReviewText"></pre>
+   <label class="line"><input type="checkbox" id="batchApprove"><strong id="batchApproveLabel">内容を確認した</strong></label>
+   <button id="batchExecute" class="danger" type="button" disabled>承認したゴールをテストSSへ一括登録</button>
+   <p class="small">途中でエラー・通信切断が起きた場合はその場で停止します。自動で再試行しません。SSの最新データを取得してから再開してください。</p>
+  </div>
+  <p id="batchProgress" class="small" role="status" aria-live="polite"></p>
+ </div>
+ <details><summary>従来の1件ずつ登録・修正する操作を使う</summary>
+ <p>1ゴールずつプレビューしてテスト登録する従来の方法も使えます。</p>
  <label class="field">テスト反映する操作（1件だけ）
   <select id="stagingOperation" aria-label="反映するゴール"></select>
  </label>
@@ -119,24 +141,43 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
   <button id="stagingExecute" type="button" class="danger" disabled>テストSSへこの1件だけ書き込む</button>
   <p class="small">プレビューは2分で期限切れになります。送信エラー時は二重登録防止のため再送信せず、SSの最新データを確認してください。</p>
  </div>
+ </details>
 </section>
 </main>
 <script type="module">
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=external65';
 import {toStagingAction,writeableReviewOperations} from './sposched-staging-client.mjs?v=ss-stage1';
+import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
 let snapshot=null,rows=[],scores=[],goalExports=[];
 let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='';
+let batchPrepared=null,batchBusy=false;
+const resetBatchPreview=()=>{
+ batchPrepared=null;
+ $('batchConfirmPanel').hidden=true;
+ $('batchApprove').checked=false;$('batchExecute').disabled=true;
+ $('batchReviewText').textContent='';
+};
+const setBatchBusy=busy=>{
+ batchBusy=busy;
+ for(const id of ['ssEnvironment','ssBridgeToken','ssLoadEvents','ssEventSelect',
+  'ssLoadSnapshot','refreshSources','buildPlan','stagingPreview','stagingExecute',
+  'batchPreview','batchApprove','batchExecute']){
+  $(id).disabled=busy||(id==='batchExecute'&&(!batchPrepared||!$('batchApprove').checked));
+ }
+ $('sources').inert=busy;$('reviewArea').inert=busy;
+ $('batchGoals').inert=busy;
+};
 const resetTestPreview=()=>{
  approvedAction=null;previewToken='';
  $('stagingConfirmPanel').hidden=true;$('stagingApprove').checked=false;$('stagingExecute').disabled=true;
 };
 const touch=()=>{
  $('exportArea').hidden=true;$('planJson').value='';$('reviewStatus').textContent='';
- $('stagingSendArea').hidden=true;lastPayload=null;resetTestPreview();
+ $('stagingSendArea').hidden=true;lastPayload=null;resetTestPreview();resetBatchPreview();
 };
 const select=(choices,value,placeholder='選択してください')=>{
  const el=document.createElement('select');
@@ -507,6 +548,19 @@ $('buildPlan').addEventListener('click',()=>{
   $('stagingSendArea').hidden=true;
   if(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'){
    const operations=writeableReviewOperations(payload);
+   $('batchGoals').replaceChildren();
+   resetBatchPreview();
+   for(const item of operations){
+    if(!item.enabled)continue;
+    const label=node('label','','batch-goal'),check=mkInput('checkbox');
+    check.checked=true;check.value=String(item.index);
+    check.addEventListener('change',()=>{
+     resetBatchPreview();$('batchStatus').textContent='選択を変更しました。もう一度プレビューしてください。';
+    });
+    label.append(check,node('span',item.label));$('batchGoals').append(label);
+   }
+   $('batchProgress').textContent='';
+   $('batchStatus').textContent='最大20件を選択できます。試合結果の更新は含まれません。';
    const choices=$('stagingOperation');choices.replaceChildren();
    for(const item of operations){
     const option=node('option',item.label);
@@ -531,6 +585,97 @@ $('buildPlan').addEventListener('click',()=>{
    ?'✓ 照合完了：選択したゴールはすべてSSの登録済みゴールと同じ得点者・アシスト・チームです。追加・更新する操作はありません（動画との同一性は確認済みとして扱います）。'
    :error.message;
  }
+});
+async function resolveReviewedAction(operation){
+ if(!loadedFromStagingDirect||$('ssEnvironment').value!=='staging'||!snapshot)
+  throw Error('SSのテストイベントを直接読み込んでください');
+ const seq=Number(operation.args?.seq);
+ const m=snapshot.matches.find(item=>item.seq===seq);
+ if(!m||!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(m.matchId))
+  throw Error('試合番号と正式なmatch_idが一致しません。SSを再取得してください');
+ const official=await fetchSS('/match?match_id='+encodeURIComponent(m.matchId));
+ return toStagingAction(snapshot,operation,official);
+}
+$('batchApprove').addEventListener('change',()=>{
+ $('batchExecute').disabled=!$('batchApprove').checked||!batchPrepared||batchBusy;
+});
+$('batchPreview').addEventListener('click',async()=>{
+ if(batchBusy)return;
+ resetBatchPreview();$('batchProgress').textContent='';
+ if(!lastPayload||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging'){
+  $('batchStatus').textContent='テスト環境のSSデータを直接取得して登録案を作成してください';return;
+ }
+ const indexes=[...$('batchGoals').querySelectorAll('input:checked')].map(x=>Number(x.value));
+ let selected;
+ try{selected=selectBatchOperations(lastPayload,indexes)}
+ catch(e){$('batchStatus').textContent='確認エラー：'+e.message;return}
+ setBatchBusy(true);
+ $('batchStatus').textContent='登録候補 '+selected.length+'件をSS最新データと照合中（送信なし）…';
+ try{
+  const entries=await previewReviewedBatch({selected,
+   resolveAction:resolveReviewedAction,
+   previewAction:action=>postStaging('/staging/preview',action),
+   onProgress:({current,total})=>{
+    $('batchStatus').textContent='一括プレビュー '+current+'/'+total+'件を確認中（送信なし）';
+   }
+  });
+  batchPrepared=entries;
+  $('batchReviewText').textContent=entries.map((e,i)=>(
+   (i+1)+'. 試合：'+(e.plan.title||e.action.match_id)+
+   '\n操作：'+(e.plan.action==='create'?'新規登録':'登録済みの修正')+
+   '\n得点：'+(e.plan.after?.scorer||'—')+
+   ' / アシスト：'+(e.plan.after?.assist||'なし')+
+   '\n得点側：'+e.plan.side+
+   (e.plan.warning?'\n⚠ '+e.plan.warning:'')
+  )).join('\n\n');
+  $('batchApproveLabel').textContent='上記'+entries.length+'件をテスト団体へ登録することを確認した';
+  $('batchConfirmPanel').hidden=false;
+  $('batchStatus').textContent='一括プレビュー完了：'+entries.length+'件。まだSSには送信していません。';
+ }catch(e){
+  resetBatchPreview();
+  $('batchStatus').textContent='一括プレビュー失敗：'+e.message+'（書き込みは0件）';
+ }finally{setBatchBusy(false)}
+});
+$('batchExecute').addEventListener('click',async()=>{
+ if(batchBusy||!batchPrepared||!$('batchApprove').checked||
+    !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ const entries=batchPrepared;
+ resetBatchPreview();
+ setBatchBusy(true);
+ $('batchStatus').textContent='テスト環境に送信中。通信エラー時は自動再送しません。';
+ const messages=[];
+ try{
+  const completed=await executeReviewedBatch({entries,
+   resolveAction:resolveReviewedAction,
+   previewAction:action=>postStaging('/staging/preview',action),
+   executeAction:payload=>postStaging('/staging/execute',payload),
+   onProgress:progress=>{
+    if(progress.phase==='verified'){
+     messages.push('✓ '+progress.current+'/'+progress.total+'：照合済み');
+     $('batchProgress').textContent=messages.join('\n');
+    }else if(progress.phase==='sending'){
+     $('batchStatus').textContent='SSへ登録中 '+progress.current+'/'+progress.total+'件目（前の'+progress.completed.length+'件は確認済み）';
+    }
+   }
+  });
+  $('batchStatus').textContent='登録 '+completed.length+'件成功。SSの最新データを再取得中…';
+  const refreshed=await fetchSS('/snapshot?event_id='+encodeURIComponent(snapshot.eventId));
+  setBatchBusy(false);
+  snapshot=normalizeSpoSnapshot(refreshed);
+  rebuild();
+  const finished='✓ テストSSへ'+completed.length+'件の一括登録・再取得・照合が完了しました。';
+  statusSS(finished);$('reviewStatus').textContent=finished;
+  $('reviewArea').scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(e){
+  const complete=e.completed?.length??0;
+  // A successful POST might have been committed even if its reply was lost.
+  // Freeze the old draft and require a full SS refresh. Never retry here.
+  lastPayload=null;resetTestPreview();$('stagingConfirmPanel').hidden=true;
+  $('batchStatus').textContent='一括登録停止：確認済み'+complete+'件。'+e.message+
+   '。残りは送信していません。必ずSSの最新イベントを再取得してください。';
+  $('batchProgress').textContent=messages.join('\n');
+  statusSS('一括登録は途中停止しました。SSのイベント・試合を再取得してください。');
+ }finally{setBatchBusy(false)}
 });
 $('stagingOperation').addEventListener('change',()=>{
  resetTestPreview();$('stagingStatus').textContent='操作が変更されました。プレビューを作り直してください。';
