@@ -315,6 +315,7 @@ function chosenGoals(){
 function rebuild({preserveEdits=false,completedKeys=[]}={}){
  const prior=rows;
  const sameEvent=preserveEdits&&snapshot?.eventId===reviewedEventId;
+ const wasEditing=!$('reviewArea').hidden;
  touch();
  const source=chosenGoals();
  if(!snapshot){reviewedEventId='';$('reviewArea').hidden=true;return}
@@ -328,7 +329,11 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
   winner:m.leftScore===m.rightScore?'draw':'',
   include:false,confirmed:false
  }));
- $('reviewArea').hidden=true;
+ // Video-first quick view is TEST-only. Production remains a fully usable
+ // read-only goal review. Keep exception/detail view open across local edits
+ // and same-event refreshes (e.g., manually added test goal).
+ const quickMode=loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
+ $('reviewArea').hidden=quickMode&&!(preserveEdits&&wasEditing);
  renderPendingPanel();
  $('manualAddWrap').hidden=!(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&snapshot.matches.length);
  $('eventTitle').textContent=(snapshot.eventName||'イベント')+
