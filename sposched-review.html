@@ -189,7 +189,7 @@ function renderGoals(){
   const bar=node('div','','line');bar.append(include,node('span','このゴールをShoot Sundayへ登録・修正する（要確認）'));article.append(h,quote,guess,bar);
   const wrap=node('div','','fields');
   const matchSelect=select(snapshot.matches.map(m=>({value:m.seq,label:'#'+m.seq+' '+m.leftTeam+' vs '+m.rightTeam})),row.seq);
-  matchSelect.addEventListener('change',()=>{row.seq=Number(matchSelect.value)||null;invalidate()});
+  matchSelect.addEventListener('change',()=>{row.seq=Number(matchSelect.value)||null;row.updateGoalId='';invalidate()});
   const scorerSelect=select(options,row.scorer,'得点者を選択（AI: '+(g.scorer||'—')+'）');
   scorerSelect.addEventListener('change',()=>{row.scorer=scorerSelect.value;invalidate()});
   const assistMode=select([{value:'named',label:'あり（選手を選択）'},{value:'none',label:'なし'},{value:'unknown',label:'不明（要確認）'}],row.assistMode);
@@ -287,7 +287,7 @@ function renderGoals(){
     });
     else registered.append(node('p','この試合はゴール登録なし','details'));
    }else registered.append(node('p','試合を選ぶと、登録済みゴールを表示します。','details'));
-   duplicateWrap.hidden=!same.length && !row.updateGoalId;
+   duplicateWrap.hidden=!same.length || Boolean(row.updateGoalId);
    if(!same.length && !row.updateGoalId){row.duplicateApproved=false;warn.textContent=''}
    else if(!row.include)warn.textContent='✓ 新規登録の対象から外しました。既存の登録は変更されません。';
    else if(row.updateGoalId)warn.textContent='登録済みゴールの得点者・アシスト修正を準備中です（未送信）。';
@@ -295,7 +295,9 @@ function renderGoals(){
    else warn.textContent='⚠ Shoot Sundayに同じ得点者・アシストのゴールがあります。同じゴールなら追加しないでください。';
   };
   const invalidate=()=>{
-   row.updateGoalId='';row.duplicateApproved=false;row.confirmed=false;confirm.checked=false;
+   // Keep the explicitly chosen existing goal when scorer/assist is edited.
+   // Selecting a different match is the only change that clears its goal ID.
+   row.duplicateApproved=false;row.confirmed=false;confirm.checked=false;
    decision.textContent='';touch();updateDuplicate();
    const selectedMatch=snapshot.matches.find(m=>m.seq===Number(row.seq));
    const who=row.scorer||'未選択',to=row.assist||'未選択';
