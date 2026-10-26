@@ -380,17 +380,17 @@ function renderGoals(){
   const bar=node('div','','line');bar.append(include,node('span','このゴールをShoot Sundayへ登録・修正する（要確認）'));article.append(h,quote,guess,bar);
   const wrap=node('div','','fields');
   const matchSelect=select(snapshot.matches.map(m=>({value:m.seq,label:'#'+m.seq+' '+m.leftTeam+' vs '+m.rightTeam})),row.seq);
-  matchSelect.addEventListener('change',()=>{row.seq=Number(matchSelect.value)||null;row.updateGoalId='';invalidate()});
+  matchSelect.addEventListener('change',()=>{row.seq=Number(matchSelect.value)||null;row.updateGoalId='';invalidate('match')});
   const scorerSelect=select(options,row.scorer,'得点者を選択（AI: '+(g.scorer||'—')+'）');
-  scorerSelect.addEventListener('change',()=>{row.scorer=scorerSelect.value;invalidate()});
+  scorerSelect.addEventListener('change',()=>{row.scorer=scorerSelect.value;invalidate('scorer')});
   const assistMode=select([{value:'named',label:'あり（選手を選択）'},{value:'none',label:'なし'},{value:'unknown',label:'不明（要確認）'}],row.assistMode);
   const assistSelect=select(options,row.assist,'アシスト者を選択（AI: '+(g.assist||'—')+'）');
   assistSelect.disabled=row.assistMode!=='named';
-  assistMode.addEventListener('change',()=>{row.assistMode=assistMode.value;updateGuestFields();invalidate()});
-  assistSelect.addEventListener('change',()=>{row.assist=assistSelect.value;invalidate()});
+  assistMode.addEventListener('change',()=>{row.assistMode=assistMode.value;updateGuestFields();invalidate('assist')});
+  assistSelect.addEventListener('change',()=>{row.assist=assistSelect.value;invalidate('assist')});
   const teamSelect=select([...new Set(snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]).filter(Boolean))]
    .map(t=>({value:t,label:t})),row.team,'得点チームを選択');
-  teamSelect.addEventListener('change',()=>{row.team=teamSelect.value;invalidate()});
+  teamSelect.addEventListener('change',()=>{row.team=teamSelect.value;invalidate('team')});
   wrap.append(field('試合番号',matchSelect),field('得点者',scorerSelect),field('アシスト',assistMode),
    field('アシスト者',assistSelect),field('得点チーム',teamSelect));
   article.append(wrap);
@@ -402,8 +402,8 @@ function renderGoals(){
   guestAssist.placeholder='アシストした外部選手名';
   guestScorer.value=row.guest?row.scorer:'';
   guestAssist.value=row.guest?row.assist:'';
-  guestScorer.addEventListener('input',()=>{row.scorer=guestScorer.value.trim();invalidate()});
-  guestAssist.addEventListener('input',()=>{row.assist=guestAssist.value.trim();invalidate()});
+  guestScorer.addEventListener('input',()=>{row.scorer=guestScorer.value.trim();invalidate('scorer')});
+  guestAssist.addEventListener('input',()=>{row.assist=guestAssist.value.trim();invalidate('assist')});
   const guestFields=node('div','','fields');
   guestFields.append(field('外部の得点者名（必須）',guestScorer),
     field('外部のアシスト者（ある場合）',guestAssist));
@@ -488,8 +488,12 @@ function renderGoals(){
    else if(row.duplicateApproved)warn.textContent='別のゴールとして新規登録する設定です。試合スコアも確認してください。';
    else warn.textContent='⚠ Shoot Sundayに同じ得点者・アシストのゴールがあります。同じゴールなら追加しないでください。';
   };
-  const invalidate=()=>{
+  const invalidate=(field='')=>{
    row.quickEdited=true;
+   row.quickReviewedAll=false;
+   if(field==='match')row.quickReviewedFields={match:true};
+   else if(['scorer','assist','team'].includes(field))
+    row.quickReviewedFields={...(row.quickReviewedFields||{}),[field]:true};
    // Keep the explicitly chosen existing goal when scorer/assist is edited.
    // Selecting a different match is the only change that clears its goal ID.
    row.duplicateApproved=false;row.confirmed=false;confirm.checked=false;
@@ -512,7 +516,7 @@ function renderGoals(){
    row.include=true;include.checked=true;row.updateGoalId='';row.duplicateApproved=true;
    row.confirmed=false;confirm.checked=false;
    decision.textContent='別のゴールとして追加する設定です。下で選手・試合を確認してください。';
-   touch();persistManualRow(row);updateDuplicate();
+   touch();persistManualRow(row);updateDuplicate();renderQuick();
   });
   updateButton.addEventListener('click',()=>{
    const selected=existingGoalsForMatch(row,snapshot).find(g=>g.id===updateSelect.value);
@@ -526,6 +530,22 @@ function renderGoals(){
    touch();persistManualRow(row);updateDuplicate();
   });
   confirm.addEventListener('change',()=>{row.confirmed=confirm.checked;touch();persistManualRow(row)});
+  // Exception-only single approval for a video goal whose AI identity
+  // was uncertain. Never turns a manual/PATCH/duplicate into auto-eligible.
+  const reviewQuick=node('button','試合・得点者・アシストを確認して一括候補に含める');
+  reviewQuick.type='button';
+  const reviewQuickNote=node('p','','decision-status');
+  reviewQuick.addEventListener('click',()=>{
+   row.quickReviewedAll=true;
+   touch();renderQuick();
+   const outcome=quickGoalDecisions(snapshot,rows).find(x=>x.key===row.key);
+   reviewQuickNote.textContent=outcome?.state==='ready'
+    ?'✓ 確認済み。一括登録の候補一覧に反映しました。'
+    :'まだ送信候補にできません：'+(outcome?.reason||'必要な情報を確認してください');
+  });
+  if(!g.manual){
+   article.append(reviewQuick,reviewQuickNote);
+  }
   const footer=node('label','','line');
   footer.append(confirm,node('strong','このゴールの試合・選手を確認した'));
   article.append(registered,updateFields,footer,warn,duplicateWrap);
