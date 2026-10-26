@@ -94,6 +94,13 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
  <div class="line"><button id="loadSnapshot" class="primary">試合・名簿を読み込む</button><span id="snapshotStatus" class="status"></span></div>
  </details>
 </section>
+<section class="panel" id="recoveryPanel" hidden>
+ <h2>⚠ 前回の送信結果を確認してください（テストSSのみ）</h2>
+ <p>書き込みが完了しても通信が切れた可能性があります。<strong>このイベントの次の書き込みは、安全を確認するまで禁止しています。</strong> 自動再送は行いません。</p>
+ <button id="recoveryReload" class="primary" type="button">最新のSS試合・ゴール明細を取得（読み取りだけ）</button>
+ <p id="recoveryStatus" class="small" role="status" aria-live="polite"></p>
+ <div id="recoveryDetails"></div>
+</section>
 <section class="panel" id="reviewArea" hidden>
  <h2>3. 1ゴールずつ照合・確認</h2>
  <p id="eventTitle" class="status"></p>
@@ -157,12 +164,31 @@ import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,se
 import {toStagingAction,writeableReviewOperations} from './sposched-staging-client.mjs?v=ss-stage1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
+import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt} from './sposched-write-journal.mjs?v=ss-recovery1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
 let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='',manualGoals=[];
 let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='',previewOperationKey='';
-let batchPrepared=null,batchBusy=false;
+let batchPrepared=null,batchBusy=false,recoveryBusy=false;
+const pendingForEvent=()=>snapshot?.eventId&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging'
+ ?pendingAttempts(localStorage,snapshot.eventId):[];
+const renderPendingPanel=()=>{
+ $('recoveryDetails').replaceChildren();
+ try{
+  const pending=pendingForEvent();
+  $('recoveryPanel').hidden=!pending.length;
+  if(pending.length){
+   const item=pending[0];
+   $('recoveryStatus').textContent='送信結果不明：'+item.action+' / 試合ID '+item.match_id+
+    '。まず「最新のSS試合・ゴール明細を取得」を押してください。';
+  }
+ }catch(e){
+  $('recoveryPanel').hidden=false;
+  $('recoveryStatus').textContent='⚠ '+e.message+'。安全のためSSへの書き込みを禁止しました。';
+  $('recoveryReload').disabled=true;
+ }
+};
 const resetBatchPreview=()=>{
  batchPrepared=null;
  $('batchConfirmPanel').hidden=true;
@@ -270,6 +296,7 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
   include:false,confirmed:false
  }));
  $('reviewArea').hidden=false;
+ renderPendingPanel();
  $('manualAddWrap').hidden=!(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&snapshot.matches.length);
  $('eventTitle').textContent=(snapshot.eventName||'イベント')+
   ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+'件 / 対象ゴール '+rows.length+'件';
@@ -539,11 +566,74 @@ $('manualAddGoal').addEventListener('click',()=>{
  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
  $('manualAddStatus').textContent='新しいゴールを追加しました。試合・得点者・アシストを指定してください。';
 });
+$('recoveryReload').addEventListener('click',async()=>{
+ if(recoveryBusy||batchBusy||!snapshot?.eventId||!loadedFromStagingDirect)return;
+ let pending;
+ try{pending=pendingForEvent()}catch(e){$('recoveryStatus').textContent=e.message;return}
+ if(!pending.length){renderPendingPanel();return}
+ recoveryBusy=true;$('recoveryReload').disabled=true;
+ $('recoveryStatus').textContent='SSの最新のゴール明細を確認中…（書き込みは行いません）';
+ try{
+  const eventId=snapshot.eventId,entry=pending[0];
+  const latest=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+  if(latest.eventId!==eventId)throw Error('取得したイベントIDが異なります');
+  const match=await fetchSS('/match?match_id='+encodeURIComponent(entry.match_id));
+  const evidence=inspectAttempt(entry,match);
+  snapshot=latest;
+  rebuild({preserveEdits:true});
+  // Build recovery choices only from an actual read of the official test API.
+  $('recoveryPanel').hidden=false;
+  const details=$('recoveryDetails');
+  const status=evidence.state==='possible_created'
+   ?'送信前には存在しなかった一致ゴールが'+evidence.count+'件見つかりました。どれが対象かは人が確認してください。'
+   :evidence.state==='possible_applied'
+   ?'対象ゴールの得点者・アシストが送信内容と一致しています。'
+   :evidence.state==='not_observed'||evidence.state==='not_applied'
+   ?'今回の送信が反映された証拠は見つかりませんでした。ただし通信切断の直後は確定できません。'
+   :'他の変更や対象ゴールの消失があり、送信結果を自動判定できません。';
+  details.append(node('p','照合結果：'+status,'warning'));
+  if(evidence.goalIds?.length)details.append(node('p','一致した新規ゴールID：'+evidence.goalIds.join('、'),'details'));
+  details.append(node('p','試合ID：'+entry.match_id+' / 処理：'+entry.action+' / ゴール識別子：'+entry.goalKey,'details'));
+  const decision=mkInput('checkbox');
+  const label=node('label','','line');
+  label.append(decision,node('span','SSの試合・登録済みゴール明細を自分で確認しました'));
+  details.append(label);
+  const actions=node('div','','line'),done=node('button','SSに登録済みと確認 → 再送せず終了');
+  const retry=node('button','SSに未登録と確認 → 再審査に戻す');
+  done.type=retry.type='button';done.disabled=retry.disabled=true;
+  const change=()=>{done.disabled=retry.disabled=!decision.checked};decision.addEventListener('change',change);
+  const finish=(already)=>{
+   if(!decision.checked)return;
+   try{
+    // Never send here. This only clears a one-attempt lock after explicit
+    // operator review; a later write needs a NEW goal review and token.
+    clearAttempt(localStorage,eventId,entry.goalKey);
+    if(already){
+     manualGoals=markManualCompleted(manualGoals,[entry.goalKey]);saveManual();
+     const row=rows.find(r=>r.key===entry.goalKey);
+     if(row){row.include=false;persistManualRow(row)}
+    }
+    rebuild({preserveEdits:true,completedKeys:already?[entry.goalKey]:[]});
+    $('recoveryStatus').textContent=already
+     ?'送信済みとして除外しました。書き込みは行っていません。'
+     :'送信ロックを解除しました。得点者・試合を再確認して新しいプレビューから登録してください。';
+    statusSS('送信状態を確認しました。最新SSの登録内容と二重登録に注意してください。');
+   }catch(e){$('recoveryStatus').textContent='解除できません：'+e.message}
+  };
+  done.addEventListener('click',()=>finish(true));
+  retry.addEventListener('click',()=>finish(false));
+  actions.append(done,retry);details.append(actions);
+  $('recoveryStatus').textContent='読み取り完了。送信結果を自動確定していません。明細を確認してからいずれかを選んでください。';
+ }catch(e){
+  $('recoveryStatus').textContent='照合できません：'+e.message+'。再送信しないでください。';
+ }finally{recoveryBusy=false;$('recoveryReload').disabled=false}
+});
 $('ssEnvironment').addEventListener('change',()=>{
  $('ssBridgeToken').value='';
  $('ssSelectWrap').hidden=true;$('ssLoadSnapshot').hidden=true;
  $('ssEventSelect').replaceChildren();
  snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;
+ $('recoveryPanel').hidden=true;
  $('reviewArea').hidden=true;touch();
  statusSS($('ssEnvironment').value==='staging'
   ?'テスト環境を選択しました。テスト用BRIDGE_TOKENを入力してイベントを取得してください。'
@@ -576,6 +666,7 @@ $('ssLoadEvents').addEventListener('click',async()=>{
 });
 $('ssEventSelect').addEventListener('change',()=>{
  snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;
+ $('recoveryPanel').hidden=true;
  $('reviewArea').hidden=true;touch();
  statusSS('イベントが変わりました。「選んだイベントの試合・得点を読み込む」を押してください。');
 });
@@ -613,6 +704,7 @@ $('loadSnapshot').addEventListener('click',()=>{
 });
 $('buildPlan').addEventListener('click',()=>{
  try{
+  if(pendingForEvent()?.length)throw Error('前回の送信結果が未確認です。先に「最新のSS試合・ゴール明細を取得」から照合してください');
   const payload=buildReviewPayload(snapshot,rows,scores);
   $('planJson').value=JSON.stringify(payload,null,2);
   $('exportArea').hidden=false;
@@ -721,7 +813,14 @@ $('batchExecute').addEventListener('click',async()=>{
   const completed=await executeReviewedBatch({entries,
    resolveAction:resolveReviewedAction,
    previewAction:action=>postStaging('/staging/preview',action),
+   beforeExecute:async(item,action)=>{
+    const before=await fetchSS('/match?match_id='+encodeURIComponent(action.match_id));
+    beginAttempt(localStorage,snapshot.eventId,goalKeyOfOperation(item.operation),action,before);
+   },
    executeAction:payload=>postStaging('/staging/execute',payload),
+   afterExecute:async(item)=>{
+    clearAttempt(localStorage,snapshot.eventId,goalKeyOfOperation(item.operation));
+   },
    onProgress:progress=>{
     if(progress.phase==='verified'){
      verifiedCount=progress.completed.length;
@@ -757,6 +856,7 @@ $('batchExecute').addEventListener('click',async()=>{
    '。失敗した操作は送信済みの可能性もあります。自動再送・残りの処理は行っていません。必ずSSの最新イベントを再取得してください。';
   $('batchProgress').textContent=messages.join('\n');
   statusSS('一括登録は途中停止しました。SSのイベント・試合を再取得してください。');
+  renderPendingPanel();
  }finally{setBatchBusy(false)}
 });
 $('stagingOperation').addEventListener('change',()=>{
@@ -810,11 +910,14 @@ $('stagingExecute').addEventListener('click',async()=>{
  $('stagingExecute').disabled=true;$('stagingPreview').disabled=true;
  $('stagingStatus').textContent='テストSSへ1件送信しています…';
  try{
+  const before=await fetchSS('/match?match_id='+encodeURIComponent(request.match_id));
+  beginAttempt(localStorage,snapshot.eventId,completedKey,request,before);
   const result=await postStaging('/staging/execute',{
    ...request,preview_token:token,confirm:'TEST-ONLY WRITE'
   });
   if(!result?.write_sent||!result?.readback?.verified)
    throw Error('送信済みですが照合が完了していません。再送信せずSSの最新情報を確認してください');
+  clearAttempt(localStorage,snapshot.eventId,completedKey);
   manualGoals=markManualCompleted(manualGoals,completedKey?[completedKey]:[]);
   saveManual();
   const updated=await fetchSS('/snapshot?event_id='+encodeURIComponent(snapshot.eventId));
@@ -828,6 +931,7 @@ $('stagingExecute').addEventListener('click',async()=>{
  }catch(e){
   $('stagingStatus').textContent='送信または照合に問題があります：'+e.message+
    '。再送信せず、イベントを再取得して登録済みゴールを確認してください。';
+  renderPendingPanel();
  }finally{$('stagingPreview').disabled=false;}
 });
 $('copyPlan').addEventListener('click',async()=>{
