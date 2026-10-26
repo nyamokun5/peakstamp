@@ -89,7 +89,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </section>
 <section class="panel" id="exportArea" hidden>
  <h2>4. Shoot Sunday登録前の最終データ</h2>
- <p><strong>まだ送信していません。</strong>新規得点登録・既存得点の修正候補・試合結果の変更をJSONとして確認できます。<code>patch_goal</code> はAPIのPATCHに合わせた提案で、実際の更新機能は無効です。登録前にSSの最新状態と照合してください。</p>
+ <p><strong>まだ送信していません。</strong>新規得点登録・既存得点の修正候補・試合結果の変更をJSONとして確認できます。<code>record_goal</code> は新規登録、<code>patch_goal</code> はAPIのPATCHに合わせた修正提案で、実際の更新機能は無効です。登録前にSSの最新状態と照合してください。</p>
  <textarea id="planJson" readonly></textarea>
  <div class="line"><button class="primary" id="copyPlan">JSONをコピー</button><span class="small" id="copyStatus"></span></div>
  <p class="small">コピー後、ChatGPTに「Shoot SundayのこのJSONを確認して、登録前に差分と重複を見せて」と貼り付けると、接続済みアプリ経由で進められます。</p>
