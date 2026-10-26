@@ -505,7 +505,7 @@ function renderGoals(){
    row.include=false;include.checked=false;
    row.updateGoalId='';row.duplicateApproved=false;row.confirmed=false;confirm.checked=false;
    decision.textContent='登録対象から除外しました。元の記録は変更されません。';
-   touch();persistManualRow(row);updateDuplicate();
+   touch();persistManualRow(row);updateDuplicate();renderQuick();
   });
   anotherButton.addEventListener('click',()=>{
    row.include=true;include.checked=true;row.updateGoalId='';row.duplicateApproved=true;
