@@ -129,7 +129,12 @@ test('portal never has direct write fetch, API secrets or automatic side effects
  assert.match(home,/sposched-review\.html/);
  assert.match(html,/record_goal/);
  assert.match(html,/人が選択/);
- assert.doesNotMatch(html,/fetch\s*\(/);
+ // An authenticated READ from the dedicated SS gateway is now supported.
+ // The editor still must never write goals, score changes or secrets.
+ assert.match(html,/fetchSS\('/);
+ assert.match(html,/method:'GET'/);
+ assert.doesNotMatch(html,/method:\s*['"](POST|PATCH|PUT|DELETE)['"]/i);
+ assert.doesNotMatch(html,/localStorage\.setItem\([^)]*ssBridgeToken/);
  assert.doesNotMatch(html,/localStorage\.clear/);
  assert.doesNotMatch(html,/apiKey|api_key|Bearer\s+\w/i);
  assert.match(html,/未送信/);
