@@ -24,14 +24,15 @@ export function normalizeSpoSnapshot(raw){
  const opponentFromTitle=numbered.length===1?
   string(eventName.match(/\bvs\.?\s+(.+?)\s*$/i)?.[1]):'';
  const matches=numbered.map(m=>({
-  seq:number(m.seq),title:string(m.title||'#'+m.seq),
+  seq:number(m.seq),matchId:string(m.match_id),title:string(m.title||'#'+m.seq),
   leftTeam:string(m.left_team||''),
   rightTeam:string(m.right_team||opponentFromTitle||''),
   inferredRightTeam:!string(m.right_team)&&Boolean(opponentFromTitle),
   leftScore:Number.isInteger(m.left_score)&&m.left_score>=0?m.left_score:null,
   rightScore:Number.isInteger(m.right_score)&&m.right_score>=0?m.right_score:null,
   existingGoals:Array.isArray(m.goals)?m.goals.filter(Boolean).map(g=>({
-   id:string(g.goal_id),scorer:string(g.scorer),assist:string(g.assist),team:string(g.team)
+   id:string(g.goal_id),scorer:string(g.scorer),assist:string(g.assist),team:string(g.team),
+    ownGoal:g.own_goal===true,scoredAt:string(g.scored_at)
   })):[]
  })).sort((a,b)=>a.seq-b.seq);
  const seqs=new Set();
@@ -221,7 +222,7 @@ export function prepareGoalRows(rawGoals,snapshot){
    assistMode:g.assistStatus==='none'?'none':
     g.assistStatus==='named'?'named':'unknown',
    scorerHints,assistHints,team:prefilledTeam,confirmed:false,include:true,
-   guest:false,scoreConfirmed:false,duplicateApproved:false};
+   guest:false,scoreConfirmed:false,duplicateApproved:false,updateGoalId:''};
  });
 }
 export function validateGoalRow(row,snapshot){
@@ -277,10 +278,35 @@ export function buildReviewPayload(snapshot,rows,scoreRows=[]){
  const missing=items.map((row,i)=>({i,problem:validateGoalRow(row,snapshot)}))
   .filter(x=>x.problem);
  if(missing.length)throw Error((missing[0].i+1)+'件目：'+missing[0].problem);
- const duplicates=items.filter(row=>findPotentialDuplicate(row,snapshot)&&row.duplicateApproved!==true);
+ const duplicates=items.filter(row=>!row.updateGoalId&&findPotentialDuplicate(row,snapshot)&&row.duplicateApproved!==true);
  if(duplicates.length)throw Error('Shoot Sundayに同じ得点者・アシストの登録済みゴールが'+duplicates.length+'件あります。「登録済みなので送らない」か「別ゴールとして追加」を選んでください。');
  const operationGoals=items.map(row=>{
   const team=row.team||snapshot.playerTeam.get(row.scorer)||'';
+  const match=snapshot.matches.find(m=>m.seq===number(row.seq));
+  if(row.updateGoalId){
+   // Updates only target a specific registered goal and retain its scoring side.
+   const original=match?.existingGoals.find(g=>g.id===row.updateGoalId);
+   const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+   if(!original||!uuid.test(original.id)||!uuid.test(match.matchId))
+    throw Error('更新対象のgoal_idまたはmatch_idを確認できません。SSから再取得してください。');
+   if(original.ownGoal)throw Error('オウンゴールの変更はこの画面では対応していません。');
+   if(row.guest)throw Error('ゲストの得点変更はこの画面では対応していません。');
+   if(normalizeTeam(team)!==normalizeTeam(original.team))
+    throw Error('得点チームが異なります。PATCHでは得点側を変更できません。');
+   const expected={scorer:original.scorer,assist:original.assist||null,
+    team:original.team,scored_at:original.scoredAt||null,own_goal:original.ownGoal};
+   const patch={};
+   if(normalizePerson(row.scorer)!==normalizePerson(original.scorer))patch.scorer={name:row.scorer};
+   const newAssist=row.assistMode==='named'?row.assist:null;
+   if(normalizePerson(newAssist)!==normalizePerson(original.assist))
+    patch.assist=newAssist?{name:newAssist}:null;
+   if(!Object.keys(patch).length)throw Error('選択した登録済みゴールと変更内容が同じです。更新は不要です。');
+   return {action:'patch_goal',args:{event_id:snapshot.eventId,seq:match.seq,
+    match_id:match.matchId,goal_id:original.id,patch},expected,fromPeakStamp:{
+     goalId:row.goal.id,source:row.goal.source?.name,
+     goalTimeSeconds:row.goal.goalTimeSeconds,quote:row.goal.quote
+    }};
+  }
   const args={event_id:snapshot.eventId,seq:number(row.seq),scorer:row.scorer,team};
   if(row.assistMode==='named')args.assist=row.assist;
   if(row.guest===true)args.guest=true;
