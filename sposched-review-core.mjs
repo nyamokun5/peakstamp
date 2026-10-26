@@ -238,7 +238,7 @@ export function preserveReviewRows(nextRows,priorRows,{
  return nextRows.map(row=>{
   const old=previous.get(row.key);
   if(!old)return row;
-  const fields=['seq','scorer','assist','assistMode','team','guest','include','quickEdited'];
+  const fields=['seq','scorer','assist','assistMode','team','guest','include','quickEdited','quickReviewedAll','quickReviewedFields'];
   for(const field of fields)row[field]=old[field];
   // A finished goal cannot be queued again after its successful readback.
   // Preserve other goals' edits but invalidate every confirmation/override.
