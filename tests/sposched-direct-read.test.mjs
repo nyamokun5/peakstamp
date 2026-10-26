@@ -38,3 +38,13 @@ test('verified already-registered goals show no update rather than an error',()=
   assert.match(html,/noScoreChanges/);
   assert.match(html,/追加・更新する操作はありません/);
 });
+
+test('existing-goal correction requires selecting a real goal ID and explicit confirmation',()=>{
+ assert.match(html,/id="ssLoadSnapshot"/);
+ assert.match(html,/修正対象の既存ゴールを選択/);
+ assert.match(html,/row\.updateGoalId=selected\.id/);
+ assert.match(html,/row\.confirmed=false;confirm\.checked=false/);
+ assert.match(html,/この登録済みゴールを修正対象に指定/);
+ assert.match(html,/未送信/);
+ assert.doesNotMatch(html,/method:\s*['"](POST|PATCH|PUT|DELETE)['"]/i);
+});

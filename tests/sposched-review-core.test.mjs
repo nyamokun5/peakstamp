@@ -318,3 +318,47 @@ test('one-match external fixture accepts an already confirmed official match num
  assert.equal(row.seq,1);
  assert.equal(row.scorer,'西村');
 });
+
+test('confirmed manual correction creates a PATCH proposal using stable match and goal IDs',()=>{
+ const matchId='5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e';
+ const goalId='6b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e';
+ const source={event_id:'7b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e',event:{name:'Test'},
+  roster:{'チーム1':['山田','田中','佐藤'],'チーム2':['高橋']},
+  matches:[{seq:1,match_id:matchId,left_team:'チーム1',right_team:'チーム2',
+   left_score:1,right_score:0,goals:[{goal_id:goalId,scorer:'山田',
+    assist:'田中',team:'チーム1',own_goal:false,scored_at:'2026-10-25T07:08:00+08:00'}]}]};
+ const snap=normalizeSpoSnapshot(source);
+ assert.equal(snap.matches[0].matchId,matchId);
+ const goal={id:'ps-1',source:{name:'IMG_1.MOV'},scorer:'山田',
+  assist:'佐藤',assistStatus:'named',matchSeq:1,goalTimeSeconds:40};
+ const [row]=prepareGoalRows({goals:[goal]},snap);
+ row.include=true;row.seq=1;row.scorer='山田';row.assist='佐藤';
+ row.assistMode='named';row.team='チーム1';row.confirmed=true;row.updateGoalId=goalId;
+ const data=buildReviewPayload(snap,[row]);
+ assert.equal(data.operations.length,1);
+ const operation=data.operations[0];
+ assert.equal(operation.action,'patch_goal');
+ assert.equal(operation.args.match_id,matchId);
+ assert.equal(operation.args.goal_id,goalId);
+ assert.deepEqual(operation.args.patch,{assist:{name:'佐藤'}});
+ assert.equal(operation.expected.assist,'田中');
+ assert.equal(data.status,'human-reviewed-NOT-SENT');
+ row.assist='田中';
+ assert.throws(()=>buildReviewPayload(snap,[row]),/更新は不要/);
+ row.assist='佐藤';row.team='チーム2';
+ assert.throws(()=>buildReviewPayload(snap,[row]),/得点チームが異なります/);
+});
+test('goal updates reject unknown and non-UUID registered targets',()=>{
+ const snap=normalizeSpoSnapshot({
+  event_id:'7b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e',event:'Test',
+  roster:{Team1:['A','B']},
+  matches:[{seq:1,match_id:'5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e',
+   left_team:'Team1',right_team:'Team2',
+   goals:[{goal_id:'invalid-id',scorer:'A',assist:null,team:'Team1'}]}]});
+ const [row]=prepareGoalRows({goals:[{id:'from-ps',scorer:'B',assist:null,
+  assistStatus:'none',matchSeq:1,source:{name:'demo.MOV'}}]},snap);
+ Object.assign(row,{include:true,confirmed:true,seq:1,team:'Team1',scorer:'B',assistMode:'none',updateGoalId:'invalid-id'});
+ assert.throws(()=>buildReviewPayload(snap,[row]),/goal_id/);
+ row.updateGoalId='6b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e';
+ assert.throws(()=>buildReviewPayload(snap,[row]),/goal_id/);
+});
