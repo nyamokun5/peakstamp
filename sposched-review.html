@@ -716,7 +716,7 @@ $('batchExecute').addEventListener('click',async()=>{
  setBatchBusy(true);
  $('batchStatus').textContent='テスト環境に送信中。通信エラー時は自動再送しません。';
  const messages=[];
- let verifiedCount=0;
+ let verifiedCount=0,verifiedKeys=[];
  try{
   const completed=await executeReviewedBatch({entries,
    resolveAction:resolveReviewedAction,
@@ -725,6 +725,8 @@ $('batchExecute').addEventListener('click',async()=>{
    onProgress:progress=>{
     if(progress.phase==='verified'){
      verifiedCount=progress.completed.length;
+     verifiedKeys=progress.completed.map(x=>goalKeyOfOperation(x.operation)).filter(Boolean);
+     manualGoals=markManualCompleted(manualGoals,verifiedKeys);saveManual();
      messages.push('✓ '+progress.current+'/'+progress.total+'：照合済み');
      $('batchProgress').textContent=messages.join('\n');
     }else if(progress.phase==='sending'){
@@ -744,6 +746,10 @@ $('batchExecute').addEventListener('click',async()=>{
   $('reviewArea').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){
   const complete=e.completed?.length??verifiedCount;
+  if(e.completed?.length){
+   verifiedKeys=e.completed.map(x=>goalKeyOfOperation(x.operation)).filter(Boolean);
+   manualGoals=markManualCompleted(manualGoals,verifiedKeys);saveManual();
+  }
   // A successful POST might have been committed even if its reply was lost.
   // Freeze the old draft and require a full SS refresh. Never retry here.
   lastPayload=null;resetTestPreview();$('stagingConfirmPanel').hidden=true;
@@ -809,6 +815,8 @@ $('stagingExecute').addEventListener('click',async()=>{
   });
   if(!result?.write_sent||!result?.readback?.verified)
    throw Error('送信済みですが照合が完了していません。再送信せずSSの最新情報を確認してください');
+  manualGoals=markManualCompleted(manualGoals,completedKey?[completedKey]:[]);
+  saveManual();
   const updated=await fetchSS('/snapshot?event_id='+encodeURIComponent(snapshot.eventId));
   snapshot=normalizeSpoSnapshot(updated);
   manualGoals=markManualCompleted(manualGoals,completedKey?[completedKey]:[]);
