@@ -7,7 +7,14 @@ export const normalizePerson=x=>string(x).normalize('NFKC').toLowerCase()
  .replace(/[\s.・_\-（）()]/g,'').replace(/(さん|くん|君|氏|様)$/,'');
 export const normalizeTeam=x=>string(x).normalize('NFKC').toLowerCase()
  .replace(/\s/g,'').replace(/^チーム/,'team').replace(/team(\d+)/,'team$1');
-const number=x=>Number.isInteger(Number(x))&&Number(x)>0?Number(x):null;
+const number=x=>x!==null&&x!==undefined&&x!==''&&
+ Number.isInteger(Number(x))&&Number(x)>0?Number(x):null;
+export function officialFixtureNumber(fixture){
+ const n=number(fixture?.number),seq=number(fixture?.seq);
+ if(n!==null&&seq!==null&&n!==seq)
+  throw Error('SSの試合番号numberとseqが一致しません');
+ return n??seq;
+}
 export function normalizeSpoSnapshot(raw){
  const input=raw?.result&&typeof raw.result==='object'?raw.result:raw;
  if(!input||typeof input!=='object')throw Error('SpoSchedの試合結果JSONを指定してください');
@@ -20,11 +27,12 @@ export function normalizeSpoSnapshot(raw){
  // For an external one-off fixture, SpoSched may have Team1 vs null before
  // the score is registered. Only infer an opponent from its official title
  // when there is exactly ONE numbered match and human verification is required.
- const numbered=obj.matches.filter(m=>number(m.seq)!==null);
+ const numbered=obj.matches.filter(m=>officialFixtureNumber(m)!==null);
  const opponentFromTitle=numbered.length===1?
   string(eventName.match(/\bvs\.?\s+(.+?)\s*$/i)?.[1]):'';
  const matches=numbered.map(m=>({
-  seq:number(m.seq),matchId:string(m.match_id),title:string(m.title||'#'+m.seq),
+  seq:officialFixtureNumber(m),matchId:string(m.match_id),
+  title:string(m.title||'#'+officialFixtureNumber(m)),
   // seq is the organizer-assigned video/fixture number; matchId is the
   // official backend UUID, independent from the current team's pairing.
   status:string(m.status||''),
@@ -38,10 +46,15 @@ export function normalizeSpoSnapshot(raw){
     ownGoal:g.own_goal===true,scoredAt:string(g.scored_at)
   })):[]
  })).sort((a,b)=>a.seq-b.seq);
- const seqs=new Set();
+ const seqs=new Set(),ids=new Set();
  for(const m of matches){
   if(seqs.has(m.seq))throw Error('試合番号seqが重複しています: '+m.seq);
   seqs.add(m.seq);
+  if(m.matchId){
+   const id=m.matchId.toLowerCase();
+   if(ids.has(id))throw Error('SSの同じmatch_idが複数の試合番号に紐付いています');
+   ids.add(id);
+  }
  }
  const roster=obj.roster&&typeof obj.roster==='object'?obj.roster:{};
  const players=[...new Set([
