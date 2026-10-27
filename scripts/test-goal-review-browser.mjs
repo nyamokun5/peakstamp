@@ -89,8 +89,26 @@ try{
  assert.equal(await page.locator('#autoRun').isDisabled(),true);
  await page.click('.confirm-candidate');
  assert.equal(await page.locator('#autoRun').isEnabled(),true);
+ // Same event can legitimately return 0 numbered matches (e.g. selected
+ // target event without a tournament). Never offer an empty iOS picker.
+ const saved=structuredClone(matches);
+ matches.splice(0);
+ await page.click('#ssLoadSnapshot');
+ await page.locator('#ssFixtureWarning').waitFor({state:'visible'});
+ assert.match(await page.locator('#ssFixtureWarning').innerText(),/番号付き試合を0件取得/);
+ assert.match(await page.locator('#flowGuide').innerText(),/SSの試合が0件/);
+ assert.equal(await page.locator('[aria-label="#1 試合"]').count(),0);
+ assert.equal(await page.locator('#autoRun').isDisabled(),true);
+ assert.match(await page.locator('#autoRun').innerText(),/試合枠がない/);
+ await page.click('#ssChooseEvent');
+ assert.equal(await page.evaluate(()=>document.activeElement?.id),'ssEventSelect');
+ // A GET-only refresh after the fixture is created restores actual choices.
+ matches.push(...saved);
+ await page.click('#ssReloadFixtures');
+ await page.locator('#ssFixtureWarning').waitFor({state:'hidden'});
+ assert.ok(await page.locator('[aria-label="#1 試合"] option').count()>1);
  assert.deepEqual(writes,[]);
  assert.deepEqual(errors,[]);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- console.log('PASS: goal review visible above CTA, no unnamed match silently ignored, proposed video match visible but requires explicit approval, no TEST writes');
+ console.log('PASS: goal review and video match proposals, empty official fixture error instead of unusable iPhone selector, event focus, GET-only recovery, no writes');
 }finally{await browser.close()}
