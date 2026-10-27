@@ -1605,57 +1605,100 @@ $('manualAddGoal').addEventListener('click',()=>{
  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
  $('manualAddStatus').textContent='新しいゴールを追加しました。試合・得点者・アシストを指定してください。';
 });
-async function handleMissingOldMatch(entry,eventId,latest){
- const matchIds=latest.matches.map(m=>m.matchId).filter(Boolean);
+// Old local journal and old Durable Object must NEVER be replayed against
+// a newly created match UUID. Only read-only official API checks occur here.
+async function handleMissingOldMatch(entry,eventId,firstSnapshot){
+ const oldId=entry.match_id;
+ const firstIds=firstSnapshot.matches.map(m=>m.matchId).filter(Boolean);
+ async function verifyAgain(){
+  const second=normalizeSpoSnapshot(await fetchSS(
+   '/snapshot?event_id='+encodeURIComponent(eventId)));
+  if(second.eventId!==eventId)throw Error('イベントIDが変わりました');
+  let code=null;
+  try{
+   await fetchSS('/match?match_id='+encodeURIComponent(oldId));
+   code=200;
+  }catch(e){
+   if(e.httpStatus!==404)throw e;
+   code=404;
+  }
+  return {second,code};
+ }
+ // Confirm the old match is absent TWICE and that the new set of official
+ // UUIDs is stable. An ambiguous network failure blocks archival.
+ const {second,code}=await verifyAgain();
  let gateStatus='unknown',gateError='';
  try{
-  // This POST is status-only: it reads the old per-match DO, never writes.
-  const state=await postStaging('/staging/status',{match_id:entry.match_id});
-  if(state.environment!=='STAGING ONLY')throw Error('TESTの状態を確認できません');
+  // POST is only a transport for /staging/status. This path contains no write.
+  const state=await postStaging('/staging/status',{match_id:oldId});
+  if(state.environment!=='STAGING ONLY')throw Error('TEST Workerの状態を確認できません');
   gateStatus=state.status||'unknown';
  }catch(e){gateError=e.message||'Workerの状態を取得できません'}
- const policy=retiredMatchRecoveryPolicy(entry,eventId,matchIds,404,gateStatus);
- snapshot=latest;rebuild({preserveEdits:true});
+ const policyFor=(ids,status,code)=>retiredMatchRecoveryPolicy(
+  entry,eventId,firstIds,404,status,{
+   currentMatchIds:ids,oldMatchHttpStatus:code,
+   // A prior server-driven batch is independent from the old browser journal.
+   // Do not silently override or lose a known batch job.
+   batchJobActive:Boolean(localStorage.getItem(workerBatchStorageKey(eventId)))
+  });
+ const secondIds=second.matches.map(m=>m.matchId).filter(Boolean);
+ const policy=policyFor(secondIds,gateStatus,code);
+ snapshot=second;rebuild({preserveEdits:true});
  $('recoveryPanel').hidden=false;
  const details=$('recoveryDetails');
- details.append(node('p','前回の試合IDは公式TEST APIで404となりました。送信済みだったかどうかは不明です。','warning'));
- details.append(node('p','旧試合ID：'+entry.match_id,'details'));
- details.append(node('p','Worker最終状態：'+gateStatus+(gateError?'（'+gateError+'）':''),'details'));
+ details.append(node('p','試合の削除・作り直しを検出しました。古い試合への送信結果は不明です。','warning'));
+ details.append(node('p','旧試合ID：'+oldId,'details'));
+ details.append(node('p','現在の試合ID：'+(secondIds.join('、')||'取得できません'),'details'));
+ details.append(node('p','旧試合Worker記録：'+gateStatus+
+  (gateError?'（'+gateError+'）':''),'details'));
  details.append(node('p',policy.reason,'details'));
- for(const m of latest.matches.filter(m=>m.matchId)){
-  details.append(node('p','#'+m.seq+' '+(m.leftTeam||'未確定')+' vs '+(m.rightTeam||'未確定')+
-   ' ／ '+m.status+' ／ 現在の登録済みゴール '+(m.existingGoals?.length||0)+'件','details'));
+ for(const m of second.matches.filter(m=>m.matchId)){
+  details.append(node('p','#'+m.seq+' '+(m.leftTeam||'未確定')+' vs '+
+   (m.rightTeam||'未確定')+' ／ '+m.status+
+   ' ／ 現行登録ゴール '+(m.existingGoals?.length||0)+'件','details'));
  }
  if(!policy.allowArchive){
-  $('recoveryStatus').textContent='旧試合を照合できません。'+policy.reason+' 再送はしないでください。';
+  $('recoveryStatus').textContent='旧試合の復旧条件を確認できません。'+policy.reason+
+   ' 旧送信を再送しないでください。';
   return;
  }
  const a=mkInput('checkbox'),b=mkInput('checkbox');
  const la=node('label','','line'),lb=node('label','','line');
- la.append(a,node('span','以前の試合IDが現在のTESTイベントに存在しないことを確認しました'));
- lb.append(b,node('span','最新のゴール明細を確認しました。旧送信の成否は不明のまま保管し、現在の試合をすべて再審査します'));
+ la.append(a,node('span','旧match_idは公式TEST APIで2回見つからず、現在の試合IDが異なることを確認しました'));
+ lb.append(b,node('span','現在の得点明細を確認しました。旧送信の成否は不明のまま履歴に保管し、新しい試合のゴールを再審査します'));
  details.append(la,lb);
  const button=node('button','旧試合の送信記録を保管して再審査へ');
  button.type='button';button.disabled=true;
  const update=()=>button.disabled=!a.checked||!b.checked;
  a.addEventListener('change',update);b.addEventListener('change',update);
- button.addEventListener('click',()=>{
-  if(button.disabled||!a.checked||!b.checked)return;
-  if(!window.confirm('旧送信の成否は不明です。端末に記録を保管し、現行TESTイベントを改めて審査します。送信はしません。続けますか？'))return;
+ button.addEventListener('click',async()=>{
+  if(button.disabled||!a.checked||!b.checked||recoveryBusy)return;
+  if(!window.confirm('旧試合の送信成否は不明です。端末に記録を保管し、新しい試合をすべて再審査します。旧試合への送信は行いません。続けますか？'))return;
+  recoveryBusy=true;button.disabled=true;
   try{
-   // Still require the originally confirmed ID mapping and gate status.
-   const current=retiredMatchRecoveryPolicy(entry,eventId,
-    snapshot?.matches?.map(m=>m.matchId).filter(Boolean),404,gateStatus);
-   archiveRetiredAttempt(localStorage,eventId,entry.goalKey,current);
-   autoMustReload=false;
+   // Repeat both official GETs and the historical match DO status before
+   // changing local storage, in case another admin altered the fixture.
+   const fresh=await verifyAgain();
+   const nowIds=fresh.second.matches.map(m=>m.matchId).filter(Boolean);
+   const gate=await postStaging('/staging/status',{match_id:oldId});
+   if(gate.environment!=='STAGING ONLY')throw Error('TEST Workerではありません');
+   const checked=policyFor(nowIds,gate.status,fresh.code);
+   if(!checked.allowArchive)throw Error(checked.reason);
+   if(JSON.stringify(nowIds.slice().sort())!==JSON.stringify(secondIds.slice().sort()))
+    throw Error('確認後に試合IDが変更されました。復旧をやり直してください');
+   archiveRetiredAttempt(localStorage,eventId,entry.goalKey,checked);
+   snapshot=fresh.second;autoMustReload=false;
    $('autoConflict').hidden=true;
    rebuild({preserveEdits:true});
-   $('recoveryStatus').textContent='旧送信記録を保管しました。最新のゴールと試合を再確認してください。書き込みなし。';
-   statusSS('旧試合IDの端末ロックを整理しました。現在の試合の内容を改めて確認してください。');
-  }catch(e){$('recoveryStatus').textContent='保管できません：'+e.message}
+   $('recoveryStatus').textContent='旧試合への未確定送信記録を保管しました。新しい試合は必ず得点・アシスト・勝者を再確認してください。書き込みは行っていません。';
+   statusSS('再作成されたTEST試合の最新データを確認してください。古い送信は再送していません。');
+  }catch(e){
+   $('recoveryStatus').textContent='記録は解除していません：'+e.message+'。送信せず再照合してください';
+   button.disabled=false;
+  }finally{recoveryBusy=false}
  });
  details.append(button);
- $('recoveryStatus').textContent='旧試合IDの削除または差し替えを検出しました。最新明細を確認後、2つの確認項目を選択してください。';
+ $('recoveryStatus').textContent='再作成された試合を検出しました。旧送信結果は不明として保管できます。現行ゴール明細を確認してから2項目を選択してください。';
 }
 
 $('recoveryReload').addEventListener('click',async()=>{
