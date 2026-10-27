@@ -198,6 +198,23 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <div id="autoOutline" aria-label="試合の登録予定"></div>
   <p id="autoBeforeRun" class="small" role="status"></p>
   <button id="autoRun" class="primary quick-main" type="button">ゴール・試合結果をまとめてTESTへ登録</button>
+  <div id="workerBatchArea" class="grid-item" hidden>
+   <p class="small"><strong>高速TEST登録（新方式）</strong>：承認後はWorkerが4試合を順に処理します。通信が切れてもジョブの進捗を再取得できます。既存の試合登録は再送しません。</p>
+   <button id="workerBatchRun" class="primary quick-main" type="button">Workerで4試合を高速一括登録（TEST）</button>
+   <button id="workerBatchRefresh" type="button" hidden>ジョブの進捗を再取得（書き込みなし）</button>
+   <p id="workerBatchStatus" class="small" role="status" aria-live="polite"></p>
+   <div id="workerBatchDecision" hidden>
+    <p id="workerBatchQuestion" role="status"></p>
+    <label class="field">結果を指定
+     <select id="workerBatchWinner"><option value="">勝者を選択</option>
+      <option value="left">左チームの勝利</option>
+      <option value="right">右チームの勝利</option>
+      <option value="draw">引き分け（3位決定戦・決勝のみ）</option>
+     </select>
+    </label>
+    <button id="workerBatchSubmitDecision" class="primary" type="button">結果を確定して続行（TEST）</button>
+   </div>
+  </div>
   <div id="autoProgress" hidden aria-live="polite">
    <p id="autoStage" role="status">準備中</p>
    <progress id="autoProgressBar" max="4" value="0"></progress>
@@ -326,6 +343,7 @@ import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObser
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
+ import {prepareWorkerTournament,workerBatchStorageKey} from './sposched-worker-batch.mjs?v=worker1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -1139,6 +1157,7 @@ function autoWinnerFor(seq){
   projected.right===saved.right?saved.winner:'';
 }
 let autoBusy=false,autoProblemSeq=null,autoUnsafeStop=false,autoMustReload=false;
+let workerBatchPolling=false,workerRestoredEvent='',workerLatestState=null;
 function autoStep(message,completed=0,partial=0){
  $('autoProgress').hidden=false;
  $('autoStage').textContent=message;
@@ -1206,7 +1225,15 @@ function renderAutoSummary(){
      '件あります。上のカードで修正してください。';
   }else $('autoBeforeRun').textContent=unfinished?
     'ゴール内容を確認したら、下のボタンで順番に登録します。':'すべて終了しています。';
-  $('autoRun').disabled=batchBusy||autoBusy||autoMustReload||
+  const previousWorkerJob=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
+ $('workerBatchArea').hidden=false;
+ $('workerBatchRefresh').hidden=!previousWorkerJob;
+ $('workerBatchRun').disabled=Boolean(previousWorkerJob)||batchBusy||autoBusy||workerBatchPolling;
+ if(previousWorkerJob&&workerRestoredEvent!==snapshot.eventId){
+  workerRestoredEvent=snapshot.eventId;
+  Promise.resolve().then(()=>refreshWorkerBatch());
+ }
+ $('autoRun').disabled=Boolean(previousWorkerJob)||batchBusy||autoBusy||autoMustReload||
     unassigned.length>0||needsFix.length>0||unfinished===0;
   $('autoRun').textContent=autoMustReload?'SSの再取得が必要':
    unassigned.length||needsFix.length?'まず上のゴールを修正してください':
@@ -1374,6 +1401,137 @@ async function autoRegisterTournament(){
  }
 }
 $('autoRun').addEventListener('click',autoRegisterTournament);
+
+function showWorkerBatchState(state){
+ workerLatestState=state;
+ const marker=localStorage.getItem(workerBatchStorageKey(state.event_id));
+ $('workerBatchRefresh').hidden=!marker;
+ $('workerBatchRun').disabled=true;
+ const progress='処理 '+state.completed+'/'+state.total+'件（登録と試合終了の合計）';
+ $('workerBatchStatus').textContent=
+  state.status==='completed'?'✓ Workerで全操作の登録・照合が完了しました。'+progress:
+  state.status==='needs_decision'?'同点のため試合 #'+state.decision.seq+' の結果を指定してください。'+progress:
+  state.status==='blocked'?'⚠ Worker停止：'+(state.blocked_reason||'照合が必要です')+
+   '。自動再送しません。'+progress:
+  'WorkerがTEST環境で順次処理中です。'+progress;
+ $('workerBatchDecision').hidden=state.status!=='needs_decision';
+ if(state.status==='needs_decision'){
+  const d=state.decision;
+  $('workerBatchQuestion').textContent=
+   '試合 #'+d.seq+'：'+d.left_team+' '+d.left_score+
+   ' - '+d.right_score+' '+d.right_team;
+  const choices=new Set(d.choices);
+  for(const option of $('workerBatchWinner').options){
+   if(!option.value)continue;
+   option.disabled=!choices.has(option.value);option.hidden=!choices.has(option.value);
+   if(option.value==='left')option.textContent=d.left_team+'の勝利';
+   if(option.value==='right')option.textContent=d.right_team+'の勝利';
+  }
+  $('workerBatchWinner').value='';
+ }
+ if(state.status==='blocked'||state.status==='completed'){
+  workerBatchPolling=false;
+  autoMustReload=true;
+  setBatchBusy(false);
+ }
+}
+async function refreshWorkerBatch(){
+ if(workerBatchPolling||!snapshot||!loadedFromStagingDirect||
+    $('ssEnvironment').value!=='staging')return;
+ const saved=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
+ if(!saved)return;
+ workerBatchPolling=true;
+ $('workerBatchRun').disabled=true;
+ $('workerBatchRefresh').hidden=false;
+ const eventId=snapshot.eventId;
+ try{
+  const state=await postStaging('/staging/batch/status',{event_id:eventId});
+  if(snapshot?.eventId!==eventId)return;
+  showWorkerBatchState(state);
+  if(state.status==='running'){
+   setBatchBusy(true);
+   workerBatchPolling=false;
+   window.setTimeout(()=>refreshWorkerBatch(),1500);
+  }else if(state.status==='needs_decision'){
+   workerBatchPolling=false;setBatchBusy(true);
+  }else if(state.status==='completed'){
+   const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+   if(fresh.eventId!==eventId)throw Error('完了したジョブのイベントIDが異なります');
+   snapshot=fresh;rebuild({preserveEdits:true});
+  }
+ }catch(e){
+  workerBatchPolling=false;
+  $('workerBatchStatus').textContent='状態確認を完了できません：'+e.message+
+   '。開始を再送せず「進捗を再取得」を押してください。';
+  if(e.code==='not_found')setBatchBusy(false);
+ }
+}
+$('workerBatchRefresh').addEventListener('click',()=>refreshWorkerBatch());
+$('workerBatchRun').addEventListener('click',async()=>{
+ if(workerBatchPolling||batchBusy||autoBusy||!snapshot||!loadedFromStagingDirect||
+    $('ssEnvironment').value!=='staging')return;
+ const eventId=snapshot.eventId,key=workerBatchStorageKey(eventId);
+ if(localStorage.getItem(key)){
+  await refreshWorkerBatch();return;
+ }
+ try{
+  if(pendingForEvent().length)throw Error('未照合の送信記録があります。先に復旧してください');
+  const requestId=crypto.randomUUID();
+  const operations=prepareWorkerTournament({
+   snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId,
+   winnerFor:seq=>autoWinnerFor(seq)
+  });
+  const goalCount=operations.operations.filter(x=>x.action==='create').length;
+  if(!window.confirm('SpoSched TESTへ '+goalCount+
+    'ゴールと4試合の結果をWorkerから順に登録します。本番SSには書き込みません。実行しますか？'))
+   return;
+  // Store the key BEFORE the network request, so a lost response never
+  // enables an accidental second job with a new request ID.
+  localStorage.setItem(key,requestId);
+  $('workerBatchStatus').textContent='TEST一括ジョブを開始中…';
+  $('workerBatchRun').disabled=true;
+  $('workerBatchRefresh').hidden=false;
+  setBatchBusy(true);
+  try{
+   await postStaging('/staging/batch/start',operations);
+  }catch(error){
+   // Validation failures definitely did not run the job. Transport errors
+   // are ambiguous and the stored request ID must be retained.
+   if(['invalid_plan','invalid_event','unsupported_media_type','batch_gate_unavailable'].includes(error.code)){
+    localStorage.removeItem(key);setBatchBusy(false);
+   }
+   throw error;
+  }
+  await refreshWorkerBatch();
+ }catch(error){
+  $('workerBatchStatus').textContent='高速一括登録：'+error.message+
+   '。通信が不明な場合は再送せず「進捗を再取得」を使ってください。';
+  if(!localStorage.getItem(key))$('workerBatchRun').disabled=false;
+ }
+});
+$('workerBatchSubmitDecision').addEventListener('click',async()=>{
+ const state=workerLatestState;
+ if(state?.status!=='needs_decision')return;
+ const winner=$('workerBatchWinner').value;
+ if(!state.decision.choices.includes(winner)){
+  $('workerBatchStatus').textContent='この試合の結果を選択してください';return;
+ }
+ if(!window.confirm('試合 #'+state.decision.seq+' の結果をTESTへ確定してジョブを続行しますか？'))
+  return;
+ $('workerBatchSubmitDecision').disabled=true;
+ try{
+  await postStaging('/staging/batch/decision',{
+   event_id:state.event_id,request_id:state.request_id,
+   seq:state.decision.seq,winner,confirm:'TEST-ONLY BATCH DECISION'
+  });
+  $('workerBatchDecision').hidden=true;
+  await refreshWorkerBatch();
+ }catch(e){
+  $('workerBatchStatus').textContent='結果指定を確認できません：'+e.message+
+   '。まずジョブ状態を再取得してください。';
+ }finally{$('workerBatchSubmitDecision').disabled=false;}
+});
+
 $('autoResume').addEventListener('click',()=>{
  if(autoUnsafeStop)return;
  if(autoProblemSeq!=null && !$('autoWinnerWrap').hidden){
