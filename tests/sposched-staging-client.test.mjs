@@ -75,3 +75,18 @@ test('official final fixture number must match PS-assigned seq before a TEST wri
  waiting.left.name='';waiting.right.name='';
  assert.throws(()=>toStagingAction(snapshot,op,waiting),/対戦相手/);
 });
+
+test('reject any official number or seq disagreement before TEST mutation',()=>{
+ const draft={action:'record_goal',args:{
+  event_id:eventId,seq:6,team:'チーム1',scorer:'テスト 太郎'}};
+ const bySeq=match();bySeq.seq=6;
+ assert.equal(toStagingAction(snapshot,draft,bySeq).match_id,matchId);
+ const both=match();both.number=6;both.seq=6;
+ assert.equal(toStagingAction(snapshot,draft,both).match_id,matchId);
+ const badSeq=match();badSeq.seq=5;
+ assert.throws(()=>toStagingAction(snapshot,draft,badSeq),/試合番号/);
+ const conflicting=match();conflicting.number=6;conflicting.seq=5;
+ assert.throws(()=>toStagingAction(snapshot,draft,conflicting),/試合番号/);
+ const malformed=match();malformed.number='6';
+ assert.throws(()=>toStagingAction(snapshot,draft,malformed),/試合番号/);
+});
