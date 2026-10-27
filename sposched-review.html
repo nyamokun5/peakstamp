@@ -205,9 +205,10 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   </div>
   <div id="autoConflict" hidden>
    <p id="autoIssue" role="alert"></p>
-   <label id="autoWinnerWrap" class="field" hidden>この試合のPKなどの勝者
-    <select id="autoWinner"><option value="">選んでください</option>
+   <label id="autoWinnerWrap" class="field" hidden>この試合の結果
+    <select id="autoWinner"><option value="">結果を選んでください</option>
      <option value="left">左チームの勝利</option><option value="right">右チームの勝利</option>
+     <option value="draw" hidden disabled>引き分け（3位決定戦・決勝のみ）</option>
     </select>
    </label>
    <button id="autoResume" class="primary quick-main" type="button">修正して続行</button>
@@ -318,12 +319,12 @@ import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=ss-numbered3';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
-import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
+import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch2';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy} from './sposched-write-journal.mjs?v=ss-recovery2';
 import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=ss-numbered3';
-import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish1';
-import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto1';
+import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
+import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -1146,6 +1147,10 @@ function showAutoConflict(message,seq=null,{tie=false,unsafe=false}={}){
   const opts=$('autoWinner').options;
   if(opts.length>2){opts[1].textContent=(m?.leftTeam||'左')+'の勝利';
     opts[2].textContent=(m?.rightTeam||'右')+'の勝利';}
+  if(opts.length>3){
+   const allow=Number(seq)===3||Number(seq)===4;
+   opts[3].hidden=!allow;opts[3].disabled=!allow;
+  }
  }
  $('autoResume').hidden=unsafe;
  $('autoFix').hidden=tie||unsafe;
@@ -1217,11 +1222,18 @@ async function autoRegisterTournament(){
   const unknown=unassignedGoalDecisions(snapshot,rows,quickGoalDecisions(snapshot,rows));
   if(unknown.length)throw Error('試合番号未設定のゴールが'+unknown.length+
     '件あります。上のゴール候補から正しい試合を選んでください');
+  let snapshotFresh=false;
   for(seq of order){
    autoStep('試合 #'+seq+'：最新のSS試合・名簿を照合中…',completed);
-   const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
-   if(fresh.eventId!==eventId)throw Error('SSイベントが変更されました');
-   snapshot=fresh;rebuild({preserveEdits:true});
+   // The preceding finish already fetched the official post-write bracket.
+   // Avoid repeating that same GET; signed previews and per-goal ID resolution
+   // still revalidate the upstream state before EVERY mutation.
+   if(!snapshotFresh){
+    const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+    if(fresh.eventId!==eventId)throw Error('SSイベントが変更されました');
+    snapshot=fresh;rebuild({preserveEdits:true});
+   }
+   snapshotFresh=false;
    const plan=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),
      seq,autoWinnerFor(seq));
    if(plan.state==='finished'){
@@ -1241,16 +1253,10 @@ async function autoRegisterTournament(){
      throw Error('試合 #'+seq+' の候補が変わりました。先に内容を修正してください');
     const selected=selectBatchOperations(batch.payload,
       batch.payload.operations.map((_,i)=>i));
-    autoStep('試合 #'+seq+'：TESTの最新試合・選手IDを照合中…',completed);
-    const entries=await previewReviewedBatch({
-     selected,resolveAction:resolveReviewedAction,
-     previewAction:action=>postStaging('/staging/preview',action),
-     onProgress:({current,total})=>autoStep(
-       '試合 #'+seq+'：得点'+current+'/'+total+'件を安全確認中…',completed,0.1+0.15*current/total)
-    });
+    autoStep('試合 #'+seq+'：正式な試合・選手IDを照合中…',completed);
     autoUnsafeStop=true;
-    const done=await executeReviewedBatch({
-     entries,resolveAction:resolveReviewedAction,
+    const done=await executeReviewedBatchOnce({
+     selected,resolveAction:resolveReviewedAction,
      previewAction:action=>postStaging('/staging/preview',action),
      beforeExecute:async(item,action)=>{
       const before=await fetchSS('/match?match_id='+encodeURIComponent(action.match_id));
@@ -1261,8 +1267,9 @@ async function autoRegisterTournament(){
       clearAttempt(localStorage,eventId,goalKeyOfOperation(item.operation));
      },
      onProgress:({phase,current,total})=>autoStep(
-       '試合 #'+seq+'：'+(phase==='verified'?'登録・照合済み':'登録中')+
-       ' '+current+'/'+total+'ゴール',completed,0.3+0.5*current/total)
+       '試合 #'+seq+'：'+(phase==='verified'?'登録・照合済み':
+        phase==='checking'?'ID・署名確認中':'登録中')+
+       ' '+current+'/'+total+'ゴール',completed,0.1+0.7*current/total)
     });
     const keys=done.map(x=>goalKeyOfOperation(x.operation)).filter(Boolean);
     manualGoals=markManualCompleted(manualGoals,keys);saveManual();
@@ -1306,6 +1313,7 @@ async function autoRegisterTournament(){
    const next=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
    if(next.eventId!==eventId)throw Error('結果確定後のイベントが変更されました');
    snapshot=next;rebuild({preserveEdits:true});
+   snapshotFresh=true;
    autoUnsafeStop=false;
    completed++;
    autoStep('✓ 試合 #'+seq+' の得点と勝敗を照合しました',completed);
@@ -1331,8 +1339,9 @@ $('autoResume').addEventListener('click',()=>{
  if(autoUnsafeStop)return;
  if(autoProblemSeq!=null && !$('autoWinnerWrap').hidden){
   const winner=$('autoWinner').value;
-  if(!['left','right'].includes(winner)){
-   $('autoIssue').textContent='勝者を選んでください';return;
+  if(!(['left','right'].includes(winner)||
+    (winner==='draw'&&(autoProblemSeq===3||autoProblemSeq===4)))){
+   $('autoIssue').textContent='結果を選んでください';return;
   }
   const current=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),autoProblemSeq);
   const selected=snapshot.matches.find(m=>m.seq===autoProblemSeq);
@@ -1470,7 +1479,13 @@ function syncFinishWinner(){
   Number.isInteger(m.rightScore)&&m.rightScore>=0;
  const tied=valid&&m.leftScore===m.rightScore;
  $('finishWinnerWrap').hidden=!tied;
- if(!tied)$('finishWinner').value='';
+ const drawOption=$('finishWinner').querySelector('option[value="draw"]');
+ if(drawOption){
+  drawOption.hidden=Number(m?.seq)<=2;
+  drawOption.disabled=Number(m?.seq)<=2;
+ }
+ if(!tied||Number(m?.seq)<=2&&$('finishWinner').value==='draw')
+  $('finishWinner').value='';
  if(!m){$('finishSummary').textContent='試合を選んでください。';$('finishExecute').disabled=true;return;}
  const result=m.status==='finished'?'終了済み（再登録不可）':
   !valid?'SSのスコアを取得できません':
@@ -1484,7 +1499,8 @@ function syncFinishWinner(){
  $('finishExecute').disabled=batchBusy||recoveryBusy||!loadedFromStagingDirect||
   $('ssEnvironment').value!=='staging'||m.status!=='scheduled'||!m.matchId||
   !m.leftTeam||!m.rightTeam||!valid||
-  (tied&&!['left','right','draw'].includes($('finishWinner').value));
+  (tied&&!(['left','right'].includes($('finishWinner').value)||
+   (Number(m.seq)>=3&&$('finishWinner').value==='draw')));
 }
 function updateFlowGuide(){
  const test=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
