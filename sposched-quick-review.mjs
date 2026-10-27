@@ -123,6 +123,8 @@ export function editQuickGoalField(snapshot,row,field,value){
   row.seq=seq;row.quickReviewedFields={match:true};
   // The user explicitly reselected this numbered fixture after any ID reset.
   row.fixtureIdentityChanged=false;
+  row.matchGuess={...(row.matchGuess||{}),seq,fixtureMatchId:m.matchId||null,
+   source:'手動で試合番号を確認',confidence:'high',ambiguous:false,conflict:false};
   if(row.team&&![normalizeTeam(m.leftTeam),normalizeTeam(m.rightTeam)]
    .includes(normalizeTeam(row.team)))row.team='';
  }else if(field==='scorer'){
