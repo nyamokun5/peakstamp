@@ -113,29 +113,44 @@ export function recoveryDecisionPolicy(evidence){
 }
 
 
-/** A stale official match UUID may have disappeared after TEST fixture
- * regeneration. This is NOT evidence that a historical POST failed. A
- * separate authoritative read must give HTTP 404; any other error leaves the
- * journal locked. The per-match DO status is advisory; 'pending' vetoes even
- * an explicit local archive. The event must still contain new official slots.
+/** A deleted/recreated TEST match has a distinct UUID. A pending journal
+ * for the *old* UUID cannot be replayed against a new one: the match-scoped
+ * Durable Object remains permanently separate.
+ *
+ * Revalidate twice via authoritative, read-only TEST API calls; the second
+ * snapshot must contain the SAME new fixture UUIDs and the old match must
+ * return 404 both times. Auth/network/server errors always fail closed.
+ * 'pending' is archived as UNKNOWN, never 'failed' or 'verified'.
+ * The operator must still explicitly review the new matches/goals.
  */
-export function retiredMatchRecoveryPolicy(attempt,eventId,currentMatchIds,httpStatus,gateStatus){
+export function retiredMatchRecoveryPolicy(
+ attempt,eventId,currentMatchIds,httpStatus,gateStatus,
+ verification=null
+){
  const ids=Array.isArray(currentMatchIds)?currentMatchIds:[];
+ const current=Array.isArray(verification?.currentMatchIds)?verification.currentMatchIds:[];
  const valid=Boolean(attempt&&attempt.event_id===eventId&&
   UUID.test(attempt.match_id||'')&&
   ids.length>0&&ids.every(id=>UUID.test(id))&&
   !ids.includes(attempt.match_id));
+ const stable=Boolean(valid&&current.length===ids.length&&
+  current.every(id=>UUID.test(id))&&
+  ids.slice().sort().join('|')===current.slice().sort().join('|')&&
+  verification?.oldMatchHttpStatus===404);
  const state=typeof gateStatus==='string'?gateStatus:'unknown';
- const allowed=valid&&httpStatus===404&&
-  ['idle','verified','rejected'].includes(state);
+ const gateKnown=['idle','verified','rejected','pending'].includes(state);
+ const allowed=stable&&httpStatus===404&&gateKnown&&
+  verification?.batchJobActive!==true;
  return {state:'historical_match_unavailable',allowArchive:allowed,
-  old_match_id:attempt?.match_id||null,
-  gate_status:state,
+  old_match_id:attempt?.match_id||null,gate_status:state,
+  old_write_outcome:'unknown',current_match_ids:ids.slice().sort(),
   reason:!valid?'イベントまたは試合の正式なIDを照合できません。送信記録は保持します。'
-   :httpStatus!==404?'古い試合が削除されたと確認できません。送信記録は保持します。'
-   :state==='pending'?'旧試合のWorkerには未解決の書き込みがあります。安全のため復旧を停止します。'
-   :!allowed?'Workerの確認状態を取得できません。送信記録は保持します。'
-   :'旧試合IDは現在のTESTイベントに存在せず、公式APIも404を返しました。旧送信の成否は不明です。最新イベントのゴールを確認した場合のみ端末の古い記録を保管し、新しい試合として再審査できます。'};
+   :httpStatus!==404||!stable?'旧試合の404と新試合IDの一致を2回確認できません。送信記録は保持します。'
+   :!gateKnown?'旧試合のWorker状態を取得できません。送信記録は保持します。'
+   :verification?.batchJobActive===true?'同じイベントのWorker一括ジョブを確認してください。古い記録は保持します。'
+   :state==='pending'
+   ?'旧試合のWorker記録は未確定のままです。ただし公式TEST APIで旧試合IDの消失と別IDへの再作成を2回確認しました。旧記録を未確定として保管し、現在の試合だけを新規審査できます。旧試合への再送は行いません。'
+   :'旧試合は公式TEST APIで2回404となり、現在は別の試合IDです。旧送信の成否は不明として保管し、新しい試合を再審査できます。'};
 }
 export function retiredArchiveKey(eventId){
  return 'peakstamp_ss_retired_attempt_audit_v1:staging:'+journalKey(eventId).split(':').pop();

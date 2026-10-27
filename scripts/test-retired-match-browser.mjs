@@ -62,17 +62,12 @@ async function runCase(gateState){
   await page.locator('#workerBatchArea').waitFor({state:'visible'});
   assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
   await page.click('#workerBatchRecover');
-  await page.waitForFunction(()=>document.getElementById('recoveryStatus').textContent.includes('旧試合'));
-  assert.equal(matchGets,1);assert.equal(gateReads,1);
-  assert.ok(snapshotGets>=2);
+  await page.getByRole('button',{name:'旧試合の送信記録を保管して再審査へ'}).waitFor({state:'visible',timeout:9000});
+  assert.equal(matchGets,2);assert.equal(gateReads,1);
+  assert.ok(snapshotGets>=3);
   assert.equal(writes,0);
   const statusText=await page.locator('#recoveryStatus').innerText();
-  if(gateState==='pending'){
-   assert.match(statusText,/未解決|照合できません/);
-   assert.equal(await page.getByRole('button',{name:'旧試合の送信記録を保管して再審査へ'}).count(),0);
-   assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
-   assert.equal(await page.evaluate(id=>JSON.parse(localStorage.getItem('peakstamp_ss_uncertain_writes_v1:staging:'+id)).length,E),1);
-  }else{
+  {
    const done=page.getByRole('button',{name:'旧試合の送信記録を保管して再審査へ'});
    assert.equal(await done.isDisabled(),true);
    await page.locator('#recoveryDetails input[type=checkbox]').first().check();
@@ -80,6 +75,10 @@ async function runCase(gateState){
    await page.locator('#recoveryDetails input[type=checkbox]').nth(1).check();
    assert.equal(await done.isEnabled(),true);
    await done.click();
+   await page.waitForFunction(()=>document.getElementById('recoveryStatus').textContent.includes('旧試合への未確定送信記録を保管しました'));
+   assert.equal(matchGets,3,'old match rechecked at commit');
+   assert.equal(gateReads,2,'old DO state rechecked at commit');
+   assert.ok(snapshotGets>=4);
    const contents=await page.evaluate(id=>({
     pending:JSON.parse(localStorage.getItem('peakstamp_ss_uncertain_writes_v1:staging:'+id)),
     audit:JSON.parse(localStorage.getItem('peakstamp_ss_retired_attempt_audit_v1:staging:'+id))
@@ -87,6 +86,7 @@ async function runCase(gateState){
    assert.deepEqual(contents.pending,[]);
    assert.equal(contents.audit.length,1);
    assert.equal(contents.audit[0].match_id,OLD);
+   assert.equal(contents.audit[0].worker_gate_status,gateState);
    assert.equal(await page.locator('#workerBatchRun').isEnabled(),true);
   }
   assert.deepEqual(errors,[]);
