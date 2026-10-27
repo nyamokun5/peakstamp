@@ -53,9 +53,15 @@ export function toStagingAction(snapshot,draftOperation,officialMatch){
  // Never rely on team-pair text for identifying a numbered bracket slot.
  // When the upstream exposes its official number, it must match the PS
  // video-assigned seq in addition to match_id and event_id checks.
- if(op.action==='record_goal'&&args.seq!=null&&officialMatch.number!=null&&
-     Number(args.seq)!==Number(officialMatch.number))
-  fail('試合番号と正式なSS試合番号が一致しません。最新データを再取得してください');
+ if(op.action==='record_goal'&&args.seq!=null){
+  // Both shapes exist in SpoSched implementations. Neither number nor seq
+  // may disagree with the PeakStamp-assigned numbered fixture.
+  const expected=Number(args.seq);
+  const numbers=[officialMatch.number,officialMatch.seq].filter(v=>v!=null);
+  if(!Number.isInteger(expected)||expected<1||
+    numbers.some(v=>!Number.isInteger(v)||v!==expected))
+   fail('試合番号と正式なSS試合番号が一致しません。最新データを再取得してください');
+ }
  if(officialMatch.status==='waiting')fail('試合の対戦相手が確定していません');
  if(op.action==='record_goal'){
   if(args.guest)fail('外部ゲストの得点は今回の安全な書き込みテストの対象外です');
