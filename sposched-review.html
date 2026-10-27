@@ -212,7 +212,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=ss-numbered3';
-import {toStagingAction,writeableReviewOperations} from './sposched-staging-client.mjs?v=ss-numbered2';
+import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy} from './sposched-write-journal.mjs?v=ss-recovery2';
@@ -1157,6 +1157,13 @@ async function resolveReviewedAction(operation){
  const m=snapshot.matches.find(item=>item.seq===seq);
  if(!m||!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(m.matchId))
   throw Error('試合番号と正式なmatch_idが一致しません。SSを再取得してください');
+ // Check the CURRENT event-wide mapping before every signed preview and
+ // again before each sequential TEST write. Old same-event UUIDs can remain
+ // accessible temporarily after bracket regeneration, so GET /match alone
+ // cannot prove that this numbered slot is still the current one.
+ const latest=normalizeSpoSnapshot(await fetchSS(
+  '/snapshot?event_id='+encodeURIComponent(snapshot.eventId)));
+ assertCurrentNumberedFixture(snapshot,latest,seq);
  const official=await fetchSS('/match?match_id='+encodeURIComponent(m.matchId));
  return toStagingAction(snapshot,operation,official);
 }

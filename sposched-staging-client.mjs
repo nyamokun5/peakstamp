@@ -39,6 +39,34 @@ function registeredGoal(match,id){
  if(!goal)fail('登録済みゴールが現在のSSデータに見つかりません。再読み込みしてください');
  return goal;
 }
+/**
+ * Race guard: a selected numbered bracket slot must still point to the
+ * same authoritative match UUID and teams immediately before each TEST
+ * preview/execute. No matching by displayed round, opponent pair, or title.
+ * Calling code obtains the fresh snapshot over the authenticated GET bridge.
+ */
+export function assertCurrentNumberedFixture(loaded,latest,seq){
+ if(!loaded?.eventId||loaded.eventId!==latest?.eventId)
+  fail('イベントIDが変更されました。最新のSSイベントを再取得してください');
+ const n=Number(seq);
+ if(!Number.isInteger(n)||n<1)fail('有効な試合番号がありません');
+ const oldMatch=loaded.matches?.find(x=>x.seq===n);
+ const newMatch=latest.matches?.find(x=>x.seq===n);
+ if(!oldMatch||!newMatch)fail('試合 #'+n+' がSSから削除・変更されました');
+ if(!UUID.test(oldMatch.matchId||'')||
+    !UUID.test(newMatch.matchId||'')||
+    oldMatch.matchId.toLowerCase()!==newMatch.matchId.toLowerCase())
+  fail('試合 #'+n+' の正式なmatch_idが変更されました。SSの試合を再取得してください');
+ if(oldMatch.status==='waiting'||newMatch.status==='waiting'||
+    !oldMatch.leftTeam||!oldMatch.rightTeam||
+    !newMatch.leftTeam||!newMatch.rightTeam)
+  fail('試合 #'+n+' は対戦相手の確定待ちです');
+ if(normalizeTeam(oldMatch.leftTeam)!==normalizeTeam(newMatch.leftTeam)||
+    normalizeTeam(oldMatch.rightTeam)!==normalizeTeam(newMatch.rightTeam))
+  fail('試合 #'+n+' の対戦チームが変更されました。再確認してください');
+ return newMatch.matchId;
+}
+
 export function toStagingAction(snapshot,draftOperation,officialMatch){
  if(!snapshot?.eventId || !draftOperation?.args || !officialMatch)
   fail('SSの試合情報と確認済み操作が必要です');

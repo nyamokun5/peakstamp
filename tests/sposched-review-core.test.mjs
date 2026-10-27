@@ -501,3 +501,41 @@ test('reject SS number/seq disagreement and duplicated assigned IDs before a goa
  assert.throws(()=>normalizeSpoSnapshot({event_id:e,matches:[
   {number:5,match_id:id},{seq:5,match_id:'12345678-1234-4234-9234-1234567890ab'}]}),/重複/);
 });
+
+test('real SS 4-team layout keeps #3 third-place and #4 final by seq, excluding Drone and highlight',()=>{
+ const eventId='eeaed234-e9f0-4999-b05e-ec01c7b656fc';
+ const matches=[
+  {seq:1,title:'#1 Team1 vs Team2',left_team:'Team1',right_team:'Team2'},
+  {seq:null,title:'#1 Team1 vs Team2 Drone'},
+  {seq:2,title:'#2 Team3 vs Team4',left_team:'Team3',right_team:'Team4'},
+  {seq:null,title:'#2 Team3 vs Team4 Drone'},
+  {seq:3,title:'#3 ３位決定戦',left_team:'Team2',right_team:'Team3'},
+  {seq:null,title:'#3 ３位決定戦 Drone'},
+  {seq:4,title:'#4 決勝',left_team:'Team1',right_team:'Team4'},
+  {seq:null,title:'#4 決勝 Drone'},
+  {seq:null,title:'ゴール集'}
+ ];
+ const snap=normalizeSpoSnapshot({event_id:eventId,matches,
+  roster:{Team1:['西村'],Team2:['橋本'],Team3:['佐藤'],Team4:['山田']}});
+ assert.deepEqual(snap.matches.map(x=>x.seq),[1,2,3,4]);
+ assert.equal(snap.matches[2].title,'#3 ３位決定戦');
+ assert.equal(snap.matches[3].title,'#4 決勝');
+ const goals=[{id:'a',matchSeq:3,scorer:'橋本',assistStatus:'none'},
+  {id:'b',matchSeq:4,scorer:'西村',assistStatus:'none'}];
+ const prepared=prepareGoalRows({goals},snap);
+ assert.deepEqual(prepared.map(x=>x.seq),[3,4]);
+});
+test('5/6-team rounds with the same title number never substitute for the unique seq',()=>{
+ const evt='eeaed234-e9f0-4999-b05e-ec01c7b656fc';
+ const snap=normalizeSpoSnapshot({event_id:evt,matches:[
+  {seq:1,title:'#1 Pitch1',left_team:'Team1',right_team:'Team2'},
+  {seq:2,title:'#1 Pitch2',left_team:'Team3',right_team:'Team4'},
+  {seq:3,title:'#2 Pitch1',left_team:'Team1',right_team:'Team3'}
+ ],roster:{Team1:['西村'],Team2:['橋本'],Team3:['佐藤'],Team4:['山田']}});
+ assert.deepEqual(snap.matches.map(x=>x.seq),[1,2,3]);
+ const a=prepareGoalRows({goals:[
+  {matchSeq:1,scorer:'西村',assistStatus:'none'},
+  {matchSeq:2,scorer:'佐藤',assistStatus:'none'}
+ ]},snap);
+ assert.deepEqual(a.map(x=>x.seq),[1,2]);
+});
