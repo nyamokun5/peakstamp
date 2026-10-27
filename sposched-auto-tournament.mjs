@@ -54,3 +54,16 @@ export function assertFourMatchBracket(snapshot){
  if(!snapshot.eventId)throw Error('SSのイベントIDがありません');
  return [1,2,3,4];
 }
+
+/** Prevent unmatched video goals from silently disappearing from a four-game
+ * batch when their fixture number was not recognized. Only an explicit
+ * user skip may exclude them; duplicated/uncertain records still need review.
+ */
+export function unassignedGoalDecisions(snapshot,rows,decisions){
+ const valid=new Set((snapshot?.matches||[]).map(m=>m.seq));
+ return (decisions||[]).filter(d=>{
+  if(d.state==='skipped')return false;
+  const seq=rows?.[d.index]?.seq;
+  return !Number.isInteger(seq)||!valid.has(seq);
+ });
+}
