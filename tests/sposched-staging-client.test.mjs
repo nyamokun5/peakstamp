@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from '../sposched-staging-client.mjs';
 import {normalizeSpoSnapshot} from '../sposched-review-core.mjs';
 const eventId='5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e';
@@ -113,7 +114,7 @@ test('fresh event-wide seq to UUID mapping is verified before TEST preview and e
  assert.throws(()=>assertCurrentNumberedFixture(loaded,make([[3,goalId,'Team2','Team3'],[4,matchId,'Team1','Team4']],goalId),4),/イベントID/);
 });
 test('staging goal preview fetches newest event-wide SS match map before single-match lookup',()=>{
- const html=(await import('node:fs')).readFileSync(
+ const html=readFileSync(
   new URL('../sposched-review.html',import.meta.url),'utf8');
  const resolver=html.slice(html.indexOf('function resolveReviewedAction(operation){'),
   html.indexOf("$('batchApprove').addEventListener"));
