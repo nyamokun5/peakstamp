@@ -335,3 +335,23 @@ test('UI lists official fixture numbers and holds waiting matches without enabli
  assert.match(html,/試合番号別・動画ゴール候補数/);
  assert.match(html,/label:matchSlotLabel\(v\)/);
 });
+
+test('provisional numbered final remains queued until real UUID appears, even if team labels exist',()=>{
+ const e='5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e';
+ const provisional=normalizeSpoSnapshot({event_id:e,matches:[
+  {number:6,match_id:'',status:'scheduled',title:'決勝戦',
+   left_team:'チーム1',right_team:'チーム2'}],
+  roster:{'チーム1':['西村'],'チーム2':['橋本']}});
+ const g={id:'final-video',matchSeq:6,scorer:'西村',assistStatus:'none'};
+ const [row]=prepareGoalRows({goals:[g]},provisional);
+ const state=quickGoalDecisions(provisional,[row]);
+ assert.equal(state[0].state,'waiting');
+ assert.equal(prepareQuickGoalBatch(provisional,[row]).payload,null);
+ assert.deepEqual(goalCandidatesByMatchNumber(provisional,[row]).map(v=>[v.seq,v.teamReady]),[[6,false]]);
+ const populated=normalizeSpoSnapshot({event_id:e,matches:[
+  {number:6,match_id:'87654321-4321-4321-a321-ba0987654321',
+   status:'scheduled',title:'決勝戦',left_team:'チーム1',right_team:'チーム2'}],
+  roster:{'チーム1':['西村'],'チーム2':['橋本']}});
+ const [next]=prepareGoalRows({goals:[g]},populated);
+ assert.equal(quickGoalDecisions(populated,[next])[0].state,'ready');
+});
