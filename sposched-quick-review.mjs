@@ -148,6 +148,24 @@ export function editQuickGoalField(snapshot,row,field,value){
  return row;
 }
 
+/** Match-number-only grouping for PeakStamp's visible draft count.
+ * These are detected goal candidates, NOT confirmed official match scores.
+ */
+export function goalCandidatesByMatchNumber(snapshot,rows){
+ const totals=new Map();
+ for(const r of Array.isArray(rows)?rows:[]){
+  if(r.include===false||r.goal?.manual)continue;
+  const seq=Number(r.seq);
+  if(!Number.isInteger(seq)||seq<1)continue;
+  totals.set(seq,(totals.get(seq)||0)+1);
+ }
+ return (snapshot?.matches||[]).map(m=>({
+  seq:m.seq,matchId:m.matchId||null,title:m.title,
+  teamReady:m.status!=='waiting'&&Boolean(m.leftTeam&&m.rightTeam),
+  goals:totals.get(m.seq)||0
+ })).filter(m=>m.goals>0);
+}
+
 export function prepareQuickGoalBatch(snapshot,rows){
  const decisions=quickGoalDecisions(snapshot,rows);
  const selected=decisions.filter(x=>x.state==='ready');
