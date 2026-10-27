@@ -47,6 +47,9 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 .quick-main{width:100%;font-size:15px;margin-top:9px}
 .quick-goal button{font-size:12px;min-height:30px;padding:5px 10px}
 .quick-goal-top strong{font-size:15px;line-height:1.4}
+.quick-ai-evidence{padding:8px 10px;margin:9px 0;border:1px solid #4b6d76;background:#0e2a39;border-radius:9px}
+.quick-ai-raw{font-size:13px;line-height:1.5;color:#e1f3ee;font-weight:600;overflow-wrap:anywhere}
+.quick-ai-candidates{font-size:12px;line-height:1.55;margin-top:3px;color:#b9d4dd;overflow-wrap:anywhere}
 .quick-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:9px 0 5px}
 .quick-field{display:flex;flex-direction:column;min-width:0;gap:4px;font-size:11px;color:#c5e0e5}
 .quick-field select{width:100%;min-width:0;font-size:14px;min-height:42px;padding:8px 7px;background:#0a2131;color:#e7f7f7;border:1px solid #638391;border-radius:8px}
@@ -213,7 +216,7 @@ import {toStagingAction,writeableReviewOperations} from './sposched-staging-clie
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy} from './sposched-write-journal.mjs?v=ss-recovery2';
-import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField} from './sposched-quick-review.mjs?v=ss-inline1';
+import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation} from './sposched-quick-review.mjs?v=ss-aiheard1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -772,6 +775,18 @@ function renderQuick(){
   top.append(node('span',label,item.state==='ready'?'quick-ready':'quick-held'));
   el.append(top,node('p','試合 #'+(item.seq||'—')+' / '+(item.team||'チーム未確定')+
    ' / '+(item.source||'動画なし')+' '+(item.time==null?'':item.time+'秒'),'quick-meta'));
+  // Original PeakStamp AI wording is displayed even if the official SS
+  // player selection has subsequently been corrected. This is display-only.
+  const heard=quickAIObservation(row);
+  const aiBox=node('div','','quick-ai-evidence');
+  aiBox.append(node('div','AI聞き取り：'+heard.assistRaw+' → '+heard.scorerRaw,'quick-ai-raw'));
+  const assistCandidates=heard.noAssist?'なし（AI判定）':
+   heard.assistCandidates.length?heard.assistCandidates.join(' / '):'一致候補なし';
+  const scorerCandidates=heard.scorerCandidates.length?
+   heard.scorerCandidates.join(' / '):'一致候補なし';
+  aiBox.append(node('div','SS名簿候補：アシスト '+assistCandidates+
+   ' ／ 得点者 '+scorerCandidates,'quick-ai-candidates'));
+  el.append(aiBox);
   const inlineEligible=item.state==='attention'||item.state==='ready';
   const expanded=item.state==='attention'||quickOpenRows.has(item.key);
   if(item.state==='attention')el.append(node('p',item.reason,'quick-held-note'));
