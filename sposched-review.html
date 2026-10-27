@@ -99,7 +99,7 @@ body.detail-open{padding-bottom:115px}
  <button id="flowJump" type="button">ここへ移動</button>
 </div>
 <details class="help"><summary>使い方・安全上の注意</summary>
- <p>イベントを読み込み、ゴールを確認して登録し、最後に試合を終了します。判断できないゴールは保留になります。<strong>本番SSは読み取りのみ</strong>で、TESTへの送信も最終ボタンを押すまで行いません。エラー時は自動再送しません。</p>
+ <p>イベントを読み込み、ゴールを確認して登録し、最後に試合を終了します。不確かな試合・選手は人が選択して修正し、判断できないゴールは保留します。<strong>本番SSは読み取りのみ</strong>で、TESTへの送信も最終ボタンを押すまで行いません。エラー時は自動再送しません。</p>
 </details>
 <section class="panel">
  <h2>1. このプロジェクトのゴール</h2>
@@ -1535,6 +1535,7 @@ $('copyPlan').addEventListener('click',async()=>{
  }
 });
 sourcesLoad();
+updateFlowGuide();
 </script>
 
 <script>
@@ -1551,6 +1552,5 @@ sourcesLoad();
    :'動画データを保持するため、この画面は別タブで開きました。Safariのタブ一覧から元のPeakStampタブに切り替えて戻ってください。';
   (back||document.body.firstElementChild)?.insertAdjacentElement('afterend',note);
  }
-updateFlowGuide();
 </script>
 </body></html>
