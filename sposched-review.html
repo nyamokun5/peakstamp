@@ -75,16 +75,35 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 .duplicate-actions .secondary-action{background:#264b47;border-color:#82bca9}
 .decision-status{font-size:12px;color:#b5f9d8}
 @media(max-width:620px){.duplicate-actions button{min-width:0;width:100%}}
+.flow-guide{position:sticky;top:0;z-index:20;display:flex;gap:11px;align-items:center;justify-content:space-between;border:1px solid #67aa97;background:#123c42;padding:10px 12px;border-radius:12px;margin:12px 0;box-shadow:0 5px 20px #061822aa}
+.flow-guide strong{display:block;font-size:13px;line-height:1.35}.flow-guide .hint-step{font-size:11px;color:#a9f8d6}
+.flow-guide button{min-width:92px;background:#1a8f78;border-color:#78e2bc}
+.panel{scroll-margin-top:110px}.grid-item{scroll-margin-top:125px}
+.detail-return{position:fixed;z-index:30;left:0;right:0;bottom:0;padding:10px max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));background:#0d2632;border-top:1px solid #68a998;box-shadow:0 -8px 25px #061823c0}
+.detail-return button{display:block;max-width:830px;width:100%;margin:auto;background:#1a8f78;border-color:#78e2bc;min-height:48px;font-size:15px}
+body.detail-open{padding-bottom:115px}
+.step-help{font-size:13px;font-weight:600;color:#c4f5e7;margin:9px 0}
+.help summary{font-size:12px;color:#c6d5da}.finish-preview-card{margin-top:12px;padding:12px;background:#0e303b;border:1px solid #74ae9a;border-radius:10px}
+#finishSummary{font-size:15px;line-height:1.7;white-space:pre-wrap}
+#finishConfirm .quick-main{font-size:16px;min-height:50px}
+[hidden]{display:none!important}
+@media(max-width:480px){.flow-guide{gap:6px}.flow-guide strong{font-size:12px}.flow-guide button{min-width:77px;font-size:12px;padding:8px}}
 </style>
 </head>
 <body><main>
 <a href="./?v=external65">← PeakStampに戻る</a>
-<header class="top"><h1>⚽ PeakStamp → SS ゴール一括登録</h1><span class="step">動画優先</span></header>
-<p>PeakStampで確認済みの複数ゴールをTESTの試合・選手と照合してまとめて登録します。<strong>不確かな試合・選手は人が選択して修正し、最後に一覧でまとめて承認します。</strong></p>
-<p class="warning"><strong>本番のSSは読み取り専用です。</strong> テスト環境を明示的に選んだ場合のみ、人が確認したゴールを1件ずつプレビュー・送信できます。試合終了は、登録済みスコアを確認したうえでTESTのみ実行できます。オウンゴールの更新は対象外です。</p>
+<header class="top"><h1>⚽ SSにゴール・試合結果を登録</h1><span class="step">TESTのみ書き込み</span></header>
+<div id="flowGuide" class="flow-guide" role="status" aria-live="polite">
+ <div><span id="flowStepLabel" class="hint-step">STEP 1 / 3</span>
+ <strong id="flowGuideText">SSに接続し、イベントを選んでください。</strong></div>
+ <button id="flowJump" type="button">ここへ移動</button>
+</div>
+<details class="help"><summary>使い方・安全上の注意</summary>
+ <p>イベントを読み込み、ゴールを確認して登録し、最後に試合を終了します。判断できないゴールは保留になります。<strong>本番SSは読み取りのみ</strong>で、TESTへの送信も最終ボタンを押すまで行いません。エラー時は自動再送しません。</p>
+</details>
 <section class="panel">
  <h2>1. このプロジェクトのゴール</h2>
- <p>PeakStampで今回読み込んだ<strong>全動画の確定済みゴールを自動集約</strong>します。1本ずつ選ぶ必要はありません。各ゴールの動画名と時刻はそのまま保持します。</p>
+ <p class="step-help">まず、今回の動画から集めたゴールを確認。</p>
  <div id="projectSummary" class="registered-goals" role="status"></div>
  <details id="sourceAdvanced">
   <summary>対象動画を確認・変更する（通常は不要）</summary>
@@ -98,10 +117,10 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
  <div class="line"><button id="refreshSources">プロジェクトを再読み込み</button><span id="sourceStatus" class="small"></span></div>
 </section>
 <section class="panel">
- <h2>2. Shoot Sunday当日の試合／選手名簿を読み込む</h2>
+ <h2>2. SSのイベントを選ぶ</h2><p class="step-help">接続先 → パスワード → イベントを選ぶ。</p>
  <div class="grid-item" id="ssDirectPanel">
   <strong>SSアプリから直接読み込む（おすすめ）</strong>
-  <p>Cloudflareに設定したBRIDGE_TOKENを入力すると、SSのイベント一覧と試合・得点・選手情報を取得できます。APIキーは入力しないでください。パスワードは保存されません。</p>
+  <p class="small">SS連携用パスワードを入力してください（端末には保存しません）。</p>
   <label class="field">接続先
    <select id="ssEnvironment" aria-label="SpoSched接続先">
     <option value="production">本番SS（読み取りのみ・書き込み不可）</option>
@@ -133,47 +152,54 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
  <div id="recoveryDetails"></div>
 </section>
 <section class="panel" id="quickPanel" hidden>
- <div class="top"><h2>3. 動画ゴールをまとめてSSへ</h2><span class="step">TEST ONLY</span></div>
- <p>動画に最初に付けた<strong>試合番号 #1、#2…</strong>をSSの試合枠に紐付けます。3位決定戦・決勝戦も先に番号でまとめられます。<strong>対戦チームが未確定の試合は入力内容を保持して送信保留</strong>にします。表示はアシスト → 得点者。各ゴールの確認チェックは不要です。</p>
+ <div class="top"><h2>3. ゴールを登録する</h2><span class="step">TEST ONLY</span></div>
+ <p class="step-help">選手と試合が合っていれば、そのまま「登録内容を確認」へ。違う箇所だけ「修正する」。</p>
  <p id="quickSummary" class="quick-summary"></p>
  <div id="quickGoals"></div>
  <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
- <button id="quickPreview" class="primary quick-main" type="button">登録内容をまとめて確認</button>
- <div id="quickConfirmPanel" hidden>
+ <button id="quickPreview" class="primary quick-main" type="button">登録内容を確認</button>
+ <div id="quickConfirmPanel" class="finish-preview-card" hidden>
   <strong id="quickConfirmTitle"></strong>
-  <p>以下の新規ゴールだけをTEST環境に登録します。保留・重複候補は含めません。</p>
+  <p class="step-help">内容が合っていれば、下のボタンでTESTへ登録。</p>
   <div id="quickReviewText"></div>
-  <button id="quickExecute" class="danger quick-main" type="button">上記をテストSSへ一括登録する</button>
-  <button id="quickCancel" type="button">戻って修正</button>
+  <button id="quickExecute" class="primary quick-main" type="button">この内容でゴールを登録</button>
+  <button id="quickCancel" type="button">← 修正に戻る</button>
  </div>
- <p class="small">登録は1件ずつ実行・照合します。途中エラー時は停止し、自動再送しません。</p>
- <button id="quickEdit" type="button">詳細編集・手動入力・既存ゴール修正（例外時のみ）</button>
+ <details class="help"><summary>別の登録方法・注意事項</summary>
+  <p>対戦未確定・重複・不明なゴールは送信せず保留します。送信は1件ずつ照合し、エラー時は停止します。</p>
+  <button id="quickEdit" type="button">詳細編集・手動追加・既存ゴール修正</button>
+ </details>
 </section>
 <section class="panel" id="finishPanel" hidden>
- <div class="top"><h2>4. スコアを確認して試合終了</h2><span class="step">TEST ONLY</span></div>
- <p>先にその試合のゴールを登録してください。SSのスコアが実際の最終スコアと一致したら、1試合ずつ終了します。準決勝を終了すると3位決定戦・決勝の対戦情報を更新します。</p>
- <p class="small">点数はSS登録済みゴールから算出します。違う場合は不足・重複ゴールを修正してください。終了済みの結果の変更はここでは行いません。</p>
- <div id="finishMatches"></div>
- <label class="field">終了する試合<select id="finishMatch"></select></label>
- <label class="field">同点の場合の結果<select id="finishWinner">
-  <option value="">選択してください（点差がある場合は自動判定）</option>
-  <option value="left">左側のチームが勝利（PKなど）</option>
-  <option value="right">右側のチームが勝利（PKなど）</option>
-  <option value="draw">引き分け（勝ち上がりのない試合のみ）</option>
- </select></label>
- <button id="finishPreview" type="button">最新スコア・終了内容を確認</button>
- <button id="finishRecover" type="button">終了結果を照合（再送なし）</button>
- <div id="finishConfirm" hidden>
-  <p id="finishSummary" style="white-space:pre-wrap"></p>
-  <label><input id="finishApproved" type="checkbox">表示スコアが最終スコアと一致し、未登録の得点がないことを確認しました</label>
-  <button id="finishExecute" class="danger quick-main" type="button" disabled>このスコアでTESTの試合を終了する</button>
+ <div class="top"><h2>4. 試合を終了する</h2><span class="step">TEST ONLY</span></div>
+ <p class="step-help">ゴール登録後、試合を選んでスコアを確認。</p>
+ <label class="field">試合を選ぶ<select id="finishMatch"></select></label>
+ <label id="finishWinnerWrap" class="field" hidden>同点の場合の勝者（PKなど）
+  <select id="finishWinner">
+   <option value="">勝者を選んでください</option>
+   <option value="left">左チームの勝利</option>
+   <option value="right">右チームの勝利</option>
+   <option value="draw">引き分け（順位決定が不要な試合のみ）</option>
+  </select>
+ </label>
+ <button id="finishPreview" class="primary quick-main" type="button">この試合のスコアを確認</button>
+ <div id="finishConfirm" class="finish-preview-card" hidden>
+  <p id="finishSummary"></p>
+  <p class="step-help">このスコアで正しければ終了ボタンを押してください。</p>
+  <button id="finishExecute" class="primary quick-main" type="button" disabled>この結果で試合を終了</button>
+  <button id="finishCancel" type="button">← スコアを確認し直す</button>
  </div>
  <p id="finishStatus" role="status" aria-live="polite"></p>
+ <details class="help"><summary>全試合の状況・通信エラー時の確認</summary>
+  <div id="finishMatches"></div>
+  <button id="finishRecover" type="button">通信エラー後の結果照合（再送なし）</button>
+  <p class="small">得点の抜け・重複があれば、先にゴール登録を修正してください。終了済みの結果はここでは変更できません。</p>
+ </details>
 </section>
 <section class="panel" id="reviewArea" hidden>
- <h2>詳細編集（必要なゴールのみ）</h2>
- <p>選手・試合などの選択を直したら、上の「一括登録の一覧へ戻る」からまとめて確認できます。以下の個別チェック欄は従来の登録方法用で、一括登録では不要です。</p>
- <button id="quickBack" type="button">一括登録の一覧へ戻る</button>
+ <h2>詳細編集</h2>
+ <p class="step-help">必要な箇所だけ直してください。変更内容は一覧に戻っても保持されます。</p>
+ <button id="quickBack" class="primary" type="button">← ゴール一覧に戻る</button>
  <p id="eventTitle" class="status"></p>
  <p>実況の対戦カードと当日の選手名簿から試合・得点者・アシストを初期選択します。<strong>動画にゴールがなくても、手動で新規追加できます。</strong> 選手と試合を確認して登録してください。</p>
  <div id="manualAddWrap" class="grid-item" hidden>
@@ -188,6 +214,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
  <p>得点集計の見逃しを考慮して、ゴール件数からスコアを勝手に決めません。試合の得点を更新する場合にだけ選択し、明示的に確認します。未選択ならゴール登録のみ。</p>
  <div id="matchRows"></div>
  <div class="line"><button class="primary" id="buildPlan">確認した登録内容を作成</button><span id="reviewStatus" class="small"></span></div>
+ <button id="quickBackBottom" class="primary quick-main" type="button">← ゴール一覧に戻る</button>
 </section>
 <section class="panel" id="exportArea" hidden>
  <h2>4. Shoot Sunday登録前の最終データ</h2>
@@ -229,6 +256,9 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
  </details>
 </section>
 </main>
+<div id="detailReturnBar" class="detail-return" hidden>
+ <button id="quickBackFixed" type="button">← ゴール一覧に戻る</button>
+</div>
 <script type="module">
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
