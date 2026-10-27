@@ -1165,53 +1165,49 @@ async function refreshAfterFinish(eventId){
  if(fresh.eventId!==eventId)throw Error('別のイベントが返りました');
  snapshot=fresh;rebuild({preserveEdits:true});
 }
-$('finishMatch').addEventListener('change',()=>{resetFinish();syncFinishWinner()});
-$('finishWinner').addEventListener('change',resetFinish);
-$('finishCancel').addEventListener('click',()=>{
- resetFinish();$('finishStatus').textContent='スコアを選び直してください。';
- $('finishPreview').scrollIntoView({behavior:'smooth',block:'center'});
-});
-$('finishPreview').addEventListener('click',async()=>{
- if(batchBusy||recoveryBusy||!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
- resetFinish();setBatchBusy(true);
+$('finishMatch').addEventListener('change',()=>{resetFinish();$('finishWinner').value='';syncFinishWinner()});
+$('finishWinner').addEventListener('change',()=>{resetFinish();syncFinishWinner()});
+$('finishExecute').addEventListener('click',async()=>{
+ if(batchBusy||recoveryBusy||!snapshot||!loadedFromStagingDirect||
+    $('ssEnvironment').value!=='staging'||$('finishExecute').disabled)return;
+ const seq=Number($('finishMatch').value),winner=$('finishWinner').value;
+ // One human click authorizes exactly the score/winner shown on screen.
+ // Signed preview + latest-state verification still happen BEFORE upstream PUT.
+ let sent=false,verified=false;
+ setBatchBusy(true);
  try{
   if(pendingForEvent().length)throw Error('前回のゴール送信結果を先に確認してください');
-  const seq=Number($('finishMatch').value),winner=$('finishWinner').value;
-  const eventId=snapshot.eventId;
-  await refreshAfterFinish(eventId);
-  const count=unfinishedGoalCount(snapshot,rows,seq,quickGoalDecisions(snapshot,rows));
-  if(count)throw Error('この試合に未登録・要確認の候補が'+count+'件あります。先に登録するか対象から除外してください');
-  const action=finishAction(snapshot,snapshot,seq,winner);
+  const shown=finishAction(snapshot,snapshot,seq,winner);
+  let count=unfinishedGoalCount(snapshot,rows,seq,quickGoalDecisions(snapshot,rows));
+  if(count)throw Error('未登録・要確認のゴールが'+count+'件あります。先に登録してください');
+  const latest=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(shown.event_id)));
+  const action=finishAction(snapshot,latest,seq,winner);
+  if(JSON.stringify(action)!==JSON.stringify(shown))
+   throw Error('SSのスコアか試合情報が変わりました。イベントを再読み込みして確認してください');
+  count=unfinishedGoalCount(latest,rows,seq,quickGoalDecisions(latest,rows));
+  if(count)throw Error('未登録・要確認のゴールが'+count+'件あります。先に登録してください');
   const state=await postStaging('/staging/status',{match_id:action.match_id});
   if(state.status==='pending')throw Error('前回の送信結果が不明です。「終了結果を照合」で確認してください');
   const preview=await postStaging('/staging/preview',action);
-  if(preview.environment!=='STAGING ONLY'||!preview.preview_token||preview.plan?.action!=='finish')throw Error('試合終了プレビューに対応していません');
-  finishPrepared={action,preview_token:preview.preview_token};
-  const m=snapshot.matches.find(m=>m.seq===seq);
-  if(action.left_score===action.right_score)$('finishWinner').value=action.winner;
-  $('finishSummary').textContent='#'+seq+' '+m.title+'\n'+m.leftTeam+' '+action.left_score+' − '+action.right_score+' '+m.rightTeam+
-   '\n'+(action.winner==='draw'?'引き分け':action.winner==='left'?m.leftTeam+'の勝利':m.rightTeam+'の勝利');
-  $('finishConfirm').hidden=false;
-  $('finishStatus').textContent='未送信：下の「この結果で試合を終了」で確定します。';
-  $('finishConfirm').scrollIntoView({behavior:'smooth',block:'center'});
- }catch(e){$('finishStatus').textContent=e.message}finally{setBatchBusy(false)}
-});
-$('finishExecute').addEventListener('click',async()=>{
- if(batchBusy||recoveryBusy||!finishPrepared||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
- const prepared=finishPrepared;resetFinish();touch();setBatchBusy(true);
- let sent=false,verified=false;
- try{
-  if(pendingForEvent().length)throw Error('ゴールの送信結果が未確認です');
-  const latest=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(prepared.action.event_id)));
-  const action=finishAction(snapshot,latest,prepared.action.seq,prepared.action.winner);
-  if(JSON.stringify(action)!==JSON.stringify(prepared.action))throw Error('確認後にスコアが変わりました。もう一度確認してください');
+  if(preview.environment!=='STAGING ONLY'||!preview.preview_token||preview.plan?.action!=='finish')
+   throw Error('試合終了の安全確認ができません。送信していません');
+  // A second, read-only GET fences stale scores and regenerated match UUIDs.
+  const again=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(action.event_id)));
+  const verifiedAction=finishAction(snapshot,again,seq,winner);
+  if(JSON.stringify(verifiedAction)!==JSON.stringify(shown))
+   throw Error('確認中にスコアか組み合わせが変わりました。送信せず停止しました');
   sent=true;
-  const response=await postStaging('/staging/execute',{...action,preview_token:prepared.preview_token,confirm:'TEST-ONLY WRITE'});
+  const response=await postStaging('/staging/execute',{
+   ...action,preview_token:preview.preview_token,confirm:'TEST-ONLY WRITE'
+  });
   assertFinished(action,response);verified=true;
   await refreshAfterFinish(action.event_id);
-  $('finishStatus').textContent='✓ 試合 #'+action.seq+' の終了を確認しました。次の試合へ進めます。';
- }catch(e){if(e.code==='winner_required'&&e.httpStatus===422)sent=false;
-  $('finishStatus').textContent=(verified?'試合終了は確認済みですが一覧の更新に失敗しました。':sent?'送信結果を確認してください。再送せず「終了結果を照合」を押してください。':'終了していません。')+' '+e.message;
+  $('finishStatus').textContent='✓ 試合 #'+action.seq+' を終了しました。次の試合へ進めます。';
+ }catch(e){
+  if(e.code==='winner_required'&&e.httpStatus===422)sent=false;
+  $('finishStatus').textContent=(verified?'試合終了は確認済みですが一覧の更新に失敗しました。':
+   sent?'送信結果を確認してください。再送せず「終了結果を照合」を押してください。':
+   '終了していません。')+' '+e.message;
  }finally{setBatchBusy(false)}
 });
 $('finishRecover').addEventListener('click',async()=>{
