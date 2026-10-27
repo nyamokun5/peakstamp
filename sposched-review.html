@@ -71,10 +71,19 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 <p>PeakStampで確認済みの複数ゴールをTESTの試合・選手と照合してまとめて登録します。<strong>不確かな試合・選手は人が選択して修正し、最後に一覧でまとめて承認します。</strong></p>
 <p class="warning"><strong>本番のSSは読み取り専用です。</strong> テスト環境を明示的に選んだ場合のみ、人が確認したゴールを1件ずつプレビュー・送信できます。試合結果の確定とオウンゴールの更新は対象外です。</p>
 <section class="panel">
- <h2>1. PSのゴールデータを選択</h2>
- <p>このiPhoneのブラウザに保存された動画の確定済みゴールを使います。最新の動画が初期選択されます。別の試合なら対象動画だけ選んでください。</p>
- <div id="sources"></div>
- <div class="line"><button id="refreshSources">保存データを再読み込み</button><span id="sourceStatus" class="small"></span></div>
+ <h2>1. このプロジェクトのゴール</h2>
+ <p>PeakStampで今回読み込んだ<strong>全動画の確定済みゴールを自動集約</strong>します。1本ずつ選ぶ必要はありません。各ゴールの動画名と時刻はそのまま保持します。</p>
+ <div id="projectSummary" class="registered-goals" role="status"></div>
+ <details id="sourceAdvanced">
+  <summary>対象動画を確認・変更する（通常は不要）</summary>
+  <p class="small">古い保存データは動画のファイル更新日で仮グループ化します。撮影日とは限らないので、同じ開催日の動画か確認し、1回だけプロジェクトとして保存してください。</p>
+  <label class="field" id="legacyDayWrap" hidden>過去データの日付グループ（推定）
+   <select id="legacyDaySelect"></select>
+  </label>
+  <div id="sources"></div>
+  <button id="saveProjectSelection" type="button">選択した動画をこのプロジェクトに保存</button>
+ </details>
+ <div class="line"><button id="refreshSources">プロジェクトを再読み込み</button><span id="sourceStatus" class="small"></span></div>
 </section>
 <section class="panel">
  <h2>2. Shoot Sunday当日の試合／選手名簿を読み込む</h2>
@@ -189,6 +198,8 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </main>
 <script type="module">
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
+import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,
+ approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=ss-quick-core2';
 import {toStagingAction,writeableReviewOperations} from './sposched-staging-client.mjs?v=ss-stage1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
@@ -285,31 +296,113 @@ const checks=()=>{
  }
  return sourceObjects;
 };
+let legacyDay='';
+const updateProjectSummary=()=>{
+ const chosen=checks();
+ let count=0;
+ for(const input of document.querySelectorAll('#sources input:checked')){
+  count+=Number(input.dataset.count)||0;
+ }
+ const project=readCurrentGoalProject(localStorage);
+ const heading=project?'現在のPeakStampプロジェクト':'過去の動画データ（開催日未確認）';
+ $('projectSummary').replaceChildren();
+ $('projectSummary').append(node('strong',heading));
+ $('projectSummary').append(node('p',
+  chosen.length+'本の動画から、確定済みゴール '+count+'件をまとめて表示します。',
+  'quick-summary'));
+ if(project){
+  $('projectSummary').append(node('p','このプロジェクトに登録した動画：'+
+   project.files.length+'本。動画自体やAPIキーは保存していません。','details'));
+ }else{
+  $('projectSummary').append(node('p','ファイル更新日を使った仮グループです。撮影日とは限りません。内容を確認してからテストSSへ送信してください。','details'));
+ }
+ $('sourceStatus').textContent=chosen.length+'本 / ゴール '+count+'件'+
+  (project?'（プロジェクト全動画を自動選択）':'（日付から仮集計）');
+};
 function sourcesLoad(){
  $('sources').replaceChildren();goalExports=[];
  const saved=[];
  try{
   for(let i=0;i<localStorage.length;i++){
    const k=localStorage.key(i);if(!k?.startsWith(GOAL_STORE_PREFIX))continue;
-   const data=JSON.parse(localStorage.getItem(k)||'null');
+   let data;
+   try{data=JSON.parse(localStorage.getItem(k)||'null')}catch{continue}
    if(!data?.source?.name||!Array.isArray(data.items))continue;
    const count=data.items.filter(g=>g.status==='confirmed').length;
    if(count)saved.push({key:k,source:data.source,count});
   }
  }catch(e){$('sourceStatus').textContent='保存データにアクセスできません: '+e.message;return}
- saved.sort((a,b)=>Number(b.source.lastModified)-Number(a.source.lastModified));
- for(const [i,item] of saved.entries()){
+ const project=readCurrentGoalProject(localStorage);
+ const collection=defaultGoalCollection(saved,project);
+ const groups=approximateLegacyDayGroups(saved);
+ const dayOptions=$('legacyDaySelect');dayOptions.replaceChildren();
+ for(const group of groups){
+  const option=node('option',group.day+' · '+group.items.length+'本 · '+group.confirmedGoals+'ゴール');
+  option.value=group.day;dayOptions.append(option);
+ }
+ $('legacyDayWrap').hidden=!!project||groups.length<2;
+ if(!project){
+  const chosenDay=groups.find(g=>g.day===legacyDay)||groups[0];
+  legacyDay=chosenDay?.day||'';
+  dayOptions.value=legacyDay;
+ }
+ const selected=project?collection.items:
+  groups.find(g=>g.day===legacyDay)?.items||[];
+ const selectedKeys=new Set(selected.map(x=>x.key));
+ const order=new Map(project?.files?.map((file,i)=>[projectFileKey(file),i])||[]);
+ saved.sort((a,b)=>{
+  if(project){
+   const ax=order.get(projectFileKey(a.source)),bx=order.get(projectFileKey(b.source));
+   if(ax!==undefined&&bx!==undefined)return ax-bx;
+   if(ax!==undefined)return -1;
+   if(bx!==undefined)return 1;
+  }
+  return Number(b.source.lastModified)-Number(a.source.lastModified);
+ });
+ for(const item of saved){
   const label=node('label','','select-source'),checkbox=mkInput('checkbox');
-  checkbox.value=item.key;checkbox.checked=i===0;
-  checkbox.addEventListener('change',()=>{touch();if(snapshot)rebuild({preserveEdits:true})});
+  checkbox.value=item.key;checkbox.checked=selectedKeys.has(item.key);
+  checkbox.dataset.count=String(item.count);
+  checkbox.addEventListener('change',()=>{
+   touch();updateProjectSummary();
+   if(snapshot)rebuild({preserveEdits:true});
+  });
   label.append(checkbox,node('span',' '+item.source.name+' · 確定ゴール '+item.count+'件'));
   $('sources').append(label);
  }
- $('sourceStatus').textContent=saved.length?saved.length+'件の保存済み動画':'確定済みゴールはありません（スコアのみの確認は可能）';
+ if(!saved.length && !project)
+  $('sourceStatus').textContent='確定済みゴールはありません';
+ else updateProjectSummary();
 }
+$('legacyDaySelect').addEventListener('change',()=>{
+ legacyDay=$('legacyDaySelect').value;
+ // Recalculate from the selected day, without joining unrelated old weeks.
+ sourcesLoad();
+ if(snapshot)rebuild({preserveEdits:true});
+});
+$('saveProjectSelection').addEventListener('click',()=>{
+ const files=checks();
+ if(!files.length){
+  $('sourceStatus').textContent='少なくとも1本の動画を選択してください';return;
+ }
+ try{
+  saveCurrentGoalProject(localStorage,files,{newProject:true});
+  legacyDay='';sourcesLoad();
+  if(snapshot)rebuild({preserveEdits:true});
+  $('sourceStatus').textContent='この'+files.length+'本をプロジェクトとして保存しました。次回から自動集約します。';
+  $('sourceAdvanced').open=false;
+ }catch(e){$('sourceStatus').textContent='プロジェクトを保存できません：'+e.message}
+});
 function chosenGoals(){
  const files=checks();
  const video=files.length?confirmedGoalExport(files,localStorage).goals:[];
+ // Match sequence wins, then the project's imported video order and clip time.
+ // Timestamps within separate files are not a single global clock.
+ const bySource=new Map(files.map((x,i)=>[projectFileKey(x.file),i]));
+ video.sort((a,b)=>
+  (Number(a.matchSeq)||999)-(Number(b.matchSeq)||999)||
+  (bySource.get(projectFileKey(a.source))??999)-(bySource.get(projectFileKey(b.source))??999)||
+  Number(a.goalTimeSeconds||0)-Number(b.goalTimeSeconds||0));
  return [...video,...unsentManualGoals(manualGoals)];
 }
 function rebuild({preserveEdits=false,completedKeys=[]}={}){
