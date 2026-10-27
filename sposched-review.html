@@ -916,7 +916,7 @@ function renderQuick(){
  if(noFixtures){
   const selected=$('ssEventSelect').selectedOptions[0]?.textContent||'選択したイベント';
   $('ssFixtureWarningText').textContent='「'+selected+
-   '」について、SSから番号付き試合を0件取得しました。動画の6ゴールだけでは公式の試合番号・対戦チーム・IDは作れません。'+
+   '」について、SSから番号付き試合を0件取得しました。'+rows.length+'件の動画ゴールだけでは公式の試合番号・対戦チーム・IDは作れません。'+
    '正しいTESTイベントを選び直すか、SS側で4試合のトーナメント枠を作成してから再取得してください。TESTへの送信は停止しています。';
  }
  // Fixes are first; already reviewed goals follow. Video counts are reference
