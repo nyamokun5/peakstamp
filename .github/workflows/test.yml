@@ -19,3 +19,17 @@ jobs:
           node --check montage-ui.mjs
       - name: Unit tests
         run: node --test tests/*.test.mjs
+
+  finish-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser for isolated TEST-only UI regression
+        run: |
+          npm install --no-save --no-package-lock playwright@1.51.1
+          npx playwright install --with-deps chromium
+      - name: Exercise final-score confirmation and bracket refresh
+        run: node scripts/test-finish-browser.mjs

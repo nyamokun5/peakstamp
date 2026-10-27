@@ -836,3 +836,22 @@ SS開催日の保証ではない。対象が正しいか確認のうえ、一度
 ゴール動画の解析・編集・保存は引き続きファイル単位で行う。
 SSへの新規登録は今までどおり、TEST固定、既存重複を除外し、
 1回の最終承認後に逐次書き込み・再照合。**本番SS書き込みは禁止。**
+
+## TEST match finish — 2026-10-27
+
+The TEST review now has a separate final-score confirmation step. It reads the
+current registered-goal score (never the count of detected video candidates),
+requires an explicit final-score acknowledgement, and uses the existing signed
+preview / durable write journal to PUT the official result. Tied matches require
+a winner/draw selection; knockout draws rejected by `winner_required` consume the
+preview but permit a new corrected preview. Ambiguous failures are never retried.
+Finished matches cannot be re-finalized here because upstream advancement does
+not replace occupied downstream slots. Goal omissions must be corrected first.
+After success the event is refreshed, preserving edits for waiting third-place
+and final goals; those goals still require the existing bulk confirmation.
+Production remains read-only. The API operation is implemented only on the
+separate `shoot-sunday-sync` staging branch.
+
+Browser regression: install Playwright, then run
+`node scripts/test-finish-browser.mjs`. All HTTP calls are intercepted with fake
+TEST data; the test sends no actual SpoSched requests.
