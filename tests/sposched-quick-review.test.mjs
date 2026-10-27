@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows}
  from '../sposched-review-core.mjs';
-import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField}
+import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation}
  from '../sposched-quick-review.mjs';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch}
  from '../sposched-staging-batch.mjs';
@@ -216,4 +216,73 @@ test('compact UI renders assist -> scorer in review and pre-send summary',()=>{
  assert.match(html,/quick-field/);
  assert.match(html,/renderGoals\(\); \/\/ keep exceptional detail editor in sync/);
  assert.doesNotMatch(html,/top\.append\(node\('strong','#'\+\(item\.index\+1\)\+' '\+\(item\.scorer/);
+});
+
+test('original AI-heard player names remain visible after correcting official roster selections',()=>{
+ const x=snap(),r=rows(x);
+ const aiBefore=quickAIObservation(r[0]);
+ assert.equal(aiBefore.assistRaw,'佐藤');
+ assert.equal(aiBefore.scorerRaw,'西村');
+ assert.deepEqual(aiBefore.scorerCandidates,['西村']);
+ assert.deepEqual(aiBefore.assistCandidates,['佐藤']);
+ editQuickGoalField(x,r[0],'scorer','橋本');
+ editQuickGoalField(x,r[0],'assistMode','none');
+ assert.deepEqual(quickAIObservation(r[0]),aiBefore,
+  'The AI original is not rewritten to the newly selected official scorer or assist');
+ assert.equal(r[0].scorer,'橋本');
+ assert.equal(r[0].assistMode,'none');
+});
+
+test('unheard goal, AI no-assist and ambiguous name candidates are described accurately',()=>{
+ const x=snap(),r=rows(x);
+ r[0].goal.scorer='';
+ r[0].goal.assist='';
+ r[0].goal.assistStatus='unknown';
+ r[0].scorerHints=[
+  {name:'西村'}, {name:'橋本'}, {name:'西村'}, {name:'佐藤'},{name:'豊田'}
+ ];
+ r[0].assistHints=[];
+ const ambiguous=quickAIObservation(r[0]);
+ assert.equal(ambiguous.scorerRaw,'聞き取れず');
+ assert.equal(ambiguous.assistRaw,'不明（AI判定）');
+ assert.deepEqual(ambiguous.scorerCandidates,['西村','橋本','佐藤']);
+ assert.deepEqual(ambiguous.assistCandidates,[]);
+ r[0].goal.assistStatus='named';
+ assert.equal(quickAIObservation(r[0]).assistRaw,'名前を聞き取れず');
+ r[0].goal.assistStatus='none';
+ const withoutAssist=quickAIObservation(r[0]);
+ assert.equal(withoutAssist.assistRaw,'なし（AI判定）');
+ assert.equal(withoutAssist.noAssist,true);
+ assert.deepEqual(withoutAssist.assistCandidates,[]);
+});
+
+test('conflicting AI assist text and no-assist status do not silently erase extracted words',()=>{
+ const x=snap(),r=rows(x);
+ r[0].goal.assist='豊田';
+ r[0].goal.assistStatus='none';
+ assert.equal(quickAIObservation(r[0]).assistRaw,'豊田（AI判定：アシストなし）');
+});
+
+test('all quick goal cards show AI original and suggested roster names without confirmation checks',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(html,/const heard=quickAIObservation\(row\)/);
+ assert.match(html,/AI聞き取り：/);
+ assert.match(html,/SS名簿候補：アシスト /);
+ assert.match(html,/heard\.assistRaw\+' → '\+heard\.scorerRaw/);
+ assert.match(html,/quick-ai-evidence/);
+ assert.match(html,/el\.append\(aiBox\)/);
+ const quick=html.slice(html.indexOf('function renderQuick(){'),
+  html.indexOf("$('quickEdit').addEventListener"));
+ assert.doesNotMatch(quick,/\.innerHTML\s*=/);
+ assert.match(quick,/node\('div','AI聞き取り：'/);
+ assert.match(quick,/id='no-op-impossible'|el\.append\(aiBox\)/);
+});
+
+test('unconfirmed player dropdown exposes short AI hint but never preselects a guess',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(html,/needsReview=false,aiHint=''/);
+ assert.match(html,/確認して選択（AI: /);
+ assert.match(html,/row\.goal\?\.scorer\)\)/);
+ assert.match(html,/row\.goal\?\.assist\)\)/);
+ assert.match(html,/menu\.value=needsReview\?'':String\(current\?\?''\)/);
 });

@@ -6,6 +6,37 @@ import {
  normalizePerson,normalizeTeam,validateGoalRow,matchingExistingGoals,buildReviewPayload
 } from './sposched-review-core.mjs';
 
+/**
+ * Show what PeakStamp AI ACTUALLY extracted, separate from the possibly
+ * modified official SpoSched roster selection. Neither text nor candidate
+ * rankings imply human confirmation. Never replace an uncertain extraction
+ * with a plausible-sounding name.
+ */
+export function quickAIObservation(row){
+ const goal=row?.goal||{};
+ const heard=value=>typeof value==='string'?value.trim():'';
+ const scorerRaw=heard(goal.scorer)||'聞き取れず';
+ const spokenAssist=heard(goal.assist);
+ const assistRaw=goal.assistStatus==='none'
+  ?spokenAssist?spokenAssist+'（AI判定：アシストなし）':'なし（AI判定）'
+  :spokenAssist||(
+   goal.assistStatus==='named'?'名前を聞き取れず':'不明（AI判定）');
+ const names=hints=>{
+  const result=[],seen=new Set();
+  for(const h of Array.isArray(hints)?hints:[]){
+   const name=heard(h?.name);
+   if(!name||seen.has(name))continue;
+   result.push(name);seen.add(name);
+   if(result.length>=3)break;
+  }
+  return result;
+ };
+ return {scorerRaw,assistRaw,
+  scorerCandidates:names(row?.scorerHints),
+  assistCandidates:goal.assistStatus==='none'?[]:names(row?.assistHints),
+  noAssist:goal.assistStatus==='none'};
+}
+
 export function quickGoalDecisions(snapshot,rows) {
  const decisions=(rows||[]).map((row,index)=>{
   const g=row.goal||{};
