@@ -51,10 +51,16 @@ try{
  await page.goto('http://peakstamp.local/');
  await page.selectOption('#ssEnvironment','staging');await page.fill('#ssBridgeToken','mock-token');
  await page.click('#ssLoadEvents');await page.click('#ssLoadSnapshot');
+ await page.locator('#autoPanel').waitFor({state:'visible'});
+ assert.equal(await page.locator('#autoPanel').isVisible(),true);
+ assert.equal(await page.locator('#autoRun').isEnabled(),true);
+ assert.equal(writes,0);assert.equal(previews,0);
+ await page.locator('#individualFinishTools > summary').click();
  await page.locator('#finishPanel').waitFor({state:'visible'});
- assert.match(await page.locator('#flowGuide').innerText(),/表示された結果で試合を終了/);
+ assert.match(await page.locator('#flowGuide').innerText(),/得点と勝敗をまとめて登録/);
  assert.equal(await page.locator('#finishPreview').count(),0);
  assert.equal(await page.locator('#finishCancel').count(),0);
+ await page.locator('#autoGoalDetails summary').click();
  assert.match(await page.locator('#quickGoals').innerText(),/対戦待ち/);
  // The advanced editor still has both the sticky bottom exit and in-page exit.
  await page.locator('#quickPanel details.help summary').click();
@@ -93,7 +99,7 @@ try{
  await page.click('#finishExecute');
  await page.waitForFunction(()=>document.getElementById('finishStatus').textContent.startsWith('✓'));
  assert.equal(writes,2);assert.equal(previews,2);
- assert.match(await page.locator('#flowGuide').innerText(),/ゴール/);
+ assert.match(await page.locator('#flowGuide').innerText(),/得点・勝敗/);
  assert.match(await page.locator('#quickGoals').innerText(),/西村/);
  assert.match(await page.locator('#quickGoals').innerText(),/徳永/);
  assert.doesNotMatch(await page.locator('#quickGoals').innerText(),/対戦待ち・送信保留/);
