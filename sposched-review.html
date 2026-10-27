@@ -304,9 +304,9 @@ const setBatchBusy=busy=>{
  batchBusy=busy;
  for(const id of ['ssEnvironment','ssBridgeToken','ssLoadEvents','ssEventSelect',
   'ssLoadSnapshot','refreshSources','buildPlan','stagingPreview','stagingExecute',
-  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','finishMatch','finishWinner','finishPreview','finishRecover','finishApproved','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
+  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishPreview','finishRecover','finishCancel','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
   $(id).disabled=busy||
-   (id==='finishExecute'&&(!finishPrepared||!$('finishApproved').checked))||
+   (id==='finishExecute'&&!finishPrepared)||
    (id==='batchExecute'&&(!batchPrepared||!$('batchApprove').checked))||
    (id==='batchPreview'&&!lastPayload)||
    (id==='stagingPreview'&&!lastPayload)||
@@ -929,18 +929,12 @@ function renderQuick(){
    }else{
     const detail=node('button','詳細な修正が必要な場合','quick-exception');
     detail.type='button';
-    detail.addEventListener('click',()=>{
-     $('reviewArea').hidden=false;
-     $('review-goal-'+(item.index+1))?.scrollIntoView({behavior:'smooth',block:'start'});
-    });
+    detail.addEventListener('click',()=>openDetail(item.index+1));
     el.append(detail);
    }
   }else{
    const detail=node('button','詳細を見る','quick-exception');detail.type='button';
-   detail.addEventListener('click',()=>{
-    $('reviewArea').hidden=false;
-    $('review-goal-'+(item.index+1))?.scrollIntoView({behavior:'smooth',block:'start'});
-   });
+   detail.addEventListener('click',()=>openDetail(item.index+1));
    el.append(detail);
   }
   container.append(el);
@@ -948,18 +942,29 @@ function renderQuick(){
  $('quickPreview').disabled=batchBusy||ready===0;
  if(!quickPrepared){
   $('quickStatus').textContent=ready
-   ?'登録候補を確認し、「登録内容をまとめて確認」を押してください。各ゴールのチェックは不要です。'
-   :'送信できる動画ゴールはまだありません。対戦待ちのゴールは試合番号で保持しています。SSで対戦チームが確定したら「試合・名簿を読み込む」で再照合してください。';
+   ?'準備OK：'+ready+'件。修正がなければ内容を確認してください。'
+   :'いま登録できるゴールはありません。対戦待ちの場合は、試合終了後に再表示されます。';
  }
 }
-$('quickEdit').addEventListener('click',()=>{
+function openDetail(rowNumber=null){
+ if(batchBusy)return;
  $('reviewArea').hidden=false;
- $('reviewArea').scrollIntoView({behavior:'smooth',block:'start'});
-});
-$('quickBack').addEventListener('click',()=>{
+ $('detailReturnBar').hidden=false;
+ document.body.classList.add('detail-open');
+ // Show the requested row and keep an exit button fixed above the iPhone safe area.
+ const target=rowNumber?$('review-goal-'+rowNumber):null;
+ (target||$('reviewArea')).scrollIntoView({behavior:'smooth',block:'start'});
+}
+function closeDetail(){
+ if(batchBusy)return;
  $('reviewArea').hidden=true;
+ $('detailReturnBar').hidden=true;
+ document.body.classList.remove('detail-open');
  $('quickPanel').scrollIntoView({behavior:'smooth',block:'start'});
-});
+}
+$('quickEdit').addEventListener('click',()=>openDetail());
+for(const id of ['quickBack','quickBackBottom','quickBackFixed'])
+ $(id).addEventListener('click',closeDetail);
 $('quickCancel').addEventListener('click',()=>{
  quickPrepared=null;$('quickConfirmPanel').hidden=true;
  $('quickStatus').textContent='確認を取り消しました。送信していません。';
@@ -979,17 +984,14 @@ $('quickPreview').addEventListener('click',async()=>{
    previewAction:action=>postStaging('/staging/preview',action)
   });
   quickPrepared={entries,heldCount:held.length,eventId:snapshot.eventId};
-  $('quickConfirmTitle').textContent='TESTへ'+entries.length+'件の新規ゴールを登録';
+  $('quickConfirmTitle').textContent='TESTに'+entries.length+'ゴールを登録';
   $('quickReviewText').textContent=entries.map((item,i)=>
-   (i+1)+'. 試合：'+(item.plan.title||item.action.match_id)+
-   '\nアシスト → 得点：'+(item.plan.after?.assist||'なし')+
-   ' → '+(item.plan.after?.scorer||'—')+
-   '\n得点側：'+item.plan.side+
+   (i+1)+'. '+(item.plan.title||item.action.match_id)+'｜'+
+   (item.plan.after?.scorer||'—')+'（アシスト：'+(item.plan.after?.assist||'なし')+'）'+
    (item.plan.warning?'\n⚠ '+item.plan.warning:'')
-  ).join('\n\n');
+  ).join('\n');
   $('quickConfirmPanel').hidden=false;
-  $('quickStatus').textContent='プレビュー完了。'+entries.length+'件が登録対象・'+
-   held.length+'件は保留（送信しません）。下の内容を確認して最終ボタンを押してください。';
+  $('quickStatus').textContent='準備完了：'+entries.length+'件を登録'+(held.length?'（'+held.length+'件は保留）':'')+'。';
   $('quickConfirmPanel').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){
   $('quickStatus').textContent='確認できません：'+e.message+'（ゴールの書き込みなし）';
@@ -1085,7 +1087,7 @@ $('recoveryReload').addEventListener('click',async()=>{
  }finally{recoveryBusy=false;$('recoveryReload').disabled=false}
 });
 function resetFinish(){
- finishPrepared=null;$('finishConfirm').hidden=true;$('finishApproved').checked=false;$('finishExecute').disabled=true;
+ finishPrepared=null;$('finishConfirm').hidden=true;$('finishExecute').disabled=true;
 }
 function renderFinish(){
  resetFinish();
@@ -1103,15 +1105,55 @@ function renderFinish(){
  }
  if([...$('finishMatch').options].some(o=>o.value===prior))$('finishMatch').value=prior;
  $('finishWinner').value='';
+ syncFinishWinner();
+ updateFlowGuide();
 }
+function syncFinishWinner(){
+ const m=snapshot?.matches?.find(x=>x.seq===Number($('finishMatch').value));
+ const tied=!!m&&m.leftScore===m.rightScore;
+ $('finishWinnerWrap').hidden=!tied;
+ if(!tied)$('finishWinner').value='';
+ if(!m || m.status==='waiting' || m.status==='finished')$('finishPreview').disabled=true;
+ else $('finishPreview').disabled=batchBusy;
+}
+function updateFlowGuide(){
+ const test=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
+ let step='STEP 1 / 3',message='SSに接続し、イベントを選んでください。',target='ssDirectPanel';
+ if(test){
+  const items=quickGoalDecisions(snapshot,rows);
+  const ready=items.filter(item=>item.state==='ready').length;
+  const needsEdit=items.filter(item=>item.state==='attention'||item.state==='duplicate').length;
+  const remaining=snapshot.matches.filter(m=>m.matchId&&m.status!=='finished'&&m.status!=='waiting').length;
+  if(ready || needsEdit){
+   step='STEP 2 / 3';message=ready?'ゴール'+ready+'件を確認して登録。':'確認が必要なゴールを修正。';target='quickPanel';
+  }else if(remaining){
+   step='STEP 3 / 3';message='スコアを確認して試合を終了。';target='finishPanel';
+  }else if(snapshot.matches.length && snapshot.matches.every(m=>m.status==='finished')){
+   step='✓ 完了';message='すべての試合が終了しています。';target='finishPanel';
+  }else{
+   step='STEP 2 / 3';message='対戦待ちのゴールがあります。試合情報を確認。';target='quickPanel';
+  }
+ }
+ $('flowStepLabel').textContent=step;
+ $('flowGuideText').textContent=message;
+ $('flowJump').dataset.target=target;
+ $('flowJump').textContent=step==='✓ 完了'?'試合を見る':'ここへ移動';
+}
+$('flowJump').addEventListener('click',()=>{
+ const id=$('flowJump').dataset.target||'ssDirectPanel';
+ document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
+});
 async function refreshAfterFinish(eventId){
  const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
  if(fresh.eventId!==eventId)throw Error('別のイベントが返りました');
  snapshot=fresh;rebuild({preserveEdits:true});
 }
-$('finishMatch').addEventListener('change',()=>{resetFinish();$('finishWinner').value=''});
+$('finishMatch').addEventListener('change',()=>{resetFinish();syncFinishWinner()});
 $('finishWinner').addEventListener('change',resetFinish);
-$('finishApproved').addEventListener('change',()=>{$('finishExecute').disabled=batchBusy||!finishPrepared||!$('finishApproved').checked});
+$('finishCancel').addEventListener('click',()=>{
+ resetFinish();$('finishStatus').textContent='スコアを選び直してください。';
+ $('finishPreview').scrollIntoView({behavior:'smooth',block:'center'});
+});
 $('finishPreview').addEventListener('click',async()=>{
  if(batchBusy||recoveryBusy||!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
  resetFinish();setBatchBusy(true);
@@ -1129,15 +1171,15 @@ $('finishPreview').addEventListener('click',async()=>{
   if(preview.environment!=='STAGING ONLY'||!preview.preview_token||preview.plan?.action!=='finish')throw Error('試合終了プレビューに対応していません');
   finishPrepared={action,preview_token:preview.preview_token};
   const m=snapshot.matches.find(m=>m.seq===seq);
-  $('finishSummary').textContent='#'+seq+' '+m.title+'\n'+m.leftTeam+' '+action.left_score+' - '+action.right_score+' '+m.rightTeam+
-   '\n結果：'+(action.winner==='draw'?'引き分け':action.winner==='left'?m.leftTeam+'の勝利':m.rightTeam+'の勝利')+
-   '\n次の対戦枠へ勝者・敗者が反映されます。';
+  $('finishSummary').textContent='#'+seq+' '+m.title+'\n'+m.leftTeam+' '+action.left_score+' − '+action.right_score+' '+m.rightTeam+
+   '\n'+(action.winner==='draw'?'引き分け':action.winner==='left'?m.leftTeam+'の勝利':m.rightTeam+'の勝利');
   $('finishConfirm').hidden=false;
-  $('finishStatus').textContent='まだ終了していません。最終スコアを確認して下のボタンを押してください。';
+  $('finishStatus').textContent='未送信：下の「この結果で試合を終了」で確定します。';
+  $('finishConfirm').scrollIntoView({behavior:'smooth',block:'center'});
  }catch(e){$('finishStatus').textContent=e.message}finally{setBatchBusy(false)}
 });
 $('finishExecute').addEventListener('click',async()=>{
- if(batchBusy||recoveryBusy||!finishPrepared||!$('finishApproved').checked||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ if(batchBusy||recoveryBusy||!finishPrepared||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
  const prepared=finishPrepared;resetFinish();touch();setBatchBusy(true);
  let sent=false,verified=false;
  try{
@@ -1149,7 +1191,7 @@ $('finishExecute').addEventListener('click',async()=>{
   const response=await postStaging('/staging/execute',{...action,preview_token:prepared.preview_token,confirm:'TEST-ONLY WRITE'});
   assertFinished(action,response);verified=true;
   await refreshAfterFinish(action.event_id);
-  $('finishStatus').textContent='✓ 試合 #'+action.seq+' を終了しました。対戦情報を更新しました。上の保留候補を確認して、次の試合のゴール登録へ進んでください。';
+  $('finishStatus').textContent='✓ 試合 #'+action.seq+' の終了を確認しました。次の試合へ進めます。';
  }catch(e){if(e.code==='winner_required'&&e.httpStatus===422)sent=false;
   $('finishStatus').textContent=(verified?'試合終了は確認済みですが一覧の更新に失敗しました。':sent?'送信結果を確認してください。再送せず「終了結果を照合」を押してください。':'終了していません。')+' '+e.message;
  }finally{setBatchBusy(false)}
@@ -1387,7 +1429,10 @@ $('batchExecute').addEventListener('click',async()=>{
   const finished='✓ テストSSへ'+completed.length+'件の一括登録・再取得・照合が完了しました。';
   statusSS(finished);$('reviewStatus').textContent=finished;
   if(quickSending)$('quickStatus').textContent=finished;
-  $('reviewArea').scrollIntoView({behavior:'smooth',block:'start'});
+  // Do not drop users into the hidden legacy details after a quick registration.
+  updateFlowGuide();
+  const target=$('flowJump').dataset.target;
+  (document.getElementById(target)||$('quickPanel')).scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){
   const complete=e.completed?.length??verifiedCount;
   if(e.completed?.length){
@@ -1506,5 +1551,6 @@ sourcesLoad();
    :'動画データを保持するため、この画面は別タブで開きました。Safariのタブ一覧から元のPeakStampタブに切り替えて戻ってください。';
   (back||document.body.firstElementChild)?.insertAdjacentElement('afterend',note);
  }
+updateFlowGuide();
 </script>
 </body></html>
