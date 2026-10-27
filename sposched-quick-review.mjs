@@ -90,6 +90,9 @@ export function editQuickGoalField(snapshot,row,field,value){
    .includes(normalizeTeam(team)))row.team=team;
  }else if(field==='assistMode'){
   if(!['none','named','unknown'].includes(value))throw Error('不正なアシスト状態です');
+  // Switching from "unknown/no assist" to "named" must never resurrect a
+  // previously inferred name without explicit player selection.
+  if(value==='named'&&row.assistMode!=='named')row.assist='';
   row.assistMode=value;
   if(value!=='named')row.assist='';
   if(value==='none')mark('assist');
