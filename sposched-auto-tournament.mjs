@@ -7,7 +7,14 @@ import {normalizeTeam} from './sposched-review-core.mjs';
 export function analyzeAutoFixture(snapshot,rows,decisions,seq,winner=''){
  const m=snapshot?.matches?.find(x=>x.seq===Number(seq));
  if(!m)throw Error('試合 #'+seq+' がSSにありません');
- if(m.status==='finished')return {state:'finished',seq};
+ if(m.status==='finished'){
+  const outstanding=(decisions||[]).filter(d=>Number(rows[d.index]?.seq)===Number(seq)&&
+   d.state!=='skipped');
+  if(outstanding.length)return {state:'blocked',seq,
+   reason:'試合 #'+seq+' は終了済みですが、未解決の動画ゴールが'+outstanding.length+
+    '件あります。重複かどうかを確認してください'};
+  return {state:'finished',seq};
+ }
  if(m.status==='waiting'||!m.matchId||!m.leftTeam||!m.rightTeam)
   return {state:'waiting',seq,reason:'対戦チームが確定していません'};
  if(m.status!=='scheduled')throw Error('試合 #'+seq+' の状態を確認してください');
