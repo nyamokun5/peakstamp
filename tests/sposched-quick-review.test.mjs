@@ -355,3 +355,50 @@ test('provisional numbered final remains queued until real UUID appears, even if
  const [next]=prepareGoalRows({goals:[g]},populated);
  assert.equal(quickGoalDecisions(populated,[next])[0].state,'ready');
 });
+
+test('same event changed official match UUID requires one deliberate re-acknowledgement',()=>{
+ const old=snap(),rowsBefore=rows(old);
+ const newId='87654321-4321-4321-a321-ba0987654321';
+ const changed=normalizeSpoSnapshot({
+  event_id:E,event:'TEST Sunday',
+  roster:{'チーム1':['西村','佐藤'],'チーム2':['橋本','豊田']},
+  matches:[{seq:1,match_id:newId,left_team:'チーム1',right_team:'チーム2',
+   left_score:0,right_score:0,goals:[]}]
+ });
+ const refreshed=preserveReviewRows(rows(changed),rowsBefore,{
+  sameEvent:true,snapshot:changed
+ });
+ assert.equal(refreshed[0].fixtureIdentityChanged,true);
+ assert.equal(quickGoalDecisions(changed,refreshed)[0].state,'attention');
+ assert.match(quickGoalDecisions(changed,refreshed)[0].reason,/試合ID/);
+ assert.equal(prepareQuickGoalBatch(changed,refreshed).payload?.operations.length,1);
+ assert.equal(quickGoalDecisions(changed,[refreshed[0]])[0].state,'attention');
+ editQuickGoalField(changed,refreshed[0],'match','1');
+ assert.equal(refreshed[0].fixtureIdentityChanged,false);
+ assert.equal(refreshed[0].matchGuess.fixtureMatchId,newId);
+ assert.equal(quickGoalDecisions(changed,refreshed)[0].state,'ready');
+ const second=preserveReviewRows(rows(changed),refreshed,{sameEvent:true,snapshot:changed});
+ assert.equal(second[0].fixtureIdentityChanged,false);
+ assert.equal(quickGoalDecisions(changed,second)[0].state,'ready');
+});
+test('waiting slot gaining its very first UUID is not considered a changed fixture',()=>{
+ const id='87654321-4321-4321-a321-ba0987654321';
+ const wait=normalizeSpoSnapshot({event_id:E,matches:[
+  {seq:6,title:'決勝戦',match_id:'',status:'waiting'}],
+  roster:{'チーム1':['西村'],'チーム2':['橋本']}});
+ const detected={id:'g',matchSeq:6,scorer:'西村',assistStatus:'none'};
+ const prior=prepareGoalRows({goals:[detected]},wait);
+ const current=normalizeSpoSnapshot({event_id:E,matches:[
+  {seq:6,title:'決勝戦',match_id:id,status:'scheduled',
+   left_team:'チーム1',right_team:'チーム2'}],
+  roster:{'チーム1':['西村'],'チーム2':['橋本']}});
+ const row=preserveReviewRows(prepareGoalRows({goals:[detected]},current),prior,{
+  sameEvent:true,snapshot:current})[0];
+ assert.equal(row.fixtureIdentityChanged,false);
+ assert.equal(quickGoalDecisions(current,[row])[0].state,'ready');
+});
+test('rare fixture UUID reset prompt exists only when local mismatch has been detected',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(html,/if\(row\.fixtureIdentityChanged===true\)/);
+ assert.match(html,/この試合番号・新しい試合IDを確認する/);
+});
