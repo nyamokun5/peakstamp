@@ -912,7 +912,8 @@ function renderQuick(){
    (snapshot.matches.find(m=>m.seq===Number(item.seq))?
     matchSlotLabel(snapshot.matches.find(m=>m.seq===Number(item.seq))):
     '試合番号：未設定（要選択）')+
-   ' / '+(item.team||'得点チーム未確定')+
+   ' / '+(item.team||(snapshot.playerTeam.get(item.scorer)?
+      snapshot.playerTeam.get(item.scorer)+'（名簿候補）':'得点チーム未確定'))+
    ' / '+(item.source||'動画なし')+' '+(item.time==null?'':item.time+'秒'),'quick-meta'));
   // Original PeakStamp AI wording is displayed even if the official SS
   // player selection has subsequently been corrected. This is display-only.
