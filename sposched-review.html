@@ -343,7 +343,7 @@ import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObser
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
- import {prepareWorkerTournament,workerBatchStorageKey} from './sposched-worker-batch.mjs?v=worker1';
+import {prepareWorkerTournament,workerBatchStorageKey} from './sposched-worker-batch.mjs?v=worker1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
