@@ -73,7 +73,7 @@ await page.route('**/*',async route=>{
  }});
 });
 try{
- await page.goto('http://peakstamp.local/');
+ await page.goto('https://peakstamp.local/');
  await page.selectOption('#ssEnvironment','staging');
  await page.fill('#ssBridgeToken','intercepted-secret-only');
  await page.click('#ssLoadEvents');
@@ -81,9 +81,7 @@ try{
  await page.locator('#workerBatchArea').waitFor({state:'visible'});
  assert.equal(await page.locator('#workerBatchRun').isEnabled(),true);
  await page.click('#workerBatchRun');
- await page.waitForTimeout(600);
- console.log('TEST batch initial',JSON.stringify({status:await page.locator('#workerBatchStatus').innerText(),starts,decisions,statusCalls,otherWrites}));
- await page.locator('#workerBatchDecision').waitFor({state:'visible',timeout:6000});
+ await page.locator('#workerBatchDecision').waitFor({state:'visible'});
  assert.match(await page.locator('#workerBatchQuestion').innerText(),/0 - 0/);
  assert.equal(starts,1);assert.equal(decisions,0);
  await page.selectOption('#workerBatchWinner','draw');
