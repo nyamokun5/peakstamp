@@ -1040,6 +1040,14 @@ $('quickExecute').addEventListener('click',()=>{
 
 
 const autoWinnerChoices=new Map();
+function autoWinnerFor(seq){
+ const saved=autoWinnerChoices.get(seq);
+ const match=snapshot?.matches?.find(m=>m.seq===Number(seq));
+ if(!saved||!match||saved.eventId!==snapshot.eventId||saved.matchId!==match.matchId)return '';
+ const projected=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),seq,'');
+ return projected.state==='winner-needed'&&projected.left===saved.left&&
+  projected.right===saved.right?saved.winner:'';
+}
 let autoBusy=false,autoProblemSeq=null,autoUnsafeStop=false;
 function autoStep(message,completed=0){
  $('autoProgress').hidden=false;
@@ -1073,7 +1081,7 @@ function renderAutoSummary(){
   let unfinished=0;
   for(const seq of [1,2,3,4]){
    const m=snapshot.matches.find(x=>x.seq===seq);
-   const p=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),seq,autoWinnerChoices.get(seq)||'');
+   const p=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),seq,autoWinnerFor(seq));
    const line=p.state==='finished'?'✓ 終了':
     p.state==='waiting'?'⏳ 対戦待ち':
     p.state==='blocked'?'⚠ 修正が必要':
@@ -1107,7 +1115,7 @@ async function autoRegisterTournament(){
    if(fresh.eventId!==eventId)throw Error('SSイベントが変更されました');
    snapshot=fresh;rebuild({preserveEdits:true});
    const plan=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),
-     seq,autoWinnerChoices.get(seq)||'');
+     seq,autoWinnerFor(seq));
    if(plan.state==='finished'){
     completed++;autoStep('試合 #'+seq+' は終了済みです',completed);continue;
    }
@@ -1185,10 +1193,10 @@ async function autoRegisterTournament(){
    const result=await postStaging('/staging/execute',{
     ...action,preview_token:preview.preview_token,confirm:'TEST-ONLY WRITE'});
    assertFinished(action,result);
-   autoUnsafeStop=false;
    const next=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
    if(next.eventId!==eventId)throw Error('結果確定後のイベントが変更されました');
    snapshot=next;rebuild({preserveEdits:true});
+   autoUnsafeStop=false;
    completed++;
    autoStep('✓ 試合 #'+seq+' の得点と勝敗を照合しました',completed);
   }
@@ -1214,7 +1222,14 @@ $('autoResume').addEventListener('click',()=>{
   if(!['left','right'].includes(winner)){
    $('autoIssue').textContent='勝者を選んでください';return;
   }
-  autoWinnerChoices.set(autoProblemSeq,winner);
+  const current=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),autoProblemSeq);
+  const selected=snapshot.matches.find(m=>m.seq===autoProblemSeq);
+  if(current.state!=='winner-needed'||!selected){
+   $('autoIssue').textContent='スコアが変わりました。最新データを再取得して確認してください';return;
+  }
+  autoWinnerChoices.set(autoProblemSeq,{
+   winner,eventId:snapshot.eventId,matchId:selected.matchId,left:current.left,right:current.right
+  });
  }
  $('autoConflict').hidden=true;
  autoRegisterTournament();
