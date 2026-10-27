@@ -55,7 +55,7 @@ try{
  assert.equal(await page.locator('#autoPanel').isVisible(),true);
  assert.equal(await page.locator('#autoRun').isEnabled(),true);
  assert.equal(writes,0);assert.equal(previews,0);
- await page.locator('#individualFinishTools summary').click();
+ await page.locator('#individualFinishTools > summary').click();
  await page.locator('#finishPanel').waitFor({state:'visible'});
  assert.match(await page.locator('#flowGuide').innerText(),/得点と勝敗をまとめて登録/);
  assert.equal(await page.locator('#finishPreview').count(),0);
