@@ -9,6 +9,8 @@ export function finishAction(loaded,latest,seq,winner){
  const automatic=m.leftScore>m.rightScore?'left':m.leftScore<m.rightScore?'right':null;
  if(!automatic&&!['left','right','draw'].includes(winner))
   fail('同点です。PKなどで決めた勝者、または引き分けを選択してください');
+ if(!automatic&&winner==='draw'&&Number(seq)<=2)
+  fail('準決勝は勝ち上がりチームを選択してください。引き分け終了は3位決定戦・決勝のみです');
  if(automatic&&winner&&winner!==automatic)fail('勝者がスコアと一致しません');
  return {action:'finish',match_id:matchId,event_id:latest.eventId,seq:Number(seq),
   left_score:m.leftScore,right_score:m.rightScore,winner:automatic||winner};
