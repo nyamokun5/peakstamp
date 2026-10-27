@@ -25,6 +25,9 @@ export function normalizeSpoSnapshot(raw){
   string(eventName.match(/\bvs\.?\s+(.+?)\s*$/i)?.[1]):'';
  const matches=numbered.map(m=>({
   seq:number(m.seq),matchId:string(m.match_id),title:string(m.title||'#'+m.seq),
+  // seq is the organizer-assigned video/fixture number; matchId is the
+  // official backend UUID, independent from the current team's pairing.
+  status:string(m.status||''),
   leftTeam:string(m.left_team||''),
   rightTeam:string(m.right_team||opponentFromTitle||''),
   inferredRightTeam:!string(m.right_team)&&Boolean(opponentFromTitle),
@@ -91,11 +94,18 @@ export function inferMatchFromCommentary(goal,snapshot){
   return actual.sort().join('::')===pair.slice().sort().join('::');
  }):[];
  const commentary=string(goal?.matchLabel||[goal?.teamA,goal?.teamB].filter(Boolean).join('対'));
- // Explicitly reviewed matchSeq wins; still surface a mismatch for review.
- if(direct)return {seq:direct.seq,source:'PSで指定済みの試合番号',confidence:'high',
-  evidence:commentary,ambiguous:false,
-  conflict:pairMatches.length>0&&!pairMatches.some(m=>m.seq===direct.seq),
-  candidates:pairMatches.map(m=>m.seq)};
+ // A video-import matchSeq is the stable fixture slot, including the third-
+ // place match and final BEFORE either team's identity is known. Do not
+ // recalculate the match ID from the spoken Team1 vs Team2 pair.
+ // Preserve a team-pair mismatch as an informational flag when both official
+ // opponents are already known; the organizer can verify the video number.
+ if(direct)return {seq:direct.seq,
+  source:'PeakStampの試合番号 #'+direct.seq+' → SS試合枠 #'+direct.seq,
+  confidence:'high',evidence:commentary,ambiguous:false,
+  conflict:!!(direct.leftTeam&&direct.rightTeam&&pairMatches.length>0&&
+    !pairMatches.some(m=>m.seq===direct.seq)),
+  candidates:pairMatches.map(m=>m.seq),
+  fixtureMatchId:direct.matchId||null};
  if(pairMatches.length===1)return {seq:pairMatches[0].seq,
   source:'実況の対戦宣言 '+(commentary||pair.join('対')),confidence:'high',
   evidence:commentary,ambiguous:false,conflict:false,candidates:[pairMatches[0].seq]};
