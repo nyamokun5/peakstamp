@@ -54,11 +54,16 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
  if(selected.length>20)fail('高速登録は最大20ゴールです');
  const operations=[];
  for(const seq of [1,2,3,4]){
-  operations.push(...selected.filter(s=>s.seq===seq));
+  const fixture=matches.find(m=>m.seq===seq);
+  const expected_match_id=UUID.test(fixture.matchId||'')?fixture.matchId:null;
+  if(fixture.status==='scheduled'&&!expected_match_id)
+   fail('試合 #'+seq+' の正式なmatch_idを取得できません');
+  operations.push(...selected.filter(s=>s.seq===seq)
+   .map(goal=>({...goal,expected_match_id})));
   const winner=winnerFor(seq)||'auto';
   if(!['auto','left','right','draw'].includes(winner)||
      seq<3&&winner==='draw')fail('試合 #'+seq+' の勝敗指定が不正です');
-  operations.push({seq,action:'finish',winner});
+  operations.push({seq,action:'finish',winner,expected_match_id});
  }
  return {event_id:snapshot.eventId,request_id:requestId,
   confirm:'TEST-ONLY BATCH WRITE',operations};
