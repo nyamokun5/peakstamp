@@ -78,7 +78,7 @@ test('settings and match result pages instruct returning to original tab, not re
  }
  const peakstamp=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.match(peakstamp,/reset-goals\.html\?v=reset59&returnTab=1/);
- assert.match(peakstamp,/sposched-review\.html\?v=finish-confirm1&returnTab=1/);
+ assert.match(peakstamp,/sposched-review\.html\?v=guided-ss1&returnTab=1/);
 });
 
 test('PeakStamp settings render in parent document so no page navigation resets imported videos',()=>{
