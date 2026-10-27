@@ -116,15 +116,18 @@ try {
  assert.deepEqual(order,['finish#1','finish#2','goal#3','finish#3']);
  assert.equal(await page.locator('#autoProgressBar').getAttribute('max'),'4');
  assert.match(await page.locator('#autoCount').innerText(),/3 \/ 4/);
- // Tie in the final is the only human input before the remaining result write.
- await page.selectOption('#autoWinner','right');
+ // A tied final may be closed as a draw. No fake winner is required.
+ assert.equal(await page.locator('#autoWinner option[value="draw"]').isEnabled(),true);
+ await page.selectOption('#autoWinner','draw');
  await page.click('#autoResume');
  await page.waitForFunction(()=>document.getElementById('autoStage').textContent.includes('全4試合'));
  assert.equal(finishWrites,4);assert.equal(goalWrites,1);
- assert.equal(matches[3].winner,'right');
+ // Old flow signed the same goal twice; this flow signs it only once.
+ assert.equal(previews,5); // 4 match finishes + 1 goal preview
+ assert.equal(matches[3].winner,'draw');
  assert.deepEqual(order,['finish#1','finish#2','goal#3','finish#3','finish#4']);
  assert.equal(await page.locator('#autoRun').isDisabled(),true);
  assert.deepEqual(errors,[]);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- console.log('PASS: one approval -> two semifinal results -> official refresh -> third-place goal/result -> final tie winner; progress, no hidden duplicate confirmation, no production traffic');
+ console.log('PASS: one approval -> two semifinal results -> third-place goal/result -> drawn final; one signed preview per goal, progress, zero production traffic');
 }finally{await browser.close()}

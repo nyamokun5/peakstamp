@@ -46,3 +46,23 @@ test('unassigned video goals are detected and cannot vanish from a finished brac
  for(const m of s.matches)m.status='finished';
  assert.deepEqual(unassignedGoalDecisions(s,rows,decisions).map(x=>x.index),[0,1]);
 });
+
+test('semifinal ties prohibit draw; third-place and final ties accept draw',()=>{
+ const s=snap();
+ for(const seq of [1,2]){
+  assert.equal(analyzeAutoFixture(s,[],[],seq).state,'winner-needed');
+  assert.equal(analyzeAutoFixture(s,[],[],seq).drawAllowed,false);
+  assert.equal(analyzeAutoFixture(s,[],[],seq,'draw').state,'winner-needed');
+ }
+ for(const seq of [3,4]){
+  const plan=analyzeAutoFixture(s,[],[],seq,'draw');
+  assert.equal(plan.state,'ready');
+  assert.equal(plan.winner,'draw');
+  assert.equal(plan.left,plan.right);
+  assert.equal(analyzeAutoFixture(s,[],[],seq).drawAllowed,true);
+ }
+});
+test('draw cannot contradict a non-tied final score',()=>{
+ const s=snap();s.matches[3].leftScore=2;
+ assert.equal(analyzeAutoFixture(s,[],[],4,'draw').state,'blocked');
+});

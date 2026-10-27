@@ -43,3 +43,14 @@ test('a partial, ambiguous, wrong-environment or wrong-score finish response can
  for(const bad of [{...r,environment:'production'},{...r,readback:{...r.readback,verified:false}},
  {...r,readback:{...r.readback,left_score:2}},{...r,operation:'create'}])assert.throws(()=>assertFinished(a,bad));
 });
+
+test('finishAction allows drawn placement matches but never a drawn semifinal',()=>{
+ const third=snap();third.matches[0].rightScore=1;
+ assert.equal(finishAction(third,third,3,'draw').winner,'draw');
+ const final=snap();final.matches[0].seq=4;final.matches[0].rightScore=1;
+ assert.equal(finishAction(final,final,4,'draw').winner,'draw');
+ for(const seq of [1,2]){
+  const semi=snap();semi.matches[0].seq=seq;semi.matches[0].rightScore=1;
+  assert.throws(()=>finishAction(semi,semi,seq,'draw'),/準決勝/);
+ }
+});

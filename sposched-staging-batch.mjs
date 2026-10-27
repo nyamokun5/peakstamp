@@ -102,3 +102,49 @@ export async function executeReviewedBatch({entries,resolveAction,previewAction,
  }
  return completed;
 }
+
+/** One-tap tournament path: one signed preview per goal (not two).
+ * The operator has already reviewed the on-screen candidate and approved the
+ * entire tournament. Each goal still resolves fresh official IDs, receives its
+ * own signed preview, logs an attempt before the write, and requires readback.
+ * No mutation runs concurrently, and uncertain writes are NEVER retried.
+ */
+export async function executeReviewedBatchOnce({selected,resolveAction,previewAction,
+ executeAction,beforeExecute=async()=>{},afterExecute=async()=>{},onProgress=()=>{}}){
+ if(!Array.isArray(selected)||selected.length<1||selected.length>20)
+  abort('登録するゴールがありません');
+ const completed=[];
+ for(let i=0;i<selected.length;i++){
+  const item=selected[i];
+  try{
+   if(item.operation?.action!=='record_goal')
+    abort('自動登録は新規ゴールのみ対応します');
+   onProgress({phase:'checking',current:i+1,total:selected.length,item,completed:[...completed]});
+   const action=await resolveAction(item.operation); // validates actual team & player IDs
+   if(action.action!=='create'||!action.match_id||!['left','right'].includes(action.side)||
+      !action.scorer_id)
+    abort('正式な得点者・試合情報が確認できません');
+   const signed=assertPreview(await previewAction(action));
+   if(signed.plan.action!=='create'||signed.plan.match_id!==action.match_id||
+      signed.plan.side!==action.side)
+    abort('安全確認と選択中の試合・得点側が一致しません');
+   // The original operator-reviewed goal must remain the same.
+   // Resolve again only if the result is in doubt, never automatically retry.
+   await beforeExecute(item,action);
+   onProgress({phase:'sending',current:i+1,total:selected.length,item,completed:[...completed]});
+   const result=await executeAction({...action,
+    preview_token:signed.preview_token,confirm:'TEST-ONLY WRITE'});
+   if(result?.write_sent!==true||result?.readback?.verified!==true)
+    abort('送信結果を照合できません。再送せずSS明細を確認してください');
+   const confirmedItem={index:item.index,operation:item.operation,readback:result.readback};
+   completed.push(confirmedItem);
+   await afterExecute(item,result);
+   onProgress({phase:'verified',current:i+1,total:selected.length,item,completed:[...completed]});
+  }catch(error){
+   onProgress({phase:'failed',current:i+1,total:selected.length,item,
+    completed:[...completed],message:error.message});
+   throw new BatchStopped(error.message,completed,item.index);
+  }
+ }
+ return completed;
+}

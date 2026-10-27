@@ -36,9 +36,13 @@ export function analyzeAutoFixture(snapshot,rows,decisions,seq,winner=''){
   if(team===side[0])left++;else right++;
  }
  const isTie=left===right;
- if(isTie&&!['left','right'].includes(winner))return {
-  state:'winner-needed',seq,left,right,ready,
-  reason:'試合 #'+seq+' は '+left+' - '+right+' の同点です。PK等の勝者を指定してください'};
+ const drawAllowed=Number(seq)===3||Number(seq)===4;
+ const choices=drawAllowed?['left','right','draw']:['left','right'];
+ if(isTie&&!choices.includes(winner))return {
+  state:'winner-needed',seq,left,right,ready,drawAllowed,
+  reason:drawAllowed
+   ?'試合 #'+seq+' は '+left+' - '+right+' の同点です。引き分け、またはPK等の勝者を選んでください'
+   :'試合 #'+seq+' は '+left+' - '+right+' の同点です。準決勝の勝ち上がりチームを選んでください'};
  const side=isTie?winner:left>right?'left':'right';
  if(winner&&winner!==side)
   return {state:'blocked',seq,reason:'勝者が登録予定のスコアと一致しません'};
