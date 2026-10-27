@@ -23,7 +23,7 @@ export function analyzeAutoFixture(snapshot,rows,decisions,seq,winner=''){
  for(const decision of selected.filter(d=>d.state==='ready')){
   const row=rows[decision.index];ready.push(row);
   const side=[normalizeTeam(m.leftTeam),normalizeTeam(m.rightTeam)];
-  const team=normalizeTeam(row.team);
+  const team=normalizeTeam(row.team||snapshot.playerTeam?.get(row.scorer)||'');
   if(!team||side[0]===side[1]||!side.includes(team))
    return {state:'blocked',seq,reason:'得点者の得点チームが正式な対戦チームと一致しません'};
   if(team===side[0])left++;else right++;
