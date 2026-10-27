@@ -1249,7 +1249,10 @@ async function autoRegisterTournament(){
     if(fresh.eventId!==eventId)throw Error('SSイベントが変更されました');
     snapshot=fresh;rebuild({preserveEdits:true});
    }
-   snapshotFresh=false;
+   // Keep the current snapshot across already-finished fixtures when
+   // resuming #4; a finished slot cannot be mutated by this flow.
+   // Every new goal and result still has fresh server-side validation.
+   snapshotFresh=true;
    const plan=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),
      seq,autoWinnerFor(seq));
    if(plan.state==='finished'){
