@@ -423,3 +423,52 @@ test('preserved goal correction target must exist in latest official match',()=>
  const removed=preserveReviewRows(prepareGoalRows(exported(),newer),prior,{sameEvent:true,snapshot:newer});
  assert.equal(removed[1].updateGoalId,'');
 });
+
+test('4-team knockout match numbers bind VIDEO to third-place and final UUID before teams exist',()=>{
+ const thirdId='12345678-1234-4234-9234-1234567890ab';
+ const finalId='87654321-4321-4321-a321-ba0987654321';
+ const snap=normalizeSpoSnapshot({event_id:'eeaed234-e9f0-4999-b05e-ec01c7b656fc',
+  event:'Shoot Sunday four-team',matches:[
+   {seq:1,title:'予選1',left_team:'チーム1',right_team:'チーム2'},
+   {seq:2,title:'予選2',left_team:'チーム3',right_team:'チーム4'},
+   {seq:5,title:'3位決定戦',match_id:thirdId,status:'waiting',left_team:null,right_team:null},
+   {seq:6,title:'決勝戦',match_id:finalId,status:'waiting',left_team:null,right_team:null}
+  ],roster:{'チーム1':['西村','佐藤'],'チーム2':['橋本'],
+   'チーム3':['豊田'],'チーム4':['山田']}});
+ const goals=[
+  {id:'video-third',matchSeq:5,teamA:'1',teamB:'2',
+   scorer:'西村',assistStatus:'none',source:{name:'third.mov'}},
+  {id:'video-final',matchSeq:6,teamA:'3',teamB:'4',
+   scorer:'山田',assistStatus:'none',source:{name:'final.mov'}}
+ ];
+ const rows=prepareGoalRows({goals},snap);
+ assert.deepEqual(rows.map(row=>row.seq),[5,6]);
+ assert.deepEqual(rows.map(row=>row.matchGuess.fixtureMatchId),[thirdId,finalId]);
+ assert.deepEqual(rows.map(row=>row.matchGuess.conflict),[false,false]);
+ assert.equal(snap.matches.find(m=>m.seq===5).status,'waiting');
+ assert.equal(snap.matches.find(m=>m.seq===6).title,'決勝戦');
+ assert.equal(rows[0].matchGuess.confidence,'high',
+  'initial file match number is the primary identity, not guessed opponents');
+});
+test('after teams are assigned the same goal stays on original numbered final, not any rematch pairing',()=>{
+ const eventId='eeaed234-e9f0-4999-b05e-ec01c7b656fc';
+ const matchId='87654321-4321-4321-a321-ba0987654321';
+ const waiting=normalizeSpoSnapshot({event_id:eventId,matches:[
+  {seq:1,left_team:'チーム1',right_team:'チーム2'},
+  {seq:6,title:'決勝戦',match_id:matchId,status:'waiting',left_team:null,right_team:null}
+ ],roster:{'チーム1':['西村'],'チーム2':['橋本']}});
+ const goal={id:'g-final',source:{name:'FINAL.MOV'},matchSeq:6,
+  scorer:'西村',assistStatus:'none',teamA:'1',teamB:'2'};
+ const before=prepareGoalRows({goals:[goal]},waiting)[0];
+ const completed=normalizeSpoSnapshot({event_id:eventId,matches:[
+  {seq:1,left_team:'チーム1',right_team:'チーム2'},
+  {seq:6,title:'決勝戦',match_id:matchId,status:'scheduled',left_team:'チーム1',right_team:'チーム2'}
+ ],roster:{'チーム1':['西村'],'チーム2':['橋本']}});
+ const after=prepareGoalRows({goals:[goal]},completed)[0];
+ assert.equal(before.seq,6);
+ assert.equal(after.seq,6);
+ assert.equal(after.matchGuess.fixtureMatchId,matchId);
+ assert.equal(after.team,'チーム1');
+ assert.equal(after.matchGuess.conflict,false,
+  'a repeated team pairing must never override an explicit assigned fixture number');
+});

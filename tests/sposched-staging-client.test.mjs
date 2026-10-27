@@ -63,3 +63,15 @@ test('review list explicitly disables score result writes and unrelated operatio
  assert.deepEqual(shown.map(x=>x.enabled),[true,false,true]);
  assert.throws(()=>toStagingAction(snapshot,ops.operations[1],match()),/行いません/);
 });
+
+test('official final fixture number must match PS-assigned seq before a TEST write',()=>{
+ const op={action:'record_goal',args:{
+  event_id:eventId,seq:6,team:'チーム1',scorer:'テスト 太郎'}};
+ const correct=match();correct.number=6;correct.title='決勝戦';
+ assert.equal(toStagingAction(snapshot,op,correct).match_id,matchId);
+ const swapped=match();swapped.number=5;swapped.title='3位決定戦';
+ assert.throws(()=>toStagingAction(snapshot,op,swapped),/試合番号/);
+ const waiting=match();waiting.number=6;waiting.status='waiting';
+ waiting.left.name='';waiting.right.name='';
+ assert.throws(()=>toStagingAction(snapshot,op,waiting),/対戦相手/);
+});
