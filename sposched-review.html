@@ -45,7 +45,15 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 .quick-ready{color:#a4f4cc}.quick-held{color:#ffcd9a}
 .quick-summary{font-weight:700;margin:10px 0 4px}
 .quick-main{width:100%;font-size:15px;margin-top:9px}
-.quick-goal button{font-size:11px;min-height:32px;padding:5px 9px}
+.quick-goal button{font-size:12px;min-height:30px;padding:5px 10px}
+.quick-goal-top strong{font-size:15px;line-height:1.4}
+.quick-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:9px 0 5px}
+.quick-field{display:flex;flex-direction:column;min-width:0;gap:4px;font-size:11px;color:#c5e0e5}
+.quick-field select{width:100%;min-width:0;font-size:14px;min-height:42px;padding:8px 7px;background:#0a2131;color:#e7f7f7;border:1px solid #638391;border-radius:8px}
+.quick-held-note{font-size:12px;color:#ffcd9a;margin:5px 0}
+.quick-exception{margin-top:6px;background:transparent;color:#b7d6da;border-color:#516e7c}
+@media(max-width:420px){.quick-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 #quickReviewText{white-space:pre-wrap;word-break:break-word;background:#102938;border-radius:9px;padding:11px;font-size:12px}
 #quickConfirmPanel{margin:12px 0;padding:12px;border:1px solid #a57f5c;border-radius:12px}
 #quickConfirmPanel[hidden],#quickPanel[hidden],#reviewArea[hidden]{display:none!important}
@@ -123,7 +131,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </section>
 <section class="panel" id="quickPanel" hidden>
  <div class="top"><h2>3. 動画ゴールをまとめてSSへ</h2><span class="step">TEST ONLY</span></div>
- <p>確定済み動画ゴールから登録候補を自動照合します。個別チェック不要です。曖昧な候補・重複・手動入力は自動送信しません。</p>
+ <p>確定済み動画ゴールをまとめて照合します。<strong>表示はアシスト → 得点者</strong>。不明な項目だけ下の選択欄で直せばOK。各ゴールの確認チェックは不要です。重複・未解決ゴールは送信しません。</p>
  <p id="quickSummary" class="quick-summary"></p>
  <div id="quickGoals"></div>
  <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
@@ -205,7 +213,7 @@ import {toStagingAction,writeableReviewOperations} from './sposched-staging-clie
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy} from './sposched-write-journal.mjs?v=ss-recovery2';
-import {quickGoalDecisions,prepareQuickGoalBatch} from './sposched-quick-review.mjs?v=ss-quick2';
+import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField} from './sposched-quick-review.mjs?v=ss-inline1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -707,6 +715,41 @@ async function postStaging(path,payload) {
  return data;
 }
 
+const quickOpenRows=new Set();
+const quickSelect=(row,field,label,options,current,needsReview=false)=>{
+ const wrap=node('label','','quick-field');
+ wrap.append(node('span',label));
+ const menu=document.createElement('select');
+ menu.setAttribute('aria-label','#'+(rows.indexOf(row)+1)+' '+label);
+ const empty=node('option',needsReview?'確認して選択':'選択してください');
+ empty.value='';menu.append(empty);
+ for(const choice of options){
+  const opt=node('option',choice.label);opt.value=String(choice.value);
+  menu.append(opt);
+ }
+ menu.value=needsReview?'':String(current??'');
+ menu.addEventListener('change',()=>{
+  if(!menu.value)return;
+  try{
+   editQuickGoalField(snapshot,row,field,menu.value);
+   touch();
+   renderGoals(); // keep exceptional detail editor in sync with inline edits
+   renderQuick();
+  }catch(e){$('quickStatus').textContent='修正できません：'+e.message;}
+ });
+ wrap.append(menu);
+ return wrap;
+};
+const quickPlayers=(team='')=>{
+ const all=snapshot.players.map(name=>({
+  value:name,label:name+'　'+(snapshot.playerTeam.get(name)||'')
+ }));
+ if(!team)return all;
+ // Relevant team first; never hide a member because the roster is incomplete.
+ return all.sort((a,b)=>
+  Number(normalizeTeam(snapshot.playerTeam.get(b.value)||'')===normalizeTeam(team))-
+  Number(normalizeTeam(snapshot.playerTeam.get(a.value)||'')===normalizeTeam(team)));
+};
 function renderQuick(){
  const active=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
  $('quickPanel').hidden=!active;
@@ -720,29 +763,87 @@ function renderQuick(){
    '件 ／ 重複 '+duplicates+'件'+(other?' ／ その他 '+other+'件':'');
  const container=$('quickGoals');container.replaceChildren();
  for(const item of items){
-  const el=node('div','','quick-goal'),top=node('div','','quick-goal-top');
-  top.append(node('strong','#'+(item.index+1)+' '+(item.scorer||'得点者未確定')+
-    ' → '+item.assist));
+  const row=rows[item.index],el=node('div','','quick-goal'),top=node('div','','quick-goal-top');
+  top.append(node('strong','#'+(item.index+1)+' '+
+    item.assist+' → '+(item.scorer||'得点者未確定')));
   const label=item.state==='ready'?'登録候補':
     item.state==='duplicate'?'重複候補・対象外':
     item.state==='attention'?'要修正':'今回の一括登録から除外';
   top.append(node('span',label,item.state==='ready'?'quick-ready':'quick-held'));
   el.append(top,node('p','試合 #'+(item.seq||'—')+' / '+(item.team||'チーム未確定')+
    ' / '+(item.source||'動画なし')+' '+(item.time==null?'':item.time+'秒'),'quick-meta'));
-  if(item.state!=='ready')el.append(node('p',item.reason,'quick-held'));
-  const edit=node('button',item.state==='ready'?'内容を修正':'このゴールを修正');
-  edit.type='button';
-  edit.addEventListener('click',()=>{
-   $('reviewArea').hidden=false;
-   $('review-goal-'+(item.index+1))?.scrollIntoView({behavior:'smooth',block:'start'});
-  });
-  el.append(edit);container.append(el);
+  const inlineEligible=item.state==='attention'||item.state==='ready';
+  const expanded=item.state==='attention'||quickOpenRows.has(item.key);
+  if(item.state==='attention')el.append(node('p',item.reason,'quick-held-note'));
+  if(expanded&&inlineEligible){
+   const fields=node('div','','quick-fields');
+   const m=snapshot.matches.find(x=>x.seq===Number(row.seq));
+   const matchUncertain=!row.quickReviewedFields?.match&&!row.quickReviewedAll&&
+    (row.matchGuess?.ambiguous||row.matchGuess?.conflict||
+     (row.matchGuess?.confidence!=='high'&&snapshot.matches.length>1));
+   if(snapshot.matches.length>1||!m)fields.append(quickSelect(row,'match','試合',
+    snapshot.matches.map(v=>({value:v.seq,label:'#'+v.seq+' '+v.leftTeam+' vs '+v.rightTeam})),
+    row.seq,Boolean(matchUncertain||!m)));
+   const scorerUncertain=(!row.quickReviewedAll&&!row.quickReviewedFields?.scorer&&
+    row.scorerGuess?.confidence!=='high')||!row.scorer;
+   fields.append(quickSelect(row,'scorer','得点者',
+    quickPlayers(row.team),row.scorer,Boolean(scorerUncertain)));
+   const modeSelect=quickSelect(row,'assistMode','アシスト',
+    [{value:'none',label:'なし'},{value:'named',label:'あり（選手を選ぶ）'},
+     {value:'unknown',label:'未確認'}],
+    row.assistMode,row.assistMode==='unknown');
+   fields.append(modeSelect);
+   if(row.assistMode==='named'){
+    const assistUncertain=!row.quickReviewedAll&&!row.quickReviewedFields?.assist&&
+      row.assistGuess?.confidence!=='high';
+    fields.append(quickSelect(row,'assist','アシストした選手',
+     quickPlayers(row.team),row.assist,Boolean(assistUncertain||!row.assist)));
+   }
+   if(m){
+    const possible=[m.leftTeam,m.rightTeam].filter(Boolean);
+    const teamNeedsSelection=!row.team||!possible.some(t=>normalizeTeam(t)===normalizeTeam(row.team));
+    if(teamNeedsSelection||quickOpenRows.has(item.key))
+     fields.append(quickSelect(row,'team','得点チーム',
+      possible.map(t=>({value:t,label:t})),row.team,teamNeedsSelection));
+   }
+   el.append(fields);
+  }
+  if(item.state!=='ready'&&item.state!=='attention')
+   el.append(node('p',item.reason,'quick-held-note'));
+  if(inlineEligible){
+   if(item.state==='ready'){
+    const edit=node('button',expanded?'簡易編集を閉じる':'修正する','quick-exception');
+    edit.type='button';
+    edit.addEventListener('click',()=>{
+     if(quickOpenRows.has(item.key))quickOpenRows.delete(item.key);
+     else quickOpenRows.add(item.key);
+     renderQuick();
+    });
+    el.append(edit);
+   }else{
+    const detail=node('button','詳細な修正が必要な場合','quick-exception');
+    detail.type='button';
+    detail.addEventListener('click',()=>{
+     $('reviewArea').hidden=false;
+     $('review-goal-'+(item.index+1))?.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+    el.append(detail);
+   }
+  }else{
+   const detail=node('button','詳細を見る','quick-exception');detail.type='button';
+   detail.addEventListener('click',()=>{
+    $('reviewArea').hidden=false;
+    $('review-goal-'+(item.index+1))?.scrollIntoView({behavior:'smooth',block:'start'});
+   });
+   el.append(detail);
+  }
+  container.append(el);
  }
  $('quickPreview').disabled=batchBusy||ready===0;
  if(!quickPrepared){
   $('quickStatus').textContent=ready
-   ?'候補一覧に問題がなければ「登録内容をまとめて確認」を押してください。'
-   :'送信できる動画ゴールがありません。必要な行を修正してください。';
+   ?'登録候補を確認し、「登録内容をまとめて確認」を押してください。各ゴールのチェックは不要です。'
+   :'送信できる動画ゴールがありません。不明な項目をこの一覧で選択してください。';
  }
 }
 $('quickEdit').addEventListener('click',()=>{
@@ -775,8 +876,8 @@ $('quickPreview').addEventListener('click',async()=>{
   $('quickConfirmTitle').textContent='TESTへ'+entries.length+'件の新規ゴールを登録';
   $('quickReviewText').textContent=entries.map((item,i)=>
    (i+1)+'. 試合：'+(item.plan.title||item.action.match_id)+
-   '\n得点：'+(item.plan.after?.scorer||'—')+
-   ' / アシスト：'+(item.plan.after?.assist||'なし')+
+   '\nアシスト → 得点：'+(item.plan.after?.assist||'なし')+
+   ' → '+(item.plan.after?.scorer||'—')+
    '\n得点側：'+item.plan.side+
    (item.plan.warning?'\n⚠ '+item.plan.warning:'')
   ).join('\n\n');
@@ -1036,8 +1137,8 @@ $('batchPreview').addEventListener('click',async()=>{
   $('batchReviewText').textContent=entries.map((e,i)=>(
    (i+1)+'. 試合：'+(e.plan.title||e.action.match_id)+
    '\n操作：'+(e.plan.action==='create'?'新規登録':'登録済みの修正')+
-   '\n得点：'+(e.plan.after?.scorer||'—')+
-   ' / アシスト：'+(e.plan.after?.assist||'なし')+
+   '\nアシスト → 得点：'+(e.plan.after?.assist||'なし')+
+   ' → '+(e.plan.after?.scorer||'—')+
    '\n得点側：'+e.plan.side+
    (e.plan.warning?'\n⚠ '+e.plan.warning:'')
   )).join('\n\n');

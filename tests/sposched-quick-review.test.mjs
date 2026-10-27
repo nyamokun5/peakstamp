@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows}
  from '../sposched-review-core.mjs';
-import {quickGoalDecisions,prepareQuickGoalBatch}
+import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField}
  from '../sposched-quick-review.mjs';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch}
  from '../sposched-staging-batch.mjs';
@@ -152,4 +152,68 @@ test('default UI has no row confirmation and only final explicit TEST submit can
  assert.doesNotMatch(preview,/\$\('batchExecute'\)\.click/);
  assert.match(preview,/\/staging\/preview/);
  assert.match(html,/if\(\$\('ssEnvironment'\)\.value!=='staging'\|\|!loadedFromStagingDirect\)/);
+});
+
+test('compact editing fixes uncertain goal without any per-goal checkbox',()=>{
+ const x=snap(),r=rows(x);
+ r[0].scorer='';r[0].assistMode='unknown';r[0].assist='';
+ assert.equal(quickGoalDecisions(x,r)[0].state,'attention');
+ editQuickGoalField(x,r[0],'scorer','西村');
+ assert.equal(r[0].scorer,'西村');
+ assert.equal(r[0].quickReviewedFields.scorer,true);
+ assert.equal(quickGoalDecisions(x,r)[0].state,'attention','unknown assist still blocked');
+ editQuickGoalField(x,r[0],'assistMode','none');
+ assert.equal(r[0].assistMode,'none');
+ assert.equal(r[0].quickReviewedFields.assist,true);
+ const result=quickGoalDecisions(x,r)[0];
+ assert.equal(result.state,'ready');
+ assert.equal(result.assist,'なし');
+ assert.equal(r[0].confirmed,false,'one final batch approval still required');
+ assert.equal(prepareQuickGoalBatch(x,r).payload.operations.length,2);
+});
+test('changing match does not silently approve an uncertain scorer',()=>{
+ const x=snap(),r=rows(x);
+ r[0].scorerGuess={confidence:'medium'};
+ editQuickGoalField(x,r[0],'match',1);
+ assert.equal(r[0].quickReviewedFields.match,true);
+ assert.equal(r[0].quickReviewedFields.scorer,undefined);
+ assert.equal(quickGoalDecisions(x,r)[0].state,'attention');
+ editQuickGoalField(x,r[0],'scorer','西村');
+ assert.equal(quickGoalDecisions(x,r)[0].state,'ready');
+});
+test('assist player is not silently assumed, and cross-team selection fails closed',()=>{
+ const x=snap(),r=rows(x);
+ r[0].assistMode='unknown';
+ editQuickGoalField(x,r[0],'assistMode','named');
+ assert.equal(quickGoalDecisions(x,r)[0].state,'attention');
+ editQuickGoalField(x,r[0],'assist','佐藤');
+ assert.equal(quickGoalDecisions(x,r)[0].state,'ready');
+ editQuickGoalField(x,r[0],'assist','橋本');
+ assert.equal(quickGoalDecisions(x,r)[0].state,'attention');
+ assert.match(quickGoalDecisions(x,r)[0].reason,/得点チーム/);
+});
+test('team mismatch, invalid roster names and unknown fields never become sendable',()=>{
+ const x=snap(),r=rows(x);
+ editQuickGoalField(x,r[0],'team','チーム2');
+ assert.equal(quickGoalDecisions(x,r)[0].state,'attention');
+ assert.match(quickGoalDecisions(x,r)[0].reason,/得点チーム/);
+ assert.throws(()=>editQuickGoalField(x,r[0],'scorer','不正選手'),/名簿/);
+ assert.throws(()=>editQuickGoalField(x,r[0],'match',99),/試合番号/);
+ assert.throws(()=>editQuickGoalField(x,r[0],'team','チーム9'),/得点チーム/);
+ assert.throws(()=>editQuickGoalField(x,r[0],'assistMode','nothing'),/アシスト/);
+ assert.throws(()=>editQuickGoalField(x,r[0],'whoops','西村'),/未知/);
+ const restored=editQuickGoalField(x,r[0],'scorer','橋本');
+ assert.equal(restored.team,'チーム2');
+ assert.equal(quickGoalDecisions(x,r)[0].state,'attention',
+  'cross-team selected assist is not permitted');
+});
+test('compact UI renders assist -> scorer in review and pre-send summary',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(html,/item\.assist\+' → '\+\(item\.scorer\|\|'得点者未確定'\)/);
+ assert.match(html,/\\nアシスト → 得点：/);
+ assert.match(html,/const quickOpenRows=new Set\(\)/);
+ assert.match(html,/editQuickGoalField\(snapshot,row,field,menu\.value\)/);
+ assert.match(html,/quick-field/);
+ assert.match(html,/renderGoals\(\); \/\/ keep exceptional detail editor in sync/);
+ assert.doesNotMatch(html,/top\.append\(node\('strong','#'\+\(item\.index\+1\)\+' '\+\(item\.scorer/);
 });

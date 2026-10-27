@@ -11,7 +11,8 @@ export function quickGoalDecisions(snapshot,rows) {
   const g=row.goal||{};
   const item={index,key:row.key,source:g.source?.name||'',time:g.goalTimeSeconds??null,
     seq:row.seq,team:row.team||'',scorer:row.scorer||'',
-    assist:row.assistMode==='named'?row.assist||'':'なし',
+    assist:row.assistMode==='named'?row.assist||'アシスト未確定':
+     row.assistMode==='none'?'なし':'アシスト未確認',
     state:'attention',reason:'確認が必要です'};
   if(g.manual)return {...item,state:'manual',reason:'手動入力は詳細モードで扱います'};
   if(row.updateGoalId)return {...item,state:'patch',reason:'既存ゴールの修正は詳細モードで扱います'};
@@ -21,6 +22,13 @@ export function quickGoalDecisions(snapshot,rows) {
   if(row.guest)return {...item,reason:'ゲスト得点は現在のTEST一括登録で対応していません'};
   const issue=validateGoalRow({...row,confirmed:true},snapshot);
   if(issue)return {...item,reason:issue};
+  const team=row.team||snapshot.playerTeam.get(row.scorer)||'';
+  const scorerTeam=snapshot.playerTeam.get(row.scorer);
+  if(team&&scorerTeam&&normalizeTeam(team)!==normalizeTeam(scorerTeam))
+   return {...item,reason:'得点者と得点チームが一致しません'};
+  const assistTeam=row.assistMode==='named'?snapshot.playerTeam.get(row.assist):null;
+  if(team&&assistTeam&&normalizeTeam(team)!==normalizeTeam(assistTeam))
+   return {...item,reason:'アシスト者と得点チームが一致しません'};
   // An edit to an unrelated field must never clear AI ambiguity.
   // Only the field actually edited (or an explicit whole-row review)
   // can satisfy that field's human verification requirement.
@@ -55,6 +63,52 @@ export function quickGoalDecisions(snapshot,rows) {
  }
  return decisions;
 }
+
+/** Compact review corrections approve ONLY the selected field.
+ * Final batch approval remains a separate explicit user click.
+ */
+export function editQuickGoalField(snapshot,row,field,value){
+ if(!snapshot||!row||row.goal?.manual||row.updateGoalId||row.guest)
+  throw Error('このゴールは詳細編集が必要です');
+ const mark=name=>{
+  row.quickReviewedFields={...(row.quickReviewedFields||{}),[name]:true};
+ };
+ row.quickEdited=true;row.quickReviewedAll=false;row.confirmed=false;
+ row.duplicateApproved=false;
+ if(field==='match'){
+  const seq=Number(value),m=snapshot.matches.find(x=>x.seq===seq);
+  if(!m)throw Error('試合番号が正しくありません');
+  row.seq=seq;row.quickReviewedFields={match:true};
+  if(row.team&&![normalizeTeam(m.leftTeam),normalizeTeam(m.rightTeam)]
+   .includes(normalizeTeam(row.team)))row.team='';
+ }else if(field==='scorer'){
+  if(!snapshot.players.includes(value))throw Error('得点者が名簿にいません');
+  row.scorer=value;mark('scorer');
+  const m=snapshot.matches.find(x=>x.seq===Number(row.seq));
+  const team=snapshot.playerTeam.get(value);
+  if(m&&team&&[normalizeTeam(m.leftTeam),normalizeTeam(m.rightTeam)]
+   .includes(normalizeTeam(team)))row.team=team;
+ }else if(field==='assistMode'){
+  if(!['none','named','unknown'].includes(value))throw Error('不正なアシスト状態です');
+  // Switching from "unknown/no assist" to "named" must never resurrect a
+  // previously inferred name without explicit player selection.
+  if(value==='named'&&row.assistMode!=='named')row.assist='';
+  row.assistMode=value;
+  if(value!=='named')row.assist='';
+  if(value==='none')mark('assist');
+  else row.quickReviewedFields={...(row.quickReviewedFields||{}),assist:false};
+ }else if(field==='assist'){
+  if(!snapshot.players.includes(value))throw Error('アシスト者が名簿にいません');
+  row.assist=value;row.assistMode='named';mark('assist');
+ }else if(field==='team'){
+  const m=snapshot.matches.find(x=>x.seq===Number(row.seq));
+  if(!m||![normalizeTeam(m.leftTeam),normalizeTeam(m.rightTeam)]
+   .includes(normalizeTeam(value)))throw Error('この試合の得点チームを選択してください');
+  row.team=value;mark('team');
+ }else throw Error('未知の入力項目です');
+ return row;
+}
+
 export function prepareQuickGoalBatch(snapshot,rows){
  const decisions=quickGoalDecisions(snapshot,rows);
  const selected=decisions.filter(x=>x.state==='ready');
