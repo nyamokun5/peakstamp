@@ -834,17 +834,35 @@ const quickSelect=(row,field,label,options,current,needsReview=false,aiHint='')=
   const opt=node('option',choice.label);opt.value=String(choice.value);
   menu.append(opt);
  }
- menu.value=needsReview?'':String(current??'');
- menu.addEventListener('change',()=>{
-  if(!menu.value)return;
+ const validCandidate=field==='match'&&current!=null&&
+   options.some(opt=>String(opt.value)===String(current));
+ menu.value=validCandidate?String(current):needsReview?'':String(current??'');
+ const confirmField=value=>{
   try{
-   editQuickGoalField(snapshot,row,field,menu.value);
+   editQuickGoalField(snapshot,row,field,value);
    touch();
    renderGoals(); // keep exceptional detail editor in sync with inline edits
    renderQuick();
   }catch(e){$('quickStatus').textContent='修正できません：'+e.message;}
- });
+ };
+ menu.addEventListener('change',()=>{if(menu.value)confirmField(menu.value)});
  wrap.append(menu);
+ // The proposed numbered fixture must never disappear merely because the
+ // video inference needs a human check. Display it, but do not auto-approve.
+ if(validCandidate&&needsReview){
+  wrap.append(node('p','動画からの候補：試合 #'+current+
+    '（まだ確定していません）','match-proposal'));
+  const verify=node('button','この試合 #'+current+' で確定','confirm-candidate');
+  verify.type='button';
+  verify.addEventListener('click',()=>confirmField(String(current)));
+  wrap.append(verify);
+ }else if(field==='match'&&needsReview&&!validCandidate){
+  const candidates=(row.matchGuess?.candidates||[]).filter(n=>
+    options.some(opt=>String(opt.value)===String(n)));
+  wrap.append(node('p',candidates.length?
+   '候補：'+candidates.map(n=>'#'+n).join(' / ')+'。正しい試合を選んでください。':
+   '試合番号が未設定です。動画の試合番号を選んでください。','match-proposal'));
+ }
  return wrap;
 };
 const quickPlayers=(team='')=>{
@@ -868,21 +886,21 @@ function renderQuick(){
  const duplicates=items.filter(x=>x.state==='duplicate').length;
  const waiting=items.filter(x=>x.state==='waiting').length;
  const other=items.length-ready-attention-duplicates-waiting;
- $('quickSummary').textContent='登録候補 '+ready+'件 ／ 対戦待ち '+waiting+'件 ／ 要修正 '+attention+
-   '件 ／ 重複 '+duplicates+'件'+(other?' ／ その他 '+other+'件':'');
+ $('quickSummary').textContent=(attention||duplicates?
+   '先に確認が必要：'+(attention+duplicates)+'件。下の候補を修正してください。':
+   'ゴール候補 '+items.length+'件を確認してください。')+
+   '　｜　登録可能 '+ready+'件・対戦待ち '+waiting+'件'+
+   (other?'・対象外 '+other+'件':'');
  const container=$('quickGoals');container.replaceChildren();
- // These are video goal COUNTS per assigned match number, not official scores.
- const groups=goalCandidatesByMatchNumber(snapshot,rows);
- if(groups.length){
-  const summary=node('div','','registered-goals');
-  summary.append(node('strong','試合番号別・動画ゴール候補数（正式スコアではありません）'));
-  for(const g of groups)summary.append(node('p',
-   matchSlotLabel(snapshot.matches.find(m=>m.seq===g.seq))+'：'+g.goals+'件'+
-   (g.teamReady?'':'（対戦確定まで送信保留）'),'details'));
-  container.append(summary);
- }
- for(const item of items){
+ // Fixes are first; already reviewed goals follow. Video counts are reference
+ // information only and appear after the actual items, not before them.
+ const rank={attention:0,manual:1,patch:1,duplicate:1,waiting:2,ready:3,skipped:4};
+ const displayItems=items.slice().sort((a,b)=>
+  (rank[a.state]??2)-(rank[b.state]??2)||a.index-b.index);
+ for(const item of displayItems){
   const row=rows[item.index],el=node('div','','quick-goal'),top=node('div','','quick-goal-top');
+  el.id='quick-goal-'+(item.index+1);
+  if(item.state==='attention'||item.state==='duplicate')el.classList.add('needs-fix');
   top.append(node('strong','#'+(item.index+1)+' '+
     item.assist+' → '+(item.scorer||'得点者未確定')));
   const label=item.state==='ready'?'登録候補':
@@ -891,7 +909,9 @@ function renderQuick(){
     item.state==='attention'?'要修正':'今回の一括登録から除外';
   top.append(node('span',label,item.state==='ready'?'quick-ready':'quick-held'));
   el.append(top,node('p',
-   matchSlotLabel(snapshot.matches.find(m=>m.seq===Number(item.seq)))+
+   (snapshot.matches.find(m=>m.seq===Number(item.seq))?
+    matchSlotLabel(snapshot.matches.find(m=>m.seq===Number(item.seq))):
+    '試合番号：未設定（要選択）')+
    ' / '+(item.team||'得点チーム未確定')+
    ' / '+(item.source||'動画なし')+' '+(item.time==null?'':item.time+'秒'),'quick-meta'));
   // Original PeakStamp AI wording is displayed even if the official SS
@@ -908,7 +928,8 @@ function renderQuick(){
   el.append(aiBox);
   const inlineEligible=item.state==='attention'||item.state==='ready'||item.state==='waiting';
   const expanded=item.state==='attention'||item.state==='waiting'||quickOpenRows.has(item.key);
-  if(item.state==='attention'||item.state==='waiting')el.append(node('p',item.reason,'quick-held-note'));
+  if(item.state==='attention'||item.state==='waiting'||item.state==='duplicate')
+   el.append(node('p','確認：'+item.reason,'quick-held-note'));
   if(row.fixtureIdentityChanged===true){
    const recheck=node('button','この試合番号・新しい試合IDを確認する','quick-exception');
    recheck.type='button';
@@ -978,6 +999,15 @@ function renderQuick(){
    el.append(detail);
   }
   container.append(el);
+ }
+ const groups=goalCandidatesByMatchNumber(snapshot,rows);
+ if(groups.length){
+  const reference=node('details','','registered-goals');
+  reference.append(node('summary','試合別の候補件数（参考）'));
+  for(const g of groups)reference.append(node('p',
+   matchSlotLabel(snapshot.matches.find(m=>m.seq===g.seq))+'：'+g.goals+'件'+
+   (g.teamReady?'':'（対戦確定まで送信保留）'),'details'));
+  container.append(reference);
  }
  renderAutoSummary();
  $('quickPreview').disabled=batchBusy||ready===0;
