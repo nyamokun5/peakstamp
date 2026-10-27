@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows}
  from '../sposched-review-core.mjs';
-import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation}
+import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber}
  from '../sposched-quick-review.mjs';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch}
  from '../sposched-staging-batch.mjs';
@@ -285,4 +285,53 @@ test('unconfirmed player dropdown exposes short AI hint but never preselects a g
  assert.match(html,/row\.goal\?\.scorer\)\)/);
  assert.match(html,/row\.goal\?\.assist\)\)/);
  assert.match(html,/menu\.value=needsReview\?'':String\(current\?\?''\)/);
+});
+
+test('four-team third-place and final goal candidates remain in numbered waiting slots without any writes',()=>{
+ const data={event_id:E,event:'four-team knockout',matches:[
+  {seq:1,title:'予選1',left_team:'チーム1',right_team:'チーム2',status:'scheduled'},
+  {seq:5,title:'3位決定戦',match_id:'77777777-7777-4777-9777-777777777777',
+   left_team:null,right_team:null,status:'waiting'},
+  {seq:6,title:'決勝戦',match_id:'88888888-8888-4888-9888-888888888888',
+   left_team:null,right_team:null,status:'waiting'}
+ ],roster:{'チーム1':['西村','佐藤'],'チーム2':['橋本']}};
+ const snapshot=normalizeSpoSnapshot(data);
+ const exported={goals:[
+  {...video('third','西村','佐藤'),matchSeq:5},
+  {...video('final','橋本'),matchSeq:6}
+ ]};
+ const rows=prepareGoalRows(exported,snapshot);
+ assert.deepEqual(rows.map(x=>x.seq),[5,6]);
+ const decision=quickGoalDecisions(snapshot,rows);
+ assert.deepEqual(decision.map(x=>x.state),['waiting','waiting']);
+ assert.equal(prepareQuickGoalBatch(snapshot,rows).payload,null);
+ assert.deepEqual(goalCandidatesByMatchNumber(snapshot,rows).map(x=>[x.seq,x.goals,x.teamReady]),
+  [[5,1,false],[6,1,false]]);
+ editQuickGoalField(snapshot,rows[1],'match','5');
+ assert.equal(rows[1].seq,5,'organizer can change only the match-number assignment');
+ assert.equal(quickGoalDecisions(snapshot,rows)[1].state,'waiting');
+});
+test('waiting final transitions into reviewable goal only once official teams are available',()=>{
+ const waiting=normalizeSpoSnapshot({event_id:E,matches:[
+  {seq:6,title:'決勝戦',match_id:M,status:'waiting',left_team:null,right_team:null}
+ ],roster:{'チーム1':['西村','佐藤'],'チーム2':['橋本']}});
+ const [row]=prepareGoalRows({goals:[{...video('final','西村','佐藤'),matchSeq:6}]},waiting);
+ assert.equal(quickGoalDecisions(waiting,[row])[0].state,'waiting');
+ const scheduled=normalizeSpoSnapshot({event_id:E,matches:[
+  {seq:6,title:'決勝戦',match_id:M,status:'scheduled',left_team:'チーム1',right_team:'チーム2'}
+ ],roster:{'チーム1':['西村','佐藤'],'チーム2':['橋本']}});
+ const next=prepareGoalRows({goals:[row.goal]},scheduled);
+ const result=quickGoalDecisions(scheduled,next);
+ assert.equal(result[0].state,'ready');
+ assert.equal(next[0].seq,6);
+ assert.equal(prepareQuickGoalBatch(scheduled,next).payload.operations[0].args.seq,6);
+});
+test('UI lists official fixture numbers and holds waiting matches without enabling sending',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(html,/const matchSlotLabel=m=>/);
+ assert.match(html,/goalCandidatesByMatchNumber\(snapshot,rows\)/);
+ assert.match(html,/item\.state==='waiting'/);
+ assert.match(html,/対戦待ち・送信保留/);
+ assert.match(html,/試合番号別・動画ゴール候補数/);
+ assert.match(html,/label:matchSlotLabel\(v\)/);
 });
