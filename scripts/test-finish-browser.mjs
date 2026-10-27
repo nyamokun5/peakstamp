@@ -81,6 +81,8 @@ try{
  assert.doesNotMatch(await page.locator('#quickGoals').innerText(),/対戦待ち・送信保留/);
  // A changed score invalidates confirmation without any result write.
  await page.selectOption('#finishMatch','3');
+ // A tied TEST fixture asks for the winner; one-sided matches don't.
+ assert.equal(await page.locator('#finishWinnerWrap').isVisible(),true);
  // This third-place goal is not yet registered: the finish preview must refuse.
  await page.click('#finishPreview');await page.waitForFunction(()=>document.getElementById('finishStatus').textContent.includes('未登録・要確認'));
  assert.equal(writes,2);assert.equal(await page.locator('#finishConfirm').isVisible(),false);
