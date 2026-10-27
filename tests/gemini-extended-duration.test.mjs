@@ -56,7 +56,7 @@ test('main app activates current modules and avoids stale Safari caches',()=>{
  const main=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
  const primary=readFileSync(new URL('../gemini-primary.mjs',import.meta.url),'utf8');
- assert.match(main,/app\.mjs\?v=reviewagain1/);
+ assert.match(main,/app\.mjs\?v=project-goals1/);
  assert.match(app,/gemini-primary\.mjs\?v=guided1/);
  assert.match(primary,/gemini-wav-stream\.mjs\?v=unifiedga2/);
  assert.match(primary,/gemini-fast-waveform\.mjs\?v=long30/);
@@ -78,7 +78,7 @@ test('settings and match result pages instruct returning to original tab, not re
  }
  const peakstamp=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.match(peakstamp,/reset-goals\.html\?v=reset59&returnTab=1/);
- assert.match(peakstamp,/sposched-review\.html\?v=external65&returnTab=1/);
+ assert.match(peakstamp,/sposched-review\.html\?v=project-goals1&returnTab=1/);
 });
 
 test('PeakStamp settings render in parent document so no page navigation resets imported videos',()=>{

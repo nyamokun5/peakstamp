@@ -8,6 +8,7 @@ import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
 import { initGoalStatsReview } from './goal-stats-ui.mjs?v=reviewagain1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
+import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=guided1';
@@ -132,6 +133,12 @@ function progress(message, value) {
 let nextSourceId = 0;
 let sourceOrderWasManuallyChanged=false;
 let appendOnPick = false;
+// Imported files define today's working project; retain only their file IDs.
+// Individual audio, video and goal cache entries stay unchanged.
+const rememberGoalProject=(newProject=false)=>{
+ try{saveCurrentGoalProject(window.localStorage,state.sources,{newProject});}
+ catch(e){console.warn('PeakStamp project membership could not be saved:',e?.message);}
+};
 let filePickerOpenedAt = null;
 let importTimingSequence = 0;
 function elapsedLabel(milliseconds) {
@@ -291,6 +298,7 @@ function renderSourceList() {
         const other = i + diff;
         [sources[i],sources[other]]=[sources[other],sources[i]];
         sourceOrderWasManuallyChanged=true;
+        rememberGoalProject();
         syncSources();
       });
       controls.append(button);
@@ -307,6 +315,7 @@ function renderSourceList() {
       sceneReplayMedia.dispose();
       sources.splice(i,1);
       URL.revokeObjectURL(source.objectUrl);
+      rememberGoalProject();
       syncSources();
     });
     controls.append(del);
@@ -349,6 +358,7 @@ function chooseFiles(files, append = false) {
   // clips. Append subsequent files without scrambling a manual ordering.
   if(!sourceOrderWasManuallyChanged)sortSourcesByFilename(state.sources);
   state.sources.forEach((src,index)=>assignMatchNumber(src,index,window.localStorage));
+  rememberGoalProject(!append);
   error('loadError',state.sources.length === 12 && incoming.length > added
     ? '一度に選べる動画は最大12本です。' : '');
   $('progressArea').hidden = true;
@@ -361,6 +371,7 @@ $('sortFilesByName')?.addEventListener('click',()=>{
   // not edits, clips, File identities or any Gemini cache.
   resetMatchNumbersToFilenameOrder(state.sources,window.localStorage);
   sourceOrderWasManuallyChanged=false;
+  rememberGoalProject();
   syncSources();
 });
 $('fileInput').addEventListener('change', e => {
