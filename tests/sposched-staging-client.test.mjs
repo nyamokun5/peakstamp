@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {toStagingAction,writeableReviewOperations} from '../sposched-staging-client.mjs';
+import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from '../sposched-staging-client.mjs';
+import {normalizeSpoSnapshot} from '../sposched-review-core.mjs';
 const eventId='5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e';
 const matchId='4a5b6c7d-8e9f-4a0b-9c1d-2e3f4a5b6c7d';
 const goalId='2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b';
@@ -89,4 +90,36 @@ test('reject any official number or seq disagreement before TEST mutation',()=>{
  assert.throws(()=>toStagingAction(snapshot,draft,conflicting),/試合番号/);
  const malformed=match();malformed.number='6';
  assert.throws(()=>toStagingAction(snapshot,draft,malformed),/試合番号/);
+});
+
+test('fresh event-wide seq to UUID mapping is verified before TEST preview and each write',()=>{
+ const make=(fixtures,event=eventId)=>normalizeSpoSnapshot({
+  event_id:event,
+  matches:fixtures.map(([seq,id,left,right,status])=>({
+   seq,match_id:id,left_team:left,right_team:right,status:status||'scheduled'
+  }))
+ });
+ const loaded=make([[3,goalId,'Team2','Team3'],[4,matchId,'Team1','Team4']]);
+ const fresh=make([[3,goalId,'チーム2','チーム3'],[4,matchId,'チーム1','チーム4']]);
+ assert.equal(assertCurrentNumberedFixture(loaded,fresh,3),goalId);
+ assert.equal(assertCurrentNumberedFixture(loaded,fresh,4),matchId);
+ const swapped=make([[3,matchId,'Team2','Team3'],[4,goalId,'Team1','Team4']]);
+ assert.throws(()=>assertCurrentNumberedFixture(loaded,swapped,4),/match_id/);
+ const altered=make([[3,goalId,'Team2','Team3'],[4,matchId,'Team2','Team4']]);
+ assert.throws(()=>assertCurrentNumberedFixture(loaded,altered,4),/対戦チーム/);
+ const waiting=make([[3,goalId,'Team2','Team3'],[4,matchId,'','','waiting']]);
+ assert.throws(()=>assertCurrentNumberedFixture(loaded,waiting,4),/確定待ち/);
+ assert.throws(()=>assertCurrentNumberedFixture(loaded,make([[3,goalId,'Team2','Team3']]),4),/削除・変更/);
+ assert.throws(()=>assertCurrentNumberedFixture(loaded,make([[3,goalId,'Team2','Team3'],[4,matchId,'Team1','Team4']],goalId),4),/イベントID/);
+});
+test('staging goal preview fetches newest event-wide SS match map before single-match lookup',()=>{
+ const html=(await import('node:fs')).readFileSync(
+  new URL('../sposched-review.html',import.meta.url),'utf8');
+ const resolver=html.slice(html.indexOf('function resolveReviewedAction(operation){'),
+  html.indexOf("$('batchApprove').addEventListener"));
+ assert.match(resolver,/const latest=normalizeSpoSnapshot\(await fetchSS\(/);
+ assert.match(resolver,/\/snapshot\?event_id=/);
+ assert.match(resolver,/assertCurrentNumberedFixture\(snapshot,latest,seq\)/);
+ assert.ok(resolver.indexOf('assertCurrentNumberedFixture')<resolver.indexOf("'/match?match_id="));
+ assert.match(html,/assertCurrentNumberedFixture.*from '\.\/sposched-staging-client\.mjs/);
 });
