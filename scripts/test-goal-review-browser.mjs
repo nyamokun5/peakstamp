@@ -106,7 +106,8 @@ try{
  matches.push(...saved);
  await page.click('#ssReloadFixtures');
  await page.locator('#ssFixtureWarning').waitFor({state:'hidden'});
- assert.ok(await page.locator('[aria-label="#1 試合"] option').count()>1);
+ assert.equal(await page.locator('#autoRun').isEnabled(),true);
+ assert.match(await page.locator('#quickGoals .quick-goal').innerText(),/#1 準決勝/);
  assert.deepEqual(writes,[]);
  assert.deepEqual(errors,[]);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
