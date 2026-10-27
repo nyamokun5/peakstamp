@@ -472,3 +472,32 @@ test('after teams are assigned the same goal stays on original numbered final, n
  assert.equal(after.matchGuess.conflict,false,
   'a repeated team pairing must never override an explicit assigned fixture number');
 });
+
+test('updated SS fixture number alias preserves knockout identity before and after teams resolve',()=>{
+ const eventId='eeaed234-e9f0-4999-b05e-ec01c7b656fc';
+ const id='87654321-4321-4321-a321-ba0987654321';
+ const provisional=normalizeSpoSnapshot({event_id:eventId,matches:[
+  {number:6,title:'決勝戦',status:'waiting',match_id:'',
+   left_team:null,right_team:null}],
+  roster:{'チーム1':['西村'],'チーム2':['橋本']}});
+ assert.equal(provisional.matches[0].seq,6);
+ assert.equal(provisional.matches[0].matchId,'');
+ const goal={matchSeq:6,scorer:'西村',assistStatus:'none'};
+ assert.equal(prepareGoalRows({goals:[goal]},provisional)[0].seq,6);
+ const settled=normalizeSpoSnapshot({event_id:eventId,matches:[
+  {number:6,seq:6,title:'決勝戦',status:'scheduled',match_id:id,
+   left_team:'チーム1',right_team:'チーム2'}],
+  roster:{'チーム1':['西村'],'チーム2':['橋本']}});
+ assert.equal(prepareGoalRows({goals:[goal]},settled)[0].matchGuess.fixtureMatchId,id);
+ assert.equal(settled.matches[0].seq,6);
+});
+test('reject SS number/seq disagreement and duplicated assigned IDs before a goal can target wrong final',()=>{
+ const id='87654321-4321-4321-a321-ba0987654321';
+ const e='eeaed234-e9f0-4999-b05e-ec01c7b656fc';
+ assert.throws(()=>normalizeSpoSnapshot({event_id:e,matches:[
+  {number:5,seq:6,match_id:id}]}),/numberとseq/);
+ assert.throws(()=>normalizeSpoSnapshot({event_id:e,matches:[
+  {number:5,match_id:id},{number:6,match_id:id}]}),/同じmatch_id/);
+ assert.throws(()=>normalizeSpoSnapshot({event_id:e,matches:[
+  {number:5,match_id:id},{seq:5,match_id:'12345678-1234-4234-9234-1234567890ab'}]}),/重複/);
+});
