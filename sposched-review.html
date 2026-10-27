@@ -333,6 +333,12 @@ let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='',manualGoal
 let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='',previewOperationKey='';
 let batchPrepared=null,batchBusy=false,recoveryBusy=false;
 let quickPrepared=null,quickSending=false;
+let autoTiming=null;
+function runTimingLabel(){
+ if(!autoTiming)return '';
+ const seconds=((performance.now()-autoTiming.start)/1000).toFixed(1);
+ return '（'+seconds+'秒・取得'+autoTiming.gets+'回・確認/登録'+autoTiming.posts+'回）';
+}
 const pendingForEvent=()=>snapshot?.eventId&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging'
  ?pendingAttempts(localStorage,snapshot.eventId):[];
 const renderPendingPanel=()=>{
@@ -803,6 +809,7 @@ const selectedGateway=()=>SS_GATEWAYS[$('ssEnvironment').value];
 const SS_EVENT_ID = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i;
 const statusSS = (message) => { $('ssDirectStatus').textContent = message; };
 async function fetchSS(path) {
+ if(autoTiming)autoTiming.gets++;
  const token = $('ssBridgeToken').value.trim();
  if(!token) throw Error('BRIDGE_TOKENを入力してください。');
  const r = await fetch(selectedGateway() + path, {
@@ -816,6 +823,7 @@ async function fetchSS(path) {
  return data;
 }
 async function postStaging(path,payload) {
+ if(autoTiming)autoTiming.posts++;
  if($('ssEnvironment').value!=='staging'||!loadedFromStagingDirect)
   throw Error('テスト環境のSS APIを直接読み込んでください');
  const token=$('ssBridgeToken').value.trim();
@@ -1228,6 +1236,7 @@ async function autoRegisterTournament(){
     $('ssEnvironment').value!=='staging'||autoMustReload)return;
  let seq=null,completed=0;
  autoBusy=true;autoUnsafeStop=false;
+ autoTiming={start:performance.now(),gets:0,posts:0};
  $('autoConflict').hidden=true;
  setBatchBusy(true);
  try{
@@ -1261,7 +1270,7 @@ async function autoRegisterTournament(){
    if(plan.state==='blocked'||plan.state==='winner-needed'||plan.state==='waiting'){
     showAutoConflict(plan.reason||'この試合を処理できません',seq,
       {tie:plan.state==='winner-needed'});
-    autoStep('試合 #'+seq+'：入力が必要です。修正後に続行してください',completed);
+    autoStep('試合 #'+seq+'：入力が必要です。修正後に続行してください '+runTimingLabel(),completed);
     return;
    }
    // Only goals for this official numbered fixture are eligible at this step.
@@ -1346,7 +1355,7 @@ async function autoRegisterTournament(){
    completed++;
    autoStep('✓ 試合 #'+seq+' の得点と勝敗を照合しました',completed);
   }
-  $('autoStage').textContent='✓ 全4試合の登録・結果確認が完了しました';
+  $('autoStage').textContent='✓ 全4試合の登録・結果確認が完了しました '+runTimingLabel();
   $('autoConflict').hidden=true;
  }catch(error){
   // On uncertain outcome (including failed POST/readback), stop with no retry.
@@ -1357,8 +1366,10 @@ async function autoRegisterTournament(){
   showAutoConflict('試合 #'+(seq||'?')+' で停止：'+error.message+
     (uncertain?'。送信済みの可能性があります。再送せず最新データを照合してください。':''),seq,
     {unsafe:uncertain});
-  autoStep('停止しました。'+(uncertain?'通信結果を照合してください':'修正後に続行できます'),completed);
+  autoStep('停止しました。'+(uncertain?'通信結果を照合してください':'修正後に続行できます')+
+   ' '+runTimingLabel(),completed);
  }finally{
+  autoTiming=null;
   autoUnsafeStop=false;autoBusy=false;setBatchBusy(false);renderAutoSummary();
  }
 }
