@@ -62,13 +62,6 @@ async function runCase(gateState){
   await page.locator('#workerBatchArea').waitFor({state:'visible'});
   assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
   await page.click('#workerBatchRecover');
-  await page.waitForTimeout(900);
-  console.log('STAGING RECOVERY DEBUG',JSON.stringify({
-   status:await page.locator('#recoveryStatus').innerText(),
-   details:await page.locator('#recoveryDetails').innerText(),
-   gateState,matchGets,snapshotGets,gateReads,
-   errors
-  }));
   await page.getByRole('button',{name:'旧試合の送信記録を保管して再審査へ'}).waitFor({state:'visible',timeout:9000});
   assert.equal(matchGets,2);assert.equal(gateReads,1);
   assert.ok(snapshotGets>=3);
@@ -82,6 +75,7 @@ async function runCase(gateState){
    await page.locator('#recoveryDetails input[type=checkbox]').nth(1).check();
    assert.equal(await done.isEnabled(),true);
    await done.click();
+   await page.waitForFunction(()=>document.getElementById('recoveryStatus').textContent.includes('旧試合への未確定送信記録を保管しました'));
    assert.equal(matchGets,3,'old match rechecked at commit');
    assert.equal(gateReads,2,'old DO state rechecked at commit');
    assert.ok(snapshotGets>=4);
