@@ -132,5 +132,5 @@ test('mobile page uses project-wide aggregation and still allows exceptional man
  assert.match(html,/id="quickPanel"/);
  assert.match(app,/saveCurrentGoalProject\(window\.localStorage,state\.sources,\{newProject\}\)/);
  assert.match(app,/rememberGoalProject\(!append\)/);
- assert.match(index,/sposched-review\.html\?v=finish-confirm1/);
+ assert.match(index,/sposched-review\.html\?v=guided-ss1/);
 });
