@@ -48,6 +48,14 @@ export function quickGoalDecisions(snapshot,rows) {
   if(g.manual)return {...item,state:'manual',reason:'手動入力は詳細モードで扱います'};
   if(row.updateGoalId)return {...item,state:'patch',reason:'既存ゴールの修正は詳細モードで扱います'};
   if(!row.include)return {...item,state:'skipped',reason:'登録対象から除外済み'};
+  // Numbered knockout slots already have a stable match_id even while
+  // SpoSched waits to learn which teams reached the final/third-place match.
+  // Goals are kept in PeakStamp by matchSeq, but NEVER sent to waiting games.
+  const fixture=snapshot.matches.find(m=>m.seq===Number(row.seq));
+  if(fixture && (fixture.status==='waiting'||!fixture.leftTeam||!fixture.rightTeam))
+   return {...item,state:'waiting',
+    reason:'SS試合枠 #'+fixture.seq+'（'+(fixture.title||'対戦チーム未確定')+
+     '）に紐付け済み。対戦チームが確定するまで送信を保留します'};
   if(matchingExistingGoals(row,snapshot).length)
    return {...item,state:'duplicate',reason:'SSに同じ得点者・アシストの組み合わせがあります'};
   if(row.guest)return {...item,reason:'ゲスト得点は現在のTEST一括登録で対応していません'};
