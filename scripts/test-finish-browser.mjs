@@ -60,7 +60,8 @@ try{
  assert.match(await page.locator('#flowGuide').innerText(),/得点と勝敗をまとめて登録/);
  assert.equal(await page.locator('#finishPreview').count(),0);
  assert.equal(await page.locator('#finishCancel').count(),0);
- await page.locator('#autoGoalDetails summary').click();
+ assert.equal(await page.locator('#autoGoalDetails').isVisible(),true);
+ assert.equal(await page.locator('#quickGoals .quick-goal').count(),1);
  assert.match(await page.locator('#quickGoals').innerText(),/対戦待ち/);
  // The advanced editor still has both the sticky bottom exit and in-page exit.
  await page.locator('#quickPanel details.help summary').click();
