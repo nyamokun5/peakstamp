@@ -422,3 +422,14 @@ test('visible candidate list precedes one-tap registration and errors sort first
  assert.match(html,/試合番号：未設定（要選択）/);
  assert.match(html,/試合番号が未設定のゴールが/);
 });
+
+test('TEST event without official numbered fixtures never renders fake selector or allows submit',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(html,/if\(field==='match'&&!options\.length\)/);
+ assert.match(html,/id="ssFixtureWarning"/);
+ assert.match(html,/番号付き試合を0件取得しました/);
+ assert.match(html,/ssChooseEvent/);
+ assert.match(html,/ssReloadFixtures/);
+ assert.match(html,/if\(snapshot\.matches\.length===0\)/);
+ assert.match(html,/試合枠がないため登録できません/);
+});
