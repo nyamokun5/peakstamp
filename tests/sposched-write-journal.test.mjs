@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {journalKey,pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy}
+import {journalKey,pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy,retiredMatchRecoveryPolicy,archiveRetiredAttempt,retiredArchiveKey}
  from '../sposched-write-journal.mjs';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,BatchStopped}
  from '../sposched-staging-batch.mjs';
@@ -144,4 +144,41 @@ test('recovery forbids retry when SS already shows a likely write or concurrent 
   assert.match(policy.reason,/未登録と確認/);
  }
  assert.equal(recoveryDecisionPolicy(null).allowReturnToReview,false);
+});
+
+test('retired TEST match may be archived only after old-ID HTTP 404 and non-pending DO read',()=>{
+ const store=st(),entry=beginAttempt(store,E,K,action(),official(),1793041200000);
+ const newer='d0e0f0a0-1111-4111-8111-111111111111';
+ assert.equal(retiredMatchRecoveryPolicy(entry,E,[newer],404,'pending').allowArchive,false);
+ assert.equal(retiredMatchRecoveryPolicy(entry,E,[newer],503,'idle').allowArchive,false);
+ assert.equal(retiredMatchRecoveryPolicy(entry,E,[M],404,'idle').allowArchive,false);
+ assert.equal(retiredMatchRecoveryPolicy(entry,E,[],404,'idle').allowArchive,false);
+ assert.equal(retiredMatchRecoveryPolicy(entry,'another',[newer],404,'idle').allowArchive,false);
+ assert.equal(retiredMatchRecoveryPolicy(entry,E,[newer],404,'unknown').allowArchive,false);
+ assert.equal(retiredMatchRecoveryPolicy(entry,E,[newer],404,'verified').allowArchive,true);
+ assert.throws(()=>archiveRetiredAttempt(store,E,K,
+  retiredMatchRecoveryPolicy(entry,E,[newer],404,'pending')),/一致/);
+ assert.equal(pendingAttempts(store,E).length,1,'a pending journal cannot be discarded');
+ const permission=retiredMatchRecoveryPolicy(entry,E,[newer],404,'idle');
+ assert.equal(permission.allowArchive,true);
+ archiveRetiredAttempt(store,E,K,permission,1793041300000);
+ assert.deepEqual(pendingAttempts(store,E),[]);
+ const audit=JSON.parse(store.getItem(retiredArchiveKey(E)));
+ assert.equal(audit.length,1);
+ assert.equal(audit[0].match_id,M);
+ assert.equal(audit[0].resolution,'old_official_match_404_manual_archive_no_write');
+ assert.equal(audit[0].worker_gate_status,'idle');
+ assert.equal(audit[0].archived_at,1793041300000);
+ assert.doesNotMatch(JSON.stringify(audit),/BRIDGE_TOKEN|preview_token/);
+});
+test('archival storage failure preserves the original uncertain TEST journal',()=>{
+ const store=st(),entry=beginAttempt(store,E,K,action(),official());
+ const permission=retiredMatchRecoveryPolicy(entry,E,['d0e0f0a0-1111-4111-8111-111111111111'],404,'verified');
+ const oldSet=store.setItem.bind(store);
+ store.setItem=(key,val)=>{
+  if(key===retiredArchiveKey(E))throw Error('storage full');
+  return oldSet(key,val);
+ };
+ assert.throws(()=>archiveRetiredAttempt(store,E,K,permission),/保管できません/);
+ assert.equal(pendingAttempts(store,E).length,1);
 });
