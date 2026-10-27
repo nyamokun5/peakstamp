@@ -371,12 +371,17 @@ test('same event changed official match UUID requires one deliberate re-acknowle
  assert.equal(refreshed[0].fixtureIdentityChanged,true);
  assert.equal(quickGoalDecisions(changed,refreshed)[0].state,'attention');
  assert.match(quickGoalDecisions(changed,refreshed)[0].reason,/試合ID/);
- assert.equal(prepareQuickGoalBatch(changed,refreshed).payload?.operations.length,1);
+ assert.equal(prepareQuickGoalBatch(changed,refreshed).payload,null,
+  'all goals from a regenerated fixture stay held until individually checked');
  assert.equal(quickGoalDecisions(changed,[refreshed[0]])[0].state,'attention');
  editQuickGoalField(changed,refreshed[0],'match','1');
  assert.equal(refreshed[0].fixtureIdentityChanged,false);
  assert.equal(refreshed[0].matchGuess.fixtureMatchId,newId);
  assert.equal(quickGoalDecisions(changed,refreshed)[0].state,'ready');
+ assert.equal(quickGoalDecisions(changed,refreshed)[1].state,'attention',
+  'acknowledging one row never unlocks a different goal');
+ editQuickGoalField(changed,refreshed[1],'match','1');
+ assert.equal(prepareQuickGoalBatch(changed,refreshed).payload.operations.length,2);
  const second=preserveReviewRows(rows(changed),refreshed,{sameEvent:true,snapshot:changed});
  assert.equal(second[0].fixtureIdentityChanged,false);
  assert.equal(quickGoalDecisions(changed,second)[0].state,'ready');
