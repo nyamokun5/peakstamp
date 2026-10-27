@@ -79,7 +79,6 @@ try{
   localStorage.setItem(key,JSON.stringify(v));
  });
  await page.reload();
- await page.locator('#autoGoalDetails').waitFor({state:'visible'});
  await page.selectOption('#ssEnvironment','staging');
  await page.fill('#ssBridgeToken','mock-token');
  await page.click('#ssLoadEvents');
