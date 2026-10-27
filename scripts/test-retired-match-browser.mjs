@@ -62,7 +62,14 @@ async function runCase(gateState){
   await page.locator('#workerBatchArea').waitFor({state:'visible'});
   assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
   await page.click('#workerBatchRecover');
-  await page.waitForFunction(()=>document.getElementById('recoveryStatus').textContent.includes('旧試合'));
+  await page.waitForTimeout(900);
+  console.log('STAGING RECOVERY DEBUG',JSON.stringify({
+   status:await page.locator('#recoveryStatus').innerText(),
+   details:await page.locator('#recoveryDetails').innerText(),
+   gateState,matchGets,snapshotGets,gateReads,
+   errors
+  }));
+  await page.waitForFunction(()=>document.getElementById('recoveryStatus').textContent.includes('旧試合'),{timeout:7000});
   assert.equal(matchGets,2);assert.equal(gateReads,1);
   assert.ok(snapshotGets>=3);
   assert.equal(writes,0);
