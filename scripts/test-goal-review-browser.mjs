@@ -67,7 +67,7 @@ try{
  const button=await page.locator('#autoPanel').boundingBox();
  assert.ok(card.y<button.y,'corrections must appear ABOVE registration');
  await page.locator('[aria-label="#1 試合"]').selectOption('1');
- assert.match(await page.locator('#quickGoals .quick-goal').innerText(),/試合 #1/);
+ assert.match(await page.locator('#quickGoals .quick-goal').innerText(),/#1 準決勝/);
  assert.equal(await page.locator('#autoRun').isEnabled(),true);
 
  // A conflicting voice interpretation proposes a video slot but must
