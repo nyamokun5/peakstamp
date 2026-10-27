@@ -813,6 +813,17 @@ function renderQuick(){
   const inlineEligible=item.state==='attention'||item.state==='ready'||item.state==='waiting';
   const expanded=item.state==='attention'||item.state==='waiting'||quickOpenRows.has(item.key);
   if(item.state==='attention'||item.state==='waiting')el.append(node('p',item.reason,'quick-held-note'));
+  if(row.fixtureIdentityChanged===true){
+   const recheck=node('button','この試合番号・新しい試合IDを確認する','quick-exception');
+   recheck.type='button';
+   recheck.addEventListener('click',()=>{
+    try{
+     editQuickGoalField(snapshot,row,'match',String(row.seq));
+     touch();renderGoals();renderQuick();
+    }catch(e){$('quickStatus').textContent='試合番号の確認に失敗：'+e.message}
+   });
+   el.append(recheck);
+  }
   if(expanded&&inlineEligible){
    const fields=node('div','','quick-fields');
    const m=snapshot.matches.find(x=>x.seq===Number(row.seq));
