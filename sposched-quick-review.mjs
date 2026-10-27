@@ -48,6 +48,8 @@ export function quickGoalDecisions(snapshot,rows) {
   if(g.manual)return {...item,state:'manual',reason:'手動入力は詳細モードで扱います'};
   if(row.updateGoalId)return {...item,state:'patch',reason:'既存ゴールの修正は詳細モードで扱います'};
   if(!row.include)return {...item,state:'skipped',reason:'登録対象から除外済み'};
+  if(row.fixtureIdentityChanged===true)return {...item,state:'attention',
+   reason:'SSの正式な試合IDが前回から変更されました。試合番号を再確認するまで送信しません'};
   // Numbered knockout slots already have a stable match_id even while
   // SpoSched waits to learn which teams reached the final/third-place match.
   // Goals are kept in PeakStamp by matchSeq, but NEVER sent to waiting games.
@@ -119,6 +121,10 @@ export function editQuickGoalField(snapshot,row,field,value){
   const seq=Number(value),m=snapshot.matches.find(x=>x.seq===seq);
   if(!m)throw Error('試合番号が正しくありません');
   row.seq=seq;row.quickReviewedFields={match:true};
+  // The user explicitly reselected this numbered fixture after any ID reset.
+  row.fixtureIdentityChanged=false;
+  row.matchGuess={...(row.matchGuess||{}),seq,fixtureMatchId:m.matchId||null,
+   source:'手動で試合番号を確認',confidence:'high',ambiguous:false,conflict:false};
   if(row.team&&![normalizeTeam(m.leftTeam),normalizeTeam(m.rightTeam)]
    .includes(normalizeTeam(row.team)))row.team='';
  }else if(field==='scorer'){

@@ -263,6 +263,16 @@ export function preserveReviewRows(nextRows,priorRows,{
   if(!old)return row;
   const fields=['seq','scorer','assist','assistMode','team','guest','include','quickEdited','quickReviewedAll','quickReviewedFields'];
   for(const field of fields)row[field]=old[field];
+  // An event's numbered slot can be re-generated after a bracket reset.
+  // Never silently transfer the *same video's* goal to a different UUID
+  // merely because its displayed match number has not changed. A newly
+  // assigned UUID after an ID-less waiting slot is expected and safe.
+  const previousId=old.matchGuess?.fixtureMatchId||'';
+  const currentId=row.matchGuess?.fixtureMatchId||'';
+  const replaced=Boolean(previousId&&currentId&&
+   previousId.toLowerCase()!==currentId.toLowerCase()&&
+   Number(old.seq)===Number(row.seq));
+  row.fixtureIdentityChanged=old.fixtureIdentityChanged===true||replaced;
   // A finished goal cannot be queued again after its successful readback.
   // Preserve other goals' edits but invalidate every confirmation/override.
   if(completed.has(row.key))row.include=false;

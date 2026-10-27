@@ -211,12 +211,12 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 <script type="module">
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
-import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=ss-numbered2';
+import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=ss-numbered3';
 import {toStagingAction,writeableReviewOperations} from './sposched-staging-client.mjs?v=ss-numbered2';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy} from './sposched-write-journal.mjs?v=ss-recovery2';
-import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=ss-numbered2';
+import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=ss-numbered3';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -813,6 +813,17 @@ function renderQuick(){
   const inlineEligible=item.state==='attention'||item.state==='ready'||item.state==='waiting';
   const expanded=item.state==='attention'||item.state==='waiting'||quickOpenRows.has(item.key);
   if(item.state==='attention'||item.state==='waiting')el.append(node('p',item.reason,'quick-held-note'));
+  if(row.fixtureIdentityChanged===true){
+   const recheck=node('button','この試合番号・新しい試合IDを確認する','quick-exception');
+   recheck.type='button';
+   recheck.addEventListener('click',()=>{
+    try{
+     editQuickGoalField(snapshot,row,'match',String(row.seq));
+     touch();renderGoals();renderQuick();
+    }catch(e){$('quickStatus').textContent='試合番号の確認に失敗：'+e.message}
+   });
+   el.append(recheck);
+  }
   if(expanded&&inlineEligible){
    const fields=node('div','','quick-fields');
    const m=snapshot.matches.find(x=>x.seq===Number(row.seq));
