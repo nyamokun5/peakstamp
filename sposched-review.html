@@ -49,6 +49,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 #quickReviewText{white-space:pre-wrap;word-break:break-word;background:#102938;border-radius:9px;padding:11px;font-size:12px}
 #quickConfirmPanel{margin:12px 0;padding:12px;border:1px solid #a57f5c;border-radius:12px}
 #quickConfirmPanel[hidden],#quickPanel[hidden],#reviewArea[hidden]{display:none!important}
+#legacyDayWrap[hidden]{display:none!important}
 #goalRows:empty:after{content:'ゴールはまだありません。テストSSのイベントを読み込んだら、上の「＋ 新規ゴールを手動追加」で登録できます。';color:#9dabbc}
 #planJson{min-height:160px}
 @media(max-width:620px){.input-row,.fields{grid-template-columns:1fr}body{padding:12px 9px 40px}}
@@ -198,8 +199,7 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 </main>
 <script type="module">
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
-import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,
- approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
+import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=ss-quick-core2';
 import {toStagingAction,writeableReviewOperations} from './sposched-staging-client.mjs?v=ss-stage1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch} from './sposched-staging-batch.mjs?v=ss-batch1';
