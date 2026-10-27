@@ -51,6 +51,7 @@ try{
  await page.goto('http://peakstamp.local/');
  await page.selectOption('#ssEnvironment','staging');await page.fill('#ssBridgeToken','mock-token');
  await page.click('#ssLoadEvents');await page.click('#ssLoadSnapshot');
+ await page.locator('#autoPanel').waitFor({state:'visible'});
  assert.equal(await page.locator('#autoPanel').isVisible(),true);
  assert.equal(await page.locator('#autoRun').isEnabled(),true);
  assert.equal(writes,0);assert.equal(previews,0);
