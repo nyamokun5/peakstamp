@@ -24,6 +24,7 @@ const official=match=>({
  goals:match.goals
 });
 let writes=0,goalWrites=0,finishWrites=0,previews=0;
+let matchGets=0,snapshotGets=0;
 const order=[];
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -38,8 +39,9 @@ await page.route('**/*',async route=>{
  const body=route.request().postDataJSON(),method=route.request().method();
  let data;
  if(u.pathname==='/events')data={events:[{event_id:E,name:'TEST',date:'2026-10-25'}]};
- else if(u.pathname==='/snapshot')data=snapshot();
+ else if(u.pathname==='/snapshot'){snapshotGets++;data=snapshot();}
  else if(u.pathname==='/match'){
+  matchGets++;
   const m=matches.find(m=>m.match_id===u.searchParams.get('match_id'));
   assert.ok(m,'match must exist');data=official(m);
  }
@@ -124,10 +126,12 @@ try {
  assert.equal(finishWrites,4);assert.equal(goalWrites,1);
  // Old flow signed the same goal twice; this flow signs it only once.
  assert.equal(previews,5); // 4 match finishes + 1 goal preview
+ assert.equal(matchGets,1); // no redundant pre-write journal GET
+ assert.ok(snapshotGets<=17,'unexpected repeated snapshot reads: '+snapshotGets);
  assert.equal(matches[3].winner,'draw');
  assert.deepEqual(order,['finish#1','finish#2','goal#3','finish#3','finish#4']);
  assert.equal(await page.locator('#autoRun').isDisabled(),true);
  assert.deepEqual(errors,[]);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- console.log('PASS: one approval -> two semifinal results -> third-place goal/result -> drawn final; one signed preview per goal, progress, zero production traffic');
+ console.log('PASS: one approval -> two semifinal results -> third-place goal/result -> drawn final; one signed preview per goal, progress, one pre-write official /match GET and no production traffic');
 }finally{await browser.close()}
