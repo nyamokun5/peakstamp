@@ -87,6 +87,15 @@ body.detail-open{padding-bottom:115px}
 #finishSummary{font-size:15px;line-height:1.7;white-space:pre-wrap}
 #finishCurrent .quick-main{font-size:16px;min-height:50px}
 #autoPanel{padding:12px;border:1px solid #68a995;border-radius:12px;background:#102e37;margin:14px 0}
+#autoGoalDetails{display:block;margin:12px 0 24px}
+#quickSummary{padding:12px 14px;border-left:4px solid #7be0bb;background:#173843;border-radius:8px;margin:12px 0;font-weight:650}
+#autoRegisterHeading{scroll-margin-top:120px}
+.quick-goal{scroll-margin-top:120px}
+.quick-goal.needs-fix{border-color:#d4a76b;background:#233b43}
+.quick-goal .quick-held-note{font-weight:650;color:#fbd9a0}
+.quick-goal .match-proposal{font-size:13px;margin:8px 0;color:#bbf1dc}
+.quick-goal .confirm-candidate{min-height:44px;margin-top:8px}
+@media(max-width:480px){#autoGoalDetails .quick-field select{min-height:44px}}
 #autoRun,#autoResume{min-height:52px}#autoProgress progress{height:16px;width:100%;accent-color:#36bb9a}
 #autoStage{font-size:13px;margin:9px 0;line-height:1.5}
 #autoConflict{border:1px solid #d49c56;padding:12px;border-radius:10px;background:#312e2b;margin:12px 0}
@@ -160,10 +169,19 @@ body.detail-open{padding-bottom:115px}
  <div id="recoveryDetails"></div>
 </section>
 <section class="panel" id="quickPanel" hidden>
- <div class="top"><h2>3. トーナメントをまとめて登録</h2><span class="step">TEST ONLY</span></div>
- <p class="step-help">得点 → 試合終了 → 次の試合を自動で処理。問題があるときだけ停止します。</p>
+ <div class="top"><h2>3. ゴール候補を確認・修正</h2><span class="step">TEST ONLY</span></div>
+ <p class="step-help">全ゴールを確認してください。問題のある候補は最初に表示し、必要な項目だけ修正できます。</p>
+ <p id="quickSummary" class="quick-summary" role="status" aria-live="polite"></p>
+ <div id="autoGoalDetails">
+  <div id="quickGoals"></div>
+  <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
+  <button id="quickEdit" type="button">詳細編集・手動追加・既存ゴール修正</button>
+ </div>
+ <h2 id="autoRegisterHeading">4. 得点・試合結果をまとめて登録</h2>
+ <p class="step-help">内容が合っていれば、この下のボタン1つで4試合を順番に処理します。</p>
  <div id="autoPanel">
   <div id="autoOutline" aria-label="試合の登録予定"></div>
+  <p id="autoBeforeRun" class="small" role="status"></p>
   <button id="autoRun" class="primary quick-main" type="button">ゴール・試合結果をまとめてTESTへ登録</button>
   <div id="autoProgress" hidden aria-live="polite">
    <p id="autoStage" role="status">準備中</p>
@@ -182,12 +200,6 @@ body.detail-open{padding-bottom:115px}
    <button id="autoReload" class="primary" type="button" hidden>SSを再取得（書き込みなし）</button>
   </div>
  </div>
- <p id="quickSummary" class="quick-summary"></p>
- <details id="autoGoalDetails"><summary>ゴール候補を確認・修正する</summary>
-  <div id="quickGoals"></div>
-  <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
-  <button id="quickEdit" type="button">詳細編集・手動追加・既存ゴール修正</button>
- </details>
  <details class="help"><summary>個別ゴール登録（従来方式）</summary>
   <button id="quickPreview" class="primary quick-main" type="button">登録内容を確認</button>
   <div id="quickConfirmPanel" class="finish-preview-card" hidden>
