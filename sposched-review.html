@@ -312,6 +312,7 @@ const setBatchBusy=busy=>{
    (id==='stagingPreview'&&!lastPayload)||
    (id==='stagingExecute'&&(!approvedAction||!previewToken||!$('stagingApprove').checked));
  }
+ syncFinishWinner();
  $('sources').inert=busy;$('reviewArea').inert=busy;
  $('quickGoals').inert=busy;
  $('batchGoals').inert=busy;
@@ -1171,6 +1172,7 @@ $('finishPreview').addEventListener('click',async()=>{
   if(preview.environment!=='STAGING ONLY'||!preview.preview_token||preview.plan?.action!=='finish')throw Error('試合終了プレビューに対応していません');
   finishPrepared={action,preview_token:preview.preview_token};
   const m=snapshot.matches.find(m=>m.seq===seq);
+  if(action.left_score===action.right_score)$('finishWinner').value=action.winner;
   $('finishSummary').textContent='#'+seq+' '+m.title+'\n'+m.leftTeam+' '+action.left_score+' − '+action.right_score+' '+m.rightTeam+
    '\n'+(action.winner==='draw'?'引き分け':action.winner==='left'?m.leftTeam+'の勝利':m.rightTeam+'の勝利');
   $('finishConfirm').hidden=false;
@@ -1212,12 +1214,14 @@ $('ssEnvironment').addEventListener('change',()=>{
  $('ssEventSelect').replaceChildren();
  snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;
  $('recoveryPanel').hidden=true;
- $('reviewArea').hidden=true;touch();
+ $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
+ document.body.classList.remove('detail-open');
+ touch();updateFlowGuide();
  statusSS($('ssEnvironment').value==='staging'
   ?'テスト環境を選択しました。テスト用BRIDGE_TOKENを入力してイベントを取得してください。'
   :'本番（読み取り専用）に切り替えました。書き込み操作はありません。');
  $('ssEnvironmentNote').textContent=$('ssEnvironment').value==='staging'
-  ?'【テスト専用】ダミーデータを参照します。送信する場合はゴールごとに2段階の確認が必要です。'
+  ?'TESTのみ書き込み可能。'
   :'本番環境から読み取ります。書き込み操作は利用できません。';
 });
 $('ssLoadEvents').addEventListener('click',async()=>{
@@ -1245,7 +1249,9 @@ $('ssLoadEvents').addEventListener('click',async()=>{
 $('ssEventSelect').addEventListener('change',()=>{
  snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;
  $('recoveryPanel').hidden=true;
- $('reviewArea').hidden=true;touch();
+ $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
+ document.body.classList.remove('detail-open');
+ touch();updateFlowGuide();
  statusSS('イベントが変わりました。「選んだイベントの試合・得点を読み込む」を押してください。');
 });
 $('ssLoadSnapshot').addEventListener('click',async()=>{
