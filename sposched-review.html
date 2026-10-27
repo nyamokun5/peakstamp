@@ -86,6 +86,14 @@ body.detail-open{padding-bottom:115px}
 .help summary{font-size:12px;color:#c6d5da}.finish-preview-card{margin-top:12px;padding:12px;background:#0e303b;border:1px solid #74ae9a;border-radius:10px}
 #finishSummary{font-size:15px;line-height:1.7;white-space:pre-wrap}
 #finishCurrent .quick-main{font-size:16px;min-height:50px}
+#autoPanel{padding:12px;border:1px solid #68a995;border-radius:12px;background:#102e37;margin:14px 0}
+#autoRun,#autoResume{min-height:52px}#autoProgress progress{height:16px;width:100%;accent-color:#36bb9a}
+#autoStage{font-size:13px;margin:9px 0;line-height:1.5}
+#autoConflict{border:1px solid #d49c56;padding:12px;border-radius:10px;background:#312e2b;margin:12px 0}
+#autoConflict p{color:#f6ddb9}#autoConflict select{min-height:44px}
+#autoOutline{font-size:13px;line-height:1.7;color:#d5e7e7}
+#autoOutline .fixture-status{border-bottom:1px solid #476472;padding:5px 1px}
+#autoOutline .fixture-status:last-child{border:0}
 [hidden]{display:none!important}
 @media(max-width:480px){.flow-guide{gap:6px}.flow-guide strong{font-size:12px}.flow-guide button{min-width:77px;font-size:12px;padding:8px}}
 </style>
@@ -152,24 +160,44 @@ body.detail-open{padding-bottom:115px}
  <div id="recoveryDetails"></div>
 </section>
 <section class="panel" id="quickPanel" hidden>
- <div class="top"><h2>3. ゴールを登録する</h2><span class="step">TEST ONLY</span></div>
- <p class="step-help">選手と試合が合っていれば、そのまま「登録内容を確認」へ。違う箇所だけ「修正する」。</p>
- <p id="quickSummary" class="quick-summary"></p>
- <div id="quickGoals"></div>
- <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
- <button id="quickPreview" class="primary quick-main" type="button">登録内容を確認</button>
- <div id="quickConfirmPanel" class="finish-preview-card" hidden>
-  <strong id="quickConfirmTitle"></strong>
-  <p class="step-help">内容が合っていれば、下のボタンでTESTへ登録。</p>
-  <div id="quickReviewText"></div>
-  <button id="quickExecute" class="primary quick-main" type="button">この内容でゴールを登録</button>
-  <button id="quickCancel" type="button">← 修正に戻る</button>
+ <div class="top"><h2>3. トーナメントをまとめて登録</h2><span class="step">TEST ONLY</span></div>
+ <p class="step-help">得点 → 試合終了 → 次の試合を自動で処理。問題があるときだけ停止します。</p>
+ <div id="autoPanel">
+  <div id="autoOutline" aria-label="試合の登録予定"></div>
+  <button id="autoRun" class="primary quick-main" type="button">ゴール・試合結果をまとめてTESTへ登録</button>
+  <div id="autoProgress" hidden aria-live="polite">
+   <p id="autoStage" role="status">準備中</p>
+   <progress id="autoProgressBar" max="4" value="0"></progress>
+   <p id="autoCount" class="small">0 / 4試合完了</p>
+  </div>
+  <div id="autoConflict" hidden>
+   <p id="autoIssue" role="alert"></p>
+   <label id="autoWinnerWrap" class="field" hidden>この試合のPKなどの勝者
+    <select id="autoWinner"><option value="">選んでください</option>
+     <option value="left">左チームの勝利</option><option value="right">右チームの勝利</option>
+    </select>
+   </label>
+   <button id="autoResume" class="primary quick-main" type="button">修正して続行</button>
+   <button id="autoFix" type="button">対象ゴールを修正する</button>
+  </div>
  </div>
- <details class="help"><summary>別の登録方法・注意事項</summary>
-  <p>対戦未確定・重複・不明なゴールは送信せず保留します。送信は1件ずつ照合し、エラー時は停止します。</p>
+ <p id="quickSummary" class="quick-summary"></p>
+ <details id="autoGoalDetails"><summary>ゴール候補を確認・修正する</summary>
+  <div id="quickGoals"></div>
+  <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
   <button id="quickEdit" type="button">詳細編集・手動追加・既存ゴール修正</button>
  </details>
+ <details class="help"><summary>個別ゴール登録（従来方式）</summary>
+  <button id="quickPreview" class="primary quick-main" type="button">登録内容を確認</button>
+  <div id="quickConfirmPanel" class="finish-preview-card" hidden>
+   <strong id="quickConfirmTitle"></strong>
+   <div id="quickReviewText"></div>
+   <button id="quickExecute" class="primary quick-main" type="button">この内容でゴールを登録</button>
+   <button id="quickCancel" type="button">← 修正に戻る</button>
+  </div>
+ </details>
 </section>
+<details id="individualFinishTools" class="help"><summary>試合を個別に終了する（例外時）</summary>
 <section class="panel" id="finishPanel" hidden>
  <div class="top"><h2>4. 試合を終了する</h2><span class="step">TEST ONLY</span></div>
  <p class="step-help">試合を選び、表示された結果が正しければ終了ボタンを押してください。</p>
@@ -193,6 +221,7 @@ body.detail-open{padding-bottom:115px}
   <p class="small">得点の抜け・重複があれば、先にゴール登録を修正してください。終了済みの結果はここでは変更できません。</p>
  </details>
 </section>
+</details>
 <section class="panel" id="reviewArea" hidden>
  <h2>詳細編集</h2>
  <p class="step-help">必要な箇所だけ直してください。変更内容は一覧に戻っても保持されます。</p>
@@ -266,6 +295,7 @@ import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,u
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy} from './sposched-write-journal.mjs?v=ss-recovery2';
 import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=ss-numbered3';
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish1';
+import {analyzeAutoFixture,assertFourMatchBracket} from './sposched-auto-tournament.mjs?v=auto1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -301,7 +331,7 @@ const setBatchBusy=busy=>{
  batchBusy=busy;
  for(const id of ['ssEnvironment','ssBridgeToken','ssLoadEvents','ssEventSelect',
   'ssLoadSnapshot','refreshSources','buildPlan','stagingPreview','stagingExecute',
-  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishRecover','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
+  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','autoRun','autoResume','autoFix','autoWinner','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishRecover','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
   $(id).disabled=busy||
    (id==='batchExecute'&&(!batchPrepared||!$('batchApprove').checked))||
    (id==='batchPreview'&&!lastPayload)||
@@ -1143,11 +1173,11 @@ function updateFlowGuide(){
   const needsEdit=items.filter(item=>item.state==='attention'||item.state==='duplicate').length;
   const remaining=snapshot.matches.filter(m=>m.matchId&&m.status!=='finished'&&m.status!=='waiting').length;
   if(ready || needsEdit){
-   step='STEP 2 / 3';message=ready?'ゴール'+ready+'件を確認して登録。':'確認が必要なゴールを修正。';target='quickPanel';
+   step='STEP 2 / 3';message=ready?'試合ごとの得点・勝敗を自動で登録。':'問題のあるゴールだけ修正。';target='quickPanel';
   }else if(remaining){
-   step='STEP 3 / 3';message='表示された結果で試合を終了。';target='finishPanel';
+   step='STEP 3 / 3';message='トーナメント登録を続行。';target='quickPanel';
   }else if(snapshot.matches.length && snapshot.matches.every(m=>m.status==='finished')){
-   step='✓ 完了';message='すべての試合が終了しています。';target='finishPanel';
+   step='✓ 完了';message='すべての試合が終了しています。';target='quickPanel';
   }else{
    step='STEP 2 / 3';message='対戦待ちのゴールがあります。試合情報を確認。';target='quickPanel';
   }
