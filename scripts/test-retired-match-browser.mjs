@@ -69,7 +69,7 @@ async function runCase(gateState){
    gateState,matchGets,snapshotGets,gateReads,
    errors
   }));
-  await page.waitForFunction(()=>document.getElementById('recoveryStatus').textContent.includes('旧試合'),{timeout:7000});
+  await page.getByRole('button',{name:'旧試合の送信記録を保管して再審査へ'}).waitFor({state:'visible',timeout:9000});
   assert.equal(matchGets,2);assert.equal(gateReads,1);
   assert.ok(snapshotGets>=3);
   assert.equal(writes,0);
