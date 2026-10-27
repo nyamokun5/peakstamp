@@ -179,6 +179,7 @@ body.detail-open{padding-bottom:115px}
    </label>
    <button id="autoResume" class="primary quick-main" type="button">修正して続行</button>
    <button id="autoFix" type="button">対象ゴールを修正する</button>
+   <button id="autoReload" class="primary" type="button" hidden>SSを再取得（書き込みなし）</button>
   </div>
  </div>
  <p id="quickSummary" class="quick-summary"></p>
@@ -331,7 +332,7 @@ const setBatchBusy=busy=>{
  batchBusy=busy;
  for(const id of ['ssEnvironment','ssBridgeToken','ssLoadEvents','ssEventSelect',
   'ssLoadSnapshot','refreshSources','buildPlan','stagingPreview','stagingExecute',
-  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','autoRun','autoResume','autoFix','autoWinner','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishRecover','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
+  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','autoRun','autoResume','autoFix','autoReload','autoWinner','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishRecover','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
   $(id).disabled=busy||
    (id==='batchExecute'&&(!batchPrepared||!$('batchApprove').checked))||
    (id==='batchPreview'&&!lastPayload)||
@@ -1048,7 +1049,7 @@ function autoWinnerFor(seq){
  return projected.state==='winner-needed'&&projected.left===saved.left&&
   projected.right===saved.right?saved.winner:'';
 }
-let autoBusy=false,autoProblemSeq=null,autoUnsafeStop=false;
+let autoBusy=false,autoProblemSeq=null,autoUnsafeStop=false,autoMustReload=false;
 function autoStep(message,completed=0,partial=0){
  $('autoProgress').hidden=false;
  $('autoStage').textContent=message;
@@ -1069,6 +1070,7 @@ function showAutoConflict(message,seq=null,{tie=false,unsafe=false}={}){
  }
  $('autoResume').hidden=unsafe;
  $('autoFix').hidden=tie||unsafe;
+ $('autoReload').hidden=!unsafe;
  $('autoConflict').scrollIntoView({behavior:'smooth',block:'center'});
 }
 function renderAutoSummary(){
@@ -1092,8 +1094,9 @@ function renderAutoSummary(){
    if(p.state!=='finished')unfinished++;
    root.append(node('div','#'+seq+' '+(m.title||'試合')+'：'+line,'fixture-status'));
   }
-  $('autoRun').disabled=batchBusy||autoBusy||unfinished===0;
-  $('autoRun').textContent=unfinished?'残り'+unfinished+'試合をまとめて登録':'すべて終了済み';
+  $('autoRun').disabled=batchBusy||autoBusy||autoMustReload||unfinished===0;
+  $('autoRun').textContent=autoMustReload?'SSの再取得が必要':
+   unfinished?'残り'+unfinished+'試合をまとめて登録':'すべて終了済み';
  }catch(e){
   root.textContent=e.message;
   $('autoRun').disabled=true;
@@ -1101,7 +1104,7 @@ function renderAutoSummary(){
 }
 async function autoRegisterTournament(){
  if(autoBusy||batchBusy||!snapshot||!loadedFromStagingDirect||
-    $('ssEnvironment').value!=='staging')return;
+    $('ssEnvironment').value!=='staging'||autoMustReload)return;
  let seq=null,completed=0;
  autoBusy=true;autoUnsafeStop=false;
  $('autoConflict').hidden=true;
@@ -1142,6 +1145,7 @@ async function autoRegisterTournament(){
      onProgress:({current,total})=>autoStep(
        '試合 #'+seq+'：得点'+current+'/'+total+'件を安全確認中…',completed,0.1+0.15*current/total)
     });
+    autoUnsafeStop=true;
     const done=await executeReviewedBatch({
      entries,resolveAction:resolveReviewedAction,
      previewAction:action=>postStaging('/staging/preview',action),
@@ -1163,6 +1167,7 @@ async function autoRegisterTournament(){
     const afterGoals=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
     if(afterGoals.eventId!==eventId)throw Error('登録後のイベントが変更されました');
     snapshot=afterGoals;rebuild({preserveEdits:true,completedKeys:keys});
+    autoUnsafeStop=false;
    }
    // Never finalize a match with a stale team assignment or an unexpected score.
    const m=snapshot.matches.find(x=>x.seq===seq);
@@ -1206,8 +1211,10 @@ async function autoRegisterTournament(){
   $('autoConflict').hidden=true;
  }catch(error){
   // On uncertain outcome (including failed POST/readback), stop with no retry.
-  const uncertain=autoUnsafeStop||error.name==='BatchStopped'||
+  const drift=/スコア.*一致|試合ID.*一致|試合情報が変わり|イベントが変更/.test(error.message||'');
+  const uncertain=autoUnsafeStop||error.name==='BatchStopped'||drift||
     Boolean(pendingForEvent().length);
+  if(uncertain)autoMustReload=true;
   showAutoConflict('試合 #'+(seq||'?')+' で停止：'+error.message+
     (uncertain?'。送信済みの可能性があります。再送せず最新データを照合してください。':''),seq,
     {unsafe:uncertain});
@@ -1239,6 +1246,10 @@ $('autoResume').addEventListener('click',()=>{
 $('autoFix').addEventListener('click',()=>{
  $('autoGoalDetails').open=true;
  $('autoGoalDetails').scrollIntoView({behavior:'smooth',block:'start'});
+});
+$('autoReload').addEventListener('click',()=>{
+ if(autoBusy)return;
+ $('ssLoadSnapshot').click(); // authenticated GET only; successful load clears lock
 });
 
 $('manualAddGoal').addEventListener('click',()=>{
@@ -1513,6 +1524,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   loadedFromStagingDirect=$('ssEnvironment').value==='staging';
   manualGoals=loadedFromStagingDirect?
    restoreManualGoals(localStorage,'staging',snapshot.eventId):[];
+  autoMustReload=false;$('autoConflict').hidden=true;
   rebuild({preserveEdits:true});
   statusSS((loadedFromStagingDirect?'テスト':'本番')+'読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
  }catch(error){statusSS('読み込み失敗：'+error.message);}
