@@ -146,34 +146,43 @@ test('recovery forbids retry when SS already shows a likely write or concurrent 
  assert.equal(recoveryDecisionPolicy(null).allowReturnToReview,false);
 });
 
-test('retired TEST match may be archived only after old-ID HTTP 404 and non-pending DO read',()=>{
+test('retired TEST match with pending historical DO can be archived only after two 404s and unchanged new UUIDs',()=>{
  const store=st(),entry=beginAttempt(store,E,K,action(),official(),1793041200000);
  const newer='d0e0f0a0-1111-4111-8111-111111111111';
- assert.equal(retiredMatchRecoveryPolicy(entry,E,[newer],404,'pending').allowArchive,false);
- assert.equal(retiredMatchRecoveryPolicy(entry,E,[newer],503,'idle').allowArchive,false);
- assert.equal(retiredMatchRecoveryPolicy(entry,E,[M],404,'idle').allowArchive,false);
- assert.equal(retiredMatchRecoveryPolicy(entry,E,[],404,'idle').allowArchive,false);
- assert.equal(retiredMatchRecoveryPolicy(entry,'another',[newer],404,'idle').allowArchive,false);
- assert.equal(retiredMatchRecoveryPolicy(entry,E,[newer],404,'unknown').allowArchive,false);
- assert.equal(retiredMatchRecoveryPolicy(entry,E,[newer],404,'verified').allowArchive,true);
- assert.throws(()=>archiveRetiredAttempt(store,E,K,
-  retiredMatchRecoveryPolicy(entry,E,[newer],404,'pending')),/一致/);
- assert.equal(pendingAttempts(store,E).length,1,'a pending journal cannot be discarded');
- const permission=retiredMatchRecoveryPolicy(entry,E,[newer],404,'idle');
- assert.equal(permission.allowArchive,true);
+ const verified={currentMatchIds:[newer],oldMatchHttpStatus:404,batchJobActive:false};
+ const policy=(ids,status,code,extra=verified)=>
+  retiredMatchRecoveryPolicy(entry,E,ids,code,status,extra);
+ assert.equal(policy([newer],'pending',404).allowArchive,true);
+ assert.equal(policy([newer],'verified',404).allowArchive,true);
+ assert.equal(policy([newer],'idle',404).allowArchive,true);
+ assert.equal(policy([newer],'unknown',404).allowArchive,false);
+ assert.equal(policy([newer],'pending',503).allowArchive,false);
+ assert.equal(policy([M],'pending',404).allowArchive,false);
+ assert.equal(policy([],'pending',404).allowArchive,false);
+ assert.equal(retiredMatchRecoveryPolicy(entry,'another',[newer],404,'pending',verified).allowArchive,false);
+ assert.equal(policy([newer],'pending',404,{...verified,oldMatchHttpStatus:500}).allowArchive,false);
+ assert.equal(policy([newer],'pending',404,{...verified,currentMatchIds:[M]}).allowArchive,false);
+ assert.equal(policy([newer],'pending',404,{...verified,batchJobActive:true}).allowArchive,false);
+ assert.equal(policy([newer],'pending',404,null).allowArchive,false);
+ assert.throws(()=>archiveRetiredAttempt(store,E,K,policy([newer],'pending',404,null)),/一致/);
+ assert.equal(pendingAttempts(store,E).length,1);
+ const permission=policy([newer],'pending',404);
+ assert.equal(permission.old_write_outcome,'unknown');
  archiveRetiredAttempt(store,E,K,permission,1793041300000);
  assert.deepEqual(pendingAttempts(store,E),[]);
  const audit=JSON.parse(store.getItem(retiredArchiveKey(E)));
  assert.equal(audit.length,1);
  assert.equal(audit[0].match_id,M);
  assert.equal(audit[0].resolution,'old_official_match_404_manual_archive_no_write');
- assert.equal(audit[0].worker_gate_status,'idle');
+ assert.equal(audit[0].worker_gate_status,'pending');
  assert.equal(audit[0].archived_at,1793041300000);
  assert.doesNotMatch(JSON.stringify(audit),/BRIDGE_TOKEN|preview_token/);
 });
 test('archival storage failure preserves the original uncertain TEST journal',()=>{
  const store=st(),entry=beginAttempt(store,E,K,action(),official());
- const permission=retiredMatchRecoveryPolicy(entry,E,['d0e0f0a0-1111-4111-8111-111111111111'],404,'verified');
+ const newer='d0e0f0a0-1111-4111-8111-111111111111';
+ const permission=retiredMatchRecoveryPolicy(entry,E,[newer],404,'verified',{
+  currentMatchIds:[newer],oldMatchHttpStatus:404,batchJobActive:false});
  const oldSet=store.setItem.bind(store);
  store.setItem=(key,val)=>{
   if(key===retiredArchiveKey(E))throw Error('storage full');
