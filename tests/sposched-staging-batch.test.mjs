@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {TEST_TEAM_ID,selectBatchOperations,previewReviewedBatch,
- executeReviewedBatch,BatchStopped} from '../sposched-staging-batch.mjs';
+ executeReviewedBatch,executeReviewedBatchOnce,BatchStopped} from '../sposched-staging-batch.mjs';
 const ID='4a5b6c7d-8e9f-4a0b-9c1d-2e3f4a5b6c7d';
 const op=(seq,scorer,assist='')=>({action:'record_goal',args:{
  event_id:'5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e',seq,team:'チーム1',
@@ -89,4 +89,46 @@ test('stops before POST if team verification, reviewed action or preview has cha
   executeAction:async()=>{writeCount++;return {write_sent:true,readback:{verified:true}};}}),
   /一括確認時から変わりました/);
  assert.equal(writeCount,0);
+});
+
+test('one-tap path uses exactly ONE signed preview per goal, journal before each write',async()=>{
+ const selected=selectBatchOperations(plan,[0,1]);
+ const events=[],count={preview:0,write:0};
+ const done=await executeReviewedBatchOnce({selected,
+  resolveAction:async op=>{events.push('read '+op.args.scorer);return actionOf(op)},
+  previewAction:async a=>{count.preview++;events.push('preview '+a.scorer_id);return preview(a)},
+  beforeExecute:async(item,a)=>events.push('journal '+a.scorer_id),
+  executeAction:async a=>{count.write++;events.push('write '+a.scorer_id);return {write_sent:true,readback:{verified:true}}},
+  afterExecute:async item=>events.push('verified '+item.operation.args.scorer)});
+ assert.equal(done.length,2);
+ assert.equal(count.preview,2);assert.equal(count.write,2);
+ assert.deepEqual(events,[
+  'read 太郎','preview 太郎','journal 太郎','write 太郎','verified 太郎',
+  'read 次郎','preview 次郎','journal 次郎','write 次郎','verified 次郎']);
+});
+test('one-tap path stops on tampered preview and does not write',async()=>{
+ const selected=selectBatchOperations(plan,[0]);
+ let writes=0;
+ await assert.rejects(executeReviewedBatchOnce({selected,
+  resolveAction:async op=>actionOf(op),
+  previewAction:async a=>({...preview(a),plan:{...preview(a).plan,side:'right'}}),
+  executeAction:async()=>{writes++;return {write_sent:true,readback:{verified:true}};}
+ }),/得点側が一致/);
+ assert.equal(writes,0);
+});
+test('one-tap path never retries after a lost response and retains partial success',async()=>{
+ const selected=selectBatchOperations(plan,[0,1]);const called=[];
+ let stopped;
+ try{await executeReviewedBatchOnce({selected,
+  resolveAction:async op=>actionOf(op),previewAction:async a=>preview(a),
+  executeAction:async a=>{
+   called.push(a.scorer_id);
+   if(a.scorer_id==='次郎')throw Error('network lost');
+   return {write_sent:true,readback:{verified:true}};
+  }
+ })}catch(e){stopped=e}
+ assert.ok(stopped instanceof BatchStopped);
+ assert.equal(stopped.completed.length,1);
+ assert.equal(stopped.failedIndex,1);
+ assert.deepEqual(called,['太郎','次郎']);
 });
