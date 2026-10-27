@@ -340,7 +340,7 @@ import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,se
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch2';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
-import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy} from './sposched-write-journal.mjs?v=ss-recovery2';
+import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy,retiredMatchRecoveryPolicy,archiveRetiredAttempt} from './sposched-write-journal.mjs?v=ss-recovery3';
 import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=ss-numbered3';
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
@@ -843,7 +843,7 @@ async function fetchSS(path) {
   cache:'no-store'
  });
  const data = await r.json();
- if(!r.ok) throw Error(data?.error?.message||'SS API HTTP '+r.status);
+ if(!r.ok) throw Object.assign(Error(data?.error?.message||'SS API HTTP '+r.status),{httpStatus:r.status,code:data?.error?.code||'upstream_error'});
  return data;
 }
 async function postStaging(path,payload) {
@@ -1605,6 +1605,59 @@ $('manualAddGoal').addEventListener('click',()=>{
  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
  $('manualAddStatus').textContent='新しいゴールを追加しました。試合・得点者・アシストを指定してください。';
 });
+async function handleMissingOldMatch(entry,eventId,latest){
+ const matchIds=latest.matches.map(m=>m.matchId).filter(Boolean);
+ let gateStatus='unknown',gateError='';
+ try{
+  // This POST is status-only: it reads the old per-match DO, never writes.
+  const state=await postStaging('/staging/status',{match_id:entry.match_id});
+  if(state.environment!=='STAGING ONLY')throw Error('TESTの状態を確認できません');
+  gateStatus=state.status||'unknown';
+ }catch(e){gateError=e.message||'Workerの状態を取得できません'}
+ const policy=retiredMatchRecoveryPolicy(entry,eventId,matchIds,404,gateStatus);
+ snapshot=latest;rebuild({preserveEdits:true});
+ $('recoveryPanel').hidden=false;
+ const details=$('recoveryDetails');
+ details.append(node('p','前回の試合IDは公式TEST APIで404となりました。送信済みだったかどうかは不明です。','warning'));
+ details.append(node('p','旧試合ID：'+entry.match_id,'details'));
+ details.append(node('p','Worker最終状態：'+gateStatus+(gateError?'（'+gateError+'）':''),'details'));
+ details.append(node('p',policy.reason,'details'));
+ for(const m of latest.matches.filter(m=>m.matchId)){
+  details.append(node('p','#'+m.seq+' '+(m.leftTeam||'未確定')+' vs '+(m.rightTeam||'未確定')+
+   ' ／ '+m.status+' ／ 現在の登録済みゴール '+(m.existingGoals?.length||0)+'件','details'));
+ }
+ if(!policy.allowArchive){
+  $('recoveryStatus').textContent='旧試合を照合できません。'+policy.reason+' 再送はしないでください。';
+  return;
+ }
+ const a=mkInput('checkbox'),b=mkInput('checkbox');
+ const la=node('label','','line'),lb=node('label','','line');
+ la.append(a,node('span','以前の試合IDが現在のTESTイベントに存在しないことを確認しました'));
+ lb.append(b,node('span','最新のゴール明細を確認しました。旧送信の成否は不明のまま保管し、現在の試合をすべて再審査します'));
+ details.append(la,lb);
+ const button=node('button','旧試合の送信記録を保管して再審査へ');
+ button.type='button';button.disabled=true;
+ const update=()=>button.disabled=!a.checked||!b.checked;
+ a.addEventListener('change',update);b.addEventListener('change',update);
+ button.addEventListener('click',()=>{
+  if(button.disabled||!a.checked||!b.checked)return;
+  if(!window.confirm('旧送信の成否は不明です。端末に記録を保管し、現行TESTイベントを改めて審査します。送信はしません。続けますか？'))return;
+  try{
+   // Still require the originally confirmed ID mapping and gate status.
+   const current=retiredMatchRecoveryPolicy(entry,eventId,
+    snapshot?.matches?.map(m=>m.matchId).filter(Boolean),404,gateStatus);
+   archiveRetiredAttempt(localStorage,eventId,entry.goalKey,current);
+   autoMustReload=false;
+   $('autoConflict').hidden=true;
+   rebuild({preserveEdits:true});
+   $('recoveryStatus').textContent='旧送信記録を保管しました。最新のゴールと試合を再確認してください。書き込みなし。';
+   statusSS('旧試合IDの端末ロックを整理しました。現在の試合の内容を改めて確認してください。');
+  }catch(e){$('recoveryStatus').textContent='保管できません：'+e.message}
+ });
+ details.append(button);
+ $('recoveryStatus').textContent='旧試合IDの削除または差し替えを検出しました。最新明細を確認後、2つの確認項目を選択してください。';
+}
+
 $('recoveryReload').addEventListener('click',async()=>{
  if(recoveryBusy||batchBusy||!snapshot?.eventId||!loadedFromStagingDirect)return;
  let pending;
@@ -1616,7 +1669,14 @@ $('recoveryReload').addEventListener('click',async()=>{
   const eventId=snapshot.eventId,entry=pending[0];
   const latest=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
   if(latest.eventId!==eventId)throw Error('取得したイベントIDが異なります');
-  const match=await fetchSS('/match?match_id='+encodeURIComponent(entry.match_id));
+  let match;
+  try {
+   match=await fetchSS('/match?match_id='+encodeURIComponent(entry.match_id));
+  }catch(e){
+   if(e.httpStatus!==404)throw e;
+   await handleMissingOldMatch(entry,eventId,latest);
+   return;
+  }
   const evidence=inspectAttempt(entry,match);
   const policy=recoveryDecisionPolicy(evidence);
   snapshot=latest;
