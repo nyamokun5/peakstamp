@@ -203,6 +203,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
    <button id="workerBatchRun" class="primary quick-main" type="button">Workerで4試合を高速一括登録（TEST）</button>
    <button id="workerBatchRefresh" type="button" hidden>ジョブの進捗を再取得（書き込みなし）</button>
    <p id="workerBatchStatus" class="small" role="status" aria-live="polite"></p>
+   <button id="workerBatchRecover" type="button" hidden>⚠ 前回の送信記録を照合（書き込みなし）</button>
    <div id="workerBatchDecision" hidden>
     <p id="workerBatchQuestion" role="status"></p>
     <label class="field">結果を指定
@@ -231,6 +232,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
    <button id="autoResume" class="primary quick-main" type="button">修正して続行</button>
    <button id="autoFix" type="button">対象ゴールを修正する</button>
    <button id="autoReload" class="primary" type="button" hidden>SSを再取得（書き込みなし）</button>
+   <button id="autoRecover" class="primary" type="button" hidden>⚠ 前回の送信記録を照合（書き込みなし）</button>
   </div>
  </div>
  <details class="help"><summary>個別ゴール登録（従来方式）</summary>
@@ -364,6 +366,8 @@ const renderPendingPanel=()=>{
  try{
   const pending=pendingForEvent();
   $('recoveryPanel').hidden=!pending.length;
+  $('workerBatchRecover').hidden=!pending.length;
+  $('autoRecover').hidden=!pending.length||$('autoConflict').hidden;
   if(pending.length){
    const item=pending[0];
    $('recoveryStatus').textContent='送信結果不明：'+item.action+' / 試合ID '+item.match_id+
@@ -371,6 +375,8 @@ const renderPendingPanel=()=>{
   }
  }catch(e){
   $('recoveryPanel').hidden=false;
+  $('workerBatchRecover').hidden=false;
+  $('autoRecover').hidden=$('autoConflict').hidden;
   $('recoveryStatus').textContent='⚠ '+e.message+'。安全のためSSへの書き込みを禁止しました。';
   $('recoveryReload').disabled=true;
  }
@@ -385,7 +391,7 @@ const setBatchBusy=busy=>{
  batchBusy=busy;
  for(const id of ['ssEnvironment','ssBridgeToken','ssLoadEvents','ssEventSelect',
   'ssLoadSnapshot','refreshSources','buildPlan','stagingPreview','stagingExecute',
-  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','autoRun','autoResume','autoFix','autoReload','autoWinner','ssChooseEvent','ssReloadFixtures','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishRecover','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
+  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','autoRun','autoResume','autoFix','autoReload','autoRecover','workerBatchRecover','autoWinner','ssChooseEvent','ssReloadFixtures','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishRecover','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
   $(id).disabled=busy||
    (id==='batchExecute'&&(!batchPrepared||!$('batchApprove').checked))||
    (id==='batchPreview'&&!lastPayload)||
@@ -1183,6 +1189,7 @@ function showAutoConflict(message,seq=null,{tie=false,unsafe=false}={}){
  $('autoResume').hidden=unsafe;
  $('autoFix').hidden=tie||unsafe;
  $('autoReload').hidden=!unsafe;
+ try{$('autoRecover').hidden=!pendingForEvent().length;}catch{$('autoRecover').hidden=false;}
  $('autoConflict').scrollIntoView({behavior:'smooth',block:'center'});
 }
 function renderAutoSummary(){
@@ -1226,16 +1233,22 @@ function renderAutoSummary(){
   }else $('autoBeforeRun').textContent=unfinished?
     'ゴール内容を確認したら、下のボタンで順番に登録します。':'すべて終了しています。';
   const previousWorkerJob=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
- $('workerBatchArea').hidden=false;
+  const unresolved=pendingForEvent().length>0;
+  $('workerBatchArea').hidden=false;
+  $('workerBatchRecover').hidden=!unresolved;
+  if(unresolved){
+   $('autoBeforeRun').textContent='⚠ 前回のTEST送信結果が未確認です。先に「送信記録を照合（書き込みなし）」で状態を確認してください。';
+   $('workerBatchStatus').textContent='前回の未照合記録があります。新しい登録は開始していません。';
+  }
  $('workerBatchRefresh').hidden=!previousWorkerJob;
- $('workerBatchRun').disabled=Boolean(previousWorkerJob)||batchBusy||autoBusy||workerBatchPolling;
+ $('workerBatchRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||autoBusy||workerBatchPolling;
  if(previousWorkerJob&&workerRestoredEvent!==snapshot.eventId){
   workerRestoredEvent=snapshot.eventId;
   Promise.resolve().then(()=>refreshWorkerBatch());
  }
- $('autoRun').disabled=Boolean(previousWorkerJob)||batchBusy||autoBusy||autoMustReload||
+ $('autoRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||autoBusy||autoMustReload||
     unassigned.length>0||needsFix.length>0||unfinished===0;
-  $('autoRun').textContent=autoMustReload?'SSの再取得が必要':
+  $('autoRun').textContent=unresolved?'まず前回の送信記録を照合してください':autoMustReload?'SSの再取得が必要':
    unassigned.length||needsFix.length?'まず上のゴールを修正してください':
    unfinished?'残り'+unfinished+'試合をまとめて登録':'すべて終了済み';
  }catch(e){
@@ -1466,6 +1479,17 @@ async function refreshWorkerBatch(){
   if(e.code==='not_found')setBatchBusy(false);
  }
 }
+// Recovery navigation is GET-only. Journal unlocking still requires an
+// explicit decision after inspecting the official SpoSched TEST goal details.
+function openPendingRecovery(){
+ renderPendingPanel();
+ if($('recoveryPanel').hidden)return;
+ $('recoveryPanel').scrollIntoView({behavior:'smooth',block:'start'});
+ if(!$('recoveryReload').disabled&&!recoveryBusy&&!batchBusy)
+  $('recoveryReload').click();
+}
+$('workerBatchRecover').addEventListener('click',openPendingRecovery);
+$('autoRecover').addEventListener('click',openPendingRecovery);
 $('workerBatchRefresh').addEventListener('click',()=>refreshWorkerBatch());
 $('workerBatchRun').addEventListener('click',async()=>{
  if(workerBatchPolling||batchBusy||autoBusy||!snapshot||!loadedFromStagingDirect||
@@ -1475,7 +1499,10 @@ $('workerBatchRun').addEventListener('click',async()=>{
   await refreshWorkerBatch();return;
  }
  try{
-  if(pendingForEvent().length)throw Error('未照合の送信記録があります。先に復旧してください');
+  if(pendingForEvent().length){
+    renderPendingPanel();
+    throw Error('未照合の送信記録があります。下の「送信記録を照合（書き込みなし）」から復旧してください');
+   }
   const requestId=crypto.randomUUID();
   const operations=prepareWorkerTournament({
    snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId,
@@ -1504,6 +1531,7 @@ $('workerBatchRun').addEventListener('click',async()=>{
   }
   await refreshWorkerBatch();
  }catch(error){
+  renderPendingPanel();
   $('workerBatchStatus').textContent='高速一括登録：'+error.message+
    '。通信が不明な場合は再送せず「進捗を再取得」を使ってください。';
   if(!localStorage.getItem(key))$('workerBatchRun').disabled=false;
@@ -1626,6 +1654,8 @@ $('recoveryReload').addEventListener('click',async()=>{
      const row=rows.find(r=>r.key===entry.goalKey);
      if(row){row.include=false;persistManualRow(row)}
     }
+    autoMustReload=false;
+    $('autoConflict').hidden=true;
     rebuild({preserveEdits:true,completedKeys:already?[entry.goalKey]:[]});
     $('recoveryStatus').textContent=already
      ?'送信済みとして除外しました。書き込みは行っていません。'
