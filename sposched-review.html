@@ -325,6 +325,7 @@ import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisio
 import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=ss-numbered3';
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
+import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -332,6 +333,12 @@ let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='',manualGoal
 let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='',previewOperationKey='';
 let batchPrepared=null,batchBusy=false,recoveryBusy=false;
 let quickPrepared=null,quickSending=false;
+let autoTiming=null;
+function runTimingLabel(){
+ if(!autoTiming)return '';
+ const seconds=((performance.now()-autoTiming.start)/1000).toFixed(1);
+ return '（'+seconds+'秒・取得'+autoTiming.gets+'回・確認/登録'+autoTiming.posts+'回）';
+}
 const pendingForEvent=()=>snapshot?.eventId&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging'
  ?pendingAttempts(localStorage,snapshot.eventId):[];
 const renderPendingPanel=()=>{
@@ -802,6 +809,7 @@ const selectedGateway=()=>SS_GATEWAYS[$('ssEnvironment').value];
 const SS_EVENT_ID = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i;
 const statusSS = (message) => { $('ssDirectStatus').textContent = message; };
 async function fetchSS(path) {
+ if(autoTiming)autoTiming.gets++;
  const token = $('ssBridgeToken').value.trim();
  if(!token) throw Error('BRIDGE_TOKENを入力してください。');
  const r = await fetch(selectedGateway() + path, {
@@ -815,6 +823,7 @@ async function fetchSS(path) {
  return data;
 }
 async function postStaging(path,payload) {
+ if(autoTiming)autoTiming.posts++;
  if($('ssEnvironment').value!=='staging'||!loadedFromStagingDirect)
   throw Error('テスト環境のSS APIを直接読み込んでください');
  const token=$('ssBridgeToken').value.trim();
@@ -1207,11 +1216,27 @@ function renderAutoSummary(){
   $('autoRun').disabled=true;
  }
 }
+// The before-image belongs to the exact reviewed goal; no extra /match GET
+// is needed just to fill the crash-recovery journal before its single POST.
+const autoGoalBefore=new WeakMap();
+async function resolveAutoGoal(operation){
+ const verified=await resolveAutoGoalRead({
+  snapshot,operation,
+  readSnapshot:id=>fetchSS('/snapshot?event_id='+encodeURIComponent(id)),
+  readMatch:id=>fetchSS('/match?match_id='+encodeURIComponent(id)),
+  normalizeSnapshot:normalizeSpoSnapshot,
+  assertNumbered:assertCurrentNumberedFixture,
+  toAction:toStagingAction
+ });
+ autoGoalBefore.set(operation,verified);
+ return verified.action;
+}
 async function autoRegisterTournament(){
  if(autoBusy||batchBusy||!snapshot||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging'||autoMustReload)return;
  let seq=null,completed=0;
  autoBusy=true;autoUnsafeStop=false;
+ autoTiming={start:performance.now(),gets:0,posts:0};
  $('autoConflict').hidden=true;
  setBatchBusy(true);
  try{
@@ -1233,7 +1258,10 @@ async function autoRegisterTournament(){
     if(fresh.eventId!==eventId)throw Error('SSイベントが変更されました');
     snapshot=fresh;rebuild({preserveEdits:true});
    }
-   snapshotFresh=false;
+   // Keep the current snapshot across already-finished fixtures when
+   // resuming #4; a finished slot cannot be mutated by this flow.
+   // Every new goal and result still has fresh server-side validation.
+   snapshotFresh=true;
    const plan=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),
      seq,autoWinnerFor(seq));
    if(plan.state==='finished'){
@@ -1242,7 +1270,7 @@ async function autoRegisterTournament(){
    if(plan.state==='blocked'||plan.state==='winner-needed'||plan.state==='waiting'){
     showAutoConflict(plan.reason||'この試合を処理できません',seq,
       {tie:plan.state==='winner-needed'});
-    autoStep('試合 #'+seq+'：入力が必要です。修正後に続行してください',completed);
+    autoStep('試合 #'+seq+'：入力が必要です。修正後に続行してください '+runTimingLabel(),completed);
     return;
    }
    // Only goals for this official numbered fixture are eligible at this step.
@@ -1256,11 +1284,16 @@ async function autoRegisterTournament(){
     autoStep('試合 #'+seq+'：正式な試合・選手IDを照合中…',completed);
     autoUnsafeStop=true;
     const done=await executeReviewedBatchOnce({
-     selected,resolveAction:resolveReviewedAction,
+     selected,resolveAction:resolveAutoGoal,
      previewAction:action=>postStaging('/staging/preview',action),
      beforeExecute:async(item,action)=>{
-      const before=await fetchSS('/match?match_id='+encodeURIComponent(action.match_id));
-      beginAttempt(localStorage,eventId,goalKeyOfOperation(item.operation),action,before);
+      const verified=autoGoalBefore.get(item.operation);
+      if(!verified||JSON.stringify(verified.action)!==JSON.stringify(action)||
+         verified.before?.match_id!==action.match_id)
+       throw Error('送信前の正式な試合情報がありません。処理を停止しました');
+      beginAttempt(localStorage,eventId,goalKeyOfOperation(item.operation),
+       action,verified.before);
+      autoGoalBefore.delete(item.operation);
      },
      executeAction:payload=>postStaging('/staging/execute',payload),
      afterExecute:async item=>{
@@ -1293,18 +1326,22 @@ async function autoRegisterTournament(){
    const base=finishAction(snapshot,snapshot,seq,plan.winner);
    if(base.left_score!==plan.left||base.right_score!==plan.right)
     throw Error('試合 #'+seq+' の結果がプランと一致しません');
-   const current=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+   // Independent GET + Durable Object journal status can run concurrently.
+   const [currentData,state]=await Promise.all([
+    fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)),
+    postStaging('/staging/status',{match_id:base.match_id})
+   ]);
+   const current=normalizeSpoSnapshot(currentData);
    const action=finishAction(snapshot,current,seq,plan.winner);
    if(JSON.stringify(action)!==JSON.stringify(base))
     throw Error('試合 #'+seq+' のスコアか試合情報が変わりました。送信せず中断しました');
-   const state=await postStaging('/staging/status',{match_id:action.match_id});
    if(state.status==='pending')throw Error('前回の試合終了結果が不明です。再送できません');
    const preview=await postStaging('/staging/preview',action);
    if(preview.environment!=='STAGING ONLY'||!preview.preview_token||preview.plan?.action!=='finish')
     throw Error('TESTの結果確定プレビューに対応していません');
-   const last=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
-   if(JSON.stringify(finishAction(snapshot,last,seq,plan.winner))!==JSON.stringify(base))
-    throw Error('確定直前に試合結果が変わりました。送信しません');
+   // No third identical read here: Worker signed preview binds the entire
+   // official match fingerprint. At execute, the Worker independently re-GETs
+   // the official match + current event bracket and rejects any drift.
    // From here, any exception is an ambiguous response: never auto-retry.
    autoUnsafeStop=true;
    const result=await postStaging('/staging/execute',{
@@ -1318,7 +1355,7 @@ async function autoRegisterTournament(){
    completed++;
    autoStep('✓ 試合 #'+seq+' の得点と勝敗を照合しました',completed);
   }
-  $('autoStage').textContent='✓ 全4試合の登録・結果確認が完了しました';
+  $('autoStage').textContent='✓ 全4試合の登録・結果確認が完了しました '+runTimingLabel();
   $('autoConflict').hidden=true;
  }catch(error){
   // On uncertain outcome (including failed POST/readback), stop with no retry.
@@ -1329,8 +1366,10 @@ async function autoRegisterTournament(){
   showAutoConflict('試合 #'+(seq||'?')+' で停止：'+error.message+
     (uncertain?'。送信済みの可能性があります。再送せず最新データを照合してください。':''),seq,
     {unsafe:uncertain});
-  autoStep('停止しました。'+(uncertain?'通信結果を照合してください':'修正後に続行できます'),completed);
+  autoStep('停止しました。'+(uncertain?'通信結果を照合してください':'修正後に続行できます')+
+   ' '+runTimingLabel(),completed);
  }finally{
+  autoTiming=null;
   autoUnsafeStop=false;autoBusy=false;setBatchBusy(false);renderAutoSummary();
  }
 }
