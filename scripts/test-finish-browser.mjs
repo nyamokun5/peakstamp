@@ -57,7 +57,7 @@ try{
  assert.equal(writes,0);assert.equal(previews,0);
  await page.locator('#individualFinishTools summary').click();
  await page.locator('#finishPanel').waitFor({state:'visible'});
- assert.match(await page.locator('#flowGuide').innerText(),/トーナメント登録を続行/);
+ assert.match(await page.locator('#flowGuide').innerText(),/得点と勝敗をまとめて登録/);
  assert.equal(await page.locator('#finishPreview').count(),0);
  assert.equal(await page.locator('#finishCancel').count(),0);
  await page.locator('#autoGoalDetails summary').click();
