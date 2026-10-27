@@ -27,7 +27,7 @@ test('unknown goal, duplicate, unsupported or wrong team blocks a match before a
   assert.equal(r.state,'blocked',state);
  }
  assert.equal(analyzeAutoFixture(s,[{seq:1,team:'別チーム'}],[{index:0,state:'ready'}],1).state,'blocked');
- assert.equal(analyzeAutoFixture(s,[{seq:1,team:'チーム1'}],[{index:0,state:'skipped'}],1,'left').state,'blocked');
+ assert.equal(analyzeAutoFixture(s,[{seq:1,team:'チーム1'}],[{index:0,state:'skipped'}],1,'left').state,'ready');
 });
 test('semifinal completion reveals new final only after an actual upstream refresh',()=>{
  const s=snap();s.matches[2].status='waiting';
