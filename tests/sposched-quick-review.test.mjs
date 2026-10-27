@@ -212,7 +212,7 @@ test('compact UI renders assist -> scorer in review and pre-send summary',()=>{
  assert.match(html,/item\.assist\+' → '\+\(item\.scorer\|\|'得点者未確定'\)/);
  assert.match(html,/\\nアシスト → 得点：/);
  assert.match(html,/const quickOpenRows=new Set\(\)/);
- assert.match(html,/editQuickGoalField\(snapshot,row,field,menu\.value\)/);
+ assert.match(html,/editQuickGoalField\(snapshot,row,field,value\)/);
  assert.match(html,/quick-field/);
  assert.match(html,/renderGoals\(\); \/\/ keep exceptional detail editor in sync/);
  assert.doesNotMatch(html,/top\.append\(node\('strong','#'\+\(item\.index\+1\)\+' '\+\(item\.scorer/);
@@ -284,7 +284,9 @@ test('unconfirmed player dropdown exposes short AI hint but never preselects a g
  assert.match(html,/確認して選択（AI: /);
  assert.match(html,/row\.goal\?\.scorer\)\)/);
  assert.match(html,/row\.goal\?\.assist\)\)/);
- assert.match(html,/menu\.value=needsReview\?'':String\(current\?\?''\)/);
+ assert.match(html,/menu\.value=validCandidate\?String\(current\):needsReview\?'':String\(current\?\?''\)/);
+  assert.match(html,/この試合 #/);
+  assert.match(html,/confirm-candidate/);
 });
 
 test('four-team third-place and final goal candidates remain in numbered waiting slots without any writes',()=>{
@@ -332,7 +334,7 @@ test('UI lists official fixture numbers and holds waiting matches without enabli
  assert.match(html,/goalCandidatesByMatchNumber\(snapshot,rows\)/);
  assert.match(html,/item\.state==='waiting'/);
  assert.match(html,/対戦待ち・送信保留/);
- assert.match(html,/試合番号別・動画ゴール候補数/);
+ assert.match(html,/試合別の候補件数（参考）/);
  assert.match(html,/label:matchSlotLabel\(v\)/);
 });
 
@@ -406,4 +408,17 @@ test('rare fixture UUID reset prompt exists only when local mismatch has been de
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
  assert.match(html,/if\(row\.fixtureIdentityChanged===true\)/);
  assert.match(html,/この試合番号・新しい試合IDを確認する/);
+});
+
+test('visible candidate list precedes one-tap registration and errors sort first',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ const start=html.indexOf('<section class="panel" id="quickPanel"');
+ const review=html.indexOf('<div id="autoGoalDetails">',start);
+ const list=html.indexOf('<div id="quickGoals"></div>',review);
+ const register=html.indexOf('<div id="autoPanel">',start);
+ assert.ok(start>=0&&start<review&&review<list&&list<register);
+ assert.doesNotMatch(html,/<details id="autoGoalDetails">/);
+ assert.match(html,/const displayItems=items\.slice\(\)\.sort/);
+ assert.match(html,/試合番号：未設定（要選択）/);
+ assert.match(html,/試合番号が未設定のゴールが/);
 });

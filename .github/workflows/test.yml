@@ -35,3 +35,4 @@ jobs:
         run: |
           node scripts/test-finish-browser.mjs
           node scripts/test-auto-tournament-browser.mjs
+          node scripts/test-goal-review-browser.mjs

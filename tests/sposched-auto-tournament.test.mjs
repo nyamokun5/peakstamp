@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {analyzeAutoFixture,assertFourMatchBracket} from '../sposched-auto-tournament.mjs';
+import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from '../sposched-auto-tournament.mjs';
 const match=(seq,leftScore=0,rightScore=0,status='scheduled')=>({
  seq,matchId:'match-'+seq,status,leftTeam:'チーム'+seq,rightTeam:'相手'+seq,
  leftScore,rightScore
@@ -36,4 +36,13 @@ test('semifinal completion reveals new final only after an actual upstream refre
  assert.equal(analyzeAutoFixture(s,[],[],3).state,'ready');
  s.matches[2].status='finished';
  assert.equal(analyzeAutoFixture(s,[],[],3).state,'finished');
+});
+
+test('unassigned video goals are detected and cannot vanish from a finished bracket',()=>{
+ const s=snap(),rows=[{seq:null},{seq:99},{seq:2},{seq:undefined},{seq:1}];
+ const decisions=[{index:0,state:'attention'},{index:1,state:'attention'},
+  {index:2,state:'ready'},{index:3,state:'skipped'},{index:4,state:'duplicate'}];
+ assert.deepEqual(unassignedGoalDecisions(s,rows,decisions).map(x=>x.index),[0,1]);
+ for(const m of s.matches)m.status='finished';
+ assert.deepEqual(unassignedGoalDecisions(s,rows,decisions).map(x=>x.index),[0,1]);
 });

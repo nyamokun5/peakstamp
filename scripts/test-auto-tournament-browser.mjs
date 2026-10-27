@@ -97,6 +97,11 @@ try {
  await page.fill('#ssBridgeToken','mock-token');
  await page.click('#ssLoadEvents');await page.click('#ssLoadSnapshot');
  await page.locator('#autoPanel').waitFor({state:'visible'});
+ assert.equal(await page.locator('#autoGoalDetails').isVisible(),true);
+ assert.equal(await page.locator('#quickGoals .quick-goal').count(),1);
+ const cards=await page.locator('#autoGoalDetails').boundingBox();
+ const primary=await page.locator('#autoPanel').boundingBox();
+ assert.ok(cards.y<primary.y,'goal review must be ABOVE primary registration');
  assert.equal(await page.locator('#autoRun').isVisible(),true);
  assert.equal(await page.locator('#autoRun').isEnabled(),true);
  assert.equal(await page.locator('#quickPreview').isVisible(),false);
