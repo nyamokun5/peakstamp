@@ -277,3 +277,12 @@ test('all quick goal cards show AI original and suggested roster names without c
  assert.match(quick,/node\('div','AI聞き取り：'/);
  assert.match(quick,/id='no-op-impossible'|el\.append\(aiBox\)/);
 });
+
+test('unconfirmed player dropdown exposes short AI hint but never preselects a guess',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(html,/needsReview=false,aiHint=''/);
+ assert.match(html,/確認して選択（AI: /);
+ assert.match(html,/row\.goal\?\.scorer\)\)/);
+ assert.match(html,/row\.goal\?\.assist\)\)/);
+ assert.match(html,/menu\.value=needsReview\?'':String\(current\?\?''\)/);
+});
