@@ -88,6 +88,15 @@ body.detail-open{padding-bottom:115px}
 #finishCurrent .quick-main{font-size:16px;min-height:50px}
 #autoPanel{padding:12px;border:1px solid #68a995;border-radius:12px;background:#102e37;margin:14px 0}
 #autoGoalDetails{display:block;margin:12px 0 24px}
+html,body{max-width:100%;overflow-x:clip}
+main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-width:100%}
+.quick-field select,#quickGoals select{display:block;max-width:100%;width:100%;min-width:0}
+.flow-guide>div{min-width:0;flex:1;overflow-wrap:anywhere}
+#ssFixtureWarning{margin:12px 0;padding:14px;border-radius:10px}
+#ssFixtureWarning strong{display:block;font-size:16px}
+#ssFixtureWarning p{color:#ffdfa9;overflow-wrap:anywhere}
+#ssFixtureWarning button{margin:6px 6px 0 0}
+@media(max-width:480px){#ssFixtureWarning button{display:block;width:100%}}
 #quickSummary{padding:12px 14px;border-left:4px solid #7be0bb;background:#173843;border-radius:8px;margin:12px 0;font-weight:650}
 #autoRegisterHeading{scroll-margin-top:120px}
 .quick-goal{scroll-margin-top:120px}
@@ -170,6 +179,12 @@ body.detail-open{padding-bottom:115px}
 </section>
 <section class="panel" id="quickPanel" hidden>
  <div class="top"><h2>3. ゴール候補を確認・修正</h2><span class="step">TEST ONLY</span></div>
+ <div id="ssFixtureWarning" class="warning" hidden role="alert">
+  <strong>このイベントには選択できるSS試合がありません</strong>
+  <p id="ssFixtureWarningText"></p>
+  <button id="ssChooseEvent" type="button">← SSイベントを選び直す</button>
+  <button id="ssReloadFixtures" type="button">試合を再取得（読み取りのみ）</button>
+ </div>
  <p class="step-help">全ゴールを確認してください。問題のある候補は最初に表示し、必要な項目だけ修正できます。</p>
  <p id="quickSummary" class="quick-summary" role="status" aria-live="polite"></p>
  <div id="autoGoalDetails">
@@ -344,7 +359,7 @@ const setBatchBusy=busy=>{
  batchBusy=busy;
  for(const id of ['ssEnvironment','ssBridgeToken','ssLoadEvents','ssEventSelect',
   'ssLoadSnapshot','refreshSources','buildPlan','stagingPreview','stagingExecute',
-  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','autoRun','autoResume','autoFix','autoReload','autoWinner','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishRecover','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
+  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','autoRun','autoResume','autoFix','autoReload','autoWinner','ssChooseEvent','ssReloadFixtures','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishRecover','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
   $(id).disabled=busy||
    (id==='batchExecute'&&(!batchPrepared||!$('batchApprove').checked))||
    (id==='batchPreview'&&!lastPayload)||
@@ -823,6 +838,10 @@ const quickOpenRows=new Set();
 const quickSelect=(row,field,label,options,current,needsReview=false,aiHint='')=>{
  const wrap=node('label','','quick-field');
  wrap.append(node('span',label));
+ if(field==='match'&&!options.length){
+  wrap.append(node('p','SSに試合番号付きの試合がありません。上のイベントを選び直すか、SS側で試合枠を作成してください。','quick-held-note'));
+  return wrap;
+ }
  const menu=document.createElement('select');
  menu.setAttribute('aria-label','#'+(rows.indexOf(row)+1)+' '+label);
  const shortAI=typeof aiHint==='string'?aiHint.trim().slice(0,16):'';
@@ -892,6 +911,14 @@ function renderQuick(){
    '　｜　登録可能 '+ready+'件・対戦待ち '+waiting+'件'+
    (other?'・対象外 '+other+'件':'');
  const container=$('quickGoals');container.replaceChildren();
+ const noFixtures=snapshot.matches.length===0;
+ $('ssFixtureWarning').hidden=!noFixtures;
+ if(noFixtures){
+  const selected=$('ssEventSelect').selectedOptions[0]?.textContent||'選択したイベント';
+  $('ssFixtureWarningText').textContent='「'+selected+
+   '」について、SSから番号付き試合を0件取得しました。動画の6ゴールだけでは公式の試合番号・対戦チーム・IDは作れません。'+
+   '正しいTESTイベントを選び直すか、SS側で4試合のトーナメント枠を作成してから再取得してください。TESTへの送信は停止しています。';
+ }
  // Fixes are first; already reviewed goals follow. Video counts are reference
  // information only and appear after the actual items, not before them.
  const rank={attention:0,manual:1,patch:1,duplicate:1,waiting:2,ready:3,skipped:4};
@@ -1036,6 +1063,14 @@ function closeDetail(){
  $('quickPanel').scrollIntoView({behavior:'smooth',block:'start'});
 }
 $('quickEdit').addEventListener('click',()=>openDetail());
+$('ssChooseEvent').addEventListener('click',()=>{
+ $('ssEventSelect').scrollIntoView({behavior:'smooth',block:'center'});
+ $('ssEventSelect').focus({preventScroll:true});
+});
+$('ssReloadFixtures').addEventListener('click',()=>{
+ if(batchBusy)return;
+ $('ssLoadSnapshot').click(); // only authenticated GET, never writes
+});
 for(const id of ['quickBack','quickBackBottom','quickBackFixed'])
  $(id).addEventListener('click',closeDetail);
 $('quickCancel').addEventListener('click',()=>{
@@ -1123,6 +1158,13 @@ function renderAutoSummary(){
  if(!active)return;
  const root=$('autoOutline');root.replaceChildren();
  try{
+  if(snapshot.matches.length===0){
+   root.textContent='SSから選択できる試合が取得できていません。';
+   $('autoBeforeRun').textContent='試合番号・試合IDがないためTESTへは登録できません。上のイベントを確認してください。';
+   $('autoRun').disabled=true;
+   $('autoRun').textContent='試合枠がないため登録できません';
+   return;
+  }
   assertFourMatchBracket(snapshot);
   let unfinished=0;
   for(const seq of [1,2,3,4]){
@@ -1447,7 +1489,11 @@ function syncFinishWinner(){
 function updateFlowGuide(){
  const test=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
  let step='STEP 1 / 2',message='SSに接続し、イベントを選んでください。',target='ssDirectPanel';
- if(test){
+ if(test&&snapshot.matches.length===0){
+  step='試合枠なし';
+  message='SSの試合が0件です。イベントを確認してください。';
+  target='ssFixtureWarning';
+ }else if(test){
   const items=quickGoalDecisions(snapshot,rows);
   const ready=items.filter(item=>item.state==='ready').length;
   const needsEdit=items.filter(item=>item.state==='attention'||item.state==='duplicate').length;
@@ -1593,7 +1639,9 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
    restoreManualGoals(localStorage,'staging',snapshot.eventId):[];
   autoMustReload=false;$('autoConflict').hidden=true;
   rebuild({preserveEdits:true});
-  statusSS((loadedFromStagingDirect?'テスト':'本番')+'読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
+  statusSS(snapshot.matches.length===0?
+   '試合0件：このイベントには登録先の番号付き試合がありません。別イベントを選ぶか、SSに試合枠を作成してください。':
+   (loadedFromStagingDirect?'テスト':'本番')+'読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
  }catch(error){statusSS('読み込み失敗：'+error.message);}
  finally{$('ssLoadSnapshot').disabled=false;}
 });
