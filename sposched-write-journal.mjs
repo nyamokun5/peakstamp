@@ -111,3 +111,54 @@ export function recoveryDecisionPolicy(evidence){
   :'SS側に他の変更・対象の消失があります。この画面から再送準備を解除できません。管理者がSSの記録を確認してください。';
  return {allowMarkSent:true,allowReturnToReview:retryAllowed,reason};
 }
+
+
+/** A stale official match UUID may have disappeared after TEST fixture
+ * regeneration. This is NOT evidence that a historical POST failed. A
+ * separate authoritative read must give HTTP 404; any other error leaves the
+ * journal locked. The per-match DO status is advisory; 'pending' vetoes even
+ * an explicit local archive. The event must still contain new official slots.
+ */
+export function retiredMatchRecoveryPolicy(attempt,eventId,currentMatchIds,httpStatus,gateStatus){
+ const ids=Array.isArray(currentMatchIds)?currentMatchIds:[];
+ const valid=Boolean(attempt&&attempt.event_id===eventId&&
+  UUID.test(attempt.match_id||'')&&
+  ids.length>0&&ids.every(id=>UUID.test(id))&&
+  !ids.includes(attempt.match_id));
+ const state=typeof gateStatus==='string'?gateStatus:'unknown';
+ const allowed=valid&&httpStatus===404&&
+  ['idle','verified','rejected'].includes(state);
+ return {state:'historical_match_unavailable',allowArchive:allowed,
+  old_match_id:attempt?.match_id||null,
+  gate_status:state,
+  reason:!valid?'イベントまたは試合の正式なIDを照合できません。送信記録は保持します。'
+   :httpStatus!==404?'古い試合が削除されたと確認できません。送信記録は保持します。'
+   :state==='pending'?'旧試合のWorkerには未解決の書き込みがあります。安全のため復旧を停止します。'
+   :!allowed?'Workerの確認状態を取得できません。送信記録は保持します。'
+   :'旧試合IDは現在のTESTイベントに存在せず、公式APIも404を返しました。旧送信の成否は不明です。最新イベントのゴールを確認した場合のみ端末の古い記録を保管し、新しい試合として再審査できます。'};
+}
+export function retiredArchiveKey(eventId){
+ return 'peakstamp_ss_retired_attempt_audit_v1:staging:'+journalKey(eventId).split(':').pop();
+}
+/** Never mark an attempted goal as sent or unsent. Archive the raw evidence
+ * BEFORE unlocking; keep a separate immutable-by-this-app audit history.
+ * If local storage fails, the attempt remains pending and all writes blocked.
+ */
+export function archiveRetiredAttempt(storage,eventId,goalKey,policy,at=Date.now()){
+ const pending=pendingAttempts(storage,eventId);
+ if(!policy?.allowArchive||pending.length!==1||pending[0].goalKey!==goalKey||
+  pending[0].match_id!==policy.old_match_id||!Number.isFinite(at))
+  fail('失効した試合の確認条件が一致しません。送信記録は保持します');
+ const key=retiredArchiveKey(eventId);
+ let archive;
+ try{
+  archive=JSON.parse(storage.getItem(key)||'[]');
+  if(!Array.isArray(archive)||archive.length>50)throw Error('corrupt audit');
+  const record={...pending[0],archived_at:at,
+   resolution:'old_official_match_404_manual_archive_no_write',
+   worker_gate_status:policy.gate_status};
+  if(!archive.some(item=>item.goalKey===record.goalKey&&item.match_id===record.match_id))
+   storage.setItem(key,JSON.stringify([...archive,record]));
+ }catch{fail('旧送信記録を保管できません。ロックを解除していません')}
+ clearAttempt(storage,eventId,goalKey);
+}
