@@ -99,7 +99,7 @@ try{
  await page.click('#finishExecute');
  await page.waitForFunction(()=>document.getElementById('finishStatus').textContent.startsWith('✓'));
  assert.equal(writes,2);assert.equal(previews,2);
- assert.match(await page.locator('#flowGuide').innerText(),/ゴール/);
+ assert.match(await page.locator('#flowGuide').innerText(),/得点・勝敗/);
  assert.match(await page.locator('#quickGoals').innerText(),/西村/);
  assert.match(await page.locator('#quickGoals').innerText(),/徳永/);
  assert.doesNotMatch(await page.locator('#quickGoals').innerText(),/対戦待ち・送信保留/);
