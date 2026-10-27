@@ -719,12 +719,15 @@ async function postStaging(path,payload) {
 }
 
 const quickOpenRows=new Set();
-const quickSelect=(row,field,label,options,current,needsReview=false)=>{
+const quickSelect=(row,field,label,options,current,needsReview=false,aiHint='')=>{
  const wrap=node('label','','quick-field');
  wrap.append(node('span',label));
  const menu=document.createElement('select');
  menu.setAttribute('aria-label','#'+(rows.indexOf(row)+1)+' '+label);
- const empty=node('option',needsReview?'確認して選択':'選択してください');
+ const shortAI=typeof aiHint==='string'?aiHint.trim().slice(0,16):'';
+ const empty=node('option',needsReview
+  ?shortAI?'確認して選択（AI: '+shortAI+'）':'確認して選択'
+  :'選択してください');
  empty.value='';menu.append(empty);
  for(const choice of options){
   const opt=node('option',choice.label);opt.value=String(choice.value);
@@ -802,7 +805,7 @@ function renderQuick(){
    const scorerUncertain=(!row.quickReviewedAll&&!row.quickReviewedFields?.scorer&&
     row.scorerGuess?.confidence!=='high')||!row.scorer;
    fields.append(quickSelect(row,'scorer','得点者',
-    quickPlayers(row.team),row.scorer,Boolean(scorerUncertain)));
+    quickPlayers(row.team),row.scorer,Boolean(scorerUncertain),row.goal?.scorer));
    const modeSelect=quickSelect(row,'assistMode','アシスト',
     [{value:'none',label:'なし'},{value:'named',label:'あり（選手を選ぶ）'},
      {value:'unknown',label:'未確認'}],
@@ -812,7 +815,8 @@ function renderQuick(){
     const assistUncertain=!row.quickReviewedAll&&!row.quickReviewedFields?.assist&&
       row.assistGuess?.confidence!=='high';
     fields.append(quickSelect(row,'assist','アシストした選手',
-     quickPlayers(row.team),row.assist,Boolean(assistUncertain||!row.assist)));
+     quickPlayers(row.team),row.assist,Boolean(assistUncertain||!row.assist),
+      row.goal?.assist));
    }
    if(m){
     const possible=[m.leftTeam,m.rightTeam].filter(Boolean);
