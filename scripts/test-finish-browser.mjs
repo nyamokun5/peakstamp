@@ -50,20 +50,39 @@ try{
  await page.selectOption('#ssEnvironment','staging');await page.fill('#ssBridgeToken','mock-token');
  await page.click('#ssLoadEvents');await page.click('#ssLoadSnapshot');
  await page.locator('#finishPanel').waitFor({state:'visible'});
+ assert.match(await page.locator('#flowGuide').innerText(),/スコアを確認して試合を終了/);
  assert.match(await page.locator('#quickGoals').innerText(),/対戦待ち/);
+ // Detailed editing is never a dead end: fixed footer + inline top/bottom exits.
+ await page.locator('#quickPanel details.help summary').click();
+ await page.click('#quickEdit');
+ assert.equal(await page.locator('#reviewArea').isVisible(),true);
+ assert.equal(await page.locator('#detailReturnBar').isVisible(),true);
+ await page.click('#quickBackFixed');
+ assert.equal(await page.locator('#reviewArea').isVisible(),false);
+ assert.equal(await page.locator('#detailReturnBar').isVisible(),false);
+ await page.click('#quickEdit');
+ await page.click('#quickBackBottom');
+ assert.equal(await page.locator('#reviewArea').isVisible(),false);
  for(const seq of ['1','2']){
-  await page.selectOption('#finishMatch',seq);await page.click('#finishPreview');
+  await page.selectOption('#finishMatch',seq);
+  assert.equal(await page.locator('#finishWinnerWrap').isVisible(),false);
+  await page.click('#finishPreview');
   await page.locator('#finishConfirm').waitFor({state:'visible'});
-  assert.equal(await page.locator('#finishExecute').isDisabled(),true);
-  await page.check('#finishApproved');await page.click('#finishExecute');
+  // Human approves only once after seeing the signed TEST preview: no extra checkbox.
+  assert.equal(await page.locator('#finishExecute').isEnabled(),true);
+  assert.equal(await page.locator('#finishApproved').count(),0);
+  await page.click('#finishExecute');
   await page.waitForFunction(()=>document.getElementById('finishStatus').textContent.startsWith('✓'));
  }
  assert.equal(writes,2);
+ assert.match(await page.locator('#flowGuide').innerText(),/ゴール/);
  assert.match(await page.locator('#quickGoals').innerText(),/西村/);
  assert.match(await page.locator('#quickGoals').innerText(),/徳永/);
  assert.doesNotMatch(await page.locator('#quickGoals').innerText(),/対戦待ち・送信保留/);
  // A changed score invalidates confirmation without any result write.
  await page.selectOption('#finishMatch','3');
+ // A tied TEST fixture asks for the winner; one-sided matches don't.
+ assert.equal(await page.locator('#finishWinnerWrap').isVisible(),true);
  // This third-place goal is not yet registered: the finish preview must refuse.
  await page.click('#finishPreview');await page.waitForFunction(()=>document.getElementById('finishStatus').textContent.includes('未登録・要確認'));
  assert.equal(writes,2);assert.equal(await page.locator('#finishConfirm').isVisible(),false);
@@ -71,5 +90,5 @@ try{
  assert.equal(await page.locator('#finishPanel').isVisible(),false);
  assert.deepEqual(errors,[]);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- console.log('PASS: mobile finish confirmation, two semifinals, third-place goal retained/unblocked, unfinished-goal guard and production hidden');
+ console.log('PASS: mobile guided steps, persistent detail return, two-click finish, third-place goal preserved, pending-guard and production hidden');
 }finally{await browser.close()}
