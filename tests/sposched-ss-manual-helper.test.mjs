@@ -31,17 +31,26 @@ const review=s=>{
 const plan=(snapshot,rows,decisions)=>prepareWorkerTournament({
  snapshot,rows,decisions,requestId:'77777777-7777-4777-8777-777777777777'
 });
-test('cross-team assist is automatically excluded and cannot silently finalize an unregistered SS goal',()=>{
+test('cross-team ASSIST is deferred, but its goal and match finish remain in the Worker batch',()=>{
  const snapshot=fresh(false),rows=review(snapshot),row=rows[0],decisions=quickGoalDecisions(snapshot,rows);
- assert.equal(row.include,true,'original candidate stays visible for corrections');
- assert.equal(decisions[0].state,'manual-ss');
- assert.equal(decisions[0].registeredInSS,false);
- assert.match(decisions[0].reason,/SSのこの試合.*直接記録/);
+ assert.equal(row.include,true,'source goal stays visible and retains its assist');
+ assert.equal(row.assist,'橋本 泰成');
+ assert.equal(row.assistMode,'named');
+ assert.equal(decisions[0].state,'ready');
+ assert.equal(decisions[0].deferredAssist.person,'橋本 泰成');
+ assert.equal(decisions[0].assist,'なし（SSで後から追記）');
  assert.equal(ssManualHelperGoal(snapshot,row).mismatches[0].person,'橋本 泰成');
  assert.equal(snapshot.playerTeam.get('橋本 泰成'),'チーム1',
   'SS roster home team is never changed');
- assert.throws(()=>plan(snapshot,rows,decisions),/SSで直接登録後/);
- assert.throws(()=>plan(snapshot,rows,[{...decisions[0],registeredInSS:true}]),/登録状態が変わりました/);
+ const job=plan(snapshot,rows,decisions);
+ assert.deepEqual(job.operations.map(op=>[op.action,op.seq]),
+  [['finish',1],['create',2],['finish',2],['finish',3],['finish',4]]);
+ assert.deepEqual(job.operations.find(op=>op.action==='create'),
+  {seq:2,action:'create',team:'チーム3',scorer:'Hiroyuki Kawata',assist:'',expected_match_id:IDS[1]});
+ assert.throws(()=>plan(snapshot,rows,[{...decisions[0],deferredAssist:null}]),
+  /アシスト除外を再検証/);
+ assert.throws(()=>plan(snapshot,rows,[{...decisions[0],deferredAssist:{person:'別人',homeTeam:'チーム1',scoringTeam:'チーム3'}}]),
+  /アシスト除外を再検証/);
 });
 test('officially read-back manually entered helper goal is excluded from the Worker job',()=>{
  const snapshot=fresh(true),rows=review(snapshot),decisions=quickGoalDecisions(snapshot,rows);
@@ -83,6 +92,8 @@ test('UI highlights the SS manual-only exclusion and blocks finalizing until off
  assert.match(html,/SSで手動登録後に最新情報を再取得/);
  assert.match(html,/manualPending\.length/);
  assert.match(html,/未登録のまま試合は終了しません/);
+ assert.match(html,/アシストSS追記/);
+ assert.match(html,/アシストだけ別チームならゴールをアシストなしで自動登録/);
 });
 
 test('scorer from outside both fixture teams is SS-manual even when scoring side cannot be guessed',()=>{
@@ -102,4 +113,20 @@ test('scorer from outside both fixture teams is SS-manual even when scoring side
   scorer:'橋本 泰成',assistStatus:'none',matchSeq:2,matchLabel:'チーム3 vs チーム4'}]},official);
  assert.equal(ssManualHelperGoal(official,after[0]).registered,true);
  assert.equal(plan(official,after,quickGoalDecisions(official,after)).operations.filter(x=>x.action==='create').length,0);
+});
+
+test('a planned blank-assist goal cannot duplicate an existing or newly planned blank-assist goal',()=>{
+ const snapshot=fresh(false),rows=review(snapshot);
+ snapshot.matches[1].existingGoals=[{scorer:'Hiroyuki Kawata',assist:'',team:'チーム3'}];
+ assert.equal(quickGoalDecisions(snapshot,rows)[0].state,'duplicate',
+  'deferring the assist must compare to the actual no-assist goal in SS');
+ snapshot.matches[1].existingGoals=[];
+ const two=prepareGoalRows({goals:[
+  {id:'same-scorer-help',source,scorer:'Hiroyuki Kawata',assist:'橋本 泰成',assistStatus:'named',matchSeq:2,matchLabel:'チーム3 vs チーム4'},
+  {id:'same-scorer-none',source,scorer:'Hiroyuki Kawata',assistStatus:'none',matchSeq:2,matchLabel:'チーム3 vs チーム4'}
+ ]},snapshot);
+ const decisions=quickGoalDecisions(snapshot,two);
+ assert.deepEqual(decisions.map(d=>d.state),['attention','attention'],
+  'two create calls with same scorer and no assist are rejected before writing');
+ assert.throws(()=>plan(snapshot,two,decisions),/一括候補内に同一|個別確認/);
 });
