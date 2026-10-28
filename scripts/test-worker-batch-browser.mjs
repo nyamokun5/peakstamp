@@ -50,7 +50,7 @@ await page.route('**/*',async route=>{
   assert.deepEqual(body.operations.map(op=>[op.action,op.seq]),[
    ['finish',1],['finish',2],['create',3],['finish',3],['finish',4]
   ],'waiting third-place goal is included automatically with no extra approval');
-  assert.deepEqual(body.operations.map(op=>op.expected_match_id),ids);
+  assert.deepEqual(body.operations.map(op=>op.expected_match_id),[ids[0],ids[1],ids[2],ids[2],ids[3]]);
   assert.ok(/^[0-9a-f-]{36}$/i.test(body.request_id));
   lastRequestId=body.request_id;step='running';
   data={environment:'STAGING ONLY',event_id:E,request_id:lastRequestId,
