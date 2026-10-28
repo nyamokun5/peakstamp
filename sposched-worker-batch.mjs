@@ -4,6 +4,7 @@
  * every signed mutation before calling the existing per-match write gate.
  */
 import {waitingKnockoutGoalIssue} from './sposched-quick-review.mjs?v=roster-phonetic2';
+import {isVerifiedMatchHelper} from './sposched-match-helpers.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const name=v=>typeof v==='string'?v.trim():'';
 const normalized=v=>name(v).normalize('NFKC').toLocaleLowerCase('en').replace(/[\s\u3000]/g,'');
@@ -57,9 +58,11 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
    fail('ゴール'+(i+1)+'：チーム・得点者・アシスト状態を確認してください');
   if(assist&&normalized(assist)===normalized(scorer))
    fail('ゴール'+(i+1)+'：同じ選手を得点者とアシスト者に指定できません');
-  if(snapshot.playerTeam?.get(scorer)&&normalized(snapshot.playerTeam.get(scorer))!==normalized(team))
+  if(snapshot.playerTeam?.get(scorer)&&normalized(snapshot.playerTeam.get(scorer))!==normalized(team)&&
+     !isVerifiedMatchHelper(snapshot,seq,scorer,team))
    fail('ゴール'+(i+1)+'：得点者の所属と得点チームが異なります');
-  if(assist&&snapshot.playerTeam?.get(assist)&&normalized(snapshot.playerTeam.get(assist))!==normalized(team))
+  if(assist&&snapshot.playerTeam?.get(assist)&&normalized(snapshot.playerTeam.get(assist))!==normalized(team)&&
+     !isVerifiedMatchHelper(snapshot,seq,assist,team))
    fail('ゴール'+(i+1)+'：アシスト者の所属と得点チームが異なります');
   const signature=[seq,normalized(team),normalized(scorer),normalized(assist)].join('|');
   if(signatures.has(signature))
