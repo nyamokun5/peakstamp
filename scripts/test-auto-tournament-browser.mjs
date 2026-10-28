@@ -104,6 +104,17 @@ try {
  const cards=await page.locator('#autoGoalDetails').boundingBox();
  const primary=await page.locator('#autoPanel').boundingBox();
  assert.ok(cards.y<primary.y,'goal review must be ABOVE primary registration');
+ // The third-place goal is correctly WAITING for semifinal promotion.
+ // Being waiting is NOT a reason to require the SS opponent up front.
+ assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
+ assert.match(await page.locator('#workerBatchReadiness').innerText(),/明示的に確認/);
+ const approveWaiting=page.getByRole('button',{
+  name:'試合番号・得点者・アシストを確認して進む（対戦待ちはOK）'
+ });
+ assert.equal(await approveWaiting.isVisible(),true);
+ await approveWaiting.click();
+ assert.equal(await page.locator('#workerBatchRun').isEnabled(),true,
+  'approved waiting goal must not block Worker batch before semifinals finish');
  assert.equal(await page.locator('#autoRun').isVisible(),false);
  await page.locator('#legacyBatchDetails summary').click();
  assert.equal(await page.locator('#autoRun').isVisible(),true);
