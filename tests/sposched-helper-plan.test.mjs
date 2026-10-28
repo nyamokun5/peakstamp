@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeSpoSnapshot,prepareGoalRows} from '../sposched-review-core.mjs';
-import {proposedMatchHelpers} from '../sposched-helper-plan.mjs';
+import {proposedMatchHelpers,waitingHelperScoringSideIssue} from '../sposched-helper-plan.mjs';
 import {quickGoalDecisions,editQuickGoalField} from '../sposched-quick-review.mjs';
 import {prepareWorkerTournament} from '../sposched-worker-batch.mjs';
 const E='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -85,4 +85,39 @@ test('iPhone UI keeps a single TEST batch click and clearly shows helper enrollm
  assert.match(html,/準決勝終了後の正式な対戦確認が条件/);
  assert.match(html,/helperEnrollment>0/);
  assert.match(html,/Workerがその試合の助っ人として登録/);
+});
+
+test('third-place video pair excludes scorer home team: require ONE scoring-team selection before any helper write',()=>{
+ const snapshot=snap(),goal=video('third-helper-scorer',3,'橋本 泰成',null);
+ goal.teamA='チーム2';goal.teamB='チーム3';goal.matchLabel='チーム2 vs チーム3';
+ const rows=prepareGoalRows({goals:[goal]},snapshot);
+ assert.equal(rows[0].team,'');
+ assert.match(waitingHelperScoringSideIssue(snapshot,rows[0]),/実際に得点したチームを選んでください/);
+ assert.equal(proposedMatchHelpers(snapshot,rows[0]),null);
+ const undecided=quickGoalDecisions(snapshot,rows)[0];
+ assert.equal(undecided.state,'attention');
+ assert.match(undecided.reason,/助っ人得点/);
+ assert.throws(()=>job(snapshot,rows,[undecided]),/得点したチーム/);
+ assert.throws(()=>editQuickGoalField(snapshot,rows[0],'team','チーム9'),/名簿/);
+ editQuickGoalField(snapshot,rows[0],'team','チーム2');
+ assert.equal(waitingHelperScoringSideIssue(snapshot,rows[0]),null);
+ const decided=quickGoalDecisions(snapshot,rows);
+ assert.equal(decided[0].state,'waiting');
+ assert.deepEqual(decided[0].helperPlan?.helpers.map(h=>h.name),['橋本 泰成']);
+ const operations=job(snapshot,rows,decided).operations;
+ assert.deepEqual(operations.map(op=>[op.seq,op.action]),[
+  [1,'finish'],[2,'finish'],[3,'helper'],[3,'create'],[3,'finish'],[4,'finish']
+ ]);
+ assert.equal(operations[2].team,'チーム2');
+ assert.equal(operations[3].team,'チーム2');
+ assert.equal(operations[3].scorer,'橋本 泰成');
+});
+test('waiting knockout scorer who belongs to stated video pair requires NO extra side decision',()=>{
+ const snapshot=snap(),goal=video('third-usual',3,'T2',null);
+ goal.matchLabel='チーム2 vs チーム3';
+ const rows=prepareGoalRows({goals:[goal]},snapshot);
+ assert.equal(waitingHelperScoringSideIssue(snapshot,rows[0]),null);
+ assert.equal(quickGoalDecisions(snapshot,rows)[0].state,'waiting');
+ assert.equal(job(snapshot,rows,quickGoalDecisions(snapshot,rows)).operations.some(
+  o=>o.action==='helper'),false);
 });

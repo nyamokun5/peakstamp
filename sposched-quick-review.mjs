@@ -5,7 +5,7 @@
 import {
  normalizePerson,normalizeTeam,validateGoalRow,matchingExistingGoals,buildReviewPayload
 } from './sposched-review-core.mjs?v=roster-phonetic2';
-import {proposedMatchHelpers} from './sposched-helper-plan.mjs';
+import {proposedMatchHelpers,waitingHelperScoringSideIssue} from './sposched-helper-plan.mjs?v=wait-side1';
 
 /**
  * Show what PeakStamp AI ACTUALLY extracted, separate from the possibly
@@ -51,6 +51,8 @@ export function waitingKnockoutGoalIssue(snapshot,row) {
   return '対戦待ちのトーナメント試合番号を確認してください';
  if(row.goal?.manual||row.updateGoalId||row.guest||row.fixtureIdentityChanged)
   return '手動入力・修正・試合ID変更は詳細確認が必要です';
+ const sideIssue=waitingHelperScoringSideIssue(snapshot,row);
+ if(sideIssue)return sideIssue;
  const scorer=String(row.scorer||'').trim();
  const team=String(row.team||snapshot.playerTeam?.get(scorer)||'').trim();
  const actual=snapshot.playerTeam?.get(scorer);
