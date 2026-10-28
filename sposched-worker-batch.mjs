@@ -3,7 +3,7 @@
  * The Worker independently resolves official fixture/player UUIDs and checks
  * every signed mutation before calling the existing per-match write gate.
  */
-import {waitingKnockoutGoalIssue} from './sposched-quick-review.mjs?v=roster-phonetic2';
+import {waitingKnockoutGoalIssue,ssManualHelperGoal} from './sposched-quick-review.mjs?v=roster-phonetic2';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const name=v=>typeof v==='string'?v.trim():'';
 const normalized=v=>name(v).normalize('NFKC').toLocaleLowerCase('en').replace(/[\s\u3000]/g,'');
@@ -37,6 +37,17 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
  for(let i=0;i<rows.length;i++){
   const row=rows[i],decision=decisions[i];
   if(!row?.include)continue;
+  if(decision?.state==='manual-ss'){
+   // Only automatically exclude a verified cross-team scenario from the
+   // batch. Do not silently finalize a match while a manual goal is missing:
+   // enter it directly in SS first, then GET-refresh the official snapshot.
+   const manual=ssManualHelperGoal(snapshot,row);
+   if(!manual||decision.registeredInSS!==manual.registered)
+    fail('ゴール'+(i+1)+'：助っ人の登録状態が変わりました。SSを再取得してください');
+   if(!manual.registered)
+    fail('ゴール'+(i+1)+'：助っ人のゴールはSSで直接登録後、最新データを再取得してください');
+   continue;
+  }
   const seq=Number(row.seq),fixture=matches.find(m=>m.seq===seq);
   if(!fixture)fail('ゴール'+(i+1)+'：試合番号が未設定です');
   if(row.goal?.manual||row.updateGoalId||row.guest||row.fixtureIdentityChanged)
