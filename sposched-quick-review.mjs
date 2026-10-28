@@ -5,6 +5,7 @@
 import {
  normalizePerson,normalizeTeam,validateGoalRow,matchingExistingGoals,buildReviewPayload
 } from './sposched-review-core.mjs?v=roster-phonetic2';
+import {proposedMatchHelpers} from './sposched-helper-plan.mjs';
 
 /**
  * Show what PeakStamp AI ACTUALLY extracted, separate from the possibly
@@ -165,6 +166,9 @@ export function quickGoalDecisions(snapshot,rows) {
     !fixture.leftTeam||!fixture.rightTeam)){
    if(fixture.status==='waiting'&&[3,4].includes(Number(fixture.seq))&&
       snapshot.matches.length===4){
+    const helper=proposedMatchHelpers(snapshot,row);
+    if(helper)return {...item,state:'waiting',helperPlan:helper,
+     reason:'準決勝終了後に正式な対戦相手を検証→助っ人登録→ゴール・アシストを記録します'};
     const issue=waitingKnockoutGoalIssue(snapshot,row);
     if(issue)return {...item,state:'attention',reason:issue};
     return {...item,state:'waiting',
@@ -174,6 +178,9 @@ export function quickGoalDecisions(snapshot,rows) {
     reason:'SS試合枠 #'+fixture.seq+'（'+(fixture.title||'対戦チーム未確定')+
      '）に紐付け済み。正式な試合ID・対戦チームが確定するまで送信を保留します'};
   }
+  const helper=proposedMatchHelpers(snapshot,row);
+  if(helper)return {...item,state:'ready',helperPlan:helper,
+   reason:'Workerがこの試合の助っ人登録を確認してから得点・アシストを記録します'};
   const manual=ssManualHelperGoal(snapshot,row);
   const deferred=deferredHelperAssist(snapshot,row);
   if(manual&&!deferred){
@@ -283,8 +290,13 @@ export function editQuickGoalField(snapshot,row,field,value){
   row.assist=value;row.assistMode='named';mark('assist');
  }else if(field==='team'){
   const m=snapshot.matches.find(x=>x.seq===Number(row.seq));
-  if(!m||![normalizeTeam(m.leftTeam),normalizeTeam(m.rightTeam)]
-   .includes(normalizeTeam(value)))throw Error('この試合の得点チームを選択してください');
+  const allowed=m?.status==='waiting'&&[3,4].includes(Number(m.seq))?
+   Object.keys(snapshot.roster||{}):[m?.leftTeam,m?.rightTeam].filter(Boolean);
+  if(!m||!allowed.some(t=>normalizeTeam(t)===normalizeTeam(value)))
+   throw Error('得点チームを正しい名簿から選択してください');
+  // For waiting #3/#4, a provisional selection is NOT authorization to
+  // enroll a helper. The Worker checks both finished semifinals and the
+  // newly resolved official sides before starting the signed write.
   row.team=value;mark('team');
  }else throw Error('未知の入力項目です');
  return row;
@@ -310,7 +322,9 @@ export function goalCandidatesByMatchNumber(snapshot,rows){
 
 export function prepareQuickGoalBatch(snapshot,rows){
  const decisions=quickGoalDecisions(snapshot,rows);
- const selected=decisions.filter(x=>x.state==='ready');
+ // The legacy direct quick-write path cannot enroll helpers. These rows
+ // must be sent only through the signed Worker four-match job.
+ const selected=decisions.filter(x=>x.state==='ready'&&!x.helperPlan);
  // These AI proposals are NOT per-row human confirmed. The operator must
  // inspect the complete reviewed summary and click the final TEST submit.
  const approved=selected.map(item=>({
