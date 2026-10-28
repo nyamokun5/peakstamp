@@ -198,7 +198,8 @@ test('team mismatch, invalid roster names and unknown fields never become sendab
  editQuickGoalField(x,r[0],'team','チーム2');
  assert.equal(quickGoalDecisions(x,r)[0].state,'manual-ss');
  assert.equal(quickGoalDecisions(x,r)[0].registeredInSS,false);
- assert.match(quickGoalDecisions(x,r)[0].reason,/SSのこの試合/);
+ assert.match(quickGoalDecisions(x,r)[0].reason,/ゴールを手動登録/);
+ assert.match(quickGoalDecisions(x,r)[0].reason,/勝敗を確定しません/);
  assert.throws(()=>editQuickGoalField(x,r[0],'scorer','不正選手'),/名簿/);
  assert.throws(()=>editQuickGoalField(x,r[0],'match',99),/試合番号/);
  assert.throws(()=>editQuickGoalField(x,r[0],'team','チーム9'),/得点チーム/);
