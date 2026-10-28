@@ -1670,6 +1670,7 @@ function showWorkerTiming(state){
   '時間がかかった操作：'+slowest.join('、'):'';
 }
 function showWorkerBatchState(state){
+ const previousState=workerLatestState;
  workerLatestState=state;
  for(const [action,id] of [['pause','workerBatchPause'],['resume','workerBatchResume']]){
   try{jobControlPayload(action,state,{environment:$('ssEnvironment').value,eventId:snapshot?.eventId,
@@ -1720,13 +1721,22 @@ function showWorkerBatchState(state){
    '試合 #'+d.seq+'：'+d.left_team+' '+d.left_score+
    ' - '+d.right_score+' '+d.right_team;
   const choices=new Set(d.choices);
+  const sameDecision=previousState?.status==='needs_decision' &&
+   previousState.event_id===state.event_id &&
+   previousState.request_id===state.request_id &&
+   previousState.cursor===state.cursor &&
+   previousState.decision?.seq===d.seq &&
+   previousState.decision?.match_id===d.match_id;
+  const chosen=sameDecision?$('workerBatchWinner').value:'';
   for(const option of $('workerBatchWinner').options){
    if(!option.value)continue;
    option.disabled=!choices.has(option.value);option.hidden=!choices.has(option.value);
    if(option.value==='left')option.textContent=d.left_team+'の勝利';
    if(option.value==='right')option.textContent=d.right_team+'の勝利';
   }
-  $('workerBatchWinner').value='';
+  // Preserve the human's choice across status reads for this exact match only.
+  // A new job/fixture still clears the selection to avoid an unintended finish.
+  $('workerBatchWinner').value=choices.has(chosen)?chosen:'';
  }
  if(state.status==='blocked'||state.status==='completed'||state.status==='paused'){
   workerBatchPolling=false;
