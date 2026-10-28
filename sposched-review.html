@@ -381,11 +381,12 @@ import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} 
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy,retiredMatchRecoveryPolicy,archiveRetiredAttempt} from './sposched-write-journal.mjs?v=ss-recovery3';
-import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=roster-phonetic2';
+import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=helper-readback1';
+import {recordVerifiedMatchHelpers,opposingTeamHelperCandidates} from './sposched-match-helpers.mjs?v=helper-readback1';
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
-import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-roster2';
+import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
@@ -1046,6 +1047,42 @@ function renderQuick(){
   const expanded=item.state==='attention'||quickOpenRows.has(item.key);
   if(item.state==='attention'||item.state==='waiting'||item.state==='duplicate')
    el.append(node('p','確認：'+item.reason,'quick-held-note'));
+  const helpers=opposingTeamHelperCandidates(snapshot,row);
+  if(helpers.length&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging'){
+   const hint=node('div','','quick-ai-evidence');
+   const descriptions=helpers.map(h=>h.name+'（'+h.from+' → この試合では'+h.to+'）');
+   hint.append(node('p',helpers.every(h=>h.verified)
+    ?'✓ SS公式の試合別助っ人名簿で確認済み：'+descriptions.join('、')
+    :'助っ人の可能性：'+descriptions.join('、')+
+      '。元の所属は変更しません。SS側でこの試合の助っ人として登録した後、再確認してください。','quick-meta'));
+   const check=node('button','SSの試合別助っ人登録を再確認（読み取りのみ）','quick-exception');
+   check.type='button';check.disabled=batchBusy;
+   check.addEventListener('click',async()=>{
+    const m=snapshot?.matches?.find(x=>x.seq===Number(row.seq));
+    if(!m?.matchId||batchBusy)return;
+    check.disabled=true;
+    try{
+     const official=await fetchSS('/match?match_id='+encodeURIComponent(m.matchId));
+     recordVerifiedMatchHelpers(snapshot,m.seq,official);
+     const fresh=opposingTeamHelperCandidates(snapshot,row);
+     renderQuick();
+     $('quickStatus').textContent=fresh.every(h=>h.verified)
+      ?'✓ SSの正式な試合別助っ人名簿を照合しました。登録前に一覧を確認してください。'
+      :'SSのこの試合には助っ人がまだ登録されていません。SS側の試合画面で登録してから再確認してください。';
+    }catch(e){
+     $('quickStatus').textContent='助っ人の照合に失敗：'+e.message+'（書き込みなし）';
+     check.disabled=false;
+    }
+   });
+   hint.append(check);
+   const ssLink=savedSSAppLink(localStorage,'staging',snapshot.eventId,selectedSSDate());
+   if(ssLink){
+    const link=document.createElement('a');
+    link.href=ssLink;link.target='_blank';link.rel='noopener noreferrer';
+    link.textContent='SSアプリでこのイベントを開く';hint.append(link);
+   }
+   el.append(hint);
+  }
   if(row.fixtureIdentityChanged===true){
    const recheck=node('button','この試合番号・新しい試合IDを確認する','quick-exception');
    recheck.type='button';
