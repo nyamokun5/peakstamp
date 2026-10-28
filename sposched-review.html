@@ -50,6 +50,13 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 .quick-ai-evidence{padding:8px 10px;margin:9px 0;border:1px solid #4b6d76;background:#0e2a39;border-radius:9px}
 .quick-ai-raw{font-size:13px;line-height:1.5;color:#e1f3ee;font-weight:600;overflow-wrap:anywhere}
 .quick-ai-candidates{font-size:12px;line-height:1.55;margin-top:3px;color:#b9d4dd;overflow-wrap:anywhere}
+.quick-compare{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:9px 0}
+.quick-compare-cell{min-width:0;border:1px solid #476b77;background:#0e2a39;border-radius:9px;padding:9px}
+.quick-compare-cell.proposed{border-color:#64aa94;background:#123c3a}
+.quick-compare-label{display:block;color:#b8d1d8;font-size:11px;margin-bottom:5px}
+.quick-compare-value{display:block;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.quick-compare-detail{font-size:11px;line-height:1.45;color:#b8d1d8;margin-top:5px;overflow-wrap:anywhere}
+
 .quick-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:9px 0 5px}
 .quick-field{display:flex;flex-direction:column;min-width:0;gap:4px;font-size:11px;color:#c5e0e5}
 .quick-field select{width:100%;min-width:0;font-size:14px;min-height:42px;padding:8px 7px;background:#0a2131;color:#e7f7f7;border:1px solid #638391;border-radius:8px}
@@ -189,7 +196,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <button id="ssChooseEvent" type="button">← SSイベントを選び直す</button>
   <button id="ssReloadFixtures" type="button">試合を再取得（読み取りのみ）</button>
  </div>
- <p class="step-help">全ゴールを確認してください。問題のある候補は最初に表示し、必要な項目だけ修正できます。</p>
+ <p class="step-help">左のAI提案と右のSS登録予定を見比べてください。全件正しければ下の<strong>「4試合を登録（TEST）」を1回押すだけ</strong>です。名前が曖昧な場合だけその行を修正できます。</p>
  <p id="quickSummary" class="quick-summary" role="status" aria-live="polite"></p>
  <div id="autoGoalDetails">
   <div id="quickGoals"></div>
@@ -197,7 +204,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <button id="quickEdit" type="button">詳細編集・手動追加・既存ゴール修正</button>
  </div>
  <h2 id="autoRegisterHeading">4. 確認済みのゴールと4試合をTESTへ登録</h2>
- <p class="step-help">通常は下の<strong>「確認した内容で4試合を登録（TEST）」</strong>だけを使います。従来方式は予備操作にまとめました。同じイベントで両方押さないでください。</p>
+ <p class="step-help">通常は下の<strong>「一覧の内容で4試合を登録（TEST）」</strong>だけを使います。従来方式は予備操作にまとめました。同じイベントで両方押さないでください。</p>
  <div id="autoPanel">
   <div id="autoOutline" aria-label="試合の登録予定"></div>
   <p id="autoBeforeRun" class="small" role="status"></p>
@@ -205,7 +212,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
    <p class="small"><strong>通常はこちら（Worker方式）</strong>：4試合を順番に登録し、進捗と処理時間の内訳を表示します。通信が切れた場合は進捗を再取得できます。</p>
    <p id="workerBatchReadiness" class="small" role="status"></p>
    <button id="workerBatchJumpToGoal" type="button" hidden>未確認のゴール候補へ戻る</button>
-   <button id="workerBatchRun" class="primary quick-main" type="button">確認した内容で4試合を登録（TEST）</button>
+   <button id="workerBatchRun" class="primary quick-main" type="button">一覧の内容で4試合を登録（TEST）</button>
     <button id="workerBatchRecreate" class="primary quick-main" type="button" hidden>再作成された新しい4試合を高速登録（TEST）</button>
     <p id="workerBatchRecreateHint" class="small" hidden>前回ジョブは旧試合IDとして履歴に保管し、新しい試合のIDで一括登録します。旧試合には再送しません。</p>
    <button id="workerBatchRefresh" type="button" hidden>ジョブの進捗を再取得（書き込みなし）</button>
@@ -997,7 +1004,7 @@ function renderQuick(){
   el.id='quick-goal-'+(item.index+1);
   if(item.state==='attention'||item.state==='duplicate')el.classList.add('needs-fix');
   top.append(node('strong','#'+(item.index+1)+' '+
-    item.assist+' → '+(item.scorer||'得点者未確定')));
+    (snapshot.matches.find(m=>m.seq===Number(item.seq))?.title||'試合未選択')));
   const label=item.state==='ready'?'登録候補':
     item.state==='duplicate'?'重複候補・対象外':
     item.state==='waiting'?'対戦確定後に自動登録':
@@ -1013,15 +1020,28 @@ function renderQuick(){
   // Original PeakStamp AI wording is displayed even if the official SS
   // player selection has subsequently been corrected. This is display-only.
   const heard=quickAIObservation(row);
-  const aiBox=node('div','','quick-ai-evidence');
-  aiBox.append(node('div','AI聞き取り：'+heard.assistRaw+' → '+heard.scorerRaw,'quick-ai-raw'));
-  const assistCandidates=heard.noAssist?'なし（AI判定）':
-   heard.assistCandidates.length?heard.assistCandidates.join(' / '):'一致候補なし';
-  const scorerCandidates=heard.scorerCandidates.length?
-   heard.scorerCandidates.join(' / '):'一致候補なし';
-  aiBox.append(node('div','SS名簿候補：アシスト '+assistCandidates+
-   ' ／ 得点者 '+scorerCandidates,'quick-ai-candidates'));
-  el.append(aiBox);
+  // Compare the untouched AI transcript with the precise SpoSched roster
+  // selection before the single batch-approval click. No silent UI rewrites.
+  const compare=node('div','','quick-compare');
+  const aiCell=node('div','','quick-compare-cell');
+  aiCell.append(node('span','AI提案','quick-compare-label'),
+   node('strong',heard.assistRaw+' → '+heard.scorerRaw,'quick-compare-value'));
+  const officialCell=node('div','','quick-compare-cell proposed');
+  officialCell.append(node('span','SS登録予定（名簿照合）','quick-compare-label'),
+   node('strong',item.assist+' → '+(item.scorer||'得点者未確定'),'quick-compare-value'));
+  officialCell.append(node('div',
+   (item.team||snapshot.playerTeam.get(item.scorer)||'チーム未確定')+
+   (row.scorerGuess?.source?' ／ '+row.scorerGuess.source:''),
+   'quick-compare-detail'));
+  compare.append(aiCell,officialCell);el.append(compare);
+  if(item.state==='attention'){
+   const assistCandidates=heard.noAssist?'なし（AI判定）':
+    heard.assistCandidates.length?heard.assistCandidates.join(' / '):'一致候補なし';
+   const scorerCandidates=heard.scorerCandidates.length?
+    heard.scorerCandidates.join(' / '):'一致候補なし';
+   el.append(node('p','名簿の候補：アシスト '+assistCandidates+
+    ' ／ 得点者 '+scorerCandidates,'quick-ai-candidates'));
+  }
   const inlineEligible=item.state==='attention'||item.state==='ready'||item.state==='waiting';
   const expanded=item.state==='attention'||quickOpenRows.has(item.key);
   if(item.state==='attention'||item.state==='waiting'||item.state==='duplicate')
@@ -1786,16 +1806,16 @@ $('workerBatchRun').addEventListener('click',async()=>{
    snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId,
    winnerFor:seq=>autoWinnerFor(seq)
   });
+  // The complete AI-vs-SS registration plan is visible above this
+  // explicitly labeled TEST button. One intentional click is approval;
+  // an extra browser confirmation dialog would only duplicate that approval.
   const goalCount=operations.operations.filter(x=>x.action==='create').length;
-  if(!window.confirm('SpoSched TESTへ '+goalCount+
-    'ゴールと4試合の結果をWorkerから順に登録します。本番SSには書き込みません。実行しますか？'))
-   return;
   // Store the key BEFORE the network request, so a lost response never
   // enables an accidental second job with a new request ID.
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
    localStorage.setItem(key,requestId);
    hideCompletionPanel();
-  $('workerBatchStatus').textContent='TEST一括ジョブを開始中…';
+  $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋4試合）…';
   $('workerBatchRun').disabled=true;
   $('workerBatchRefresh').hidden=false;
   setBatchBusy(true);
@@ -1824,8 +1844,7 @@ $('workerBatchSubmitDecision').addEventListener('click',async()=>{
  if(!state.decision.choices.includes(winner)){
   $('workerBatchStatus').textContent='この試合の結果を選択してください';return;
  }
- if(!window.confirm('試合 #'+state.decision.seq+' の結果をTESTへ確定してジョブを続行しますか？'))
-  return;
+ // The selected winner and this explicit submit click approve only this tie.
  $('workerBatchSubmitDecision').disabled=true;
  try{
   await postStaging('/staging/batch/decision',{
