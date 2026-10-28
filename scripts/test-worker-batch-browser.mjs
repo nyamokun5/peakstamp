@@ -165,6 +165,14 @@ try{
  // The clock must keep running while the human decides a drawn final.
  await page.waitForTimeout(1350);
  await page.selectOption('#workerBatchWinner','draw');
+ if(exercisePause){
+  const statusReply=page.waitForResponse(r=>r.url().includes('/staging/batch/status'));
+  await page.click('#workerBatchRefresh');
+  await statusReply;
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#workerBatchWinner').inputValue(),'draw',
+   'a read-only refresh must preserve the winner choice for the same fixture');
+ }
  await page.click('#workerBatchSubmitDecision');
  if(failFinalSnapshot){
   await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('状態確認を完了できません'));
