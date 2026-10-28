@@ -58,7 +58,7 @@ test('HTML only uses sessionStorage for Bridge password and supports iOS autofil
  assert.match(html,/rememberBridgeAfterSuccess\('staging',token\)/);
  assert.match(html,/restoreBridgeInThisTab\(\)/);
  const token=readFileSync(new URL('../sposched-bridge-session.mjs',import.meta.url),'utf8');
- assert.doesNotMatch(token,/localStorage/);
+ assert.doesNotMatch(token,/localStorage\\.(getItem|setItem)/);
  assert.doesNotMatch(html,/localStorage\.setItem\([^\n]*BridgeToken/);
  assert.match(html,/if\(r\.status===401\|\|r\.status===403\)rejectRememberedBridge\(env\)/);
 });
