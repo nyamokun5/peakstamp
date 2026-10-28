@@ -48,29 +48,30 @@ await page.route('**/*',async route=>{
   assert.equal(body.event_id,E);
   assert.equal(body.confirm,'TEST-ONLY BATCH WRITE');
   assert.deepEqual(body.operations.map(op=>[op.action,op.seq]),[
-   ['finish',1],['finish',2],['finish',3],['finish',4]
-  ]);
+   ['finish',1],['finish',2],['create',3],['finish',3],['finish',4]
+  ],'waiting third-place goal is included automatically with no extra approval');
   assert.deepEqual(body.operations.map(op=>op.expected_match_id),ids);
   assert.ok(/^[0-9a-f-]{36}$/i.test(body.request_id));
   lastRequestId=body.request_id;step='running';
   data={environment:'STAGING ONLY',event_id:E,request_id:lastRequestId,
-   status:'running',cursor:0,completed:0,total:4};
+   status:'running',cursor:0,completed:0,total:5};
  }else if(url.pathname==='/staging/batch/status'){
   statusCalls++;
   assert.equal(body.event_id,E);
   if(step==='running')step='needs_decision';
   data={environment:'STAGING ONLY',event_id:E,request_id:lastRequestId,
-   status:step,cursor:step==='completed'?4:3,completed:step==='completed'?4:3,total:4,
+   status:step,cursor:step==='completed'?5:4,completed:step==='completed'?5:4,total:5,
    decision:step==='needs_decision'?{
     seq:4,match_id:ids[3],left_team:'チーム1',right_team:'チーム3',
     left_score:0,right_score:0,choices:['left','right','draw']
    }:null,
     metrics:step==='completed'?{
-     steps:4,preflight_ms:1200,preview_ms:1800,execute_ms:5200,
+     steps:5,preflight_ms:1200,preview_ms:1800,execute_ms:5200,
      total_ms:8200,decision_wait_ms:1500,total_elapsed_ms:10800,
      by_step:[
       {seq:1,action:'finish',total_ms:2400},
       {seq:2,action:'finish',total_ms:2500},
+      {seq:3,action:'create',total_ms:800},
       {seq:3,action:'finish',total_ms:1700},
       {seq:4,action:'finish',total_ms:1600}
      ]
@@ -82,7 +83,7 @@ await page.route('**/*',async route=>{
   assert.equal(body.confirm,'TEST-ONLY BATCH DECISION');
   step='completed';
   matches.forEach(x=>{x.status='finished';x.winner=x.seq===4?'draw':'left'});
-  data={environment:'STAGING ONLY',status:'running',cursor:3,completed:3,total:4};
+  data={environment:'STAGING ONLY',status:'running',cursor:4,completed:4,total:5};
  }else{
   otherWrites++;
   throw Error('Unexpected browser API '+method+' '+url.pathname);
@@ -91,6 +92,18 @@ await page.route('**/*',async route=>{
   'Access-Control-Allow-Origin':'*'
  }});
 });
+await page.addInitScript(()=>{
+ const file={name:'IMG_0289.MOV',size:1234,lastModified:1000};
+ localStorage.setItem('peakstamp_current_video_project_v1',JSON.stringify({
+  version:1,projectId:'waiting-goal-test',files:[file],updatedAt:1000
+ }));
+ localStorage.setItem('peakstamp_confirmed_goals_v1:IMG_0289.MOV::1234::1000',
+  JSON.stringify({source:file,items:[{
+   id:'third-place',origin:'manual',status:'confirmed',
+   timeSeconds:238,goalTimeSeconds:238,scorer:'西村',
+   assistStatus:'none',matchSeq:3
+  }]}));
+});
 try{
  await page.goto('https://peakstamp.local/');
  await page.selectOption('#ssEnvironment','staging');
@@ -98,6 +111,10 @@ try{
  await page.click('#ssLoadEvents');
  await page.click('#ssLoadSnapshot');
  await page.locator('#workerBatchArea').waitFor({state:'visible'});
+ assert.equal(await page.locator('#quickGoals .quick-goal').count(),1);
+ assert.match(await page.locator('#quickGoals').innerText(),/対戦確定後に自動登録/);
+ assert.equal(await page.getByRole('button',{name:/試合番号・得点者・アシストを確認して進む/}).count(),0,
+  'no redundant waiting-goal confirmation button');
  assert.equal(await page.locator('#workerBatchRun').isEnabled(),true);
  await page.click('#workerBatchRun');
  await page.locator('#workerBatchDecision').waitFor({state:'visible'});
@@ -131,7 +148,7 @@ try{
  await page.locator('#workerTimingDetails').waitFor({state:'visible'});
  await page.click('#workerTimingDetails summary');
  const breakdown=await page.locator('#workerTimingSummary').innerText();
- assert.match(breakdown,/完了操作 4\/4/);
+ assert.match(breakdown,/完了操作 5\/5/);
  assert.match(breakdown,/事前確認 1\.2秒/);
  assert.match(breakdown,/登録＋再取得 5\.2秒/);
  assert.match(breakdown,/勝敗入力待ち 1\.5秒/);
