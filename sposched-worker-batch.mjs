@@ -3,7 +3,7 @@
  * The Worker independently resolves official fixture/player UUIDs and checks
  * every signed mutation before calling the existing per-match write gate.
  */
-import {waitingKnockoutGoalIssue,ssManualHelperGoal} from './sposched-quick-review.mjs?v=roster-phonetic2';
+import {waitingKnockoutGoalIssue,ssManualHelperGoal} from './sposched-quick-review.mjs?v=manual-ss1';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const name=v=>typeof v==='string'?v.trim():'';
 const normalized=v=>name(v).normalize('NFKC').toLocaleLowerCase('en').replace(/[\s\u3000]/g,'');
