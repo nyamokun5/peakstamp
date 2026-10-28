@@ -8,6 +8,20 @@ const name=v=>typeof v==='string'?v.trim():'';
 const normalized=v=>name(v).normalize('NFKC').toLocaleLowerCase('en').replace(/[\s\u3000]/g,'');
 const fail=message=>{throw Error(message)};
 export const workerBatchStorageKey=eventId=>'peakstamp:test:worker-batch:'+eventId;
+export function verifyCompletedWorkerSnapshot(state,fresh,previous){
+ if(state?.status!=='completed'||fresh?.eventId!==state.event_id||
+    previous?.eventId!==state.event_id)fail('完了したジョブのイベントIDが異なります');
+ if(fresh.matches?.length!==4)fail('完了後の4試合を取得できません');
+ for(const seq of [1,2,3,4]){
+  const matches=fresh.matches.filter(m=>m.seq===seq);
+  const expected=state.fixture_ids?.[seq]||previous.matches?.find(m=>m.seq===seq)?.matchId;
+  const m=matches[0];
+  if(matches.length!==1||!UUID.test(expected||'')||
+     m.matchId?.toLowerCase()!==expected.toLowerCase()||m.status!=='finished')
+   fail('試合 #'+seq+' の終了状態・正式な試合IDを確認できません。再登録せずSSを確認してください');
+ }
+ return true;
+}
 export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winnerFor=()=>''}){
  if(!snapshot||!UUID.test(snapshot.eventId||'')||!UUID.test(requestId||''))
   fail('テストSSの正式なイベントとジョブIDが必要です');

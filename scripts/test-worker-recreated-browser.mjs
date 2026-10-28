@@ -9,7 +9,7 @@ const oldIds=[1,2,3,4].map(n=>'22222222-2222-4222-8222-22222222222'+n);
 const newIds=[1,2,3,4].map(n=>'33333333-3333-4333-8333-33333333333'+n);
 const matchData=()=>newIds.map((match_id,i)=>({
  match_id,seq:i+1,title:i<2?'準決勝':'決勝',
- status:i<2?'scheduled':'waiting',
+ status:committed?'finished':i<2?'scheduled':'waiting',
  left_team:i<2?'チーム'+(i*2+1):'',
  right_team:i<2?'チーム'+(i*2+2):'',
  left_score:0,right_score:0,winner:null,goals:[]
