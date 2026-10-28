@@ -129,6 +129,21 @@ export function ssManualHelperGoal(snapshot,row){
  return {seq,team,mismatches,registered};
 }
 
+/** Defer ONLY the cross-team assist, never the goal or the scoring side.
+ * Preserve the original AI/roster selection for a later SS-only edit.
+ * Reuses the strict confidence and fixture checks of ssManualHelperGoal().
+ */
+export function deferredHelperAssist(snapshot,row){
+ const manual=ssManualHelperGoal(snapshot,row);
+ if(!manual||manual.registered||!manual.team||
+    manual.mismatches.length!==1||
+    manual.mismatches[0].role!=='アシスト者'||
+    normalizeTeam(snapshot.playerTeam.get(row.scorer))!==normalizeTeam(manual.team))
+  return null;
+ return {person:manual.mismatches[0].person,
+  homeTeam:manual.mismatches[0].from,scoringTeam:manual.team};
+}
+
 export function quickGoalDecisions(snapshot,rows) {
  const decisions=(rows||[]).map((row,index)=>{
   const g=row.goal||{};
@@ -160,23 +175,29 @@ export function quickGoalDecisions(snapshot,rows) {
      '）に紐付け済み。正式な試合ID・対戦チームが確定するまで送信を保留します'};
   }
   const manual=ssManualHelperGoal(snapshot,row);
-  if(manual){
+  const deferred=deferredHelperAssist(snapshot,row);
+  if(manual&&!deferred){
    const players=manual.mismatches.map(x=>x.role+' '+x.person+'（通常'+x.from+'）').join('、');
    return {...item,state:'manual-ss',registeredInSS:manual.registered,
     reason:manual.registered
      ?'SSで登録済みの助っ人候補：'+players+'。一括登録から除外します。'
-     :'助っ人の可能性：'+players+'。SSのこの試合で助っ人登録とゴール・アシストを直接記録してください。一括登録から自動除外します。'};
+     :'得点者が別チームの助っ人の可能性：'+players+
+      '。SSで正しい得点チームにゴールを手動登録し、再取得してください。得点を欠いた状態では勝敗を確定しません。'};
   }
-  if(matchingExistingGoals(row,snapshot).length)
-   return {...item,state:'duplicate',reason:'SSに同じ得点者・アシストの組み合わせがあります'};
+  // Readback/deduplication must match the EFFECTIVE written goal (no
+  // cross-team assist), not the unmodified AI-suggested source row.
+  const plannedRow=deferred?{...row,assistMode:'none',assist:''}:row;
+  if(matchingExistingGoals(plannedRow,snapshot).length)
+   return {...item,state:'duplicate',
+    reason:'SSに同じ得点者・登録予定アシストの組み合わせがあります'};
   if(row.guest)return {...item,reason:'ゲスト得点は現在のTEST一括登録で対応していません'};
-  const issue=validateGoalRow({...row,confirmed:true},snapshot);
+  const issue=validateGoalRow({...plannedRow,confirmed:true},snapshot);
   if(issue)return {...item,reason:issue};
   const team=row.team||snapshot.playerTeam.get(row.scorer)||'';
   const scorerTeam=snapshot.playerTeam.get(row.scorer);
   if(team&&scorerTeam&&normalizeTeam(team)!==normalizeTeam(scorerTeam))
    return {...item,reason:'得点者と得点チームが一致しません'};
-  const assistTeam=row.assistMode==='named'?snapshot.playerTeam.get(row.assist):null;
+  const assistTeam=plannedRow.assistMode==='named'?snapshot.playerTeam.get(plannedRow.assist):null;
   if(team&&assistTeam&&normalizeTeam(team)!==normalizeTeam(assistTeam))
    return {...item,reason:'アシスト者と得点チームが一致しません'};
   // An edit to an unrelated field must never clear AI ambiguity.
@@ -195,7 +216,12 @@ export function quickGoalDecisions(snapshot,rows) {
    return {...item,reason:'得点者の候補を確認・修正してください'};
   if(!assistReviewed && row.assistMode==='named' && row.assistGuess?.confidence!=='high')
    return {...item,reason:'アシスト者の候補を確認・修正してください'};
-  return {...item,state:'ready',reason:'最終一覧で確認してください'};
+  return deferred
+   ?{...item,state:'ready',assist:'なし（SSで後から追記）',
+     deferredAssist:deferred,
+     reason:'ゴールと得点スコアは自動登録。助っ人 '+deferred.person+
+      ' のアシストのみSSで後から追記してください。'}
+   :{...item,state:'ready',reason:'最終一覧で確認してください'};
  });
  // The pinned SpoSched TEST API rejects same-match/same-scorer/same-assist
  // duplicates, including multiple "legitimate" goals. Do not silently send.
@@ -204,7 +230,8 @@ export function quickGoalDecisions(snapshot,rows) {
   if(item.state!=='ready')continue;
   const row=rows[item.index];
   const sig=[row.seq,normalizeTeam(row.team),
-    normalizePerson(row.scorer),normalizePerson(row.assistMode==='named'?row.assist:'')].join('|');
+    normalizePerson(row.scorer),
+    normalizePerson(item.deferredAssist?'':row.assistMode==='named'?row.assist:'')].join('|');
   signatures.set(sig,(signatures.get(sig)||[]).concat(item.index));
  }
  for(const indices of signatures.values())if(indices.length>1)for(const index of indices){
@@ -286,7 +313,10 @@ export function prepareQuickGoalBatch(snapshot,rows){
  const selected=decisions.filter(x=>x.state==='ready');
  // These AI proposals are NOT per-row human confirmed. The operator must
  // inspect the complete reviewed summary and click the final TEST submit.
- const approved=selected.map(item=>({...rows[item.index],confirmed:true}));
+ const approved=selected.map(item=>({
+  ...rows[item.index],confirmed:true,
+  ...(item.deferredAssist?{assistMode:'none',assist:''}:{})
+ }));
  const payload=approved.length?buildReviewPayload(snapshot,approved,[]):null;
  if(payload && payload.operations.some(x=>x.action!=='record_goal'))
   throw Error('一括新規登録では既存ゴールの修正はできません');
