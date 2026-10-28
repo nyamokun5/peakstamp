@@ -64,7 +64,7 @@ try{
  assert.equal(await page.locator('#quickGoals .quick-goal').count(),1);
  assert.match(await page.locator('#quickGoals').innerText(),/対戦待ち/);
  // The advanced editor still has both the sticky bottom exit and in-page exit.
- await page.locator('#quickPanel details.help summary').click();
+ await page.locator('#quickPanel > details.help summary').click();
  await page.click('#quickEdit');
  assert.equal(await page.locator('#reviewArea').isVisible(),true);
  assert.equal(await page.locator('#detailReturnBar').isVisible(),true);
