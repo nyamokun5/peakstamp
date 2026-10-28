@@ -104,7 +104,7 @@ try{
  assert.match(await page.locator('#flowGuide').innerText(),/SSの試合が0件/);
  assert.equal(await page.locator('[aria-label="#1 試合"]').count(),0);
  assert.equal(await page.locator('#autoRun').isDisabled(),true);
- assert.match(await page.locator('#autoRun').innerText(),/試合枠がない/);
+ assert.match(await page.locator('#autoRun').textContent(),/試合枠がない/);
  await page.click('#ssChooseEvent');
  assert.equal(await page.evaluate(()=>document.activeElement?.id),'ssEventSelect');
  // A GET-only refresh after the fixture is created restores actual choices.
