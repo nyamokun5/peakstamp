@@ -55,7 +55,17 @@ await page.route('**/*',async route=>{
    decision:step==='needs_decision'?{
     seq:4,match_id:ids[3],left_team:'チーム1',right_team:'チーム3',
     left_score:0,right_score:0,choices:['left','right','draw']
-   }:null};
+   }:null,
+    metrics:step==='completed'?{
+     steps:4,preflight_ms:1200,preview_ms:1800,execute_ms:5200,
+     total_ms:8200,decision_wait_ms:1500,total_elapsed_ms:10800,
+     by_step:[
+      {seq:1,action:'finish',total_ms:2400},
+      {seq:2,action:'finish',total_ms:2500},
+      {seq:3,action:'finish',total_ms:1700},
+      {seq:4,action:'finish',total_ms:1600}
+     ]
+    }:null};
  }else if(url.pathname==='/staging/batch/decision'){
   decisions++;assert.equal(decisions,1);
   assert.equal(body.request_id,lastRequestId);
@@ -95,6 +105,14 @@ try{
  const stored=await page.evaluate(eventId=>localStorage.getItem('peakstamp:test:worker-batch:'+eventId),E);
  assert.equal(stored,lastRequestId);
  assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
+ await page.locator('#workerTimingDetails').waitFor({state:'visible'});
+ await page.click('#workerTimingDetails summary');
+ const breakdown=await page.locator('#workerTimingSummary').innerText();
+ assert.match(breakdown,/完了操作 4\/4/);
+ assert.match(breakdown,/事前確認 1\.2秒/);
+ assert.match(breakdown,/登録＋再取得 5\.2秒/);
+ assert.match(breakdown,/勝敗入力待ち 1\.5秒/);
+ assert.match(await page.locator('#workerTimingSlowest').innerText(),/#2 終了：2\.5秒/);
  await page.locator('#ssResultPanel').waitFor({state:'visible'});
  const elapsedText=await page.locator('#ssResultTime').innerText();
  const seconds=Number(elapsedText.match(/([0-9]+\.[0-9])秒/)?.[1]);
