@@ -189,14 +189,16 @@ test('assist player is not silently assumed, and cross-team selection fails clos
  editQuickGoalField(x,r[0],'assist','佐藤');
  assert.equal(quickGoalDecisions(x,r)[0].state,'ready');
  editQuickGoalField(x,r[0],'assist','橋本');
- assert.equal(quickGoalDecisions(x,r)[0].state,'attention');
- assert.match(quickGoalDecisions(x,r)[0].reason,/得点チーム/);
+ assert.equal(quickGoalDecisions(x,r)[0].state,'manual-ss');
+ assert.equal(quickGoalDecisions(x,r)[0].registeredInSS,false);
+ assert.match(quickGoalDecisions(x,r)[0].reason,/SSのこの試合/);
 });
 test('team mismatch, invalid roster names and unknown fields never become sendable',()=>{
  const x=snap(),r=rows(x);
  editQuickGoalField(x,r[0],'team','チーム2');
- assert.equal(quickGoalDecisions(x,r)[0].state,'attention');
- assert.match(quickGoalDecisions(x,r)[0].reason,/得点チーム/);
+ assert.equal(quickGoalDecisions(x,r)[0].state,'manual-ss');
+ assert.equal(quickGoalDecisions(x,r)[0].registeredInSS,false);
+ assert.match(quickGoalDecisions(x,r)[0].reason,/SSのこの試合/);
  assert.throws(()=>editQuickGoalField(x,r[0],'scorer','不正選手'),/名簿/);
  assert.throws(()=>editQuickGoalField(x,r[0],'match',99),/試合番号/);
  assert.throws(()=>editQuickGoalField(x,r[0],'team','チーム9'),/得点チーム/);
@@ -204,8 +206,8 @@ test('team mismatch, invalid roster names and unknown fields never become sendab
  assert.throws(()=>editQuickGoalField(x,r[0],'whoops','西村'),/未知/);
  const restored=editQuickGoalField(x,r[0],'scorer','橋本');
  assert.equal(restored.team,'チーム2');
- assert.equal(quickGoalDecisions(x,r)[0].state,'attention',
-  'cross-team selected assist is not permitted');
+ assert.equal(quickGoalDecisions(x,r)[0].state,'manual-ss',
+  'cross-team selected assist must be handled directly in SS');
 });
 test('compact UI renders assist -> scorer in review and pre-send summary',()=>{
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
@@ -275,7 +277,8 @@ test('all quick goal cards show AI original next to the registered official name
   html.indexOf("$('quickEdit').addEventListener"));
  assert.doesNotMatch(quick,/\.innerHTML\s*=/);
  assert.match(quick,/node\('span','AI提案'/);
- assert.match(quick,/node\('span','SS登録予定（名簿照合）'/);
+ assert.match(quick,/SS登録予定（名簿照合）/);
+ assert.match(quick,/SSで手動登録（自動送信しません）/);
 });
 
 test('unconfirmed player dropdown exposes short AI hint but never preselects a guess',()=>{
