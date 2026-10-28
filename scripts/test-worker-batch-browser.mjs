@@ -19,6 +19,7 @@ const snapshot=()=>({event_id:E,matches,roster:{
 const exercisePause=process.env.TEST_BATCH_PAUSE==='1';
 const loseResumeReply=process.env.TEST_RESUME_LOST_REPLY==='1';
 const losePauseReply=process.env.TEST_PAUSE_LOST_REPLY==='1';
+const reloadPaused=process.env.TEST_PAUSE_RELOAD==='1';
 let pauses=0,resumes=0;
 let failFinalSnapshot=process.env.TEST_FINAL_SNAPSHOT_FAILURE==='1';
 let incompleteFinalSnapshot=failFinalSnapshot;
@@ -151,6 +152,18 @@ try{
   await page.locator('#workerBatchResume').waitFor({state:'visible'});
   assert.match(await page.locator('#workerBatchStatus').innerText(),/一時停止/);
   assert.equal(starts,1);assert.equal(pauses,1);assert.equal(resumes,0);
+  if(reloadPaused){
+   await page.reload();
+   await page.selectOption('#ssEnvironment','staging');
+   await page.fill('#ssBridgeToken','intercepted-secret-only');
+   await page.click('#ssLoadEvents');
+   await page.click('#ssLoadSnapshot');
+   await page.locator('#workerBatchResume').waitFor({state:'visible'});
+   assert.match(await page.locator('#workerBatchStatus').innerText(),/一時停止/);
+   assert.equal(await page.locator('#workerBatchRun').isEnabled(),false);
+   assert.equal(starts,1,'reload must preserve the existing job instead of starting again');
+   assert.equal(pauses,1);assert.equal(resumes,0,'reload must not automatically resume');
+  }
   await page.click('#workerBatchResume');
   if(loseResumeReply){
    await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('操作を再送せず'));
