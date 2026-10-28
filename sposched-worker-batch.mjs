@@ -3,6 +3,7 @@
  * The Worker independently resolves official fixture/player UUIDs and checks
  * every signed mutation before calling the existing per-match write gate.
  */
+import {waitingKnockoutGoalIssue} from './sposched-quick-review.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const name=v=>typeof v==='string'?v.trim():'';
 const normalized=v=>name(v).normalize('NFKC').toLocaleLowerCase('en').replace(/[\s\u3000]/g,'');
@@ -42,11 +43,12 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
    fail('ゴール'+(i+1)+'：高速登録に未対応のデータがあります');
   if(decision?.state!=='ready'&&decision?.state!=='waiting')
    fail('ゴール'+(i+1)+'：'+(decision?.reason||'確認が必要です'));
-  if(decision.state==='waiting'&&!(
-   row.quickReviewedAll===true||
-   (row.quickReviewedFields?.match&&row.quickReviewedFields?.scorer&&
-    row.quickReviewedFields?.assist)))
-   fail('ゴール'+(i+1)+'：対戦待ちのゴールは試合・得点者・アシストを明示的に確認してください');
+  if(decision.state==='waiting'){
+   // A known 3rd-place/final slot is queued until SpoSched resolves its
+   // opponents. Only uncertain match/player evidence needs correction.
+   const issue=waitingKnockoutGoalIssue(snapshot,row);
+   if(issue)fail('ゴール'+(i+1)+'：'+issue);
+  }
   const scorer=name(row.scorer);
   const team=name(row.team||snapshot.playerTeam?.get(scorer));
   const assist=row.assistMode==='named'?name(row.assist):'';

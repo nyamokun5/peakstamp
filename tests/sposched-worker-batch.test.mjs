@@ -44,12 +44,20 @@ test('accepts explicit semi-final tie winner but rejects semifinal draw',()=>{
  assert.equal(p.operations[1].winner,'right');
  assert.throws(()=>build({winnerFor:seq=>seq===1?'draw':''}),/勝敗指定/);
 });
-test('waiting-goal rows require explicit human confirmation of match, scorer and assist',()=>{
+test('waiting knockout goal needs no extra button when its match and scorer are reliable',()=>{
  const changed=rows.map(x=>({...x}));
  changed[1].quickReviewedAll=false;
- assert.throws(()=>build({rows:changed}),/明示的/);
- changed[1].quickReviewedFields={match:true,scorer:true,assist:true};
- assert.equal(build({rows:changed}).operations.length,6);
+ changed[1].matchGuess={seq:4,confidence:'high',ambiguous:false,conflict:false};
+ changed[1].scorerGuess={confidence:'high'};
+ assert.equal(build({rows:changed}).operations.length,6,
+  'official opponents may be waiting: a reliable goal still joins the batch');
+ changed[1].matchGuess={seq:4,confidence:'low'};
+ assert.throws(()=>build({rows:changed}),/試合番号を確認/);
+ changed[1].quickReviewedFields={match:true};
+ assert.equal(build({rows:changed}).operations.length,6,
+  'an uncertain match only needs its own explicit correction');
+ changed[1].scorer='Not-on-roster';
+ assert.throws(()=>build({rows:changed}),/名簿/);
 });
 test('no unreviewed, mismatched, unsupported or duplicated goal can enter Worker batch',()=>{
  assert.throws(()=>build({decisions:[{state:'attention',reason:'得点者不明'},...decisions.slice(1)]}),/得点者不明/);

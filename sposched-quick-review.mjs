@@ -37,6 +37,49 @@ export function quickAIObservation(row){
   noAssist:goal.assistStatus==='none'};
 }
 
+/** Four-fixture Worker batch only: a waiting semi-final-derived slot is
+ * already known by its numbered sequence. Check the goal/roster evidence,
+ * not whether the future opponents have been populated yet.
+ * No user click is needed for WAITING itself; uncertain AI fields still need
+ * an explicit selection before the final one-click batch approval.
+ */
+export function waitingKnockoutGoalIssue(snapshot,row) {
+ const seq=Number(row?.seq);
+ const match=snapshot?.matches?.find(m=>m.seq===seq);
+ if(!match||match.status!=='waiting'||![3,4].includes(seq))
+  return '対戦待ちのトーナメント試合番号を確認してください';
+ if(row.goal?.manual||row.updateGoalId||row.guest||row.fixtureIdentityChanged)
+  return '手動入力・修正・試合ID変更は詳細確認が必要です';
+ const scorer=String(row.scorer||'').trim();
+ const team=String(row.team||snapshot.playerTeam?.get(scorer)||'').trim();
+ const actual=snapshot.playerTeam?.get(scorer);
+ if(!scorer||!actual||!team||normalizeTeam(team)!==normalizeTeam(actual))
+  return '得点者と所属チームを名簿から確認してください';
+ if(!['none','named'].includes(row.assistMode))
+  return 'アシストあり／なしを確認してください';
+ if(row.assistMode==='named'){
+  const assist=String(row.assist||'').trim();
+  if(!assist||!snapshot.playerTeam?.has(assist)||
+     normalizeTeam(snapshot.playerTeam.get(assist))!==normalizeTeam(team)||
+     normalizePerson(assist)===normalizePerson(scorer))
+   return 'アシスト者と所属チームを名簿から確認してください';
+ }
+ if(matchingExistingGoals(row,snapshot).length)
+  return 'すでに登録済みのゴールと重複する可能性があります';
+ const reviewed=row.quickReviewedAll===true;
+ const fields=row.quickReviewedFields||{};
+ if(!reviewed&&!fields.match&&(row.matchGuess?.confidence!=='high'||
+     row.matchGuess?.ambiguous||row.matchGuess?.conflict||
+     Number(row.matchGuess?.seq)!==seq))
+  return '動画の試合番号を確認・修正してください';
+ if(!reviewed&&!fields.scorer&&row.scorerGuess?.confidence!=='high')
+  return '得点者の候補を確認・修正してください';
+ if(row.assistMode==='named'&&!reviewed&&!fields.assist&&
+     row.assistGuess?.confidence!=='high')
+  return 'アシスト者の候補を確認・修正してください';
+ return null;
+}
+
 export function quickGoalDecisions(snapshot,rows) {
  const decisions=(rows||[]).map((row,index)=>{
   const g=row.goal||{};
@@ -55,10 +98,18 @@ export function quickGoalDecisions(snapshot,rows) {
   // Goals are kept in PeakStamp by matchSeq, but NEVER sent to waiting games.
   const fixture=snapshot.matches.find(m=>m.seq===Number(row.seq));
   if(fixture && (fixture.status==='waiting'||!fixture.matchId||
-    !fixture.leftTeam||!fixture.rightTeam))
+    !fixture.leftTeam||!fixture.rightTeam)){
+   if(fixture.status==='waiting'&&[3,4].includes(Number(fixture.seq))&&
+      snapshot.matches.length===4){
+    const issue=waitingKnockoutGoalIssue(snapshot,row);
+    if(issue)return {...item,state:'attention',reason:issue};
+    return {...item,state:'waiting',
+     reason:'対戦相手は準決勝の結果からWorkerが自動確定します。ゴールは一括登録の対象です'};
+   }
    return {...item,state:'waiting',
     reason:'SS試合枠 #'+fixture.seq+'（'+(fixture.title||'対戦チーム未確定')+
      '）に紐付け済み。正式な試合ID・対戦チームが確定するまで送信を保留します'};
+  }
   if(matchingExistingGoals(row,snapshot).length)
    return {...item,state:'duplicate',reason:'SSに同じ得点者・アシストの組み合わせがあります'};
   if(row.guest)return {...item,reason:'ゲスト得点は現在のTEST一括登録で対応していません'};
