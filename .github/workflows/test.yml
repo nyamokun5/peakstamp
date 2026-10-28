@@ -37,6 +37,7 @@ jobs:
           node scripts/test-auto-tournament-browser.mjs
           node scripts/test-goal-review-browser.mjs
           node scripts/test-worker-batch-browser.mjs
+          TEST_FINAL_SNAPSHOT_FAILURE=1 node scripts/test-worker-batch-browser.mjs
           node scripts/test-worker-recreated-browser.mjs
           node scripts/test-pending-recovery-browser.mjs
           node scripts/test-retired-match-browser.mjs

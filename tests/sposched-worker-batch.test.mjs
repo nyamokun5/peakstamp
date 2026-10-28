@@ -94,3 +94,17 @@ test('a truly recreated four-fixture bracket is distinct from every known old Wo
  assert.equal(workerBatchRecreatePendingKey(eventId),
   'peakstamp:test:worker-batch:recreate-pending:'+eventId);
 });
+
+test('completion requires fresh same-event finished fixtures with original identities',async()=>{
+ const {verifyCompletedWorkerSnapshot:verify}=await import('../sposched-worker-batch.mjs');
+ const state={event_id:eventId,status:'completed',fixture_ids:Object.fromEntries(ids.map((id,i)=>[i+1,id]))};
+ const fresh={...snapshot,matches:snapshot.matches.map(m=>({...m,status:'finished'}))};
+ assert.equal(verify(state,fresh,snapshot),true);
+ for(const changed of [
+  {...fresh,eventId:requestId},
+  {...fresh,matches:fresh.matches.slice(0,3)},
+  {...fresh,matches:fresh.matches.map(m=>m.seq===3?{...m,status:'waiting'}:m)},
+  {...fresh,matches:fresh.matches.map(m=>m.seq===4?{...m,matchId:requestId}:m)},
+  {...fresh,matches:[fresh.matches[0],fresh.matches[0],...fresh.matches.slice(2)]}
+ ])assert.throws(()=>verify(state,changed,snapshot));
+});

@@ -16,6 +16,7 @@ const matches=ids.map((match_id,i)=>({
 const snapshot=()=>({event_id:E,matches,roster:{
  チーム1:['山田'],チーム2:['西村'],チーム3:['田中'],チーム4:['橋本']
 }});
+let failFinalSnapshot=process.env.TEST_FINAL_SNAPSHOT_FAILURE==='1';
 let starts=0,decisions=0,statusCalls=0,lastRequestId=null,step='idle',otherWrites=0;
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -33,7 +34,11 @@ await page.route('**/*',async route=>{
  let data,method=route.request().method();
  const body=method==='POST'?route.request().postDataJSON():null;
  if(url.pathname==='/events')data={events:[{event_id:E,name:'TEST',date:'2026-10-25'}]};
- else if(url.pathname==='/snapshot')data=snapshot();
+ else if(url.pathname==='/snapshot'){
+  if(step==='completed'&&failFinalSnapshot)return route.fulfill({status:503,
+   json:{error:{message:'simulated final snapshot outage'}},headers:{'Access-Control-Allow-Origin':'*'}});
+  data=snapshot();
+ }
  else if(url.pathname==='/staging/batch/start'){
   starts++;assert.equal(starts,1,'starting twice is forbidden');
   assert.equal(body.event_id,E);
@@ -98,6 +103,14 @@ try{
  await page.waitForTimeout(1350);
  await page.selectOption('#workerBatchWinner','draw');
  await page.click('#workerBatchSubmitDecision');
+ if(failFinalSnapshot){
+  await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('状態確認を完了できません'));
+  assert.equal(await page.locator('#ssResultPanel').isVisible(),false,
+   'failed official final snapshot must not show completion');
+  assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
+  failFinalSnapshot=false;
+  await page.click('#workerBatchRefresh');
+ }
  await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('全操作の登録・照合'));
  assert.equal(starts,1);assert.equal(decisions,1);
  assert.ok(statusCalls>=2);

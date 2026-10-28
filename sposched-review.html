@@ -378,7 +378,7 @@ import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObser
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
-import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey} from './sposched-worker-batch.mjs?v=worker2';
+import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker3';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
@@ -1684,6 +1684,16 @@ async function refreshWorkerBatch(){
     localStorage.removeItem(recreationKey);
    }
   }
+  // Completion is shown only after the final official snapshot is available.
+  // Status/GET failure must not leave a green success panel behind.
+  if(state.status==='completed'&&!hasRecreatedBracket(state,snapshot)){
+   hideCompletionPanel();
+   $('workerBatchStatus').textContent='Workerの登録は完了しました。公式SSの4試合の終了状態を確認中…';
+   const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+   if(snapshot?.eventId!==eventId)return;
+   verifyCompletedWorkerSnapshot(state,fresh,snapshot);
+   snapshot=fresh;
+  }
   showWorkerBatchState(state);
   if(hasRecreatedBracket(state,snapshot)&&
     localStorage.getItem(workerBatchStorageKey(eventId))===state.request_id){
@@ -1698,9 +1708,7 @@ async function refreshWorkerBatch(){
   }else if(state.status==='needs_decision'){
    workerBatchPolling=false;setBatchBusy(true);
   }else if(state.status==='completed'){
-   const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
-   if(fresh.eventId!==eventId)throw Error('完了したジョブのイベントIDが異なります');
-   snapshot=fresh;rebuild({preserveEdits:true});
+   rebuild({preserveEdits:true});
   }
  }catch(e){
   workerBatchPolling=false;
