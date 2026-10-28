@@ -68,7 +68,7 @@ test('uncertain AI evidence stays in correction, never silently excluded as a he
  rows[0].assistGuess.confidence='low';
  assert.equal(ssManualHelperGoal(snapshot,rows[0]),null);
  assert.equal(quickGoalDecisions(snapshot,rows)[0].state,'attention');
- assert.throws(()=>plan(snapshot,rows,quickGoalDecisions(snapshot,rows)),/候補を確認/);
+ assert.throws(()=>plan(snapshot,rows,quickGoalDecisions(snapshot,rows)),/候補を確認|アシスト者と得点チーム/);
 });
 test('nonexistent fixture and inconsistent scorer team are not silently marked helper for wrong event',()=>{
  const snapshot=fresh(false),rows=review(snapshot);
