@@ -263,19 +263,19 @@ test('conflicting AI assist text and no-assist status do not silently erase extr
  assert.equal(quickAIObservation(r[0]).assistRaw,'豊田（AI判定：アシストなし）');
 });
 
-test('all quick goal cards show AI original and suggested roster names without confirmation checks',()=>{
+test('all quick goal cards show AI original next to the registered official name',()=>{
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
  assert.match(html,/const heard=quickAIObservation\(row\)/);
- assert.match(html,/AI聞き取り：/);
- assert.match(html,/SS名簿候補：アシスト /);
+ assert.match(html,/AI提案/);
+ assert.match(html,/SS登録予定（名簿照合）/);
  assert.match(html,/heard\.assistRaw\+' → '\+heard\.scorerRaw/);
- assert.match(html,/quick-ai-evidence/);
- assert.match(html,/el\.append\(aiBox\)/);
+ assert.match(html,/quick-compare/);
+ assert.match(html,/compare\.append\(aiCell,officialCell\);el\.append\(compare\)/);
  const quick=html.slice(html.indexOf('function renderQuick(){'),
   html.indexOf("$('quickEdit').addEventListener"));
  assert.doesNotMatch(quick,/\.innerHTML\s*=/);
- assert.match(quick,/node\('div','AI聞き取り：'/);
- assert.match(quick,/id='no-op-impossible'|el\.append\(aiBox\)/);
+ assert.match(quick,/node\('span','AI提案'/);
+ assert.match(quick,/node\('span','SS登録予定（名簿照合）'/);
 });
 
 test('unconfirmed player dropdown exposes short AI hint but never preselects a guess',()=>{
