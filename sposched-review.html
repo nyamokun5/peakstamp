@@ -209,6 +209,12 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
     <p id="workerBatchRecreateHint" class="small" hidden>前回ジョブは旧試合IDとして履歴に保管し、新しい試合のIDで一括登録します。旧試合には再送しません。</p>
    <button id="workerBatchRefresh" type="button" hidden>ジョブの進捗を再取得（書き込みなし）</button>
    <p id="workerBatchStatus" class="small" role="status" aria-live="polite"></p>
+   <details id="workerTimingDetails" hidden>
+    <summary>登録速度の内訳（Worker診断）</summary>
+    <p id="workerTimingSummary" class="small"></p>
+    <p id="workerTimingSlowest" class="small"></p>
+    <p class="small">事前確認・署名付きプレビュー・登録＋再取得を操作ごとに計測しています。同点時の選択待ち時間は別集計です。</p>
+   </details>
    <button id="workerBatchRecover" type="button" hidden>⚠ 前回の送信記録を照合（書き込みなし）</button>
    <div id="workerBatchDecision" hidden>
     <p id="workerBatchQuestion" role="status"></p>
@@ -1499,10 +1505,38 @@ $('autoRun').addEventListener('click',()=>{
  autoRegisterTournament();
 });
 
+function showWorkerTiming(state){
+ const metrics=state?.metrics;
+ const detail=$('workerTimingDetails');
+ if(!metrics||!Number.isFinite(metrics.steps)||metrics.steps<=0){
+  detail.hidden=true;
+  return;
+ }
+ detail.hidden=false;
+ const sec=n=>(Number.isFinite(n)?Math.max(0,n)/1000:0).toFixed(1)+'秒';
+ const stages=Number(metrics.preflight_ms||0)+Number(metrics.preview_ms||0)+
+  Number(metrics.execute_ms||0);
+ const full=metrics.total_elapsed_ms;
+ const other=Number.isFinite(full)?Math.max(0,full-stages-Number(metrics.decision_wait_ms||0)):null;
+ $('workerTimingSummary').textContent=
+  '完了操作 '+metrics.steps+'/'+state.total+
+  ' ／事前確認 '+sec(metrics.preflight_ms)+
+  ' ／署名プレビュー '+sec(metrics.preview_ms)+
+  ' ／登録＋再取得 '+sec(metrics.execute_ms)+
+  ' ／勝敗入力待ち '+sec(metrics.decision_wait_ms)+
+  (other===null?'':' ／その他のWorker処理・待機 '+sec(other));
+ const slowest=(Array.isArray(metrics.by_step)?metrics.by_step:[])
+  .slice().sort((a,b)=>Number(b.total_ms||0)-Number(a.total_ms||0))
+  .slice(0,3).map(x=>'#'+x.seq+' '+(x.action==='finish'?'終了':'ゴール')+
+   '：'+sec(x.total_ms));
+ $('workerTimingSlowest').textContent=slowest.length?
+  '時間がかかった操作：'+slowest.join('、'):'';
+}
 function showWorkerBatchState(state){
  workerLatestState=state;
  const stored=localStorage.getItem(workerBatchStorageKey(state.event_id));
  if(stored===state.request_id&&hasRecreatedBracket(state,snapshot)){
+  $('workerTimingDetails').hidden=true;
   hideCompletionPanel();
   $('workerBatchStatus').textContent=
    '前回Workerジョブは古い試合IDに紐づいています。現在の4試合は別IDです。'+
@@ -1515,6 +1549,7 @@ function showWorkerBatchState(state){
   renderAutoSummary();
   return;
  }
+ showWorkerTiming(state);
  const marker=localStorage.getItem(workerBatchStorageKey(state.event_id));
  $('workerBatchRefresh').hidden=!marker;
  $('workerBatchRun').disabled=true;
