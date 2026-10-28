@@ -196,7 +196,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <button id="ssChooseEvent" type="button">← SSイベントを選び直す</button>
   <button id="ssReloadFixtures" type="button">試合を再取得（読み取りのみ）</button>
  </div>
- <p class="step-help">左のAI提案と右のSS登録予定を見比べてください。全件正しければ下の<strong>「4試合を登録（TEST）」を1回押すだけ</strong>です。名前が曖昧な場合だけその行を修正できます。</p>
+ <p class="step-help">AI提案とSS登録予定を見比べてください。<strong>別チームの助っ人が疑われるゴールは、自動登録から除外しSSで直接登録</strong>します。手動登録後に最新情報を再取得してから、残りのゴールと試合結果を1クリックで登録します。</p>
  <p id="quickSummary" class="quick-summary" role="status" aria-live="polite"></p>
  <div id="autoGoalDetails">
   <div id="quickGoals"></div>
@@ -381,11 +381,11 @@ import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} 
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy,retiredMatchRecoveryPolicy,archiveRetiredAttempt} from './sposched-write-journal.mjs?v=ss-recovery3';
-import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=roster-phonetic2';
+import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=manual-ss1';
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
-import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-roster2';
+import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-manual-ss1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
@@ -979,11 +979,14 @@ function renderQuick(){
  const attention=items.filter(x=>x.state==='attention').length;
  const duplicates=items.filter(x=>x.state==='duplicate').length;
  const waiting=items.filter(x=>x.state==='waiting').length;
- const other=items.length-ready-attention-duplicates-waiting;
+ const manual=items.filter(x=>x.state==='manual-ss');
+ const manualPending=manual.filter(x=>!x.registeredInSS).length;
+ const other=items.length-ready-attention-duplicates-waiting-manual.length;
  $('quickSummary').textContent=(attention||duplicates?
    '先に確認が必要：'+(attention+duplicates)+'件。下の候補を修正してください。':
    'ゴール候補 '+items.length+'件を確認してください。')+
    '　｜　登録可能 '+ready+'件・対戦待ち（自動登録予定） '+waiting+'件'+
+   (manual.length?'・SSで手動登録する助っ人候補 '+manual.length+'件（未登録 '+manualPending+'件）':'')+
    (other?'・対象外 '+other+'件':'');
  const container=$('quickGoals');container.replaceChildren();
  const noFixtures=snapshot.matches.length===0;
@@ -996,18 +999,19 @@ function renderQuick(){
  }
  // Fixes are first; already reviewed goals follow. Video counts are reference
  // information only and appear after the actual items, not before them.
- const rank={attention:0,manual:1,patch:1,duplicate:1,waiting:2,ready:3,skipped:4};
+ const rank={attention:0,'manual-ss':1,manual:1,patch:1,duplicate:1,waiting:2,ready:3,skipped:4};
  const displayItems=items.slice().sort((a,b)=>
   (rank[a.state]??2)-(rank[b.state]??2)||a.index-b.index);
  for(const item of displayItems){
   const row=rows[item.index],el=node('div','','quick-goal'),top=node('div','','quick-goal-top');
   el.id='quick-goal-'+(item.index+1);
-  if(item.state==='attention'||item.state==='duplicate')el.classList.add('needs-fix');
+  if(['attention','duplicate','manual-ss'].includes(item.state))el.classList.add('needs-fix');
   top.append(node('strong','#'+(item.index+1)+' '+
     (snapshot.matches.find(m=>m.seq===Number(item.seq))?.title||'試合未選択')));
   const label=item.state==='ready'?'登録候補':
     item.state==='duplicate'?'重複候補・対象外':
     item.state==='waiting'?'対戦確定後に自動登録':
+    item.state==='manual-ss'?(item.registeredInSS?'SS登録済み／自動対象外':'SSで手動登録／自動対象外'):
     item.state==='attention'?'要修正':'今回の一括登録から除外';
   top.append(node('span',label,['ready','waiting'].includes(item.state)?'quick-ready':'quick-held'));
   el.append(top,node('p',
@@ -1027,7 +1031,7 @@ function renderQuick(){
   aiCell.append(node('span','AI提案','quick-compare-label'),
    node('strong',heard.assistRaw+' → '+heard.scorerRaw,'quick-compare-value'));
   const officialCell=node('div','','quick-compare-cell proposed');
-  officialCell.append(node('span','SS登録予定（名簿照合）','quick-compare-label'),
+  officialCell.append(node('span',item.state==='manual-ss'?'SSで手動登録（自動送信しません）':'SS登録予定（名簿照合）','quick-compare-label'),
    node('strong',item.assist+' → '+(item.scorer||'得点者未確定'),'quick-compare-value'));
   officialCell.append(node('div',
    (item.team||snapshot.playerTeam.get(item.scorer)||'チーム未確定')+
@@ -1042,10 +1046,21 @@ function renderQuick(){
    el.append(node('p','名簿の候補：アシスト '+assistCandidates+
     ' ／ 得点者 '+scorerCandidates,'quick-ai-candidates'));
   }
-  const inlineEligible=item.state==='attention'||item.state==='ready'||item.state==='waiting';
+  const inlineEligible=['attention','ready','waiting','manual-ss'].includes(item.state);
   const expanded=item.state==='attention'||quickOpenRows.has(item.key);
-  if(item.state==='attention'||item.state==='waiting'||item.state==='duplicate')
-   el.append(node('p','確認：'+item.reason,'quick-held-note'));
+  if(['attention','waiting','duplicate','manual-ss'].includes(item.state))
+   el.append(node('p',(item.state==='manual-ss'?'⚠ SSで対応：':'確認：')+item.reason,'quick-held-note'));
+  if(item.state==='manual-ss'&&!item.registeredInSS){
+   const linkUrl=savedSSAppLink(localStorage,'staging',snapshot.eventId,selectedSSDate());
+   if(linkUrl){
+    const link=document.createElement('a');link.href=linkUrl;
+    link.target='_blank';link.rel='noopener noreferrer';
+    link.textContent='SSでこのイベントを開いて登録する';el.append(link);
+   }
+   const refresh=node('button','SSで手動登録後に最新情報を再取得','quick-exception');
+   refresh.type='button';refresh.addEventListener('click',()=>{if(!batchBusy)$('ssLoadSnapshot').click()});
+   el.append(refresh);
+  }
   if(row.fixtureIdentityChanged===true){
    const recheck=node('button','この試合番号・新しい試合IDを確認する','quick-exception');
    recheck.type='button';
@@ -1091,7 +1106,7 @@ function renderQuick(){
    }
    el.append(fields);
   }
-  if(item.state!=='ready'&&item.state!=='attention'&&item.state!=='waiting')
+  if(!['ready','attention','waiting','manual-ss'].includes(item.state))
    el.append(node('p',item.reason,'quick-held-note'));
   if(item.state==='waiting'&&row.include){
    const automated=snapshot.matches.length===4&&[3,4].includes(Number(row.seq));
@@ -1100,8 +1115,9 @@ function renderQuick(){
     :'対戦相手の確定までは送信保留です。','quick-ready'));
   }
   if(inlineEligible){
-   if(item.state==='ready'||item.state==='waiting'){
-    const edit=node('button',expanded?'簡易編集を閉じる':'修正する','quick-exception');
+   if(['ready','waiting','manual-ss'].includes(item.state)){
+    const edit=node('button',expanded?'簡易編集を閉じる':
+     item.state==='manual-ss'?'AIの選手判定を修正する':'修正する','quick-exception');
     edit.type='button';
     edit.addEventListener('click',()=>{
      if(quickOpenRows.has(item.key))quickOpenRows.delete(item.key);
@@ -1137,7 +1153,8 @@ function renderQuick(){
   $('quickStatus').textContent=attention||duplicates
    ?'要確認 '+(attention+duplicates)+'件を直すと登録に進めます。'
    :(ready||waiting)?'確認できたら下の「まとめてTESTへ登録」を押してください。'
-   :'登録可能なゴールは現在ありません。対戦待ちは準決勝の終了後に確認します。';
+   :manualPending?'助っ人疑いのゴールはSSで直接登録し、最新情報を再取得してください。'
+    :'登録可能なゴールは現在ありません。対戦待ちは準決勝の終了後に確認します。';
  }
 }
 function openDetail(rowNumber=null){
@@ -1318,15 +1335,21 @@ function renderAutoSummary(){
    const p=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),seq,autoWinnerFor(seq));
    const score=['ready','winner-needed'].includes(p.state)?
     '（登録後 '+p.left+' - '+p.right+'）':'';
+   const manualBlockers=p.state==='blocked'&&p.blockers?.length&&
+    p.blockers.every(d=>d.state==='manual-ss');
    const line=p.state==='finished'?'✓ 終了':
     p.state==='waiting'?'⏳ 対戦待ち':
-    p.state==='blocked'?'⚠ 修正が必要':
+    p.state==='blocked'?(manualBlockers?
+     p.blockers.every(d=>d.registeredInSS)?'✓ SS手動登録済み・残りを一括登録':'⚠ SSで手動登録が必要'
+     :'⚠ 修正が必要'):
     p.state==='winner-needed'?'⚠ 勝者未指定'+score:
     '登録予定 '+p.ready.length+'ゴール'+score;
    if(p.state!=='finished')unfinished++;
    root.append(node('div','#'+seq+' '+(m.title||'試合')+'：'+line,'fixture-status'));
   }
   const decisions=quickGoalDecisions(snapshot,rows);
+  const manualPending=decisions.filter(d=>d.state==='manual-ss'&&!d.registeredInSS);
+  const manualDone=decisions.filter(d=>d.state==='manual-ss'&&d.registeredInSS).length;
   const unassigned=unassignedGoalDecisions(snapshot,rows,decisions);
   const needsFix=decisions.filter(d=>d.state==='attention'||d.state==='duplicate'||
     d.state==='manual'||d.state==='patch');
@@ -1336,8 +1359,11 @@ function renderAutoSummary(){
   }else if(needsFix.length){
    $('autoBeforeRun').textContent='⚠ 要確認のゴールが'+needsFix.length+
      '件あります。上のカードで修正してください。';
+  }else if(manualPending.length){
+   $('autoBeforeRun').textContent='⚠ 助っ人候補 '+manualPending.length+'件は自動登録から除外しています。先にSSで試合単位の助っ人とゴールを直接登録し、最新データを再取得してください。未登録のまま試合は終了しません。';
   }else $('autoBeforeRun').textContent=unfinished?
-    'ゴール内容を確認したら、下のボタンで順番に登録します。':'すべて終了しています。';
+    'ゴール内容を確認したら、下のボタンで順番に登録します。'+(manualDone?'（SS手動登録済み '+manualDone+'件は除外）':''):
+    'すべて終了しています。';
   const previousWorkerJob=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
   const unresolved=pendingForEvent().length>0;
   $('workerBatchArea').hidden=false;
@@ -1364,9 +1390,9 @@ function renderAutoSummary(){
   });
  }catch(e){batchReadinessError=e.message||'登録内容の確認が必要です'}
  const pendingReview=decisions.filter(d=>
-  ['attention','waiting','duplicate','manual','patch'].includes(d.state));
+  ['attention','waiting','duplicate','manual','patch','manual-ss'].includes(d.state));
  const firstPending=pendingReview.find(d=>
-  d.state==='attention'||d.state==='waiting')||pendingReview[0];
+  d.state==='attention'||d.state==='waiting'||d.state==='manual-ss')||pendingReview[0];
  $('workerBatchJumpToGoal').hidden=!batchReadinessError||!firstPending;
  $('workerBatchJumpToGoal').dataset.goalIndex=firstPending?.index??'';
  $('workerBatchReadiness').textContent=unresolved
@@ -1375,7 +1401,8 @@ function renderAutoSummary(){
   :batchReadinessError?'⚠ まだ登録できません：'+batchReadinessError+
     '。該当するゴール候補を確認してください。'
   :unfinished===0?'4試合はすでに終了しています。'
-  :'✓ 登録前の確認が済みました。内容が正しければTEST登録ボタンを押してください。';
+  :'✓ 登録前の確認が済みました。内容が正しければTEST登録ボタンを押してください。'+
+   (manualDone?'（SS手動登録済みの助っ人 '+manualDone+'件は除外）':'');
  $('workerBatchRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||
   autoBusy||workerBatchPolling||unfinished===0||Boolean(batchReadinessError);
  if(previousWorkerJob&&workerRestoredEvent!==snapshot.eventId){
@@ -1383,7 +1410,7 @@ function renderAutoSummary(){
   Promise.resolve().then(()=>refreshWorkerBatch());
  }
  $('autoRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||autoBusy||autoMustReload||
-    unassigned.length>0||needsFix.length>0||unfinished===0;
+    unassigned.length>0||needsFix.length>0||manualPending.length>0||unfinished===0;
   $('autoRun').textContent=unresolved?'まず前回の送信記録を照合してください':autoMustReload?'SSの再取得が必要':
    unassigned.length||needsFix.length?'まず上のゴールを修正してください':
    unfinished?'残り'+unfinished+'試合をまとめて登録':'すべて終了済み';
