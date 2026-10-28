@@ -189,9 +189,9 @@ test('assist player is not silently assumed, and cross-team selection fails clos
  editQuickGoalField(x,r[0],'assist','佐藤');
  assert.equal(quickGoalDecisions(x,r)[0].state,'ready');
  editQuickGoalField(x,r[0],'assist','橋本');
- assert.equal(quickGoalDecisions(x,r)[0].state,'manual-ss');
- assert.equal(quickGoalDecisions(x,r)[0].registeredInSS,false);
- assert.match(quickGoalDecisions(x,r)[0].reason,/SSのこの試合/);
+ assert.equal(quickGoalDecisions(x,r)[0].state,'ready');
+ assert.equal(quickGoalDecisions(x,r)[0].deferredAssist.person,'橋本');
+ assert.match(quickGoalDecisions(x,r)[0].reason,/SSで後から追記/);
 });
 test('team mismatch, invalid roster names and unknown fields never become sendable',()=>{
  const x=snap(),r=rows(x);
@@ -206,8 +206,9 @@ test('team mismatch, invalid roster names and unknown fields never become sendab
  assert.throws(()=>editQuickGoalField(x,r[0],'whoops','西村'),/未知/);
  const restored=editQuickGoalField(x,r[0],'scorer','橋本');
  assert.equal(restored.team,'チーム2');
- assert.equal(quickGoalDecisions(x,r)[0].state,'manual-ss',
-  'cross-team selected assist must be handled directly in SS');
+ assert.equal(quickGoalDecisions(x,r)[0].state,'ready',
+  'cross-team selected assist defers only assist attribution while scoring the goal');
+ assert.equal(quickGoalDecisions(x,r)[0].deferredAssist.person,'佐藤');
 });
 test('compact UI renders assist -> scorer in review and pre-send summary',()=>{
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
