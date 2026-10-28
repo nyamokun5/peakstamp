@@ -539,3 +539,33 @@ test('5/6-team rounds with the same title number never substitute for the unique
  ]},snap);
  assert.deepEqual(a.map(x=>x.seq),[1,2]);
 });
+
+test('Japanese speech resolves uniquely to Latin SpoSched surname and given name',()=>{
+ const snap=normalizeSpoSnapshot({event_id:'eeaed234-e9f0-4999-b05e-ec01c7b656fc',
+  matches:[{seq:1,title:'準決勝',left_team:'Team1',right_team:'Team2'}],
+  roster:{Team1:['Taro Fujii','Tatsuo Sato'],Team2:['Koji Tanaka']}});
+ assert.equal(suggestedPlayer('藤井さん',snap).name,'Taro Fujii');
+ assert.equal(suggestedPlayer('藤井さん',snap).confidence,'high');
+ assert.equal(suggestedPlayer('達夫',snap).name,'Tatsuo Sato');
+ assert.equal(suggestedPlayer('佐藤達夫',snap).name,'Tatsuo Sato');
+ assert.equal(suggestedPlayer('Tatsuo Sato',snap).name,'Tatsuo Sato');
+ assert.equal(suggestedPlayer('Sato Tatsuo',snap).name,'Tatsuo Sato');
+ const rows=prepareGoalRows({goals:[{id:'foo',matchSeq:1,scorer:'藤井さん',
+  assist:'達夫',assistStatus:'named'}]},snap);
+ assert.equal(rows[0].scorer,'Taro Fujii');
+ assert.equal(rows[0].assist,'Tatsuo Sato');
+ assert.equal(rows[0].scorerGuess.confidence,'high');
+ assert.equal(rows[0].assistGuess.confidence,'high');
+ assert.equal(rows[0].team,'Team1');
+});
+test('similar surnames stay unselected when roster match is ambiguous',()=>{
+ const snap=normalizeSpoSnapshot({event_id:'eeaed234-e9f0-4999-b05e-ec01c7b656fc',
+  matches:[{seq:1,title:'準決勝',left_team:'Team1',right_team:'Team2'}],
+  roster:{Team1:['Taro Fujii'],Team2:['Shun Fujii','Tatsuo Sato']}});
+ const result=suggestedPlayer('藤井さん',snap);
+ assert.equal(result.name,'');
+ assert.equal(result.confidence,'none');
+ assert.equal(result.candidates.length>=2,true);
+ assert.deepEqual(spokenNameTokens('ふじいさん').includes('fujii'),true);
+ assert.equal(suggestedPlayer('聞き取れず',snap).name,'');
+});
