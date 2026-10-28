@@ -84,3 +84,22 @@ test('UI highlights the SS manual-only exclusion and blocks finalizing until off
  assert.match(html,/manualPending\.length/);
  assert.match(html,/未登録のまま試合は終了しません/);
 });
+
+test('scorer from outside both fixture teams is SS-manual even when scoring side cannot be guessed',()=>{
+ const snapshot=fresh(false);
+ const rows=prepareGoalRows({goals:[{id:'scorer-helper',source,
+  scorer:'橋本 泰成',assistStatus:'none',matchSeq:2,matchLabel:'チーム3 vs チーム4'}]},snapshot);
+ assert.equal(rows[0].team,'','no scoring side may be guessed from a helper home team');
+ const manual=ssManualHelperGoal(snapshot,rows[0]);
+ assert.equal(manual.team,'','manual SS entry must choose the scoring side');
+ assert.equal(manual.mismatches[0].role,'得点者');
+ assert.equal(quickGoalDecisions(snapshot,rows)[0].state,'manual-ss');
+ assert.throws(()=>plan(snapshot,rows,quickGoalDecisions(snapshot,rows)),/SSで直接登録後/);
+ const official=fresh(false);
+ official.matches[1].existingGoals=[{id:'77777777-7777-4777-8777-777777777777',
+  scorer:'橋本 泰成',assist:'',team:'チーム3',ownGoal:false}];
+ const after=prepareGoalRows({goals:[{id:'scorer-helper',source,
+  scorer:'橋本 泰成',assistStatus:'none',matchSeq:2,matchLabel:'チーム3 vs チーム4'}]},official);
+ assert.equal(ssManualHelperGoal(official,after[0]).registered,true);
+ assert.equal(plan(official,after,quickGoalDecisions(official,after)).operations.filter(x=>x.action==='create').length,0);
+});
