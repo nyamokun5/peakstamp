@@ -4,7 +4,7 @@
  */
 import {
  normalizePerson,normalizeTeam,validateGoalRow,matchingExistingGoals,buildReviewPayload
-} from './sposched-review-core.mjs';
+} from './sposched-review-core.mjs?v=roster-phonetic2';
 
 /**
  * Show what PeakStamp AI ACTUALLY extracted, separate from the possibly

@@ -4,7 +4,8 @@
  */
 const string=x=>String(x??'').trim();
 export const normalizePerson=x=>string(x).normalize('NFKC').toLowerCase()
- .replace(/[\s.・_\-（）()]/g,'').replace(/(さん|くん|君|氏|様)$/,'');
+ .replace(/[\s.・_\-（）()]/g,'').replace(/(さん|くん|君|氏|様)$/,'')
+ .replace(/德/g,'徳');
 export const normalizeTeam=x=>string(x).normalize('NFKC').toLowerCase()
  .replace(/\s/g,'').replace(/^チーム/,'team').replace(/team(\d+)/,'team$1');
 const number=x=>x!==null&&x!==undefined&&x!==''&&
@@ -156,7 +157,8 @@ const knownKanjiReadings={
  '高橋':'takahashi','伊藤':'ito','加藤':'kato','斉藤':'saito',
  '斎藤':'saito','吉田':'yoshida','山口':'yamaguchi','山本':'yamamoto',
  '井上':'inoue','清水':'shimizu','木村':'kimura','林':'hayashi',
- '達夫':'tatsuo','達雄':'tatsuo','竜夫':'tatsuo','龍夫':'tatsuo'
+ '達夫':'tatsuo','達雄':'tatsuo','竜夫':'tatsuo','龍夫':'tatsuo',
+ '大野':'ohno'
 };
 const kanaMap={
  'あ':'a','い':'i','う':'u','え':'e','お':'o',
@@ -194,7 +196,7 @@ function kanaRomanization(text){
 // the same aliases to BOTH AI audio and official roster display names.
 const aliasName=value=>{
  const raw=string(value).normalize('NFKC').toLowerCase()
-  .replace(/(さん|くん|君|氏|様)\s*$/,'').trim();
+  .replace(/(さん|くん|君|氏|様)\s*$/,'').replace(/德/g,'徳').trim();
  const words=raw.split(/[\s.・_\-（）()]+/).filter(Boolean);
  const romanize=part=>{
   let result=kanaRomanization(part);
@@ -204,9 +206,30 @@ const aliasName=value=>{
   return result;
  };
  const pieces=words.map(romanize);
+ // Only established Japanese spelling variants, not unrestricted edit distance:
+ // 大野 = OHNO/ONO/OONO; kana long vowels コーイチ = KOOICHI/KOICHI/KOUICHI.
+ // Every variant is searched against the actual roster; two equivalent
+ // roster members must still be treated as ambiguous, never auto-selected.
+ const expand=(reading,source)=>{
+  const found=new Set([reading]);
+  if(['ohno','ono','oono'].includes(reading))
+   for(const alias of ['ohno','ono','oono'])found.add(alias);
+  if(/[ぁ-ゖァ-ヶー]/u.test(source)){
+   if(reading.includes('oo')){
+    found.add(reading.replace(/oo/g,'o'));
+    found.add(reading.replace(/oo/g,'ou'));
+   }
+   if(reading.includes('ou')){
+    found.add(reading.replace(/ou/g,'o'));
+    found.add(reading.replace(/ou/g,'oo'));
+   }
+  }
+  return [...found];
+ };
+ const alternatives=words.flatMap((word,i)=>expand(pieces[i],word));
  const joined=pieces.join('');
  const ordered=pieces.length>1?pieces.slice().sort().join(''):'';
- return {raw:normalizePerson(value),parts:pieces,joined,ordered};
+ return {raw:normalizePerson(value),parts:[...new Set(alternatives)],joined,ordered};
 };
 export function spokenNameTokens(text){
  const alias=aliasName(text);

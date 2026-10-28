@@ -569,3 +569,46 @@ test('similar surnames stay unselected when roster match is ambiguous',()=>{
  assert.deepEqual(spokenNameTokens('ふじいさん').includes('fujii'),true);
  assert.equal(suggestedPlayer('聞き取れず',snap).name,'');
 });
+
+test('Japanese long-vowel and traditional glyphs resolve to the unique SS roster member',()=>{
+ const evt='eeaed234-e9f0-4999-b05e-ec01c7b656fc';
+ const snap=normalizeSpoSnapshot({event_id:evt,
+  matches:[{seq:1,left_team:'Team1',right_team:'Team2'}],
+  roster:{Team1:['Taro OHNO','KOICHI','德永'],Team2:['Tatsuo Sato']}});
+ const examples=[['大野','Taro OHNO'],['コーイチ','KOICHI'],
+  ['徳永','德永'],['德永','德永'],['オオノ','Taro OHNO'],
+  ['こういち','KOICHI']];
+ for(const [spoken,official] of examples){
+  const result=suggestedPlayer(spoken,snap);
+  assert.equal(result.name,official,spoken+' should resolve to official roster spelling');
+  assert.equal(result.confidence,'high',spoken+' must be a strong, unique match');
+ }
+ assert.equal(normalizePerson('徳永'),normalizePerson('德永'));
+ assert.ok(spokenNameTokens('コーイチ').includes('koichi'));
+ assert.ok(spokenNameTokens('コーイチ').includes('kouichi'));
+ assert.ok(spokenNameTokens('大野').includes('ohno'));
+ assert.ok(spokenNameTokens('大野').includes('ono'));
+ const chosen=prepareGoalRows({goals:[
+  {id:'ohno',matchSeq:1,scorer:'大野',assistStatus:'none'},
+  {id:'koichi',matchSeq:1,scorer:'コーイチ',assistStatus:'none'},
+  {id:'tokunaga',matchSeq:1,scorer:'徳永',assistStatus:'none'}
+ ]},snap);
+ assert.deepEqual(chosen.map(row=>row.scorer),['Taro OHNO','KOICHI','德永']);
+ assert.ok(chosen.every(row=>row.scorerGuess.confidence==='high'));
+});
+test('related spellings do not auto-select when two different roster entries match',()=>{
+ const evt='eeaed234-e9f0-4999-b05e-ec01c7b656fc';
+ const snap=normalizeSpoSnapshot({event_id:evt,
+  matches:[{seq:1,left_team:'Team1',right_team:'Team2'}],
+  roster:{Team1:['Taro OHNO','Taro Ono','KOICHI'],
+   Team2:['Kouichi','徳永','德永']}});
+ for(const spoken of ['大野','コーイチ','徳永']){
+  const picked=suggestedPlayer(spoken,snap);
+  assert.equal(picked.name,'',spoken+' must be held when alias matches are non-unique');
+  assert.equal(picked.confidence,'none');
+  assert.ok(picked.candidates.length>=2);
+ }
+ assert.equal(suggestedPlayer('全然別の人',snap).name,'');
+ assert.equal(suggestedPlayer('小野',snap).name,'',
+  'unlisted kanji readings are never guessed as another surname');
+});

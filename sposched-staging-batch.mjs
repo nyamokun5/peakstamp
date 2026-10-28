@@ -3,7 +3,7 @@
  * a freshly issued signed preview and readback confirmation after each write.
  * Errors stop the batch; successful operations are never retried here.
  */
-import {normalizePerson,normalizeTeam} from './sposched-review-core.mjs';
+import {normalizePerson,normalizeTeam} from './sposched-review-core.mjs?v=roster-phonetic2';
 export const TEST_TEAM_ID='dbb50f85-9d9a-408c-9482-497abbca399c';
 const abort=message=>{throw Error(message)};
 const comparable=plan=>JSON.stringify({action:plan?.action,side:plan?.side,
