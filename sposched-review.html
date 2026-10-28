@@ -1184,6 +1184,52 @@ function autoWinnerFor(seq){
 }
 let autoBusy=false,autoProblemSeq=null,autoUnsafeStop=false,autoMustReload=false;
 let workerBatchPolling=false,workerRestoredEvent='',workerLatestState=null;
+
+let legacyStartedAt=null,legacyStartedEventId='';
+function hideCompletionPanel(){
+ $('ssResultPanel').hidden=true;
+ $('ssResultPanel').dataset.eventId='';
+ $('ssResultPanel').dataset.runId='';
+}
+function selectedSSDate(){
+ const label=$('ssEventSelect').selectedOptions?.[0]?.textContent||'';
+ return /^\d{4}-\d{2}-\d{2}/.exec(label)?.[0]||'';
+}
+function refreshSSResultLink(){
+ const id=$('ssResultPanel').dataset.eventId;
+ if(!id||!snapshot||id!==snapshot.eventId)return;
+ const link=savedSSAppLink(localStorage,'staging',id,selectedSSDate());
+ $('ssResultUrlInput').value=link;
+ $('ssResultLink').hidden=!link;
+ if(link)$('ssResultLink').href=link;
+ else $('ssResultLink').removeAttribute('href');
+ $('ssResultLinkNote').textContent=link
+  ?'別タブでSSアプリを開き、登録されたゴールと4試合の結果を確認できます。'
+  :'このイベントのSSアプリURLは未登録です。下の欄へ正しいURLを貼り付けて保存してください。';
+}
+function showCompletionPanel(eventId,seconds,runId){
+ if(!snapshot||snapshot.eventId!==eventId||$('ssEnvironment').value!=='staging')return;
+ const panel=$('ssResultPanel');
+ if(!panel.hidden&&panel.dataset.eventId===eventId&&panel.dataset.runId===runId)return;
+ panel.dataset.eventId=eventId;
+ panel.dataset.runId=runId;
+ panel.hidden=false;
+ $('ssResultTime').textContent=seconds===null
+  ?'開始時刻が保存されていないため、全体の秒数は測定できません（次回から計測）'
+  :'ボタン押下 → 全処理完了：'+seconds.toFixed(1)+'秒';
+ $('ssResultUrlStatus').textContent='';
+ refreshSSResultLink();
+}
+$('ssResultUrlSave').addEventListener('click',()=>{
+ const id=$('ssResultPanel').dataset.eventId;
+ if(!snapshot||id!==snapshot.eventId||$('ssEnvironment').value!=='staging')return;
+ try{
+  const url=validatedSSAppLink($('ssResultUrlInput').value,'staging');
+  localStorage.setItem(resultLinkKey('staging',id),url);
+  refreshSSResultLink();
+  $('ssResultUrlStatus').textContent='このTESTイベントのURLを保存しました。';
+ }catch(e){$('ssResultUrlStatus').textContent=e.message}
+});
 function autoStep(message,completed=0,partial=0){
  $('autoProgress').hidden=false;
  $('autoStage').textContent=message;
