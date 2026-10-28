@@ -1613,6 +1613,75 @@ function openPendingRecovery(){
 $('workerBatchRecover').addEventListener('click',openPendingRecovery);
 $('autoRecover').addEventListener('click',openPendingRecovery);
 $('workerBatchRefresh').addEventListener('click',()=>refreshWorkerBatch());
+$('workerBatchRecreate').addEventListener('click',async()=>{
+ if(workerBatchPolling||batchBusy||autoBusy||!snapshot||!loadedFromStagingDirect||
+    $('ssEnvironment').value!=='staging')return;
+ const eventId=snapshot.eventId;
+ const key=workerBatchStorageKey(eventId);
+ const pendingKey=workerBatchRecreatePendingKey(eventId);
+ if(localStorage.getItem(pendingKey)){
+  await refreshWorkerBatch();
+  return;
+ }
+ const clickedAt=Date.now();
+ try{
+  if(pendingForEvent().length)
+   throw Error('前回の未確認ゴールがあります。先に安全な照合を完了してください');
+  const old=await postStaging('/staging/batch/status',{event_id:eventId});
+  const oldRequestId=localStorage.getItem(key);
+  if(old.request_id!==oldRequestId||
+     !['completed','blocked','needs_decision'].includes(old.status))
+   throw Error('旧ジョブの状態が変更されました。進捗を再取得してください');
+  const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+  if(fresh.eventId!==eventId)throw Error('現在のTESTイベントIDが一致しません');
+  if(!hasRecreatedBracket(old,fresh))
+   throw Error('削除・再作成後の4試合IDを確認できません');
+  // Keep the first click separate from any follow-up status polling.
+  // The Worker independently confirms deleted old fixtures, old HTTP 404,
+  // and 0-0 clean new semifinals before running even one write.
+  const requestId=crypto.randomUUID();
+  const plan=prepareWorkerTournament({
+   snapshot:fresh,rows,decisions:quickGoalDecisions(fresh,rows),requestId,
+   winnerFor:seq=>autoWinnerFor(seq)
+  });
+  const goalCount=plan.operations.filter(op=>op.action==='create').length;
+  if(!window.confirm('TESTイベント内で試合が再作成されています。旧ジョブ（'+
+     oldRequestId+'）は履歴へ保管し、新しい4試合に'+goalCount+
+     'ゴールを登録します。旧試合には再送しません。開始しますか？'))return;
+  storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
+  localStorage.setItem(pendingKey,JSON.stringify({requestId,previousRequestId:oldRequestId,clickedAt}));
+  $('workerBatchRecreate').disabled=true;
+  $('workerBatchStatus').textContent='旧試合の削除と新試合IDをWorkerで再照合しています…';
+  hideCompletionPanel();
+  setBatchBusy(true);
+  try{
+   const started=await postStaging('/staging/batch/recreate',{
+    ...plan,confirm_recreation:'TEST-ONLY RECREATE DELETED FIXTURES',
+    previous_request_id:oldRequestId
+   });
+   if(started.environment!=='STAGING ONLY'||started.request_id!==requestId)
+    throw Error('新しいTESTジョブIDを確認できません。再送せず進捗を再取得してください');
+   localStorage.setItem(key,requestId);
+   localStorage.removeItem(pendingKey);
+   await refreshWorkerBatch();
+  }catch(error){
+   // A recognized rejected request did NOT start a new job. Any network
+   // error remains ambiguous and keeps the pending marker until status read.
+   if(['invalid_plan','recreation_not_verified','recreation_not_authorized',
+       'previous_job_active','previous_job_missing','archive_full',
+       'recreation_unavailable'].includes(error.code)){
+    localStorage.removeItem(pendingKey);
+   }
+   throw error;
+  }
+ }catch(error){
+  setBatchBusy(false);
+  $('workerBatchStatus').textContent='再作成した試合の登録確認：'+error.message+
+   '。送信結果が不明な場合は再送しないで「進捗を再取得」を押してください。';
+  renderAutoSummary();
+ }
+});
+
 $('workerBatchRun').addEventListener('click',async()=>{
  if(workerBatchPolling||batchBusy||autoBusy||!snapshot||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging')return;
