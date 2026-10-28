@@ -3,7 +3,8 @@
  * The Worker independently resolves official fixture/player UUIDs and checks
  * every signed mutation before calling the existing per-match write gate.
  */
-import {waitingKnockoutGoalIssue,ssManualHelperGoal,deferredHelperAssist} from './sposched-quick-review.mjs?v=assist-defer1';
+import {waitingKnockoutGoalIssue,ssManualHelperGoal,deferredHelperAssist} from './sposched-quick-review.mjs?v=helper-auto1';
+import {proposedMatchHelpers} from './sposched-helper-plan.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const name=v=>typeof v==='string'?v.trim():'';
 const normalized=v=>name(v).normalize('NFKC').toLocaleLowerCase('en').replace(/[\s\u3000]/g,'');
@@ -54,17 +55,20 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
    fail('ゴール'+(i+1)+'：高速登録に未対応のデータがあります');
   if(decision?.state!=='ready'&&decision?.state!=='waiting')
    fail('ゴール'+(i+1)+'：'+(decision?.reason||'確認が必要です'));
-  if(decision.state==='waiting'){
+  if(decision.state==='waiting'&&!decision.helperPlan){
    // A known 3rd-place/final slot is queued until SpoSched resolves its
    // opponents. Only uncertain match/player evidence needs correction.
    const issue=waitingKnockoutGoalIssue(snapshot,row);
    if(issue)fail('ゴール'+(i+1)+'：'+issue);
   }
   const scorer=name(row.scorer);
-  const team=name(row.team||snapshot.playerTeam?.get(scorer));
+  const helperPlan=proposedMatchHelpers(snapshot,row);
+  if(JSON.stringify(decision.helperPlan||null)!==JSON.stringify(helperPlan||null))
+   fail('ゴール'+(i+1)+'：助っ人の登録計画が変わりました。再確認してください');
+  const team=name(helperPlan?.team||row.team||snapshot.playerTeam?.get(scorer));
   // Recompute independently: a forged/obsolete UI flag cannot remove an
   // assistant from a goal or authorize a cross-team player.
-  const verifiedDeferred=deferredHelperAssist(snapshot,row);
+  const verifiedDeferred=helperPlan?null:deferredHelperAssist(snapshot,row);
   if(Boolean(decision.deferredAssist)!==Boolean(verifiedDeferred)||
      (verifiedDeferred&&(
       decision.deferredAssist.person!==verifiedDeferred.person||
@@ -77,25 +81,36 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
    fail('ゴール'+(i+1)+'：チーム・得点者・アシスト状態を確認してください');
   if(assist&&normalized(assist)===normalized(scorer))
    fail('ゴール'+(i+1)+'：同じ選手を得点者とアシスト者に指定できません');
-  if(snapshot.playerTeam?.get(scorer)&&normalized(snapshot.playerTeam.get(scorer))!==normalized(team))
+  if(snapshot.playerTeam?.get(scorer)&&normalized(snapshot.playerTeam.get(scorer))!==normalized(team)&&
+    !helperPlan?.helpers.some(h=>h.name===scorer&&normalized(h.team)===normalized(team)))
    fail('ゴール'+(i+1)+'：得点者の所属と得点チームが異なります');
-  if(assist&&snapshot.playerTeam?.get(assist)&&normalized(snapshot.playerTeam.get(assist))!==normalized(team))
+  if(assist&&snapshot.playerTeam?.get(assist)&&normalized(snapshot.playerTeam.get(assist))!==normalized(team)&&
+    !helperPlan?.helpers.some(h=>h.name===assist&&normalized(h.team)===normalized(team)))
    fail('ゴール'+(i+1)+'：アシスト者の所属と得点チームが異なります');
   const signature=[seq,normalized(team),normalized(scorer),normalized(assist)].join('|');
   if(signatures.has(signature))
    fail('同じ試合・得点者・アシストのゴールが複数あります。高速登録を中止します');
   signatures.add(signature);
-  selected.push({seq,action:'create',team,scorer,assist});
+  selected.push({seq,action:'create',team,scorer,assist,helpers:helperPlan?.helpers||[]});
  }
  if(selected.length>20)fail('高速登録は最大20ゴールです');
- const operations=[];
+ const operations=[],seenHelpers=new Set();
  for(const seq of [1,2,3,4]){
   const fixture=matches.find(m=>m.seq===seq);
   const expected_match_id=UUID.test(fixture.matchId||'')?fixture.matchId:null;
   if(fixture.status==='scheduled'&&!expected_match_id)
    fail('試合 #'+seq+' の正式なmatch_idを取得できません');
-  operations.push(...selected.filter(s=>s.seq===seq)
-   .map(goal=>({...goal,expected_match_id})));
+  for(const goal of selected.filter(s=>s.seq===seq)){
+   for(const helper of goal.helpers){
+    const key=[seq,normalized(helper.team),normalized(helper.name)].join('|');
+    if(seenHelpers.has(key))continue;
+    seenHelpers.add(key);
+    operations.push({seq,action:'helper',team:helper.team,
+     name:helper.name,expected_match_id});
+   }
+   const {helpers,...create}=goal;
+   operations.push({...create,expected_match_id});
+  }
   const winner=winnerFor(seq)||'auto';
   if(!['auto','left','right','draw'].includes(winner)||
      seq<3&&winner==='draw')fail('試合 #'+seq+' の勝敗指定が不正です');
