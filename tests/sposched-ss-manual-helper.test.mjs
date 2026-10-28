@@ -116,8 +116,9 @@ test('scorer from outside both fixture teams is SS-manual even when scoring side
 test('official existing helper-assisted goal and repeated helper-assisted drafts remain protected from duplicates',()=>{
  const snapshot=fresh(false),rows=review(snapshot);
  snapshot.matches[1].existingGoals=[{scorer:'Hiroyuki Kawata',assist:'橋本 泰成',team:'チーム3'}];
- assert.equal(quickGoalDecisions(snapshot,rows)[0].state,'duplicate',
-  'same official scorer and assistant must not be re-created');
+ assert.equal(quickGoalDecisions(snapshot,rows)[0].state,'manual-ss',
+  'an already registered helper-assisted goal is explicitly excluded from any new write');
+ assert.equal(quickGoalDecisions(snapshot,rows)[0].registeredInSS,true);
  snapshot.matches[1].existingGoals=[];
  const two=prepareGoalRows({goals:[
   {id:'repeat-helper-a',source,scorer:'Hiroyuki Kawata',assist:'橋本 泰成',assistStatus:'named',matchSeq:2,matchLabel:'チーム3 vs チーム4'},
