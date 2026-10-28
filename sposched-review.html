@@ -1073,6 +1073,43 @@ function renderQuick(){
   }
   if(item.state!=='ready'&&item.state!=='attention'&&item.state!=='waiting')
    el.append(node('p',item.reason,'quick-held-note'));
+  if(item.state==='waiting'&&row.include){
+   const reviewed=row.quickReviewedAll===true||
+    (row.quickReviewedFields?.match===true&&
+     row.quickReviewedFields?.scorer===true&&row.quickReviewedFields?.assist===true);
+   if(reviewed){
+    el.append(node('p','✓ 試合番号・得点者・アシスト確認済み。対戦相手は準決勝終了後に確定します。','quick-ready'));
+   }else{
+    const approve=node('button','試合番号・得点者・アシストを確認して進む（対戦待ちはOK）','confirm-candidate');
+    approve.type='button';
+    approve.addEventListener('click',()=>{
+     // Deliberate user confirmation of visible player/slot values; NEVER
+     // assumes a third-place opponent, an official goal or a fixture winner.
+     const fixture=snapshot?.matches?.find(m=>m.seq===Number(row.seq));
+     const scorer=String(row.scorer||'').trim();
+     const team=String(row.team||snapshot?.playerTeam?.get(scorer)||'').trim();
+     const assist=String(row.assist||'').trim();
+     const complete=fixture?.status==='waiting'&&Number(row.seq)>=3&&
+      !row.goal?.manual&&!row.updateGoalId&&!row.guest&&!row.fixtureIdentityChanged&&
+      scorer&&team&&['none','named'].includes(row.assistMode)&&
+      (row.assistMode==='none'||assist)&&
+      (!snapshot.playerTeam?.get(scorer)||
+       normalizeTeam(snapshot.playerTeam.get(scorer))===normalizeTeam(team))&&
+      (!assist||normalizeTeam(assist)!==normalizeTeam(scorer))&&
+      (!assist||!snapshot.playerTeam?.get(assist)||
+       normalizeTeam(snapshot.playerTeam.get(assist))===normalizeTeam(team));
+     if(!complete){
+      $('quickStatus').textContent='試合番号・得点者・得点チーム・アシストを確認してください。対戦相手の確定は不要です。';
+      return;
+     }
+     row.quickReviewedAll=true;
+     touch();persistManualRow(row);renderQuick();
+     $('quickStatus').textContent='✓ ゴール #'+(item.index+1)+
+      ' を確認しました。対戦相手の確定前でも一括登録を開始できます。';
+    });
+    el.append(approve);
+   }
+  }
   if(inlineEligible){
    if(item.state==='ready'){
     const edit=node('button',expanded?'簡易編集を閉じる':'修正する','quick-exception');
