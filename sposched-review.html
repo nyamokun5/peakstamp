@@ -1597,6 +1597,7 @@ function showWorkerTiming(state){
   ' ／署名プレビュー '+sec(metrics.preview_ms)+
   ' ／登録＋再取得 '+sec(metrics.execute_ms)+
   ' ／勝敗入力待ち '+sec(metrics.decision_wait_ms)+
+  (Number.isFinite(full)?' ／入力待ちを除くWorker経過 '+sec(Math.max(0,full-Number(metrics.decision_wait_ms||0))):'')+
   (other===null?'':' ／その他のWorker処理・待機 '+sec(other));
  const slowest=(Array.isArray(metrics.by_step)?metrics.by_step:[])
   .slice().sort((a,b)=>Number(b.total_ms||0)-Number(a.total_ms||0))
