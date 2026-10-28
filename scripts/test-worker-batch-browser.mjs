@@ -17,6 +17,7 @@ const snapshot=()=>({event_id:E,matches,roster:{
  チーム1:['山田'],チーム2:['西村'],チーム3:['田中'],チーム4:['橋本']
 }});
 let failFinalSnapshot=process.env.TEST_FINAL_SNAPSHOT_FAILURE==='1';
+let incompleteFinalSnapshot=failFinalSnapshot;
 let starts=0,decisions=0,statusCalls=0,lastRequestId=null,step='idle',otherWrites=0;
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -38,6 +39,9 @@ await page.route('**/*',async route=>{
   if(step==='completed'&&failFinalSnapshot)return route.fulfill({status:503,
    json:{error:{message:'simulated final snapshot outage'}},headers:{'Access-Control-Allow-Origin':'*'}});
   data=snapshot();
+  if(step==='completed'&&incompleteFinalSnapshot){
+   data.matches[3]={...data.matches[3],status:'scheduled'};
+  }
  }
  else if(url.pathname==='/staging/batch/start'){
   starts++;assert.equal(starts,1,'starting twice is forbidden');
@@ -109,6 +113,12 @@ try{
    'failed official final snapshot must not show completion');
   assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
   failFinalSnapshot=false;
+  await page.click('#workerBatchRefresh');
+  await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('試合 #4 の終了状態'));
+  assert.equal(await page.locator('#ssResultPanel').isVisible(),false,
+   'unfinished official fixture must not show completion');
+  assert.equal(starts,1,'readback failures must not restart the batch');
+  incompleteFinalSnapshot=false;
   await page.click('#workerBatchRefresh');
  }
  await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('全操作の登録・照合'));
