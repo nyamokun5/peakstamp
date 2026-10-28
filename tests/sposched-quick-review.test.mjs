@@ -333,7 +333,7 @@ test('UI lists official fixture numbers and holds waiting matches without enabli
  assert.match(html,/const matchSlotLabel=m=>/);
  assert.match(html,/goalCandidatesByMatchNumber\(snapshot,rows\)/);
  assert.match(html,/item\.state==='waiting'/);
- assert.match(html,/対戦待ち・送信保留/);
+ assert.match(html,/対戦確定後に自動登録/);
  assert.match(html,/試合別の候補件数（参考）/);
  assert.match(html,/label:matchSlotLabel\(v\)/);
 });
@@ -432,4 +432,37 @@ test('TEST event without official numbered fixtures never renders fake selector 
  assert.match(html,/ssReloadFixtures/);
  assert.match(html,/if\(snapshot\.matches\.length===0\)/);
  assert.match(html,/試合枠がないため登録できません/);
+});
+
+test('known third-place and final goal slots join batch without waiting-opponent approval',()=>{
+ const knockout=normalizeSpoSnapshot({event_id:E,matches:[
+  {seq:1,title:'準決勝1',match_id:M,status:'scheduled',left_team:'チーム1',right_team:'チーム2'},
+  {seq:2,title:'準決勝2',match_id:'11111111-1111-4111-8111-111111111112',status:'scheduled',left_team:'チーム3',right_team:'チーム4'},
+  {seq:3,title:'3位決定戦',match_id:'11111111-1111-4111-8111-111111111113',status:'waiting',left_team:null,right_team:null},
+  {seq:4,title:'決勝',match_id:'11111111-1111-4111-8111-111111111114',status:'waiting',left_team:null,right_team:null}
+ ],roster:{'チーム1':['西村','佐藤'],'チーム2':['橋本'],'チーム3':['豊田'],'チーム4':['中村']}});
+ const [third,final]=prepareGoalRows({goals:[
+  {...video('third-known','西村','佐藤'),matchSeq:3},
+  {...video('final-known','橋本'),matchSeq:4}
+ ]},knockout);
+ assert.equal(third.quickReviewedAll,undefined);
+ const decisions=quickGoalDecisions(knockout,[third,final]);
+ assert.deepEqual(decisions.map(d=>d.state),['waiting','waiting'],
+  'opponent pending is only a scheduled execution dependency');
+ assert.match(decisions[0].reason,/一括登録の対象/);
+ third.scorerGuess={confidence:'low'};
+ assert.equal(quickGoalDecisions(knockout,[third,final])[0].state,'attention',
+  'ambiguous scorer must still be corrected');
+ third.quickReviewedFields={scorer:true};
+ assert.equal(quickGoalDecisions(knockout,[third,final])[0].state,'waiting');
+ third.assistGuess={confidence:'low'};
+ assert.equal(quickGoalDecisions(knockout,[third,final])[0].state,'attention');
+ third.quickReviewedFields.assist=true;
+ assert.equal(quickGoalDecisions(knockout,[third,final])[0].state,'waiting');
+ third.quickReviewedFields={};
+ third.scorerGuess={confidence:'high'};
+ third.assistGuess={confidence:'high'};
+ third.matchGuess={...third.matchGuess,ambiguous:true};
+ assert.equal(quickGoalDecisions(knockout,[third,final])[0].state,'attention',
+  'uncertain fixture number must never silently auto-approve');
 });
