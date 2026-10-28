@@ -79,6 +79,10 @@ details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 .flow-guide strong{display:block;font-size:13px;line-height:1.35}.flow-guide .hint-step{font-size:11px;color:#a9f8d6}
 .flow-guide button{min-width:92px;background:#1a8f78;border-color:#78e2bc}
 .panel{scroll-margin-top:110px}.grid-item{scroll-margin-top:125px}
+#ssResultPanel{margin-top:18px;border:1px solid #78e2bc;border-radius:12px;padding:15px;background:#15382f}
+#ssResultTime{font-size:20px;font-weight:750;margin:9px 0}
+#ssResultLink{display:inline-block;max-width:100%;box-sizing:border-box;margin:7px 0;padding:12px 14px;border-radius:9px;background:#1a8f78;color:white;font-weight:700;text-decoration:none;overflow-wrap:anywhere}
+#ssResultUrlInput{width:100%;box-sizing:border-box}
 .detail-return{position:fixed;z-index:30;left:0;right:0;bottom:0;padding:10px max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));background:#0d2632;border-top:1px solid #68a998;box-shadow:0 -8px 25px #061823c0}
 .detail-return button{display:block;max-width:830px;width:100%;margin:auto;background:#1a8f78;border-color:#78e2bc;min-height:48px;font-size:15px}
 body.detail-open{padding-bottom:115px}
@@ -234,6 +238,21 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
    <button id="autoReload" class="primary" type="button" hidden>SSを再取得（書き込みなし）</button>
    <button id="autoRecover" class="primary" type="button" hidden>⚠ 前回の送信記録を照合（書き込みなし）</button>
   </div>
+  <div id="ssResultPanel" hidden>
+   <strong>✓ 4試合の登録・確認が完了しました</strong>
+   <p id="ssResultTime" role="status"></p>
+   <p class="small">最初の登録ボタン押下から全処理完了まで計測。同点時の勝者選択で待った時間も含みます。</p>
+   <a id="ssResultLink" target="_blank" rel="noopener noreferrer" hidden>SSアプリで登録結果を確認する（TEST）</a>
+   <p id="ssResultLinkNote" class="small"></p>
+   <details id="ssResultLinkSettings">
+    <summary>このイベントのSSアプリURLを登録・変更する</summary>
+    <label class="field">SS TESTのイベント画面URL
+     <input id="ssResultUrlInput" type="url" inputmode="url" placeholder="https://testsundayfront.web.app/app/shoot/activity/?event=...">
+    </label>
+    <button id="ssResultUrlSave" type="button">このイベントのリンクを保存</button>
+    <p id="ssResultUrlStatus" class="small" role="status"></p>
+   </details>
+  </div>
  </div>
  <details class="help"><summary>個別ゴール登録（従来方式）</summary>
   <button id="quickPreview" class="primary quick-main" type="button">登録内容を確認</button>
@@ -346,6 +365,7 @@ import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey} from './sposched-worker-batch.mjs?v=worker1';
+import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
@@ -357,7 +377,7 @@ let autoTiming=null;
 function runTimingLabel(){
  if(!autoTiming)return '';
  const seconds=((performance.now()-autoTiming.start)/1000).toFixed(1);
- return '（'+seconds+'秒・取得'+autoTiming.gets+'回・確認/登録'+autoTiming.posts+'回）';
+ return '（今回の区間'+seconds+'秒・取得'+autoTiming.gets+'回・確認/登録'+autoTiming.posts+'回。全体計測は完了時に確定）';
 }
 const pendingForEvent=()=>snapshot?.eventId&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging'
  ?pendingAttempts(localStorage,snapshot.eventId):[];
