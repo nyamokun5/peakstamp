@@ -290,8 +290,13 @@ export function editQuickGoalField(snapshot,row,field,value){
   row.assist=value;row.assistMode='named';mark('assist');
  }else if(field==='team'){
   const m=snapshot.matches.find(x=>x.seq===Number(row.seq));
-  if(!m||![normalizeTeam(m.leftTeam),normalizeTeam(m.rightTeam)]
-   .includes(normalizeTeam(value)))throw Error('この試合の得点チームを選択してください');
+  const allowed=m?.status==='waiting'&&[3,4].includes(Number(m.seq))?
+   Object.keys(snapshot.roster||{}):[m?.leftTeam,m?.rightTeam].filter(Boolean);
+  if(!m||!allowed.some(t=>normalizeTeam(t)===normalizeTeam(value)))
+   throw Error('得点チームを正しい名簿から選択してください');
+  // For waiting #3/#4, a provisional selection is NOT authorization to
+  // enroll a helper. The Worker checks both finished semifinals and the
+  // newly resolved official sides before starting the signed write.
   row.team=value;mark('team');
  }else throw Error('未知の入力項目です');
  return row;
