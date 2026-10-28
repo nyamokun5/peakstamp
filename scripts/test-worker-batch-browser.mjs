@@ -18,6 +18,7 @@ const snapshot=()=>({event_id:E,matches,roster:{
 }});
 const exercisePause=process.env.TEST_BATCH_PAUSE==='1';
 const loseResumeReply=process.env.TEST_RESUME_LOST_REPLY==='1';
+const losePauseReply=process.env.TEST_PAUSE_LOST_REPLY==='1';
 let pauses=0,resumes=0;
 let failFinalSnapshot=process.env.TEST_FINAL_SNAPSHOT_FAILURE==='1';
 let incompleteFinalSnapshot=failFinalSnapshot;
@@ -63,6 +64,7 @@ await page.route('**/*',async route=>{
  }else if(url.pathname==='/staging/batch/pause'){
   pauses++;assert.equal(pauses,1);assert.equal(body.request_id,lastRequestId);
   assert.equal(body.confirm,'TEST-ONLY BATCH PAUSE');step='paused';data={status:'paused'};
+  if(losePauseReply)return route.fulfill({status:503,json:{error:{message:'lost pause reply'}},headers:{'Access-Control-Allow-Origin':'*'}});
  }else if(url.pathname==='/staging/batch/resume'){
   resumes++;assert.equal(resumes,1);assert.equal(body.request_id,lastRequestId);
   assert.equal(body.confirm,'TEST-ONLY BATCH RESUME');assert.equal(body.pause_id,'pause-receipt');
@@ -140,6 +142,12 @@ try{
  if(exercisePause){
   await page.locator('#workerBatchPause').waitFor({state:'visible'});
   await page.click('#workerBatchPause');
+  if(losePauseReply){
+   await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('操作を再送せず'));
+   assert.equal(await page.locator('#workerBatchResume').isVisible(),false);
+   assert.equal(pauses,1,'lost pause reply must not repeat pause');
+   await page.click('#workerBatchRefresh');
+  }
   await page.locator('#workerBatchResume').waitFor({state:'visible'});
   assert.match(await page.locator('#workerBatchStatus').innerText(),/一時停止/);
   assert.equal(starts,1);assert.equal(pauses,1);assert.equal(resumes,0);
