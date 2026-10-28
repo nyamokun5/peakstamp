@@ -1461,7 +1461,11 @@ async function autoRegisterTournament(){
    completed++;
    autoStep('✓ 試合 #'+seq+' の得点と勝敗を照合しました',completed);
   }
-  $('autoStage').textContent='✓ 全4試合の登録・結果確認が完了しました '+runTimingLabel();
+  const total=legacyStartedEventId===eventId
+    ?elapsedSeconds(legacyStartedAt,Date.now()):null;
+   $('autoStage').textContent='✓ 全4試合の登録・結果確認が完了しました'+
+    (total===null?'':('（全体 '+total.toFixed(1)+'秒）'));
+   showCompletionPanel(eventId,total,'legacy:'+String(legacyStartedAt));
   $('autoConflict').hidden=true;
  }catch(error){
   // On uncertain outcome (including failed POST/readback), stop with no retry.
@@ -1479,7 +1483,12 @@ async function autoRegisterTournament(){
   autoUnsafeStop=false;autoBusy=false;setBatchBusy(false);renderAutoSummary();
  }
 }
-$('autoRun').addEventListener('click',autoRegisterTournament);
+$('autoRun').addEventListener('click',()=>{
+ if($('autoRun').disabled)return;
+ legacyStartedAt=Date.now();legacyStartedEventId=snapshot?.eventId||'';
+ hideCompletionPanel();
+ autoRegisterTournament();
+});
 
 function showWorkerBatchState(state){
  workerLatestState=state;
@@ -1493,6 +1502,14 @@ function showWorkerBatchState(state){
   state.status==='blocked'?'⚠ Worker停止：'+(state.blocked_reason||'照合が必要です')+
    '。自動再送しません。'+progress:
   'WorkerがTEST環境で順次処理中です。'+progress;
+ if(state.status==='completed'){
+  const start=readWorkerTiming(localStorage,state.event_id,state.request_id);
+  const total=start===null?null:completionSeconds(start,state.updated_at,Date.now());
+  showCompletionPanel(state.event_id,total,'worker:'+state.request_id);
+  $('workerBatchStatus').textContent+=' '+
+   (total===null?'合計秒数は次回の登録から計測します。':
+    'ボタン押下から全処理完了まで '+total.toFixed(1)+'秒（勝者選択の待ち時間を含む）');
+ }
  $('workerBatchDecision').hidden=state.status!=='needs_decision';
  if(state.status==='needs_decision'){
   const d=state.decision;
@@ -1560,7 +1577,8 @@ $('workerBatchRefresh').addEventListener('click',()=>refreshWorkerBatch());
 $('workerBatchRun').addEventListener('click',async()=>{
  if(workerBatchPolling||batchBusy||autoBusy||!snapshot||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging')return;
- const eventId=snapshot.eventId,key=workerBatchStorageKey(eventId);
+ const clickedAt=Date.now();
+  const eventId=snapshot.eventId,key=workerBatchStorageKey(eventId);
  if(localStorage.getItem(key)){
   await refreshWorkerBatch();return;
  }
@@ -1580,7 +1598,9 @@ $('workerBatchRun').addEventListener('click',async()=>{
    return;
   // Store the key BEFORE the network request, so a lost response never
   // enables an accidental second job with a new request ID.
-  localStorage.setItem(key,requestId);
+  storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
+   localStorage.setItem(key,requestId);
+   hideCompletionPanel();
   $('workerBatchStatus').textContent='TEST一括ジョブを開始中…';
   $('workerBatchRun').disabled=true;
   $('workerBatchRefresh').hidden=false;
@@ -1591,7 +1611,7 @@ $('workerBatchRun').addEventListener('click',async()=>{
    // Validation failures definitely did not run the job. Transport errors
    // are ambiguous and the stored request ID must be retained.
    if(['invalid_plan','invalid_event','unsupported_media_type','batch_gate_unavailable'].includes(error.code)){
-    localStorage.removeItem(key);setBatchBusy(false);
+    localStorage.removeItem(key);localStorage.removeItem(workerTimeKey(eventId));setBatchBusy(false);
    }
    throw error;
   }
@@ -1992,6 +2012,7 @@ $('finishRecover').addEventListener('click',async()=>{
  }catch(e){$('finishStatus').textContent='照合できません：'+e.message+'。再送はしていません。'}finally{setBatchBusy(false)}
 });
 $('ssEnvironment').addEventListener('change',()=>{
+ hideCompletionPanel();legacyStartedAt=null;legacyStartedEventId='';
  $('ssBridgeToken').value='';
  $('ssSelectWrap').hidden=true;$('ssLoadSnapshot').hidden=true;
  $('ssEventSelect').replaceChildren();
@@ -2030,6 +2051,7 @@ $('ssLoadEvents').addEventListener('click',async()=>{
  finally{$('ssLoadEvents').disabled=false;}
 });
 $('ssEventSelect').addEventListener('change',()=>{
+ hideCompletionPanel();legacyStartedAt=null;legacyStartedEventId='';
  snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;
  $('recoveryPanel').hidden=true;
  $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
