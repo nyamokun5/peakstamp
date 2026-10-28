@@ -125,6 +125,7 @@ try{
  assert.match(breakdown,/事前確認 1\.2秒/);
  assert.match(breakdown,/登録＋再取得 5\.2秒/);
  assert.match(breakdown,/勝敗入力待ち 1\.5秒/);
+ assert.match(breakdown,/入力待ちを除くWorker経過 9\.3秒/);
  assert.match(await page.locator('#workerTimingSlowest').innerText(),/#2 終了：2\.5秒/);
  await page.locator('#ssResultPanel').waitFor({state:'visible'});
  const elapsedText=await page.locator('#ssResultTime').innerText();
