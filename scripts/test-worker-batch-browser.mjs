@@ -38,7 +38,7 @@ await page.route('**/*',async route=>{
  else if(url.pathname==='/snapshot'){
   if(step==='completed'&&failFinalSnapshot)return route.fulfill({status:503,
    json:{error:{message:'simulated final snapshot outage'}},headers:{'Access-Control-Allow-Origin':'*'}});
-  data=snapshot();
+  data=structuredClone(snapshot());
   if(step==='completed'&&incompleteFinalSnapshot){
    data.matches[3]={...data.matches[3],status:'scheduled'};
   }
