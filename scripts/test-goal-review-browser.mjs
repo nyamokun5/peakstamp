@@ -62,6 +62,11 @@ try{
  assert.match(await visible.first().innerText(),/試合番号：未設定/);
  assert.match(await visible.first().innerText(),/試合番号が未設定/);
  assert.equal(await page.locator('#autoRun').isDisabled(),true);
+ assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
+ assert.match(await page.locator('#workerBatchReadiness').innerText(),/まだ登録できません/);
+ assert.equal(await page.locator('#workerBatchJumpToGoal').isVisible(),true);
+ await page.click('#workerBatchJumpToGoal');
+ assert.match(await page.locator('#quickGoals .quick-goal').first().innerText(),/試合番号が未設定/);
  assert.match(await page.locator('#autoBeforeRun').innerText(),/試合番号が未設定/);
  const card=await page.locator('#autoGoalDetails').boundingBox();
  const button=await page.locator('#autoPanel').boundingBox();
