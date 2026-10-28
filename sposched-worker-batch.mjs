@@ -3,7 +3,7 @@
  * The Worker independently resolves official fixture/player UUIDs and checks
  * every signed mutation before calling the existing per-match write gate.
  */
-import {waitingKnockoutGoalIssue,ssManualHelperGoal} from './sposched-quick-review.mjs?v=manual-ss1';
+import {waitingKnockoutGoalIssue,ssManualHelperGoal,deferredHelperAssist} from './sposched-quick-review.mjs?v=assist-defer1';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const name=v=>typeof v==='string'?v.trim():'';
 const normalized=v=>name(v).normalize('NFKC').toLocaleLowerCase('en').replace(/[\s\u3000]/g,'');
@@ -62,9 +62,18 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
   }
   const scorer=name(row.scorer);
   const team=name(row.team||snapshot.playerTeam?.get(scorer));
-  const assist=row.assistMode==='named'?name(row.assist):'';
+  // Recompute independently: a forged/obsolete UI flag cannot remove an
+  // assistant from a goal or authorize a cross-team player.
+  const verifiedDeferred=deferredHelperAssist(snapshot,row);
+  if(Boolean(decision.deferredAssist)!==Boolean(verifiedDeferred)||
+     (verifiedDeferred&&(
+      decision.deferredAssist.person!==verifiedDeferred.person||
+      decision.deferredAssist.homeTeam!==verifiedDeferred.homeTeam||
+      decision.deferredAssist.scoringTeam!==verifiedDeferred.scoringTeam)))
+   fail('ゴール'+(i+1)+'：助っ人のアシスト除外を再検証できません。最新情報を取得してください');
+  const assist=verifiedDeferred?'':row.assistMode==='named'?name(row.assist):'';
   if(!scorer||!team||!['named','none'].includes(row.assistMode)||
-     row.assistMode==='named'&&!assist)
+     row.assistMode==='named'&&!verifiedDeferred&&!assist)
    fail('ゴール'+(i+1)+'：チーム・得点者・アシスト状態を確認してください');
   if(assist&&normalized(assist)===normalized(scorer))
    fail('ゴール'+(i+1)+'：同じ選手を得点者とアシスト者に指定できません');
