@@ -99,11 +99,18 @@ export function ssManualHelperGoal(snapshot,row){
   return null;
  const scorer=String(row.scorer||'').trim();
  const assist=row.assistMode==='named'?String(row.assist||'').trim():'';
- const team=String(row.team||snapshot.playerTeam?.get(scorer)||'').trim();
- if(!scorer||!team||!snapshot.playerTeam?.has(scorer)||
-    (row.assistMode==='named'&&(!assist||!snapshot.playerTeam.has(assist)))||
-    ![match.leftTeam,match.rightTeam].some(t=>normalizeTeam(t)===normalizeTeam(team)))
+ if(!scorer||!snapshot.playerTeam?.has(scorer)||
+    (row.assistMode==='named'&&(!assist||!snapshot.playerTeam.has(assist))))
   return null;
+ const sides=[match.leftTeam,match.rightTeam];
+ const onFixture=team=>sides.some(t=>normalizeTeam(t)===normalizeTeam(team));
+ const home=snapshot.playerTeam.get(scorer);
+ // A scorer who belongs to neither competing team is also a possible
+ // temporary helper. Never guess which side scored: SS must enter it.
+ const requestedTeam=String(row.team||'').trim();
+ if(requestedTeam&&!onFixture(requestedTeam))return null;
+ const team=requestedTeam||(onFixture(home)?home:'');
+ if(!team&&onFixture(home))return null;
  if(row.scorerGuess?.confidence!=='high'&&!row.quickReviewedAll&&
     row.quickReviewedFields?.scorer!==true)return null;
  if(assist&&row.assistGuess?.confidence!=='high'&&!row.quickReviewedAll&&
@@ -111,10 +118,14 @@ export function ssManualHelperGoal(snapshot,row){
  const mismatches=[
   ['得点者',scorer],['アシスト者',assist]
  ].filter(([,person])=>person&&
-   normalizeTeam(snapshot.playerTeam.get(person))!==normalizeTeam(team))
+   (team?normalizeTeam(snapshot.playerTeam.get(person))!==normalizeTeam(team):
+     !onFixture(snapshot.playerTeam.get(person))))
   .map(([role,person])=>({role,person,from:snapshot.playerTeam.get(person)}));
  if(!mismatches.length)return null;
- const registered=matchingExistingGoals(row,snapshot).length>0;
+ // Without a known scoring side, check BOTH official fixture sides and
+ // accept exactly one matching already-entered goal, never infer a side.
+ const candidates=team?[team]:sides;
+ const registered=candidates.flatMap(t=>matchingExistingGoals({...row,team:t},snapshot)).length===1;
  return {seq,team,mismatches,registered};
 }
 
