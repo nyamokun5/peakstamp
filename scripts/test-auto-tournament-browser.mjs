@@ -120,6 +120,7 @@ try {
  assert.match(await page.locator('#autoCount').innerText(),/3 \/ 4/);
  // A tied final may be closed as a draw. No fake winner is required.
  assert.equal(await page.locator('#autoWinner option[value="draw"]').isEnabled(),true);
+ await page.waitForTimeout(1350);
  await page.selectOption('#autoWinner','draw');
  await page.click('#autoResume');
  await page.waitForFunction(()=>document.getElementById('autoStage').textContent.includes('全4試合'));
@@ -131,6 +132,12 @@ try {
  assert.equal(matches[3].winner,'draw');
  assert.deepEqual(order,['finish#1','finish#2','goal#3','finish#3','finish#4']);
  assert.equal(await page.locator('#autoRun').isDisabled(),true);
+ await page.locator('#ssResultPanel').waitFor({state:'visible'});
+ const elapsedText=await page.locator('#ssResultTime').innerText();
+ const seconds=Number(elapsedText.match(/([0-9]+\.[0-9])秒/)?.[1]);
+ assert.ok(seconds>=1.3,'legacy clock must span tied final, got '+elapsedText);
+ assert.equal(await page.locator('#ssResultLink').getAttribute('href'),
+  'https://testsundayfront.web.app/app/shoot/activity/?event=%E6%97%A5%E6%9B%9C%E5%AE%9A%E6%9C%9F%252825+Oct%2529');
  assert.deepEqual(errors,[]);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  console.log('PASS: one approval -> two semifinal results -> third-place goal/result -> drawn final; one signed preview per goal, progress, one pre-write official /match GET and no production traffic');
