@@ -207,8 +207,12 @@ test('team mismatch, invalid roster names and unknown fields never become sendab
  assert.throws(()=>editQuickGoalField(x,r[0],'whoops','西村'),/未知/);
  const restored=editQuickGoalField(x,r[0],'scorer','橋本');
  assert.equal(restored.team,'チーム2');
+ assert.equal(quickGoalDecisions(x,r)[0].state,'attention',
+  'cannot send a second identical goal with the same scorer and no assist');
+ assert.match(quickGoalDecisions(x,r)[0].reason,/同一得点者・アシスト/);
+ r[1].include=false; // only then is this no-assist goal unambiguous
  assert.equal(quickGoalDecisions(x,r)[0].state,'ready',
-  'cross-team selected assist defers only assist attribution while scoring the goal');
+  'cross-team selected assist now defers without changing scorer or score');
  assert.equal(quickGoalDecisions(x,r)[0].deferredAssist.person,'佐藤');
 });
 test('compact UI renders assist -> scorer in review and pre-send summary',()=>{
