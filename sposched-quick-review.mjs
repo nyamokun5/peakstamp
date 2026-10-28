@@ -5,6 +5,7 @@
 import {
  normalizePerson,normalizeTeam,validateGoalRow,matchingExistingGoals,buildReviewPayload
 } from './sposched-review-core.mjs?v=roster-phonetic2';
+import {isVerifiedMatchHelper} from './sposched-match-helpers.mjs';
 
 /**
  * Show what PeakStamp AI ACTUALLY extracted, separate from the possibly
@@ -60,7 +61,8 @@ export function waitingKnockoutGoalIssue(snapshot,row) {
  if(row.assistMode==='named'){
   const assist=String(row.assist||'').trim();
   if(!assist||!snapshot.playerTeam?.has(assist)||
-     normalizeTeam(snapshot.playerTeam.get(assist))!==normalizeTeam(team)||
+     (normalizeTeam(snapshot.playerTeam.get(assist))!==normalizeTeam(team)&&
+    !isVerifiedMatchHelper(snapshot,seq,assist,team))||
      normalizePerson(assist)===normalizePerson(scorer))
    return 'アシスト者と所属チームを名簿から確認してください';
  }
@@ -117,11 +119,13 @@ export function quickGoalDecisions(snapshot,rows) {
   if(issue)return {...item,reason:issue};
   const team=row.team||snapshot.playerTeam.get(row.scorer)||'';
   const scorerTeam=snapshot.playerTeam.get(row.scorer);
-  if(team&&scorerTeam&&normalizeTeam(team)!==normalizeTeam(scorerTeam))
-   return {...item,reason:'得点者と得点チームが一致しません'};
+  if(team&&scorerTeam&&normalizeTeam(team)!==normalizeTeam(scorerTeam)&&
+     !isVerifiedMatchHelper(snapshot,row.seq,row.scorer,team))
+   return {...item,reason:'得点者の所属チームが違います。試合単位のSS助っ人登録を確認してください'};
   const assistTeam=row.assistMode==='named'?snapshot.playerTeam.get(row.assist):null;
-  if(team&&assistTeam&&normalizeTeam(team)!==normalizeTeam(assistTeam))
-   return {...item,reason:'アシスト者と得点チームが一致しません'};
+  if(team&&assistTeam&&normalizeTeam(team)!==normalizeTeam(assistTeam)&&
+     !isVerifiedMatchHelper(snapshot,row.seq,row.assist,team))
+   return {...item,reason:'アシスト者は別チーム所属です。SSの試合単位の助っ人登録を確認してください'};
   // An edit to an unrelated field must never clear AI ambiguity.
   // Only the field actually edited (or an explicit whole-row review)
   // can satisfy that field's human verification requirement.
