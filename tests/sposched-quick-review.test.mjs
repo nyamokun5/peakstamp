@@ -466,3 +466,23 @@ test('known third-place and final goal slots join batch without waiting-opponent
  assert.equal(quickGoalDecisions(knockout,[third,final])[0].state,'attention',
   'uncertain fixture number must never silently auto-approve');
 });
+
+test('one-click Worker review visibly compares AI transcript with selected official name',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(html,/quick-compare/);
+ assert.match(html,/AI提案/);
+ assert.match(html,/SS登録予定（名簿照合）/);
+ assert.match(html,/heard\.assistRaw\+' → '\+heard\.scorerRaw/);
+ assert.match(html,/item\.assist\+' → '\+\(item\.scorer\|\|'得点者未確定'\)/);
+ const start=html.split("$('workerBatchRun').addEventListener('click',async()=>{")[1]
+   .split("$('workerBatchSubmitDecision').addEventListener")[0];
+ assert.ok(start);
+ assert.doesNotMatch(start,/window\.confirm/,'reviewed single-click TEST batch needs no duplicate dialog');
+ assert.match(start,/storeWorkerTiming\(localStorage,eventId,requestId,clickedAt\)/);
+ assert.match(start,/localStorage\.setItem\(key,requestId\)/,
+  'durable no-replay marker must still precede the request');
+ const decide=html.split("$('workerBatchSubmitDecision').addEventListener('click',async()=>{")[1]
+   .split("$('workerBatchRecreate')")[0];
+ assert.ok(decide);
+ assert.doesNotMatch(decide,/window\.confirm/);
+});
