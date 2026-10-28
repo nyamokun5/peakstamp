@@ -74,7 +74,7 @@ try{
  await page.selectOption('#ssEnvironment','staging');
  await page.fill('#ssBridgeToken','mock-only');
  await page.click('#ssLoadEvents');
- await page.locator('#ssEventSelect option').last().waitFor();
+ await page.waitForFunction(()=>document.querySelector('#ssEventSelect')?.options.length>0);
  await page.click('#ssLoadSnapshot');
  await page.locator('#quickGoals .quick-goal').first().waitFor();
  const text=await page.locator('#quickGoals').innerText();
