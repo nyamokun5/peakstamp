@@ -40,7 +40,7 @@ try{
  await page.fill('#ssBridgeToken','test-secret');
  await page.check('#ssRememberTab');
  await page.click('#ssLoadEvents');
- assert.match(await page.locator('#ssDirectStatus').innerText(),/件取得/);
+ await page.waitForFunction(()=>document.querySelector('#ssDirectStatus').textContent.includes('件取得'));
  const contents=await page.evaluate(()=>({
   tab:sessionStorage.getItem('peakstamp_ss_bridge_tab_v1:staging'),
   local:localStorage.getItem('peakstamp_ss_bridge_tab_v1:staging')
@@ -53,12 +53,14 @@ try{
  assert.equal(await page.locator('#ssBridgeToken').inputValue(),'test-secret');
  assert.equal(await page.locator('#ssRememberTab').isChecked(),true);
  await page.click('#ssLoadEvents');
+ await page.waitForFunction(()=>document.querySelector('#ssDirectStatus').textContent.includes('件取得'));
  assert.deepEqual(calls.map(c=>c.env),['staging','staging']);
  await page.selectOption('#ssEnvironment','production');
  assert.equal(await page.locator('#ssBridgeToken').inputValue(),'');
  await page.fill('#ssBridgeToken','read-secret');
  await page.check('#ssRememberTab');
  await page.click('#ssLoadEvents');
+ await page.waitForFunction(()=>document.querySelector('#ssDirectStatus').textContent.includes('件取得'));
  assert.equal(calls.at(-1).env,'production');
  await page.selectOption('#ssEnvironment','staging');
  assert.equal(await page.locator('#ssBridgeToken').inputValue(),'test-secret');
@@ -72,7 +74,7 @@ try{
  assert.equal(await page.locator('#ssBridgeToken').inputValue(),'read-secret');
  await page.fill('#ssBridgeToken','wrong-secret');
  await page.click('#ssLoadEvents');
- assert.match(await page.locator('#ssDirectStatus').innerText(),/認証に失敗/);
+ await page.waitForFunction(()=>document.querySelector('#ssDirectStatus').textContent.includes('認証に失敗'));
  assert.equal(await page.locator('#ssRememberTab').isChecked(),false);
  await page.reload();
  assert.equal(await page.locator('#ssBridgeToken').inputValue(),'');
