@@ -84,6 +84,8 @@ try{
  await page.locator('#workerBatchDecision').waitFor({state:'visible'});
  assert.match(await page.locator('#workerBatchQuestion').innerText(),/0 - 0/);
  assert.equal(starts,1);assert.equal(decisions,0);
+ // The clock must keep running while the human decides a drawn final.
+ await page.waitForTimeout(1350);
  await page.selectOption('#workerBatchWinner','draw');
  await page.click('#workerBatchSubmitDecision');
  await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('全操作の登録・照合'));
@@ -93,6 +95,15 @@ try{
  const stored=await page.evaluate(eventId=>localStorage.getItem('peakstamp:test:worker-batch:'+eventId),E);
  assert.equal(stored,lastRequestId);
  assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
+ await page.locator('#ssResultPanel').waitFor({state:'visible'});
+ const elapsedText=await page.locator('#ssResultTime').innerText();
+ const seconds=Number(elapsedText.match(/([0-9]+\.[0-9])秒/)?.[1]);
+ assert.ok(seconds>=1.3,'entire workflow must include the tie pause, got '+elapsedText);
+ assert.equal(await page.locator('#ssResultLink').getAttribute('href'),
+  'https://testsundayfront.web.app/app/shoot/activity/?event=%E6%97%A5%E6%9B%9C%E5%AE%9A%E6%9C%9F%252825+Oct%2529');
+ assert.equal(await page.locator('#ssResultLink').getAttribute('target'),'_blank');
+ const timing=await page.evaluate(eventId=>localStorage.getItem('peakstamp:ss:test:worker-elapsed-v1:'+eventId),E);
+ assert.equal(JSON.parse(timing).requestId,lastRequestId);
  assert.deepEqual(errors,[]);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  console.log('PASS: mobile TEST Worker batch: one start, progress poll, tied-final choice, no browser mutation replay and idempotent reconnect marker');
