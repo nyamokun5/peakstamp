@@ -1501,6 +1501,20 @@ $('autoRun').addEventListener('click',()=>{
 
 function showWorkerBatchState(state){
  workerLatestState=state;
+ const stored=localStorage.getItem(workerBatchStorageKey(state.event_id));
+ if(stored===state.request_id&&hasRecreatedBracket(state,snapshot)){
+  hideCompletionPanel();
+  $('workerBatchStatus').textContent=
+   '前回Workerジョブは古い試合IDに紐づいています。現在の4試合は別IDです。'+
+   (localStorage.getItem(workerBatchRecreatePendingKey(state.event_id))
+    ?'新しいジョブの送信結果が不明です。まず「進捗を再取得」で確認し、再送はしないでください。'
+    :'「再作成された新しい4試合を高速登録（TEST）」から正式な試合IDを再照合できます。');
+  $('workerBatchDecision').hidden=true;
+  workerBatchPolling=false;
+  setBatchBusy(false);
+  renderAutoSummary();
+  return;
+ }
  const marker=localStorage.getItem(workerBatchStorageKey(state.event_id));
  $('workerBatchRefresh').hidden=!marker;
  $('workerBatchRun').disabled=true;
@@ -1552,7 +1566,23 @@ async function refreshWorkerBatch(){
  try{
   const state=await postStaging('/staging/batch/status',{event_id:eventId});
   if(snapshot?.eventId!==eventId)return;
+  const recreationKey=workerBatchRecreatePendingKey(eventId);
+  const rawPending=localStorage.getItem(recreationKey);
+  if(rawPending){
+   let pending;
+   try{pending=JSON.parse(rawPending)}catch{pending=null}
+   if(pending?.requestId===state.request_id){
+    localStorage.setItem(workerBatchStorageKey(eventId),state.request_id);
+    localStorage.removeItem(recreationKey);
+   }
+  }
   showWorkerBatchState(state);
+  if(hasRecreatedBracket(state,snapshot)&&
+    localStorage.getItem(workerBatchStorageKey(eventId))===state.request_id){
+   workerBatchPolling=false;
+   setBatchBusy(false);
+   return;
+  }
   if(state.status==='running'){
    setBatchBusy(true);
    workerBatchPolling=false;
