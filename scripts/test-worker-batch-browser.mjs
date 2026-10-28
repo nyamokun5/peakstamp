@@ -14,14 +14,14 @@ const matches=ids.map((match_id,i)=>({
  left_score:0,right_score:0,winner:null,goals:[]
 }));
 const snapshot=()=>({event_id:E,matches,roster:{
- チーム1:['山田'],チーム2:['西村'],チーム3:['田中'],チーム4:['橋本']
+ チーム1:['山田','Taro Fujii','Tatsuo Sato'],チーム2:['西村'],チーム3:['田中'],チーム4:['橋本']
 }});
 let failFinalSnapshot=process.env.TEST_FINAL_SNAPSHOT_FAILURE==='1';
 let incompleteFinalSnapshot=failFinalSnapshot;
 let starts=0,decisions=0,statusCalls=0,lastRequestId=null,step='idle',otherWrites=0;
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
-page.on('dialog',d=>d.accept());
+let dialogs=0;page.on('dialog',d=>{dialogs++;d.accept()});
 await page.route('**/*',async route=>{
  const url=new URL(route.request().url());
  if(url.host==='peakstamp.local'){
@@ -51,6 +51,8 @@ await page.route('**/*',async route=>{
    ['finish',1],['finish',2],['create',3],['finish',3],['finish',4]
   ],'waiting third-place goal is included automatically with no extra approval');
   assert.deepEqual(body.operations.map(op=>op.expected_match_id),[ids[0],ids[1],ids[2],ids[2],ids[3]]);
+ assert.equal(body.operations.find(op=>op.action==='create'&&op.seq===3).scorer,'Taro Fujii');
+ assert.equal(body.operations.find(op=>op.action==='create'&&op.seq===3).assist,'Tatsuo Sato');
   assert.ok(/^[0-9a-f-]{36}$/i.test(body.request_id));
   lastRequestId=body.request_id;step='running';
   data={environment:'STAGING ONLY',event_id:E,request_id:lastRequestId,
@@ -100,8 +102,8 @@ await page.addInitScript(()=>{
  localStorage.setItem('peakstamp_confirmed_goals_v1:IMG_0289.MOV::1234::1000',
   JSON.stringify({source:file,items:[{
    id:'third-place',origin:'manual',status:'confirmed',
-   timeSeconds:238,goalTimeSeconds:238,scorer:'西村',
-   assistStatus:'none',matchSeq:3
+   timeSeconds:238,goalTimeSeconds:238,scorer:'藤井さん',
+   assistStatus:'named',assist:'達夫',matchSeq:3
   }]}));
 });
 try{
@@ -113,10 +115,16 @@ try{
  await page.locator('#workerBatchArea').waitFor({state:'visible'});
  assert.equal(await page.locator('#quickGoals .quick-goal').count(),1);
  assert.match(await page.locator('#quickGoals').innerText(),/対戦確定後に自動登録/);
+ assert.match(await page.locator('#quickGoals .quick-compare').innerText(),/AI提案/);
+ assert.match(await page.locator('#quickGoals .quick-compare').innerText(),/藤井さん/);
+ assert.match(await page.locator('#quickGoals .quick-compare').innerText(),/達夫/);
+ assert.match(await page.locator('#quickGoals .quick-compare').innerText(),/Taro Fujii/);
+ assert.match(await page.locator('#quickGoals .quick-compare').innerText(),/Tatsuo Sato/);
  assert.equal(await page.getByRole('button',{name:/試合番号・得点者・アシストを確認して進む/}).count(),0,
   'no redundant waiting-goal confirmation button');
  assert.equal(await page.locator('#workerBatchRun').isEnabled(),true);
  await page.click('#workerBatchRun');
+ assert.equal(dialogs,0,'one reviewed TEST batch button requires no duplicate native confirm');
  await page.locator('#workerBatchDecision').waitFor({state:'visible'});
  assert.match(await page.locator('#workerBatchQuestion').innerText(),/0 - 0/);
  assert.equal(starts,1);assert.equal(decisions,0);

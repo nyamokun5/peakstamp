@@ -263,19 +263,19 @@ test('conflicting AI assist text and no-assist status do not silently erase extr
  assert.equal(quickAIObservation(r[0]).assistRaw,'豊田（AI判定：アシストなし）');
 });
 
-test('all quick goal cards show AI original and suggested roster names without confirmation checks',()=>{
+test('all quick goal cards show AI original next to the registered official name',()=>{
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
  assert.match(html,/const heard=quickAIObservation\(row\)/);
- assert.match(html,/AI聞き取り：/);
- assert.match(html,/SS名簿候補：アシスト /);
+ assert.match(html,/AI提案/);
+ assert.match(html,/SS登録予定（名簿照合）/);
  assert.match(html,/heard\.assistRaw\+' → '\+heard\.scorerRaw/);
- assert.match(html,/quick-ai-evidence/);
- assert.match(html,/el\.append\(aiBox\)/);
+ assert.match(html,/quick-compare/);
+ assert.match(html,/compare\.append\(aiCell,officialCell\);el\.append\(compare\)/);
  const quick=html.slice(html.indexOf('function renderQuick(){'),
   html.indexOf("$('quickEdit').addEventListener"));
  assert.doesNotMatch(quick,/\.innerHTML\s*=/);
- assert.match(quick,/node\('div','AI聞き取り：'/);
- assert.match(quick,/id='no-op-impossible'|el\.append\(aiBox\)/);
+ assert.match(quick,/node\('span','AI提案'/);
+ assert.match(quick,/node\('span','SS登録予定（名簿照合）'/);
 });
 
 test('unconfirmed player dropdown exposes short AI hint but never preselects a guess',()=>{
@@ -465,4 +465,24 @@ test('known third-place and final goal slots join batch without waiting-opponent
  third.matchGuess={...third.matchGuess,ambiguous:true};
  assert.equal(quickGoalDecisions(knockout,[third,final])[0].state,'attention',
   'uncertain fixture number must never silently auto-approve');
+});
+
+test('one-click Worker review visibly compares AI transcript with selected official name',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(html,/quick-compare/);
+ assert.match(html,/AI提案/);
+ assert.match(html,/SS登録予定（名簿照合）/);
+ assert.match(html,/heard\.assistRaw\+' → '\+heard\.scorerRaw/);
+ assert.match(html,/item\.assist\+' → '\+\(item\.scorer\|\|'得点者未確定'\)/);
+ const start=html.split("$('workerBatchRun').addEventListener('click',async()=>{")[1]
+   .split("$('workerBatchSubmitDecision').addEventListener")[0];
+ assert.ok(start);
+ assert.doesNotMatch(start,/window\.confirm/,'reviewed single-click TEST batch needs no duplicate dialog');
+ assert.match(start,/storeWorkerTiming\(localStorage,eventId,requestId,clickedAt\)/);
+ assert.match(start,/localStorage\.setItem\(key,requestId\)/,
+  'durable no-replay marker must still precede the request');
+ const decide=html.split("$('workerBatchSubmitDecision').addEventListener('click',async()=>{")[1]
+   .split("$('autoResume').addEventListener")[0];
+ assert.ok(decide);
+ assert.doesNotMatch(decide,/window\.confirm/);
 });
