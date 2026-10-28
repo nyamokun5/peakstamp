@@ -80,6 +80,44 @@ export function waitingKnockoutGoalIssue(snapshot,row) {
  return null;
 }
 
+/** A different event-roster team can mean a temporary match helper.
+ * This function NEVER registers or assumes helper membership. It only
+ * identifies a goal that must be entered directly in SS, outside the batch.
+ * An uncertain fixture or AI player guess remains a blocking correction,
+ * not a silently excluded goal.
+ */
+export function ssManualHelperGoal(snapshot,row){
+ if(!row?.include||row?.guest||row.goal?.manual||row.updateGoalId||
+    row.fixtureIdentityChanged||!['named','none'].includes(row.assistMode))
+  return null;
+ const seq=Number(row.seq);
+ const match=snapshot?.matches?.find(m=>m.seq===seq);
+ if(!match||match.status==='waiting'||!match.leftTeam||!match.rightTeam||
+    (row.matchGuess?.ambiguous||row.matchGuess?.conflict)||
+    (snapshot.matches.length>1&&row.matchGuess?.confidence!=='high'&&
+     row.quickReviewedFields?.match!==true&&!row.quickReviewedAll))
+  return null;
+ const scorer=String(row.scorer||'').trim();
+ const assist=row.assistMode==='named'?String(row.assist||'').trim():'';
+ const team=String(row.team||snapshot.playerTeam?.get(scorer)||'').trim();
+ if(!scorer||!team||!snapshot.playerTeam?.has(scorer)||
+    (row.assistMode==='named'&&(!assist||!snapshot.playerTeam.has(assist)))||
+    ![match.leftTeam,match.rightTeam].some(t=>normalizeTeam(t)===normalizeTeam(team)))
+  return null;
+ if(row.scorerGuess?.confidence!=='high'&&!row.quickReviewedAll&&
+    row.quickReviewedFields?.scorer!==true)return null;
+ if(assist&&row.assistGuess?.confidence!=='high'&&!row.quickReviewedAll&&
+    row.quickReviewedFields?.assist!==true)return null;
+ const mismatches=[
+  ['得点者',scorer],['アシスト者',assist]
+ ].filter(([,person])=>person&&
+   normalizeTeam(snapshot.playerTeam.get(person))!==normalizeTeam(team))
+  .map(([role,person])=>({role,person,from:snapshot.playerTeam.get(person)}));
+ if(!mismatches.length)return null;
+ const registered=matchingExistingGoals(row,snapshot).length>0;
+ return {seq,team,mismatches,registered};
+}
+
 export function quickGoalDecisions(snapshot,rows) {
  const decisions=(rows||[]).map((row,index)=>{
   const g=row.goal||{};
@@ -109,6 +147,14 @@ export function quickGoalDecisions(snapshot,rows) {
    return {...item,state:'waiting',
     reason:'SS試合枠 #'+fixture.seq+'（'+(fixture.title||'対戦チーム未確定')+
      '）に紐付け済み。正式な試合ID・対戦チームが確定するまで送信を保留します'};
+  }
+  const manual=ssManualHelperGoal(snapshot,row);
+  if(manual){
+   const players=manual.mismatches.map(x=>x.role+' '+x.person+'（通常'+x.from+'）').join('、');
+   return {...item,state:'manual-ss',registeredInSS:manual.registered,
+    reason:manual.registered
+     ?'SSで登録済みの助っ人候補：'+players+'。一括登録から除外します。'
+     :'助っ人の可能性：'+players+'。SSのこの試合で助っ人登録とゴール・アシストを直接記録してください。一括登録から自動除外します。'};
   }
   if(matchingExistingGoals(row,snapshot).length)
    return {...item,state:'duplicate',reason:'SSに同じ得点者・アシストの組み合わせがあります'};
