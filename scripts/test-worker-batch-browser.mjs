@@ -16,6 +16,9 @@ const matches=ids.map((match_id,i)=>({
 const snapshot=()=>({event_id:E,matches,roster:{
  チーム1:['山田','Taro Fujii','Tatsuo Sato'],チーム2:['西村'],チーム3:['田中'],チーム4:['橋本']
 }});
+const exercisePause=process.env.TEST_BATCH_PAUSE==='1';
+const loseResumeReply=process.env.TEST_RESUME_LOST_REPLY==='1';
+let pauses=0,resumes=0;
 let failFinalSnapshot=process.env.TEST_FINAL_SNAPSHOT_FAILURE==='1';
 let incompleteFinalSnapshot=failFinalSnapshot;
 let starts=0,decisions=0,statusCalls=0,lastRequestId=null,step='idle',otherWrites=0;
@@ -57,11 +60,20 @@ await page.route('**/*',async route=>{
   lastRequestId=body.request_id;step='running';
   data={environment:'STAGING ONLY',event_id:E,request_id:lastRequestId,
    status:'running',cursor:0,completed:0,total:5};
+ }else if(url.pathname==='/staging/batch/pause'){
+  pauses++;assert.equal(pauses,1);assert.equal(body.request_id,lastRequestId);
+  assert.equal(body.confirm,'TEST-ONLY BATCH PAUSE');step='paused';data={status:'paused'};
+ }else if(url.pathname==='/staging/batch/resume'){
+  resumes++;assert.equal(resumes,1);assert.equal(body.request_id,lastRequestId);
+  assert.equal(body.confirm,'TEST-ONLY BATCH RESUME');assert.equal(body.pause_id,'pause-receipt');
+  assert.equal(body.cursor,4);step='needs_decision';data={status:'needs_decision'};
+  if(loseResumeReply)return route.fulfill({status:503,json:{error:{message:'lost resume reply'}},headers:{'Access-Control-Allow-Origin':'*'}});
  }else if(url.pathname==='/staging/batch/status'){
   statusCalls++;
   assert.equal(body.event_id,E);
-  if(step==='running')step='needs_decision';
+  if(step==='running'&&!exercisePause)step='needs_decision';
   data={environment:'STAGING ONLY',event_id:E,request_id:lastRequestId,
+   ...(exercisePause?{control_contract:'event-pause-v1',phase:'preparing',pause_requested:step==='paused',pause_id:step==='paused'?'pause-receipt':null}:{}),
    status:step,cursor:step==='completed'?5:4,completed:step==='completed'?5:4,total:5,
    decision:step==='needs_decision'?{
     seq:4,match_id:ids[3],left_team:'チーム1',right_team:'チーム3',
@@ -125,6 +137,20 @@ try{
  assert.equal(await page.locator('#workerBatchRun').isEnabled(),true);
  await page.click('#workerBatchRun');
  assert.equal(dialogs,0,'one reviewed TEST batch button requires no duplicate native confirm');
+ if(exercisePause){
+  await page.locator('#workerBatchPause').waitFor({state:'visible'});
+  await page.click('#workerBatchPause');
+  await page.locator('#workerBatchResume').waitFor({state:'visible'});
+  assert.match(await page.locator('#workerBatchStatus').innerText(),/一時停止/);
+  assert.equal(starts,1);assert.equal(pauses,1);assert.equal(resumes,0);
+  await page.click('#workerBatchResume');
+  if(loseResumeReply){
+   await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('操作を再送せず'));
+   assert.equal(await page.locator('#workerBatchResume').isVisible(),false);
+   await page.click('#workerBatchRefresh');
+  }
+  assert.equal(resumes,1);assert.equal(starts,1);
+ }
  await page.locator('#workerBatchDecision').waitFor({state:'visible'});
  assert.match(await page.locator('#workerBatchQuestion').innerText(),/0 - 0/);
  assert.equal(starts,1);assert.equal(decisions,0);
