@@ -196,7 +196,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <button id="ssChooseEvent" type="button">← SSイベントを選び直す</button>
   <button id="ssReloadFixtures" type="button">試合を再取得（読み取りのみ）</button>
  </div>
- <p class="step-help">AI提案とSS登録予定を見比べてください。<strong>別チームの助っ人が疑われるゴールは、自動登録から除外しSSで直接登録</strong>します。手動登録後に最新情報を再取得してから、残りのゴールと試合結果を1クリックで登録します。</p>
+ <p class="step-help">AI提案とSS登録予定を見比べてください。<strong>アシストだけ別チームならゴールをアシストなしで自動登録し、アシストは後からSSで追記</strong>します。得点者が別チームの場合は、先にSSでゴールを手動登録・再取得し、得点を欠いたまま勝敗を確定しません。</p>
  <p id="quickSummary" class="quick-summary" role="status" aria-live="polite"></p>
  <div id="autoGoalDetails">
   <div id="quickGoals"></div>
@@ -381,11 +381,11 @@ import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} 
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy,retiredMatchRecoveryPolicy,archiveRetiredAttempt} from './sposched-write-journal.mjs?v=ss-recovery3';
-import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=manual-ss1';
+import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=assist-defer1';
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
-import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-manual-ss1';
+import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-assist-defer1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
@@ -981,12 +981,14 @@ function renderQuick(){
  const waiting=items.filter(x=>x.state==='waiting').length;
  const manual=items.filter(x=>x.state==='manual-ss');
  const manualPending=manual.filter(x=>!x.registeredInSS).length;
+ const deferredAssists=items.filter(x=>x.state==='ready'&&x.deferredAssist);
  const other=items.length-ready-attention-duplicates-waiting-manual.length;
  $('quickSummary').textContent=(attention||duplicates?
    '先に確認が必要：'+(attention+duplicates)+'件。下の候補を修正してください。':
    'ゴール候補 '+items.length+'件を確認してください。')+
    '　｜　登録可能 '+ready+'件・対戦待ち（自動登録予定） '+waiting+'件'+
-   (manual.length?'・SSで手動登録する助っ人候補 '+manual.length+'件（未登録 '+manualPending+'件）':'')+
+   (manual.length?'・SSで手動登録する助っ人得点候補 '+manual.length+'件（未登録 '+manualPending+'件）':'')+
+   (deferredAssists.length?'・後からSSで追記するアシスト '+deferredAssists.length+'件':'')+
    (other?'・対象外 '+other+'件':'');
  const container=$('quickGoals');container.replaceChildren();
  const noFixtures=snapshot.matches.length===0;
@@ -1008,7 +1010,7 @@ function renderQuick(){
   if(['attention','duplicate','manual-ss'].includes(item.state))el.classList.add('needs-fix');
   top.append(node('strong','#'+(item.index+1)+' '+
     (snapshot.matches.find(m=>m.seq===Number(item.seq))?.title||'試合未選択')));
-  const label=item.state==='ready'?'登録候補':
+  const label=item.state==='ready'?(item.deferredAssist?'ゴール自動登録／アシストSS追記':'登録候補'):
     item.state==='duplicate'?'重複候補・対象外':
     item.state==='waiting'?'対戦確定後に自動登録':
     item.state==='manual-ss'?(item.registeredInSS?'SS登録済み／自動対象外':'SSで手動登録／自動対象外'):
@@ -1048,8 +1050,8 @@ function renderQuick(){
   }
   const inlineEligible=['attention','ready','waiting','manual-ss'].includes(item.state);
   const expanded=item.state==='attention'||quickOpenRows.has(item.key);
-  if(['attention','waiting','duplicate','manual-ss'].includes(item.state))
-   el.append(node('p',(item.state==='manual-ss'?'⚠ SSで対応：':'確認：')+item.reason,'quick-held-note'));
+  if(['attention','waiting','duplicate','manual-ss'].includes(item.state)||item.deferredAssist)
+   el.append(node('p',(item.deferredAssist?'✓ ゴールは自動登録・アシストだけ保留：':item.state==='manual-ss'?'⚠ SSで対応：':'確認：')+item.reason,'quick-held-note'));
   if(item.state==='manual-ss'&&!item.registeredInSS){
    const linkUrl=savedSSAppLink(localStorage,'staging',snapshot.eventId,selectedSSDate());
    if(linkUrl){
@@ -1350,6 +1352,7 @@ function renderAutoSummary(){
   const decisions=quickGoalDecisions(snapshot,rows);
   const manualPending=decisions.filter(d=>d.state==='manual-ss'&&!d.registeredInSS);
   const manualDone=decisions.filter(d=>d.state==='manual-ss'&&d.registeredInSS).length;
+  const assistAfter=decisions.filter(d=>d.state==='ready'&&d.deferredAssist).length;
   const unassigned=unassignedGoalDecisions(snapshot,rows,decisions);
   const needsFix=decisions.filter(d=>d.state==='attention'||d.state==='duplicate'||
     d.state==='manual'||d.state==='patch');
@@ -1362,7 +1365,8 @@ function renderAutoSummary(){
   }else if(manualPending.length){
    $('autoBeforeRun').textContent='⚠ 助っ人候補 '+manualPending.length+'件は自動登録から除外しています。先にSSで試合単位の助っ人とゴールを直接登録し、最新データを再取得してください。未登録のまま試合は終了しません。';
   }else $('autoBeforeRun').textContent=unfinished?
-    'ゴール内容を確認したら、下のボタンで順番に登録します。'+(manualDone?'（SS手動登録済み '+manualDone+'件は除外）':''):
+    'ゴール内容を確認したら、下のボタンで順番に登録します。'+(manualDone?'（SS手動登録済み '+manualDone+'件は除外）':'')+
+     (assistAfter?'（アシスト '+assistAfter+'件はゴール登録後にSSで追記）':''):
     'すべて終了しています。';
   const previousWorkerJob=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
   const unresolved=pendingForEvent().length>0;
@@ -1410,7 +1414,7 @@ function renderAutoSummary(){
   Promise.resolve().then(()=>refreshWorkerBatch());
  }
  $('autoRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||autoBusy||autoMustReload||
-    unassigned.length>0||needsFix.length>0||manualPending.length>0||unfinished===0;
+    unassigned.length>0||needsFix.length>0||manualPending.length>0||assistAfter>0||unfinished===0;
   $('autoRun').textContent=unresolved?'まず前回の送信記録を照合してください':autoMustReload?'SSの再取得が必要':
    unassigned.length||needsFix.length?'まず上のゴールを修正してください':
    unfinished?'残り'+unfinished+'試合をまとめて登録':'すべて終了済み';
