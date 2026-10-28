@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {prepareWorkerTournament,workerBatchStorageKey} from '../sposched-worker-batch.mjs';
+import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey} from '../sposched-worker-batch.mjs';
 const eventId='01234567-89ab-4cde-8abc-0123456789ab';
 const requestId='11234567-89ab-4cde-8abc-0123456789ab';
 const ids=['21234567-89ab-4cde-8abc-0123456789ab',
@@ -71,4 +71,26 @@ test('unassigned included video goal cannot silently disappear from approval',()
 test('a scheduled fixture cannot start without the approved official match UUID',()=>{
  const mismatched={...snapshot,matches:snapshot.matches.map(m=>m.seq===1?{...m,matchId:''}:m)};
  assert.throws(()=>build({snapshot:mismatched}),/match_id/);
+});
+
+test('a truly recreated four-fixture bracket is distinct from every known old Worker UUID',()=>{
+ const prev={
+  event_id:eventId,request_id:'11234567-89ab-4cde-8abc-0123456789ab',status:'completed',
+  fixture_ids:{'1':ids[0],'2':ids[1],'3':ids[2],'4':ids[3]}
+ };
+ const recreated={...snapshot,matches:snapshot.matches.map((m,i)=>({
+  ...m,matchId:[
+   '61234567-89ab-4cde-8abc-0123456789ab',
+   '71234567-89ab-4cde-8abc-0123456789ab',
+   '81234567-89ab-4cde-8abc-0123456789ab',
+   '91234567-89ab-4cde-8abc-0123456789ab'
+  ][i]
+ }))};
+ assert.equal(hasRecreatedBracket(prev,recreated),true);
+ assert.equal(hasRecreatedBracket(prev,snapshot),false);
+ assert.equal(hasRecreatedBracket({...prev,event_id:'not-the-event'},recreated),false);
+ assert.equal(hasRecreatedBracket({...prev,fixture_ids:{}},recreated),false);
+ assert.equal(hasRecreatedBracket(prev,{...recreated,matches:recreated.matches.slice(0,3)}),false);
+ assert.equal(workerBatchRecreatePendingKey(eventId),
+  'peakstamp:test:worker-batch:recreate-pending:'+eventId);
 });

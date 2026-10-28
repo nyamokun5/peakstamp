@@ -68,3 +68,27 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
  return {event_id:snapshot.eventId,request_id:requestId,
   confirm:'TEST-ONLY BATCH WRITE',operations};
 }
+
+
+// A local marker is event-scoped, but the new bracket must be a *separate*
+// generation. The server performs independent read-only official 404 checks.
+export const workerBatchRecreatePendingKey=eventId=>
+ 'peakstamp:test:worker-batch:recreate-pending:'+eventId;
+export function hasRecreatedBracket(state,snapshot){
+ if(!state||!snapshot||state.event_id!==snapshot.eventId)return false;
+ const previous=state.fixture_ids||{};
+ const matches=snapshot.matches||[];
+ if(matches.length!==4||!['1','2'].every(seq=>UUID.test(previous[seq]||'')))
+  return false;
+ const current={};
+ for(const m of matches){
+  if(!Number.isInteger(m.seq)||m.seq<1||m.seq>4||current[m.seq]||
+     !UUID.test(m.matchId||''))return false;
+  current[m.seq]=m.matchId.toLowerCase();
+ }
+ const previousIds=Object.values(previous).filter(id=>UUID.test(id)).map(id=>id.toLowerCase());
+ return [1,2,3,4].every(seq=>current[seq])&&
+  previousIds.every(id=>!Object.values(current).includes(id))&&
+  current[1]!==previous['1'].toLowerCase()&&
+  current[2]!==previous['2'].toLowerCase();
+}
