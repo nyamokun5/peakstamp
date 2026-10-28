@@ -144,11 +144,19 @@ export function inferMatchFromCommentary(goal,snapshot){
 // Match Japanese-speaking commentary to romanized Shoot Sunday player names.
 // Exact roster member names are always preferred. Small kana/kanji conventions
 // are hints, never authoritative IDs; ambiguous matches are left unselected.
+// Conservative, deterministic aliases for names heard in Japanese but
+// displayed in Latin letters in the official SpoSched roster. Do not infer
+// an arbitrary kanji reading. Unrecognized or non-unique matches stay held.
 const knownKanjiReadings={
  '高崎':'takasaki','川田':'kawata','野田':'noda','小林':'kobayashi',
  '西村':'nishimura','山田':'yamada','渡邊':'watanabe',
  '渡辺':'watanabe','芦田':'ashida','徳永':'tokunaga',
- '佐藤':'sato','鈴木':'suzuki','松本':'matsumoto'
+ '佐藤':'sato','鈴木':'suzuki','松本':'matsumoto',
+ '藤井':'fujii','藤原':'fujiwara','田中':'tanaka','中村':'nakamura',
+ '高橋':'takahashi','伊藤':'ito','加藤':'kato','斉藤':'saito',
+ '斎藤':'saito','吉田':'yoshida','山口':'yamaguchi','山本':'yamamoto',
+ '井上':'inoue','清水':'shimizu','木村':'kimura','林':'hayashi',
+ '達夫':'tatsuo','達雄':'tatsuo','竜夫':'tatsuo','龍夫':'tatsuo'
 };
 const kanaMap={
  'あ':'a','い':'i','う':'u','え':'e','お':'o',
@@ -182,27 +190,51 @@ function kanaRomanization(text){
  }
  return out;
 }
+// Preserve word boundaries for Latin first/last-name permutations and apply
+// the same aliases to BOTH AI audio and official roster display names.
+const aliasName=value=>{
+ const raw=string(value).normalize('NFKC').toLowerCase()
+  .replace(/(さん|くん|君|氏|様)\s*$/,'').trim();
+ const words=raw.split(/[\s.・_\-（）()]+/).filter(Boolean);
+ const romanize=part=>{
+  let result=kanaRomanization(part);
+  for(const [kanji,reading] of Object.entries(knownKanjiReadings)
+   .sort((a,b)=>b[0].length-a[0].length))
+   result=result.split(kanji).join(reading);
+  return result;
+ };
+ const pieces=words.map(romanize);
+ const joined=pieces.join('');
+ const ordered=pieces.length>1?pieces.slice().sort().join(''):'';
+ return {raw:normalizePerson(value),parts:pieces,joined,ordered};
+};
 export function spokenNameTokens(text){
- const normalized=normalizePerson(text);
- if(!normalized)return [];
- const candidates=[normalized,kanaRomanization(normalized)];
- for(const [kanji,romaji] of Object.entries(knownKanjiReadings))
-  if(normalized===kanji||normalized.includes(kanji))candidates.push(romaji);
- return [...new Set(candidates.filter(Boolean))];
+ const alias=aliasName(text);
+ return [...new Set([alias.raw,alias.joined,alias.ordered,
+  ...alias.parts].filter(Boolean))];
 }
 export function scoredPlayerCandidates(text,snapshot,team='',limit=7){
  const tokens=spokenNameTokens(text);
  if(!tokens.length)return [];
+ const input=aliasName(text);
  const targetTeam=nameForTeam(team);
  const ranked=snapshot.players.map(name=>{
+  const person=aliasName(name);
   const norm=normalizePerson(name);
-  const components=string(name).normalize('NFKC').toLowerCase()
-   .split(/[\s.・_\-]+/).filter(Boolean);
+  const components=person.parts;
   let score=0,why='';
+  // Full-name aliases work in both surname-given and given-surname order.
+  if(input.joined&&
+    (input.joined===person.joined||
+     input.joined===person.ordered||
+     input.ordered&&input.ordered===person.ordered||
+     input.ordered&&input.ordered===person.joined)){
+   score=120;why='姓名の表記・順序違いが一致';
+  }
   for(const token of tokens){
    let n=0,label='';
    if(norm===token){n=120;label='正式名と一致'}
-   else if(components.includes(token)){n=98;label='氏名の一部が一致'}
+   else if(components.includes(token)){n=98;label='氏名または読みが一致'}
    else if(components.some(p=>p.startsWith(token)&&token.length>=3)){n=88;label='名前の先頭が一致'}
    else if(components.some(p=>token.startsWith(p)&&p.length>=4)){n=85;label='名前の一部が一致'}
    else if(norm.includes(token)&&token.length>=4){n=78;label='部分一致'}
