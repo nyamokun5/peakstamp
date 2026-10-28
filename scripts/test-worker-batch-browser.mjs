@@ -16,7 +16,7 @@ const matches=ids.map((match_id,i)=>({
 const snapshot=()=>({event_id:E,matches,roster:{
  チーム1:['山田'],チーム2:['西村'],チーム3:['田中'],チーム4:['橋本']
 }});
-let starts=0,decisions=0,statusCalls=0,lastRequestId=null,step='idle',otherWrites=0;
+let starts=0,decisions=0,statusCalls=0,lastRequestId=null,step='idle',otherWrites=0,completionReads=0;
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 page.on('dialog',d=>d.accept());
@@ -33,7 +33,14 @@ await page.route('**/*',async route=>{
  let data,method=route.request().method();
  const body=method==='POST'?route.request().postDataJSON():null;
  if(url.pathname==='/events')data={events:[{event_id:E,name:'TEST',date:'2026-10-25'}]};
- else if(url.pathname==='/snapshot')data=snapshot();
+ else if(url.pathname==='/snapshot'){
+  data=snapshot();
+  if(step==='completed'){
+   completionReads++;
+   if(completionReads===1)return route.fulfill({status:503,json:{error:{message:'mock readback unavailable'}},headers:{'Access-Control-Allow-Origin':'*'}});
+   if(completionReads===2){data=structuredClone(data);data.matches[3].status='scheduled';}
+  }
+ }
  else if(url.pathname==='/staging/batch/start'){
   starts++;assert.equal(starts,1,'starting twice is forbidden');
   assert.equal(body.event_id,E);
@@ -98,6 +105,14 @@ try{
  await page.waitForTimeout(1350);
  await page.selectOption('#workerBatchWinner','draw');
  await page.click('#workerBatchSubmitDecision');
+ await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('状態確認を完了できません'));
+ assert.equal(await page.locator('#ssResultPanel').isVisible(),false,'failed official GET must not announce completion');
+ assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
+ await page.click('#workerBatchRefresh');
+ await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('終了状態が一致しません'));
+ assert.equal(await page.locator('#ssResultPanel').isVisible(),false,'unfinished official fixture must not announce completion');
+ assert.equal(starts,1,'readback failures never restart the batch');
+ await page.click('#workerBatchRefresh');
  await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('全操作の登録・照合'));
  assert.equal(starts,1);assert.equal(decisions,1);
  assert.ok(statusCalls>=2);
@@ -112,6 +127,7 @@ try{
  assert.match(breakdown,/事前確認 1\.2秒/);
  assert.match(breakdown,/登録＋再取得 5\.2秒/);
  assert.match(breakdown,/勝敗入力待ち 1\.5秒/);
+ assert.match(breakdown,/入力待ちを除くWorker経過 9\.3秒/);
  assert.match(await page.locator('#workerTimingSlowest').innerText(),/#2 終了：2\.5秒/);
  await page.locator('#ssResultPanel').waitFor({state:'visible'});
  const elapsedText=await page.locator('#ssResultTime').innerText();

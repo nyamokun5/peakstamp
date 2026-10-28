@@ -1597,6 +1597,7 @@ function showWorkerTiming(state){
   ' ／署名プレビュー '+sec(metrics.preview_ms)+
   ' ／登録＋再取得 '+sec(metrics.execute_ms)+
   ' ／勝敗入力待ち '+sec(metrics.decision_wait_ms)+
+  (Number.isFinite(full)?' ／入力待ちを除くWorker経過 '+sec(Math.max(0,full-Number(metrics.decision_wait_ms||0))):'')+
   (other===null?'':' ／その他のWorker処理・待機 '+sec(other));
  const slowest=(Array.isArray(metrics.by_step)?metrics.by_step:[])
   .slice().sort((a,b)=>Number(b.total_ms||0)-Number(a.total_ms||0))
@@ -1684,6 +1685,19 @@ async function refreshWorkerBatch(){
     localStorage.removeItem(recreationKey);
    }
   }
+  // Do not announce completion until the official four-fixture snapshot is
+  // available. A failed GET must leave a read-only retry, never a new start.
+  let completedSnapshot=null;
+  if(state.status==='completed'&&!hasRecreatedBracket(state,snapshot)){
+   hideCompletionPanel();
+   $('workerBatchStatus').textContent='Workerの登録は完了しました。SS公式の4試合の終了状態を確認中です。';
+   completedSnapshot=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+   if(snapshot?.eventId!==eventId)return;
+   if(state.event_id!==eventId||completedSnapshot.eventId!==eventId||
+      completedSnapshot.matches.length!==4||
+      ![1,2,3,4].every(seq=>completedSnapshot.matches.filter(m=>m.seq===seq&&m.status==='finished').length===1))
+    throw Error('SS公式の4試合の終了状態が一致しません。再登録せず結果を確認してください');
+  }
   showWorkerBatchState(state);
   if(hasRecreatedBracket(state,snapshot)&&
     localStorage.getItem(workerBatchStorageKey(eventId))===state.request_id){
@@ -1698,9 +1712,7 @@ async function refreshWorkerBatch(){
   }else if(state.status==='needs_decision'){
    workerBatchPolling=false;setBatchBusy(true);
   }else if(state.status==='completed'){
-   const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
-   if(fresh.eventId!==eventId)throw Error('完了したジョブのイベントIDが異なります');
-   snapshot=fresh;rebuild({preserveEdits:true});
+   snapshot=completedSnapshot;rebuild({preserveEdits:true});
   }
  }catch(e){
   workerBatchPolling=false;
