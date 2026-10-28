@@ -196,15 +196,16 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
   <button id="quickEdit" type="button">詳細編集・手動追加・既存ゴール修正</button>
  </div>
- <h2 id="autoRegisterHeading">4. 得点・試合結果をまとめて登録</h2>
- <p class="step-help">内容が合っていれば、この下のボタン1つで4試合を順番に処理します。</p>
+ <h2 id="autoRegisterHeading">4. 確認済みのゴールと4試合をTESTへ登録</h2>
+ <p class="step-help">通常は下の<strong>「確認した内容で4試合を登録（TEST）」</strong>だけを使います。従来方式は予備操作にまとめました。同じイベントで両方押さないでください。</p>
  <div id="autoPanel">
   <div id="autoOutline" aria-label="試合の登録予定"></div>
   <p id="autoBeforeRun" class="small" role="status"></p>
-  <button id="autoRun" class="primary quick-main" type="button">ゴール・試合結果をまとめてTESTへ登録</button>
   <div id="workerBatchArea" class="grid-item" hidden>
-   <p class="small"><strong>高速TEST登録（新方式）</strong>：承認後はWorkerが4試合を順に処理します。通信が切れてもジョブの進捗を再取得できます。既存の試合登録は再送しません。</p>
-   <button id="workerBatchRun" class="primary quick-main" type="button">Workerで4試合を高速一括登録（TEST）</button>
+   <p class="small"><strong>通常はこちら（Worker方式）</strong>：4試合を順番に登録し、進捗と処理時間の内訳を表示します。通信が切れた場合は進捗を再取得できます。</p>
+   <p id="workerBatchReadiness" class="small" role="status"></p>
+   <button id="workerBatchJumpToGoal" type="button" hidden>未確認のゴール候補へ戻る</button>
+   <button id="workerBatchRun" class="primary quick-main" type="button">確認した内容で4試合を登録（TEST）</button>
     <button id="workerBatchRecreate" class="primary quick-main" type="button" hidden>再作成された新しい4試合を高速登録（TEST）</button>
     <p id="workerBatchRecreateHint" class="small" hidden>前回ジョブは旧試合IDとして履歴に保管し、新しい試合のIDで一括登録します。旧試合には再送しません。</p>
    <button id="workerBatchRefresh" type="button" hidden>ジョブの進捗を再取得（書き込みなし）</button>
@@ -228,6 +229,11 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
     <button id="workerBatchSubmitDecision" class="primary" type="button">結果を確定して続行（TEST）</button>
    </div>
   </div>
+  <details id="legacyBatchDetails" class="help">
+   <summary>予備操作：従来方式で4試合を登録</summary>
+   <p class="small">Worker方式を使わない場合の予備操作です。通常は上のボタンを利用し、同じイベントで両方実行しないでください。</p>
+   <button id="autoRun" class="primary quick-main" type="button">従来方式で残り4試合を登録（TEST）</button>
+  </details>
   <div id="autoProgress" hidden aria-live="polite">
    <p id="autoStage" role="status">準備中</p>
    <progress id="autoProgressBar" max="4" value="0"></progress>
@@ -1322,7 +1328,30 @@ function renderAutoSummary(){
    $('workerBatchStatus').textContent='前回の未照合記録があります。新しい登録は開始していません。';
   }
  $('workerBatchRefresh').hidden=!previousWorkerJob;
- $('workerBatchRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||autoBusy||workerBatchPolling;
+ // Client validation is read-only; signed Worker still revalidates official
+ // TEST tenant, fixture identity and idempotent write gate.
+ let batchReadinessError='';
+ try{
+  prepareWorkerTournament({
+   snapshot,rows,decisions,requestId:'11111111-1111-4111-8111-111111111111',
+   winnerFor:seq=>autoWinnerFor(seq)
+  });
+ }catch(e){batchReadinessError=e.message||'登録内容の確認が必要です'}
+ const pendingReview=decisions.filter(d=>
+  ['attention','waiting','duplicate','manual','patch'].includes(d.state));
+ const firstPending=pendingReview.find(d=>
+  d.state==='attention'||d.state==='waiting')||pendingReview[0];
+ $('workerBatchJumpToGoal').hidden=!batchReadinessError||!firstPending;
+ $('workerBatchJumpToGoal').dataset.goalIndex=firstPending?.index??'';
+ $('workerBatchReadiness').textContent=unresolved
+  ?'⚠ 前回の未照合記録があります。先に書き込みなしで復旧してください。'
+  :previousWorkerJob?'このイベントのWorker登録記録があります。「進捗を再取得」で確認してください。'
+  :batchReadinessError?'⚠ まだ登録できません：'+batchReadinessError+
+    '。該当するゴール候補を確認してください。'
+  :unfinished===0?'4試合はすでに終了しています。'
+  :'✓ 登録前の確認が済みました。内容が正しければTEST登録ボタンを押してください。';
+ $('workerBatchRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||
+  autoBusy||workerBatchPolling||unfinished===0||Boolean(batchReadinessError);
  if(previousWorkerJob&&workerRestoredEvent!==snapshot.eventId){
   workerRestoredEvent=snapshot.eventId;
   Promise.resolve().then(()=>refreshWorkerBatch());
@@ -1335,6 +1364,8 @@ function renderAutoSummary(){
  }catch(e){
   root.textContent=e.message;
   $('autoRun').disabled=true;
+  $('workerBatchRun').disabled=true;
+  $('workerBatchReadiness').textContent='⚠ '+e.message;
  }
 }
 // The before-image belongs to the exact reviewed goal; no extra /match GET
@@ -1498,6 +1529,11 @@ async function autoRegisterTournament(){
   autoUnsafeStop=false;autoBusy=false;setBatchBusy(false);renderAutoSummary();
  }
 }
+$('workerBatchJumpToGoal').addEventListener('click',()=>{
+ const index=Number($('workerBatchJumpToGoal').dataset.goalIndex);
+ if(!Number.isInteger(index)||index<0)return;
+ $('quick-goal-'+(index+1))?.scrollIntoView({behavior:'smooth',block:'center'});
+});
 $('autoRun').addEventListener('click',()=>{
  if($('autoRun').disabled)return;
  legacyStartedAt=Date.now();legacyStartedEventId=snapshot?.eventId||'';

@@ -104,6 +104,8 @@ try {
  const cards=await page.locator('#autoGoalDetails').boundingBox();
  const primary=await page.locator('#autoPanel').boundingBox();
  assert.ok(cards.y<primary.y,'goal review must be ABOVE primary registration');
+ assert.equal(await page.locator('#autoRun').isVisible(),false);
+ await page.locator('#legacyBatchDetails summary').click();
  assert.equal(await page.locator('#autoRun').isVisible(),true);
  assert.equal(await page.locator('#autoRun').isEnabled(),true);
  assert.equal(await page.locator('#quickPreview').isVisible(),false);
