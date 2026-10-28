@@ -1335,9 +1335,13 @@ function renderAutoSummary(){
    const p=analyzeAutoFixture(snapshot,rows,quickGoalDecisions(snapshot,rows),seq,autoWinnerFor(seq));
    const score=['ready','winner-needed'].includes(p.state)?
     '（登録後 '+p.left+' - '+p.right+'）':'';
+   const manualBlockers=p.state==='blocked'&&p.blockers?.length&&
+    p.blockers.every(d=>d.state==='manual-ss');
    const line=p.state==='finished'?'✓ 終了':
     p.state==='waiting'?'⏳ 対戦待ち':
-    p.state==='blocked'?'⚠ 修正が必要':
+    p.state==='blocked'?(manualBlockers?
+     p.blockers.every(d=>d.registeredInSS)?'✓ SS手動登録済み・残りを一括登録':'⚠ SSで手動登録が必要'
+     :'⚠ 修正が必要'):
     p.state==='winner-needed'?'⚠ 勝者未指定'+score:
     '登録予定 '+p.ready.length+'ゴール'+score;
    if(p.state!=='finished')unfinished++;
@@ -1386,9 +1390,9 @@ function renderAutoSummary(){
   });
  }catch(e){batchReadinessError=e.message||'登録内容の確認が必要です'}
  const pendingReview=decisions.filter(d=>
-  ['attention','waiting','duplicate','manual','patch'].includes(d.state));
+  ['attention','waiting','duplicate','manual','patch','manual-ss'].includes(d.state));
  const firstPending=pendingReview.find(d=>
-  d.state==='attention'||d.state==='waiting')||pendingReview[0];
+  d.state==='attention'||d.state==='waiting'||d.state==='manual-ss')||pendingReview[0];
  $('workerBatchJumpToGoal').hidden=!batchReadinessError||!firstPending;
  $('workerBatchJumpToGoal').dataset.goalIndex=firstPending?.index??'';
  $('workerBatchReadiness').textContent=unresolved
