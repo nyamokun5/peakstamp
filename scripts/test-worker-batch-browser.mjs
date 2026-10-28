@@ -180,7 +180,17 @@ try{
   incompleteFinalSnapshot=false;
   await page.click('#workerBatchRefresh');
  }
- await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('全操作の登録・照合'));
+ try {
+  await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('全操作の登録・照合'),null,{timeout:10000});
+ }catch(e){
+  const actual=await page.evaluate(()=>({
+   status:document.getElementById('workerBatchStatus')?.textContent,
+   decisionVisible:!document.getElementById('workerBatchDecision')?.hidden,
+   refreshVisible:!document.getElementById('workerBatchRefresh')?.hidden
+  }));
+  console.error('TEST batch completion diagnostic',JSON.stringify({actual,step,pauses,resumes,starts,decisions,statusCalls}));
+  throw e;
+ }
  assert.equal(starts,1);assert.equal(decisions,1);
  assert.ok(statusCalls>=2);
  assert.equal(otherWrites,0,'browser must never directly POST goal or result');
