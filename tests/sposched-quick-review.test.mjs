@@ -482,7 +482,7 @@ test('one-click Worker review visibly compares AI transcript with selected offic
  assert.match(start,/localStorage\.setItem\(key,requestId\)/,
   'durable no-replay marker must still precede the request');
  const decide=html.split("$('workerBatchSubmitDecision').addEventListener('click',async()=>{")[1]
-   .split("$('workerBatchRecreate')")[0];
+   .split("$('autoResume').addEventListener")[0];
  assert.ok(decide);
  assert.doesNotMatch(decide,/window\.confirm/);
 });
