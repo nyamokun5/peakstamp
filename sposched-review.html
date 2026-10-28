@@ -1344,6 +1344,8 @@ function renderAutoSummary(){
    root.append(node('div','#'+seq+' '+(m.title||'試合')+'：'+line,'fixture-status'));
   }
   const decisions=quickGoalDecisions(snapshot,rows);
+  const manualPending=decisions.filter(d=>d.state==='manual-ss'&&!d.registeredInSS);
+  const manualDone=decisions.filter(d=>d.state==='manual-ss'&&d.registeredInSS).length;
   const unassigned=unassignedGoalDecisions(snapshot,rows,decisions);
   const needsFix=decisions.filter(d=>d.state==='attention'||d.state==='duplicate'||
     d.state==='manual'||d.state==='patch');
@@ -1353,8 +1355,11 @@ function renderAutoSummary(){
   }else if(needsFix.length){
    $('autoBeforeRun').textContent='⚠ 要確認のゴールが'+needsFix.length+
      '件あります。上のカードで修正してください。';
+  }else if(manualPending.length){
+   $('autoBeforeRun').textContent='⚠ 助っ人候補 '+manualPending.length+'件は自動登録から除外しています。先にSSで試合単位の助っ人とゴールを直接登録し、最新データを再取得してください。未登録のまま試合は終了しません。';
   }else $('autoBeforeRun').textContent=unfinished?
-    'ゴール内容を確認したら、下のボタンで順番に登録します。':'すべて終了しています。';
+    'ゴール内容を確認したら、下のボタンで順番に登録します。'+(manualDone?'（SS手動登録済み '+manualDone+'件は除外）':''):
+    'すべて終了しています。';
   const previousWorkerJob=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
   const unresolved=pendingForEvent().length>0;
   $('workerBatchArea').hidden=false;
@@ -1392,7 +1397,8 @@ function renderAutoSummary(){
   :batchReadinessError?'⚠ まだ登録できません：'+batchReadinessError+
     '。該当するゴール候補を確認してください。'
   :unfinished===0?'4試合はすでに終了しています。'
-  :'✓ 登録前の確認が済みました。内容が正しければTEST登録ボタンを押してください。';
+  :'✓ 登録前の確認が済みました。内容が正しければTEST登録ボタンを押してください。'+
+   (manualDone?'（SS手動登録済みの助っ人 '+manualDone+'件は除外）':'');
  $('workerBatchRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||
   autoBusy||workerBatchPolling||unfinished===0||Boolean(batchReadinessError);
  if(previousWorkerJob&&workerRestoredEvent!==snapshot.eventId){
@@ -1400,7 +1406,7 @@ function renderAutoSummary(){
   Promise.resolve().then(()=>refreshWorkerBatch());
  }
  $('autoRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||autoBusy||autoMustReload||
-    unassigned.length>0||needsFix.length>0||unfinished===0;
+    unassigned.length>0||needsFix.length>0||manualPending.length>0||unfinished===0;
   $('autoRun').textContent=unresolved?'まず前回の送信記録を照合してください':autoMustReload?'SSの再取得が必要':
    unassigned.length||needsFix.length?'まず上のゴールを修正してください':
    unfinished?'残り'+unfinished+'試合をまとめて登録':'すべて終了済み';
