@@ -1955,6 +1955,9 @@ $('workerBatchSubmitDecision').addEventListener('click',async()=>{
    seq:state.decision.seq,winner,confirm:'TEST-ONLY BATCH DECISION'
   });
   $('workerBatchDecision').hidden=true;
+  // A prior status poll can still be marked in-flight after the decision POST.
+  // Force the authoritative post-decision read instead of silently skipping it.
+  workerBatchPolling=false;
   await refreshWorkerBatch();
  }catch(e){
   $('workerBatchStatus').textContent='結果指定を確認できません：'+e.message+
