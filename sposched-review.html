@@ -220,6 +220,8 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
    <button id="workerBatchPause" type="button" hidden>このジョブを一時停止</button>
    <button id="workerBatchResume" type="button" hidden>確認済みの続きから再開（TEST）</button>
    <button id="workerBatchRefresh" type="button" hidden>ジョブの進捗を再取得（書き込みなし）</button>
+   <button id="workerGateAudit" type="button" hidden>現在の4試合の送信記録を確認（書き込みなし）</button>
+   <p id="workerGateAuditStatus" class="small" role="status" aria-live="polite"></p>
    <p id="workerBatchStatus" class="small" role="status" aria-live="polite"></p>
    <details id="workerTimingDetails" hidden>
     <summary>登録速度の内訳（Worker診断）</summary>
@@ -379,6 +381,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
 </div>
 <script type="module">
 import {jobControlPayload} from './sposched-job-control.mjs?v=pause1';
+import {auditCurrentTestFixtureGates} from './sposched-gate-audit.mjs?v=gate-audit1';
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=roster-phonetic2';
@@ -1414,6 +1417,11 @@ function renderAutoSummary(){
   const previousWorkerJob=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
   const unresolved=pendingForEvent().length>0;
   $('workerBatchArea').hidden=false;
+  $('workerGateAudit').hidden=snapshot.matches.length!==4;
+  if($('workerGateAuditStatus').dataset.eventId!==snapshot.eventId){
+   $('workerGateAuditStatus').dataset.eventId=snapshot.eventId;
+   $('workerGateAuditStatus').textContent='';
+  }
   $('workerBatchRecover').hidden=!unresolved;
   const prior=workerLatestState?.event_id===snapshot.eventId?workerLatestState:null;
   const oldGeneration=Boolean(previousWorkerJob&&prior?.request_id===previousWorkerJob&&
@@ -1823,6 +1831,28 @@ function openPendingRecovery(){
  if(!$('recoveryReload').disabled&&!recoveryBusy&&!batchBusy)
   $('recoveryReload').click();
 }
+$('workerGateAudit').addEventListener('click',async()=>{
+ if(!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ const eventId=snapshot.eventId;
+ const button=$('workerGateAudit'),label=$('workerGateAuditStatus');
+ button.disabled=true;
+ label.textContent='4試合の保存済み送信記録を読み取り中（新規登録なし）…';
+ try{
+  const result=await auditCurrentTestFixtureGates(snapshot.matches,
+   matchId=>postStaging('/staging/status',{match_id:matchId}));
+  if(snapshot?.eventId!==eventId)return;
+  const states=result.rows.map(x=>'#'+x.seq+': '+x.status).join(' / ');
+  label.textContent=result.current_fixtures_clear
+   ?'✓ このイベントの現在の4試合は未確定送信なし（確認済 '+result.verified+'、未使用 '+result.idle+'）。'+states+
+    '。過去の別試合・別イベントは対象外です。'
+   :'⚠ 未確定または要確認の送信記録があります（'+result.uncertain.map(x=>'#'+x.seq+' '+x.status).join('、')+
+    '）。再送しないでください。'+states+'。過去の別試合・別イベントは対象外です。';
+ }catch(e){
+  if(snapshot?.eventId===eventId)
+   label.textContent='送信記録をすべて確認できません：'+e.message+
+    '。安全確認未完了のため再送せず、再度読み取ってください。';
+ }finally{button.disabled=false}
+});
 $('workerBatchRecover').addEventListener('click',openPendingRecovery);
 $('autoRecover').addEventListener('click',openPendingRecovery);
 $('workerBatchRefresh').addEventListener('click',()=>{
