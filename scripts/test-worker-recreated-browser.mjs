@@ -34,8 +34,8 @@ await page.route('**/*',async route=>{
  let data;
  if(url.pathname==='/events')data={events:[{event_id:E,name:'TEST',date:'2026-10-25'}]};
  else if(url.pathname==='/snapshot')data=latest();
- else if(url.pathname==='/staging/batch/status'){
-  statusReads++;
+ else if(url.pathname==='/staging/batch/status'||url.pathname==='/staging/batch/inspect'){
+  if(url.pathname.endsWith('/status'))statusReads++;
   test.equal(body.event_id,E);
   data={environment:'STAGING ONLY',event_id:E,
    request_id:committed?newReq:REQ_OLD,
@@ -74,7 +74,7 @@ try{
  test.equal(await page.locator('#workerBatchRun').isDisabled(),true);
  test.equal(await page.locator('#ssResultPanel').isVisible(),false,
   'old generation must never appear as newly completed');
- test.ok(statusReads>=1);
+ test.ok(statusReads===0,'initial recovery should not use status');
  await page.click('#workerBatchRecreate');
  await page.locator('#ssResultPanel').waitFor({state:'visible'});
  test.equal(started,1);test.equal(otherMutations,0);
