@@ -217,6 +217,8 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
    <button id="workerBatchRun" class="primary quick-main" type="button">一覧の内容で4試合を登録（TEST）</button>
     <button id="workerBatchRecreate" class="primary quick-main" type="button" hidden>再作成された新しい4試合を高速登録（TEST）</button>
     <p id="workerBatchRecreateHint" class="small" hidden>前回ジョブは旧試合IDとして履歴に保管し、新しい試合のIDで一括登録します。旧試合には再送しません。</p>
+   <button id="workerBatchPause" type="button" hidden>このジョブを一時停止</button>
+   <button id="workerBatchResume" type="button" hidden>確認済みの続きから再開（TEST）</button>
    <button id="workerBatchRefresh" type="button" hidden>ジョブの進捗を再取得（書き込みなし）</button>
    <p id="workerBatchStatus" class="small" role="status" aria-live="polite"></p>
    <details id="workerTimingDetails" hidden>
@@ -376,6 +378,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <button id="quickBackFixed" type="button">← ゴール一覧に戻る</button>
 </div>
 <script type="module">
+import {jobControlPayload} from './sposched-job-control.mjs?v=pause1';
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=roster-phonetic2';
@@ -1451,7 +1454,8 @@ function renderAutoSummary(){
   autoBusy||workerBatchPolling||unfinished===0||Boolean(batchReadinessError);
  if(previousWorkerJob&&workerRestoredEvent!==snapshot.eventId){
   workerRestoredEvent=snapshot.eventId;
-  Promise.resolve().then(()=>refreshWorkerBatch());
+  // Restoring a saved job must only observe; legacy /status can advance work.
+  Promise.resolve().then(()=>refreshWorkerBatch({passive:true}));
  }
  $('autoRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||autoBusy||autoMustReload||
     unassigned.length>0||needsFix.length>0||manualPending.length>0||assistAfter>0||helperEnrollment>0||unfinished===0;
@@ -1667,9 +1671,16 @@ function showWorkerTiming(state){
   '時間がかかった操作：'+slowest.join('、'):'';
 }
 function showWorkerBatchState(state){
+ const previousState=workerLatestState;
  workerLatestState=state;
+ for(const [action,id] of [['pause','workerBatchPause'],['resume','workerBatchResume']]){
+  try{jobControlPayload(action,state,{environment:$('ssEnvironment').value,eventId:snapshot?.eventId,
+   requestId:localStorage.getItem(workerBatchStorageKey(snapshot?.eventId))});$(id).hidden=false;}
+  catch{$(id).hidden=true;}
+ }
  const stored=localStorage.getItem(workerBatchStorageKey(state.event_id));
  if(stored===state.request_id&&hasRecreatedBracket(state,snapshot)){
+  $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
   $('workerTimingDetails').hidden=true;
   hideCompletionPanel();
   $('workerBatchStatus').textContent=
@@ -1689,11 +1700,14 @@ function showWorkerBatchState(state){
  $('workerBatchRun').disabled=true;
  const progress='処理 '+state.completed+'/'+state.total+'件（登録と試合終了の合計）';
  $('workerBatchStatus').textContent=
+  (state.observation_only===true?'【TEST確認専用・新規登録停止中】 ':'')+(
   state.status==='completed'?'✓ Workerで全操作の登録・照合が完了しました。'+progress:
+  state.status==='paused'?'一時停止しました。送信済みの操作を繰り返さず、確認済みの続きから再開できます。'+progress:
+  state.pause_requested?'停止要求を保存しました。進行中の操作を確認してから停止します。'+progress:
   state.status==='needs_decision'?'同点のため試合 #'+state.decision.seq+' の結果を指定してください。'+progress:
   state.status==='blocked'?'⚠ Worker停止：'+(state.blocked_reason||'照合が必要です')+
    '。自動再送しません。'+progress:
-  'WorkerがTEST環境で順次処理中です。'+progress;
+  'WorkerがTEST環境で順次処理中です。'+progress);
  if(state.status==='completed'){
   const start=readWorkerTiming(localStorage,state.event_id,state.request_id);
   const total=start===null?null:completionSeconds(start,state.updated_at,Date.now());
@@ -1709,21 +1723,30 @@ function showWorkerBatchState(state){
    '試合 #'+d.seq+'：'+d.left_team+' '+d.left_score+
    ' - '+d.right_score+' '+d.right_team;
   const choices=new Set(d.choices);
+  const sameDecision=previousState?.status==='needs_decision' &&
+   previousState.event_id===state.event_id &&
+   previousState.request_id===state.request_id &&
+   previousState.cursor===state.cursor &&
+   previousState.decision?.seq===d.seq &&
+   previousState.decision?.match_id===d.match_id;
+  const chosen=sameDecision?$('workerBatchWinner').value:'';
   for(const option of $('workerBatchWinner').options){
    if(!option.value)continue;
    option.disabled=!choices.has(option.value);option.hidden=!choices.has(option.value);
    if(option.value==='left')option.textContent=d.left_team+'の勝利';
    if(option.value==='right')option.textContent=d.right_team+'の勝利';
   }
-  $('workerBatchWinner').value='';
+  // Preserve the human's choice across status reads for this exact match only.
+  // A new job/fixture still clears the selection to avoid an unintended finish.
+  $('workerBatchWinner').value=choices.has(chosen)?chosen:'';
  }
- if(state.status==='blocked'||state.status==='completed'){
+ if(state.status==='blocked'||state.status==='completed'||state.status==='paused'){
   workerBatchPolling=false;
   autoMustReload=true;
   setBatchBusy(false);
  }
 }
-async function refreshWorkerBatch(){
+async function refreshWorkerBatch({passive=false}={}){
  if(workerBatchPolling||!snapshot||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging')return;
  const saved=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
@@ -1733,7 +1756,7 @@ async function refreshWorkerBatch(){
  $('workerBatchRefresh').hidden=false;
  const eventId=snapshot.eventId;
  try{
-  const state=await postStaging('/staging/batch/status',{event_id:eventId});
+  const state=await postStaging(passive?'/staging/batch/inspect':'/staging/batch/status',{event_id:eventId});
   if(snapshot?.eventId!==eventId)return;
   const recreationKey=workerBatchRecreatePendingKey(eventId);
   const rawPending=localStorage.getItem(recreationKey);
@@ -1763,9 +1786,15 @@ async function refreshWorkerBatch(){
    return;
   }
   if(state.status==='running'){
-   setBatchBusy(true);
    workerBatchPolling=false;
-   window.setTimeout(()=>refreshWorkerBatch(),1500);
+   if(passive){
+    // A page reload must not resume a preparing job via legacy /status.
+    setBatchBusy(false);
+    $('workerBatchStatus').textContent='前回のWorkerジョブは実行中として保存されています。自動再開しません。「進捗を再取得」で明示的に続行してください。';
+   }else{
+    setBatchBusy(true);
+    window.setTimeout(()=>refreshWorkerBatch(),1500);
+   }
   }else if(state.status==='needs_decision'){
    workerBatchPolling=false;setBatchBusy(true);
   }else if(state.status==='completed'){
@@ -1773,8 +1802,10 @@ async function refreshWorkerBatch(){
   }
  }catch(e){
   workerBatchPolling=false;
-  $('workerBatchStatus').textContent='状態確認を完了できません：'+e.message+
-   '。開始を再送せず「進捗を再取得」を押してください。';
+  $('workerBatchStatus').textContent=passive&&e.code==='not_found'
+   ?'このWorkerでは安全な状態照会を利用できません。自動再開せず、「進捗を再取得」で明示的に確認してください。'
+   :'状態確認を完了できません：'+e.message+
+    '。開始を再送せず「進捗を再取得」を押してください。';
   if(e.code==='not_found')setBatchBusy(false);
  }
 }
@@ -1908,6 +1939,27 @@ $('workerBatchRun').addEventListener('click',async()=>{
   if(!localStorage.getItem(key))$('workerBatchRun').disabled=false;
  }
 });
+let workerControlBusy=false;
+for(const [action,id] of [['pause','workerBatchPause'],['resume','workerBatchResume']]){
+ $(id).addEventListener('click',async()=>{
+  if(workerControlBusy)return;
+  const state=workerLatestState,eventId=snapshot?.eventId;
+  workerControlBusy=true;$('workerBatchPause').disabled=true;$('workerBatchResume').disabled=true;
+  try{
+   const payload=jobControlPayload(action,state,{environment:$('ssEnvironment').value,eventId,
+    requestId:localStorage.getItem(workerBatchStorageKey(eventId))});
+   await postStaging('/staging/batch/'+action,payload);
+   if(snapshot?.eventId!==eventId||$('ssEnvironment').value!=='staging')return;
+   // Do not trust a control response to show completion; always re-read status.
+   workerBatchPolling=false;await refreshWorkerBatch();
+  }catch(e){
+   if(snapshot?.eventId===eventId&&$('ssEnvironment').value==='staging'){
+    $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
+    $('workerBatchStatus').textContent='停止・再開の結果を確認できません：'+e.message+'。操作を再送せず進捗を再取得してください。';
+   }
+  }finally{workerControlBusy=false;$('workerBatchPause').disabled=false;$('workerBatchResume').disabled=false;}
+ });
+}
 $('workerBatchSubmitDecision').addEventListener('click',async()=>{
  const state=workerLatestState;
  if(state?.status!=='needs_decision')return;
@@ -1923,6 +1975,9 @@ $('workerBatchSubmitDecision').addEventListener('click',async()=>{
    seq:state.decision.seq,winner,confirm:'TEST-ONLY BATCH DECISION'
   });
   $('workerBatchDecision').hidden=true;
+  // A prior status poll can still be marked in-flight after the decision POST.
+  // Force the authoritative post-decision read instead of silently skipping it.
+  workerBatchPolling=false;
   await refreshWorkerBatch();
  }catch(e){
   $('workerBatchStatus').textContent='結果指定を確認できません：'+e.message+
@@ -2296,6 +2351,7 @@ $('finishRecover').addEventListener('click',async()=>{
  }catch(e){$('finishStatus').textContent='照合できません：'+e.message+'。再送はしていません。'}finally{setBatchBusy(false)}
 });
 $('ssEnvironment').addEventListener('change',()=>{
+ $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
  hideCompletionPanel();legacyStartedAt=null;legacyStartedEventId='';
  const reused=restoreBridgeInThisTab();
  $('ssSelectWrap').hidden=true;$('ssLoadSnapshot').hidden=true;
