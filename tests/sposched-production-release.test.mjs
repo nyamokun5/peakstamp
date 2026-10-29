@@ -38,3 +38,13 @@ test('production adapter reuses the existing four-match planner but never its TE
  assert.ok(job.operations.every(o=>o.action==='finish'));
  assert.match(productionBatchStorageKey(E),/production/);
 });
+
+test('official #3 and #4 waiting without UUID are accepted only as non-write placeholders',()=>{
+ const pendingSnapshot={...snapshot,matches:snapshot.matches.map((m,i)=>i>=2?{...m,matchId:''}:m)};
+ const pendingInspect={...inspect,matches:inspect.matches.map((m,i)=>i>=2?{...m,match_id:''}:m)};
+ assert.deepEqual(validateProductionReleaseEvidence(pendingSnapshot,pendingInspect,release).fixture_ids,
+  [ids[0],ids[1],'','']);
+ assert.throws(()=>validateProductionReleaseEvidence(pendingSnapshot,{
+  ...pendingInspect,matches:pendingInspect.matches.map((m,i)=>i===2?{...m,status:'scheduled'}:m)
+ },release));
+});
