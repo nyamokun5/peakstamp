@@ -275,6 +275,10 @@ try{
  assert.match(breakdown,/入力待ちを除くWorker経過 9\.3秒/);
  assert.match(await page.locator('#workerTimingSlowest').innerText(),/#2 終了：2\.5秒/);
  await page.locator('#ssResultPanel').waitFor({state:'visible'});
+ await page.waitForFunction(()=>document.getElementById('flowStepLabel').textContent==='✓ 完了');
+ assert.equal(await page.locator('#flowJump').getAttribute('data-target'),'ssResultPanel');
+ assert.equal(await page.locator('#workerBatchJumpToGoal').isVisible(),false);
+ assert.match(await page.locator('#workerBatchReadiness').innerText(),/再登録は不要/);
  const elapsedText=await page.locator('#ssResultTime').innerText();
  const seconds=Number(elapsedText.match(/([0-9]+\.[0-9])秒/)?.[1]);
  assert.ok(seconds>=1.3,'entire workflow must include the tie pause, got '+elapsedText);
