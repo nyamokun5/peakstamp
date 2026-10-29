@@ -20,6 +20,8 @@ const exercisePause=process.env.TEST_BATCH_PAUSE==='1';
 const loseResumeReply=process.env.TEST_RESUME_LOST_REPLY==='1';
 const losePauseReply=process.env.TEST_PAUSE_LOST_REPLY==='1';
 const reloadPaused=process.env.TEST_PAUSE_RELOAD==='1';
+const reloadRunning=process.env.TEST_RUNNING_RELOAD==='1';
+let explicitlyRefreshedRunning=false;
 let pauses=0,resumes=0;
 let failFinalSnapshot=process.env.TEST_FINAL_SNAPSHOT_FAILURE==='1';
 let incompleteFinalSnapshot=failFinalSnapshot;
@@ -75,7 +77,7 @@ await page.route('**/*',async route=>{
   const inspecting=url.pathname==='/staging/batch/inspect';
   if(inspecting)inspectCalls++;else statusCalls++;
   assert.equal(body.event_id,E);
-  if(step==='running'&&!exercisePause&&!inspecting)step='needs_decision';
+  if(step==='running'&&!exercisePause&&!inspecting&&(!reloadRunning||explicitlyRefreshedRunning))step='needs_decision';
   data={environment:'STAGING ONLY',event_id:E,request_id:lastRequestId,
    ...(exercisePause?{control_contract:'event-pause-v1',phase:'preparing',pause_requested:step==='paused',pause_id:step==='paused'?'pause-receipt':null}:{}),
    ...(inspecting?{inspection_contract:'event-inspect-v1',inspection_only:true}:{}),
@@ -142,6 +144,24 @@ try{
  assert.equal(await page.locator('#workerBatchRun').isEnabled(),true);
  await page.click('#workerBatchRun');
  assert.equal(dialogs,0,'one reviewed TEST batch button requires no duplicate native confirm');
+ if(reloadRunning){
+  await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('順次処理中'));
+  await page.reload();
+  await page.selectOption('#ssEnvironment','staging');
+  await page.fill('#ssBridgeToken','intercepted-secret-only');
+  await page.click('#ssLoadEvents');
+  const before=statusCalls;
+  await page.click('#ssLoadSnapshot');
+  await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('自動再開しません'));
+  assert.ok(inspectCalls>=1,'running page reload must use passive inspection');
+  await page.waitForTimeout(1700);
+  assert.equal(statusCalls,before,'running page reload must not resume through status polling');
+  assert.equal(starts,1,'running page reload must not repeat start');
+  assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
+  explicitlyRefreshedRunning=true;
+  await page.click('#workerBatchRefresh');
+ }
+
  if(exercisePause){
   await page.locator('#workerBatchPause').waitFor({state:'visible'});
   await page.click('#workerBatchPause');
