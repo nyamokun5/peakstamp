@@ -1673,6 +1673,11 @@ function showWorkerTiming(state){
 function showWorkerBatchState(state){
  const previousState=workerLatestState;
  workerLatestState=state;
+ // Legacy /status can advance a stored running job after a DO restart.
+ // Reloads use passive /inspect; an explicit continuation needs a warning.
+ $('workerBatchRefresh').textContent=state.status==='running'
+  ?'進捗を再取得（中断したTEST処理が再開する場合あり）'
+  :'ジョブの進捗を再取得（新規登録なし）';
  for(const [action,id] of [['pause','workerBatchPause'],['resume','workerBatchResume']]){
   try{jobControlPayload(action,state,{environment:$('ssEnvironment').value,eventId:snapshot?.eventId,
    requestId:localStorage.getItem(workerBatchStorageKey(snapshot?.eventId))});$(id).hidden=false;}
@@ -1820,7 +1825,18 @@ function openPendingRecovery(){
 }
 $('workerBatchRecover').addEventListener('click',openPendingRecovery);
 $('autoRecover').addEventListener('click',openPendingRecovery);
-$('workerBatchRefresh').addEventListener('click',()=>refreshWorkerBatch());
+$('workerBatchRefresh').addEventListener('click',()=>{
+ // Unknown/stale local state must first use passive inspection, not /status.
+ const eventId=snapshot?.eventId;
+ const stored=eventId?localStorage.getItem(workerBatchStorageKey(eventId)):null;
+ const state=workerLatestState;
+ if(!state||state.event_id!==eventId||state.request_id!==stored)
+  return refreshWorkerBatch({passive:true});
+ if(state.status==='running'&&!window.confirm(
+  'このTESTジョブは実行中として保存されています。進捗確認によって中断していた処理が再開する場合があります。再開してよろしいですか？'
+ ))return;
+ return refreshWorkerBatch();
+});
 $('workerBatchRecreate').addEventListener('click',async()=>{
  if(workerBatchPolling||batchBusy||autoBusy||!snapshot||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging')return;
