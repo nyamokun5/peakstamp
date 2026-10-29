@@ -1454,7 +1454,8 @@ function renderAutoSummary(){
   autoBusy||workerBatchPolling||unfinished===0||Boolean(batchReadinessError);
  if(previousWorkerJob&&workerRestoredEvent!==snapshot.eventId){
   workerRestoredEvent=snapshot.eventId;
-  Promise.resolve().then(()=>refreshWorkerBatch());
+  // Restoring a saved job must only observe; legacy /status can advance work.
+  Promise.resolve().then(()=>refreshWorkerBatch({passive:true}));
  }
  $('autoRun').disabled=unresolved||Boolean(previousWorkerJob)||batchBusy||autoBusy||autoMustReload||
     unassigned.length>0||needsFix.length>0||manualPending.length>0||assistAfter>0||helperEnrollment>0||unfinished===0;
@@ -1744,7 +1745,7 @@ function showWorkerBatchState(state){
   setBatchBusy(false);
  }
 }
-async function refreshWorkerBatch(){
+async function refreshWorkerBatch({passive=false}={}){
  if(workerBatchPolling||!snapshot||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging')return;
  const saved=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
@@ -1754,7 +1755,7 @@ async function refreshWorkerBatch(){
  $('workerBatchRefresh').hidden=false;
  const eventId=snapshot.eventId;
  try{
-  const state=await postStaging('/staging/batch/status',{event_id:eventId});
+  const state=await postStaging(passive?'/staging/batch/inspect':'/staging/batch/status',{event_id:eventId});
   if(snapshot?.eventId!==eventId)return;
   const recreationKey=workerBatchRecreatePendingKey(eventId);
   const rawPending=localStorage.getItem(recreationKey);
@@ -1784,9 +1785,15 @@ async function refreshWorkerBatch(){
    return;
   }
   if(state.status==='running'){
-   setBatchBusy(true);
    workerBatchPolling=false;
-   window.setTimeout(()=>refreshWorkerBatch(),1500);
+   if(passive){
+    // A page reload must not resume a preparing job via legacy /status.
+    setBatchBusy(false);
+    $('workerBatchStatus').textContent='前回のWorkerジョブは実行中として保存されています。自動再開しません。「進捗を再取得」で明示的に続行してください。';
+   }else{
+    setBatchBusy(true);
+    window.setTimeout(()=>refreshWorkerBatch(),1500);
+   }
   }else if(state.status==='needs_decision'){
    workerBatchPolling=false;setBatchBusy(true);
   }else if(state.status==='completed'){
@@ -1794,8 +1801,10 @@ async function refreshWorkerBatch(){
   }
  }catch(e){
   workerBatchPolling=false;
-  $('workerBatchStatus').textContent='状態確認を完了できません：'+e.message+
-   '。開始を再送せず「進捗を再取得」を押してください。';
+  $('workerBatchStatus').textContent=passive&&e.code==='not_found'
+   ?'このWorkerでは安全な状態照会を利用できません。自動再開せず、「進捗を再取得」で明示的に確認してください。'
+   :'状態確認を完了できません：'+e.message+
+    '。開始を再送せず「進捗を再取得」を押してください。';
   if(e.code==='not_found')setBatchBusy(false);
  }
 }
