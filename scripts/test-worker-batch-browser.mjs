@@ -181,6 +181,10 @@ try{
    await page.fill('#ssBridgeToken','intercepted-secret-only');
    await page.click('#ssLoadEvents');
    await page.click('#ssLoadSnapshot');
+   await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('一時停止'));
+   assert.equal(await page.locator('#workerBatchResume').isVisible(),false,
+    'passive reload cannot expose a resume button without explicit state refresh');
+   await page.click('#workerBatchRefresh');
    await page.locator('#workerBatchResume').waitFor({state:'visible'});
    assert.match(await page.locator('#workerBatchStatus').innerText(),/一時停止/);
    assert.equal(await page.locator('#workerBatchRun').isEnabled(),false);
