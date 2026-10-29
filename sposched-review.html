@@ -160,11 +160,11 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <p class="small">パスワードは初回接続時に必要です。通常は保存しません。タブ内での一時記憶は任意です。</p>
   <label class="field">接続先
    <select id="ssEnvironment" aria-label="SpoSched接続先">
-    <option value="production">本番SS（読み取りのみ・書き込み不可）</option>
+    <option value="production">本番SS（イベント単位の承認後のみ登録可）</option>
     <option value="staging">テストSS（ダミーデータへの手動書き込み）</option>
    </select>
   </label>
-  <p id="ssEnvironmentNote" class="small">本番環境から読み取ります。書き込み操作は利用できません。</p>
+  <p id="ssEnvironmentNote" class="small">本番の登録は、正式な団体・試合ID照合とイベント単位の承認が揃った場合だけ可能です。</p>
   <label class="field">SS連携用パスワード（BRIDGE_TOKEN）
     <input id="ssBridgeToken" type="password" name="ss-bridge-password" autocomplete="current-password" autocapitalize="off" spellcheck="false" placeholder="BRIDGE_TOKEN">
   </label>
@@ -2497,11 +2497,11 @@ $('ssEnvironment').addEventListener('change',()=>{
  statusSS($('ssEnvironment').value==='staging'
   ?reused?'テスト環境のパスワードをこのタブから再利用できます。イベントを取得してください。'
    :'テスト環境を選択しました。テスト用パスワードを入力してください。'
-  :reused?'本番（読み取り専用）のパスワードを再利用できます。'
-   :'本番（読み取り専用）に切り替えました。書き込み操作はありません。');
+  :reused?'本番の認証情報をこのタブで再利用できます。'
+   :'本番SSを選択しました。正式なイベント単位の書き込み承認がなければ登録できません。');
  $('ssEnvironmentNote').textContent=$('ssEnvironment').value==='staging'
   ?'TESTのみ書き込み可能。'
-  :'本番環境から読み取ります。書き込み操作は利用できません。';
+  :'本番の登録は、正式な団体・試合ID照合とイベント単位の承認が揃った場合だけ可能です。';
 });
 $('ssRememberTab').addEventListener('change',()=>{
  const store=tabStorage();
