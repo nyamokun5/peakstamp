@@ -1335,6 +1335,13 @@ function hideCompletionPanel(){
  $('ssResultPanel').dataset.eventId='';
  $('ssResultPanel').dataset.runId='';
 }
+function hasVerifiedCurrentCompletion(){
+ const panel=$('ssResultPanel');
+ if(panel.hidden||panel.dataset.eventId!==snapshot?.eventId||
+    panel.dataset.runId!=='worker:'+workerLatestState?.request_id)return false;
+ try{verifyCompletedWorkerSnapshot(workerLatestState,snapshot,snapshot);return true;}
+ catch{return false;}
+}
 function selectedSSDate(){
  const label=$('ssEventSelect').selectedOptions?.[0]?.textContent||'';
  return /^\d{4}-\d{2}-\d{2}/.exec(label)?.[0]||'';
@@ -1488,10 +1495,12 @@ function renderAutoSummary(){
   ['attention','waiting','duplicate','manual','patch','manual-ss'].includes(d.state));
  const firstPending=pendingReview.find(d=>
   d.state==='attention'||d.state==='waiting'||d.state==='manual-ss')||pendingReview[0];
- $('workerBatchJumpToGoal').hidden=!batchReadinessError||!firstPending;
+ const completedCurrent=hasVerifiedCurrentCompletion();
+ $('workerBatchJumpToGoal').hidden=completedCurrent||!batchReadinessError||!firstPending;
  $('workerBatchJumpToGoal').dataset.goalIndex=firstPending?.index??'';
  $('workerBatchReadiness').textContent=unresolved
   ?'⚠ 前回の未照合記録があります。先に書き込みなしで復旧してください。'
+  :completedCurrent?'✓ 現在の4試合は登録・照合済みです。再登録は不要です。'
   :previousWorkerJob?'このイベントのWorker登録記録があります。「進捗を再取得」で確認してください。'
   :batchReadinessError?'⚠ まだ登録できません：'+batchReadinessError+
     '。該当するゴール候補を確認してください。'
@@ -2346,7 +2355,9 @@ function syncFinishWinner(){
 function updateFlowGuide(){
  const test=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
  let step='STEP 1 / 2',message='SSに接続し、イベントを選んでください。',target='ssDirectPanel';
- if(test&&snapshot.matches.length===0){
+ if(test&&hasVerifiedCurrentCompletion()){
+  step='✓ 完了';message='4試合の登録・照合が完了しました。';target='ssResultPanel';
+ }else if(test&&snapshot.matches.length===0){
   step='試合枠なし';
   message='SSの試合が0件です。イベントを確認してください。';
   target='ssFixtureWarning';
