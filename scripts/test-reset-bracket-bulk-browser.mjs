@@ -64,6 +64,10 @@ try{
  assert.equal(await page.getByRole('button',{name:'この試合番号・新しい試合IDを確認する'}).count(),3);
  const priorReads=officialReads;
  await page.click('#quickResetBulkReview');
+ await page.waitForFunction(isCancel=>{
+  const text=document.getElementById('quickResetBulkStatus')?.textContent||'';
+  return isCancel?text.includes('キャンセル'):text.includes('3件の新しい試合番号');
+ },cancel);
  assert.equal(officialReads,priorReads+2,'reset review must read two official fresh snapshots');
  assert.equal(dialogs,1,'reset needs only one explicit approval');
  if(cancel){
