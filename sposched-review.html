@@ -200,6 +200,8 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  </div>
  <p class="step-help">AI提案とSS登録予定を確認してください。<strong>別チームの得点者・アシスト者はWorkerがその試合の助っ人として登録してから、ゴールとアシストを記録</strong>します。3位決定戦・決勝は準決勝の正式結果が確定してから登録します。得点チームが不明な場合だけ選択してください。</p>
  <p id="quickSummary" class="quick-summary" role="status" aria-live="polite"></p>
+ <button id="quickResetBulkReview" type="button" hidden>試合作り直し後のゴールをまとめて試合番号確認（書き込みなし）</button>
+ <p id="quickResetBulkStatus" class="small" role="status" aria-live="polite"></p>
  <div id="autoGoalDetails">
   <div id="quickGoals"></div>
   <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
@@ -390,6 +392,7 @@ import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeR
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy,retiredMatchRecoveryPolicy,archiveRetiredAttempt} from './sposched-write-journal.mjs?v=ss-recovery3';
 import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=helper-wait-side1';
+import {validateResetGoalRebinding} from './sposched-reset-fixture-review.mjs?v=reset-bulk1';
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
@@ -1010,12 +1013,49 @@ const quickPlayers=(team='')=>{
   Number(normalizeTeam(snapshot.playerTeam.get(b.value)||'')===normalizeTeam(team))-
   Number(normalizeTeam(snapshot.playerTeam.get(a.value)||'')===normalizeTeam(team)));
 };
+$('quickResetBulkReview').addEventListener('click',async()=>{
+ if(!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging'||
+    batchBusy||autoBusy||workerBatchPolling)return;
+ const eventId=snapshot.eventId,button=$('quickResetBulkReview');
+ const label=$('quickResetBulkStatus');
+ button.disabled=true;
+ label.textContent='SSの新しい4試合IDを二度取得し、変更がないか照合中…';
+ try{
+  const first=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+  const second=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+  if(snapshot?.eventId!==eventId||$('ssEnvironment').value!=='staging')
+   throw Error('確認中にTESTイベントが変更されました');
+  const checked=validateResetGoalRebinding(snapshot,first,rows);
+  validateResetGoalRebinding(first,second,rows);
+  if(!window.confirm('SSの新しい4試合IDが2回の再取得で一致しました。'+
+    checked.count+'件の動画ゴールの試合番号をまとめて再確認します。'+
+    '得点者・アシストは変更せず、TESTへも登録しません。続行しますか？')){
+   label.textContent='確認をキャンセルしました。TESTへの登録は行っていません。';
+   return;
+  }
+  for(const index of checked.indices){
+   const row=rows[index];
+   editQuickGoalField(second,row,'match',String(row.seq));
+  }
+  snapshot=second;
+  rebuild({preserveEdits:true});
+  $('quickResetBulkStatus').textContent=checked.count+
+   '件の新しい試合番号・IDを確認済み（書き込みなし）。'+
+   '得点者・アシストを確認してから、別のTEST登録ボタンで開始してください。';
+ }catch(e){
+  label.textContent='一括確認できません：'+e.message+
+   '。試合・得点を再取得するか個別に確認してください。送信はしていません。';
+ }finally{button.disabled=false}
+});
 function renderQuick(){
  resetFinish();
  const active=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
  $('quickPanel').hidden=!active;
  if(!active)return;
  const items=quickGoalDecisions(snapshot,rows);
+ const resetCount=rows.filter(r=>r.fixtureIdentityChanged===true).length;
+ $('quickResetBulkReview').hidden=resetCount===0||snapshot.matches.length!==4;
+ $('quickResetBulkReview').textContent='試合作り直し後の'+resetCount+'件をまとめて試合番号確認（書き込みなし）';
  const ready=items.filter(x=>x.state==='ready').length;
  const attention=items.filter(x=>x.state==='attention').length;
  const duplicates=items.filter(x=>x.state==='duplicate').length;
