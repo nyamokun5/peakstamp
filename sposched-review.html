@@ -399,11 +399,13 @@ import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 import {clearBridgeSession,restoreBridgeSession,rememberBridgeSession} from './sposched-bridge-session.mjs?v=bridge-tab1';
+import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
 let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='',manualGoals=[];
 let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='',previewOperationKey='';
+let ssConnectionRevision=0; // Invalidate pending SS GET requests on source/selection changes.
 let batchPrepared=null,batchBusy=false,recoveryBusy=false;
 let quickPrepared=null,quickSending=false;
 let autoTiming=null;
@@ -913,13 +915,19 @@ async function fetchSS(path) {
  const token = $('ssBridgeToken').value.trim();
  if(!token) throw Error('BRIDGE_TOKENを入力してください。');
  const env=$('ssEnvironment').value;
- const r = await fetch(selectedGateway() + path, {
+ const gateway=SS_GATEWAYS[env];
+ if(!gateway)throw Error('SSの接続先が不正です');
+ const requestScope={environment:env,token,revision:ssConnectionRevision};
+ const r = await fetch(gateway + path, {
   method:'GET',
   headers:{'X-SS-Bridge-Token':token},
   mode:'cors',
   cache:'no-store'
  });
  const data = await r.json();
+ // Reject responses from a prior environment or credential selection.
+ assertCurrentConnection(requestScope,{environment:$('ssEnvironment').value,
+  token:$('ssBridgeToken').value.trim(),revision:ssConnectionRevision});
  if(!r.ok){
   if(r.status===401||r.status===403)rejectRememberedBridge(env);
   throw Object.assign(Error(data?.error?.message||'SS API HTTP '+r.status),{httpStatus:r.status,code:data?.error?.code||'upstream_error'});
@@ -2448,6 +2456,7 @@ $('finishRecover').addEventListener('click',async()=>{
  }catch(e){$('finishStatus').textContent='照合できません：'+e.message+'。再送はしていません。'}finally{setBatchBusy(false)}
 });
 $('ssEnvironment').addEventListener('change',()=>{
+ ssConnectionRevision++;
  $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
  hideCompletionPanel();legacyStartedAt=null;legacyStartedEventId='';
  const reused=restoreBridgeInThisTab();
@@ -2467,6 +2476,7 @@ $('ssEnvironment').addEventListener('change',()=>{
   ?'TESTのみ書き込み可能。'
   :'本番環境から読み取ります。書き込み操作は利用できません。';
 });
+$('ssBridgeToken').addEventListener('input',()=>{ssConnectionRevision++;});
 $('ssRememberTab').addEventListener('change',()=>{
  const store=tabStorage();
  if(!$('ssRememberTab').checked){
@@ -2501,10 +2511,11 @@ $('ssLoadEvents').addEventListener('click',async()=>{
   $('ssSelectWrap').hidden=!select.options.length;
   $('ssLoadSnapshot').hidden=!select.options.length;
   statusSS(select.options.length+'件取得しました。日付を選択してください。');
- } catch(error){statusSS('取得失敗：'+error.message);}
+ } catch(error){if(error.code!=='stale_connection')statusSS('取得失敗：'+error.message);}
  finally{$('ssLoadEvents').disabled=false;}
 });
 $('ssEventSelect').addEventListener('change',()=>{
+ ssConnectionRevision++;
  hideCompletionPanel();legacyStartedAt=null;legacyStartedEventId='';
  snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;
  $('recoveryPanel').hidden=true;
@@ -2516,10 +2527,13 @@ $('ssEventSelect').addEventListener('change',()=>{
 $('ssLoadSnapshot').addEventListener('click',async()=>{
  const eventId=$('ssEventSelect').value;
  if(!SS_EVENT_ID.test(eventId)){statusSS('イベントを選択してください。');return;}
+ const requestRevision=ssConnectionRevision;
  $('ssLoadSnapshot').disabled=true;
  statusSS('SSの試合と登録済み得点を照合用に読み込み中…');
  try{
   const data=await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId));
+  if(requestRevision!==ssConnectionRevision||$('ssEventSelect').value!==eventId)
+   throw Object.assign(Error('イベント選択が変わりました。再取得してください。'),{code:'stale_connection'});
   // Built-in existing duplicate detector receives exactly this normalised shape.
   snapshot=normalizeSpoSnapshot(data);
   loadedFromStagingDirect=$('ssEnvironment').value==='staging';
@@ -2530,7 +2544,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   statusSS(snapshot.matches.length===0?
    '試合0件：このイベントには登録先の番号付き試合がありません。別イベントを選ぶか、SSに試合枠を作成してください。':
    (loadedFromStagingDirect?'テスト':'本番')+'読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
- }catch(error){statusSS('読み込み失敗：'+error.message);}
+ }catch(error){if(error.code!=='stale_connection')statusSS('読み込み失敗：'+error.message);}
  finally{$('ssLoadSnapshot').disabled=false;}
 });
 
