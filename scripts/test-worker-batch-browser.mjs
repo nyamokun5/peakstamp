@@ -26,7 +26,7 @@ let explicitlyRefreshedRunning=false;
 let pauses=0,resumes=0;
 let failFinalSnapshot=process.env.TEST_FINAL_SNAPSHOT_FAILURE==='1';
 let incompleteFinalSnapshot=failFinalSnapshot;
-let starts=0,decisions=0,statusCalls=0,inspectCalls=0,lastRequestId=null,step='idle',otherWrites=0;
+let starts=0,decisions=0,statusCalls=0,inspectCalls=0,gateAuditReads=0,lastRequestId=null,step='idle',otherWrites=0;
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 let dialogs=0;let cancelledResume=false;page.on('dialog',d=>{dialogs++;if(cancelFirstContinue&&!cancelledResume){cancelledResume=true;d.dismiss()}else d.accept()});
@@ -74,6 +74,9 @@ await page.route('**/*',async route=>{
   assert.equal(body.confirm,'TEST-ONLY BATCH RESUME');assert.equal(body.pause_id,'pause-receipt');
   assert.equal(body.cursor,4);step='needs_decision';data={status:'needs_decision'};
   if(loseResumeReply)return route.fulfill({status:503,json:{error:{message:'lost resume reply'}},headers:{'Access-Control-Allow-Origin':'*'}});
+ }else if(url.pathname==='/staging/status'){
+  gateAuditReads++;assert.ok(ids.includes(body.match_id));
+  data={environment:'STAGING ONLY',status:'verified',write_sent:false};
  }else if(url.pathname==='/staging/batch/status'||url.pathname==='/staging/batch/inspect'){
   const inspecting=url.pathname==='/staging/batch/inspect';
   if(inspecting)inspectCalls++;else statusCalls++;
@@ -143,6 +146,11 @@ try{
  assert.equal(await page.getByRole('button',{name:/試合番号・得点者・アシストを確認して進む/}).count(),0,
   'no redundant waiting-goal confirmation button');
  assert.equal(await page.locator('#workerBatchRun').isEnabled(),true);
+ await page.locator('#workerGateAudit').waitFor({state:'visible'});
+ await page.click('#workerGateAudit');
+ await page.waitForFunction(()=>document.getElementById('workerGateAuditStatus').textContent.includes('未確定送信なし'));
+ assert.equal(gateAuditReads,4,'one audit must check the four actual TEST match write gates');
+ assert.equal(otherWrites,0,'auditing must not mutate SpoSched');
  await page.click('#workerBatchRun');
  assert.equal(dialogs,0,'one reviewed TEST batch button requires no duplicate native confirm');
  if(reloadRunning){
