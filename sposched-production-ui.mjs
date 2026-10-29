@@ -77,9 +77,9 @@ export function installProductionUI({current,read,normalize,onComplete}){
    const x=await inspect();
    evidence=x;
    const goals=x.plan.operations.filter(o=>o.action==='create').length;
-   out.textContent='本番団体：'+x.teamId+'\\n開催日：'+x.date+
-    '\\nイベント：'+x.id+'\\n'+goals+'ゴール＋4試合の結果を登録予定\\n'+
-    x.matchIds.map((id,i)=>'#'+(i+1)+' '+id).join('\\n');
+   out.textContent='本番団体：'+x.teamId+'\n開催日：'+x.date+
+    '\nイベント：'+x.id+'\n'+goals+'ゴール＋4試合の結果を登録予定\n'+
+    x.matchIds.map((id,i)=>'#'+(i+1)+' '+id).join('\n');
    $('productionApproveWrap').hidden=false;
    status('本番の送信内容を確認しました。承認チェック後のみ送信できます。');
   }catch(e){out.textContent='確認未完了：'+e.message;status('本番への送信は行っていません。');}
