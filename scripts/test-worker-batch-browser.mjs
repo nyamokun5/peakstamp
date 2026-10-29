@@ -23,7 +23,7 @@ const reloadPaused=process.env.TEST_PAUSE_RELOAD==='1';
 let pauses=0,resumes=0;
 let failFinalSnapshot=process.env.TEST_FINAL_SNAPSHOT_FAILURE==='1';
 let incompleteFinalSnapshot=failFinalSnapshot;
-let starts=0,decisions=0,statusCalls=0,lastRequestId=null,step='idle',otherWrites=0;
+let starts=0,decisions=0,statusCalls=0,inspectCalls=0,lastRequestId=null,step='idle',otherWrites=0;
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 let dialogs=0;page.on('dialog',d=>{dialogs++;d.accept()});
@@ -71,12 +71,14 @@ await page.route('**/*',async route=>{
   assert.equal(body.confirm,'TEST-ONLY BATCH RESUME');assert.equal(body.pause_id,'pause-receipt');
   assert.equal(body.cursor,4);step='needs_decision';data={status:'needs_decision'};
   if(loseResumeReply)return route.fulfill({status:503,json:{error:{message:'lost resume reply'}},headers:{'Access-Control-Allow-Origin':'*'}});
- }else if(url.pathname==='/staging/batch/status'){
-  statusCalls++;
+ }else if(url.pathname==='/staging/batch/status'||url.pathname==='/staging/batch/inspect'){
+  const inspecting=url.pathname==='/staging/batch/inspect';
+  if(inspecting)inspectCalls++;else statusCalls++;
   assert.equal(body.event_id,E);
-  if(step==='running'&&!exercisePause)step='needs_decision';
+  if(step==='running'&&!exercisePause&&!inspecting)step='needs_decision';
   data={environment:'STAGING ONLY',event_id:E,request_id:lastRequestId,
    ...(exercisePause?{control_contract:'event-pause-v1',phase:'preparing',pause_requested:step==='paused',pause_id:step==='paused'?'pause-receipt':null}:{}),
+   ...(inspecting?{inspection_contract:'event-inspect-v1',inspection_only:true}:{}),
    status:step,cursor:step==='completed'?5:4,completed:step==='completed'?5:4,total:5,
    decision:step==='needs_decision'?{
     seq:4,match_id:ids[3],left_team:'チーム1',right_team:'チーム3',
@@ -153,6 +155,7 @@ try{
   assert.match(await page.locator('#workerBatchStatus').innerText(),/一時停止/);
   assert.equal(starts,1);assert.equal(pauses,1);assert.equal(resumes,0);
   if(reloadPaused){
+   const statusBeforeReload=statusCalls;
    await page.reload();
    await page.selectOption('#ssEnvironment','staging');
    await page.fill('#ssBridgeToken','intercepted-secret-only');
@@ -162,6 +165,8 @@ try{
    assert.match(await page.locator('#workerBatchStatus').innerText(),/一時停止/);
    assert.equal(await page.locator('#workerBatchRun').isEnabled(),false);
    assert.equal(starts,1,'reload must preserve the existing job instead of starting again');
+   assert.ok(inspectCalls>=1,'reload must use passive inspect');
+   assert.equal(statusCalls,statusBeforeReload,'page reload must never call active /status');
    assert.equal(pauses,1);assert.equal(resumes,0,'reload must not automatically resume');
   }
   await page.click('#workerBatchResume');
