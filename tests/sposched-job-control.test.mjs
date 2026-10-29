@@ -9,6 +9,11 @@ test('pause is bound to TEST event and stored job; old workers and production ca
   assert.throws(()=>jobControlPayload('pause',state,{...context,...change}));
  assert.throws(()=>jobControlPayload('pause',{...state,control_contract:null},context));
  assert.throws(()=>jobControlPayload('pause',{...state,pause_requested:true},context));
+ for(const blocked of [{inspection_only:true},{observation_only:true}]){
+  assert.throws(()=>jobControlPayload('pause',{...state,...blocked},context));
+  assert.throws(()=>jobControlPayload('resume',{...state,status:'paused',pause_id:'pause',...blocked},context));
+ }
+
 });
 test('resume requires safe paused preparing state and passes exact pause identity and cursor',()=>{
  const paused={...state,status:'paused',pause_id:'pause'};
