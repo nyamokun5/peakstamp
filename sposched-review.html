@@ -2471,6 +2471,17 @@ $('finishRecover').addEventListener('click',async()=>{
   $('finishStatus').textContent=state.status==='pending'?'送信結果を確定できません。再送せず管理者に確認してください。':'SSの最新状態を取得しました。書き込み・再送はしていません。';
  }catch(e){$('finishStatus').textContent='照合できません：'+e.message+'。再送はしていません。'}finally{setBatchBusy(false)}
 });
+const productionUI=installProductionUI({
+ current:()=>({active:loadedFromProductionDirect&&$('ssEnvironment').value==='production',
+  snapshot,rows,decisions:snapshot?quickGoalDecisions(snapshot,rows):[]}),
+ read:path=>{
+  if($('ssEnvironment').value!=='production'||!loadedFromProductionDirect)
+   throw Error('本番の公式データが読み込まれていません');
+  return fetchSS(path);
+ },
+ normalize:normalizeSpoSnapshot,
+ onComplete:next=>{snapshot=next;rebuild({preserveEdits:true});}
+});
 $('ssEnvironment').addEventListener('change',()=>{
  $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
  hideCompletionPanel();legacyStartedAt=null;legacyStartedEventId='';
