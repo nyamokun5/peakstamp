@@ -21,6 +21,7 @@ const loseResumeReply=process.env.TEST_RESUME_LOST_REPLY==='1';
 const losePauseReply=process.env.TEST_PAUSE_LOST_REPLY==='1';
 const reloadPaused=process.env.TEST_PAUSE_RELOAD==='1';
 const reloadRunning=process.env.TEST_RUNNING_RELOAD==='1';
+const cancelFirstContinue=process.env.TEST_CANCEL_RUNNING_CONTINUE==='1';
 let explicitlyRefreshedRunning=false;
 let pauses=0,resumes=0;
 let failFinalSnapshot=process.env.TEST_FINAL_SNAPSHOT_FAILURE==='1';
@@ -28,7 +29,7 @@ let incompleteFinalSnapshot=failFinalSnapshot;
 let starts=0,decisions=0,statusCalls=0,inspectCalls=0,lastRequestId=null,step='idle',otherWrites=0;
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
-let dialogs=0;page.on('dialog',d=>{dialogs++;d.accept()});
+let dialogs=0;let cancelledResume=false;page.on('dialog',d=>{dialogs++;if(cancelFirstContinue&&!cancelledResume){cancelledResume=true;d.dismiss()}else d.accept()});
 await page.route('**/*',async route=>{
  const url=new URL(route.request().url());
  if(url.host==='peakstamp.local'){
@@ -158,8 +159,16 @@ try{
   assert.equal(statusCalls,before,'running page reload must not resume through status polling');
   assert.equal(starts,1,'running page reload must not repeat start');
   assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
+  if(cancelFirstContinue){
+   const beforeCancelled=statusCalls;
+   await page.click('#workerBatchRefresh');
+   assert.equal(cancelledResume,true,'user must be able to decline TEST job continuation');
+   assert.equal(statusCalls,beforeCancelled,'cancelled continuation cannot call active /status');
+   assert.equal(starts,1,'cancelled continuation never resends the batch');
+  }
   explicitlyRefreshedRunning=true;
   await page.click('#workerBatchRefresh');
+  assert.ok(dialogs>=1,'running job continuation must require a visible confirmation');
  }
 
  if(exercisePause){
