@@ -207,7 +207,29 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
   <button id="quickEdit" type="button">詳細編集・手動追加・既存ゴール修正</button>
  </div>
- <h2 id="autoRegisterHeading">4. 確認済みのゴールと4試合をTESTへ登録</h2>
+ <section id="productionPanel" class="panel" hidden>
+ <h2>本番SS：確認した4試合を一括登録</h2>
+ <p class="step-help">本番団体・正式試合ID・リリース承認を読み取り専用で照合するまでは、本番には送信できません。</p>
+ <button id="productionCheck" type="button">本番団体・4試合・登録内容を確認（書き込みなし）</button>
+ <pre id="productionPlan" class="small" hidden></pre>
+ <label class="line" id="productionApproveWrap" hidden><input type="checkbox" id="productionApprove">
+  <strong>表示された本番団体・開催日・試合ID・登録内容を確認し、本番登録を承認します</strong>
+ </label>
+ <button id="productionStart" type="button" class="primary quick-main" disabled>本番SSに4試合を登録</button>
+ <button id="productionRefresh" type="button" hidden>保存済みジョブの進捗を確認（新規送信なし）</button>
+ <p id="productionStatus" class="small" role="status" aria-live="polite"></p>
+ <div id="productionDecision" hidden>
+  <p id="productionDecisionText" role="status"></p>
+  <label class="field">同点時の結果
+   <select id="productionWinner"><option value="">選択してください</option>
+    <option value="left">左チームの勝利</option><option value="right">右チームの勝利</option>
+    <option value="draw">引き分け（3位決定戦・決勝のみ）</option>
+   </select>
+  </label>
+  <button id="productionDecisionSend" type="button" class="primary">本番の結果を確定して続行</button>
+ </div>
+</section>
+<h2 id="autoRegisterHeading">4. 確認済みのゴールと4試合をTESTへ登録</h2>
  <p class="step-help">通常は下の<strong>「一覧の内容で4試合を登録（TEST）」</strong>だけを使います。従来方式は予備操作にまとめました。同じイベントで両方押さないでください。</p>
  <div id="autoPanel">
   <div id="autoOutline" aria-label="試合の登録予定"></div>
@@ -397,6 +419,7 @@ import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
+import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 import {clearBridgeSession,restoreBridgeSession,rememberBridgeSession} from './sposched-bridge-session.mjs?v=bridge-tab1';
 const $=id=>document.getElementById(id);
@@ -404,6 +427,7 @@ const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textCo
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
 let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='',manualGoals=[];
 let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='',previewOperationKey='';
+let loadedFromProductionDirect=false;
 let batchPrepared=null,batchBusy=false,recoveryBusy=false;
 let quickPrepared=null,quickSending=false;
 let autoTiming=null;
@@ -637,7 +661,7 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
  $('manualAddWrap').hidden=!(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&snapshot.matches.length);
  $('eventTitle').textContent=(snapshot.eventName||'イベント')+
   ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+'件 / 対象ゴール '+rows.length+'件';
- renderGoals();renderScores();renderQuick();renderFinish();
+ renderGoals();renderScores();renderQuick();renderFinish();productionUI.render();
 }
 function renderGoals(){
  $('goalRows').replaceChildren();
@@ -2453,7 +2477,7 @@ $('ssEnvironment').addEventListener('change',()=>{
  const reused=restoreBridgeInThisTab();
  $('ssSelectWrap').hidden=true;$('ssLoadSnapshot').hidden=true;
  $('ssEventSelect').replaceChildren();
- snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;
+ snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;loadedFromProductionDirect=false;$('productionPanel').hidden=true;
  $('recoveryPanel').hidden=true;
  $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
  document.body.classList.remove('detail-open');
@@ -2506,7 +2530,7 @@ $('ssLoadEvents').addEventListener('click',async()=>{
 });
 $('ssEventSelect').addEventListener('change',()=>{
  hideCompletionPanel();legacyStartedAt=null;legacyStartedEventId='';
- snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;
+ snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;loadedFromProductionDirect=false;$('productionPanel').hidden=true;
  $('recoveryPanel').hidden=true;
  $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
  document.body.classList.remove('detail-open');
@@ -2523,6 +2547,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   // Built-in existing duplicate detector receives exactly this normalised shape.
   snapshot=normalizeSpoSnapshot(data);
   loadedFromStagingDirect=$('ssEnvironment').value==='staging';
+  loadedFromProductionDirect=$('ssEnvironment').value==='production';
   manualGoals=loadedFromStagingDirect?
    restoreManualGoals(localStorage,'staging',snapshot.eventId):[];
   autoMustReload=false;$('autoConflict').hidden=true;
@@ -2543,7 +2568,7 @@ $('snapshotFile').addEventListener('change',async e=>{
 $('loadSnapshot').addEventListener('click',()=>{
  try{
   snapshot=normalizeSpoSnapshot(JSON.parse($('snapshotText').value));
-  loadedFromStagingDirect=false;manualGoals=[];
+  loadedFromStagingDirect=false;manualGoals=[];loadedFromProductionDirect=false;$('productionPanel').hidden=true;
   $('snapshotStatus').textContent='試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人';
   rebuild();
  }catch(error){$('snapshotStatus').textContent='読み込みエラー：'+error.message}
