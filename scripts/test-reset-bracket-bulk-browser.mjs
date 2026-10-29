@@ -55,6 +55,7 @@ try{
  await page.fill('#ssBridgeToken','mock-bridge-token');
  await page.click('#ssLoadEvents');
  await page.click('#ssLoadSnapshot');
+ await page.waitForFunction(()=>document.querySelectorAll('#quickGoals .quick-goal').length===3);
  assert.equal(await page.locator('#quickGoals .quick-goal').count(),3);
  assert.equal(await page.locator('#quickResetBulkReview').isVisible(),false);
  reset=true;

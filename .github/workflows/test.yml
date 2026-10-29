@@ -51,3 +51,5 @@ jobs:
           TEST_RESET_BULK_CANCEL=1 node scripts/test-reset-bracket-bulk-browser.mjs
           node scripts/test-pending-recovery-browser.mjs
           node scripts/test-retired-match-browser.mjs
+          node scripts/test-ss-connection-race-browser.mjs
+          node scripts/test-production-gate-browser.mjs

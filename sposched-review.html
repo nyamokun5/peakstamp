@@ -160,11 +160,11 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <p class="small">パスワードは初回接続時に必要です。通常は保存しません。タブ内での一時記憶は任意です。</p>
   <label class="field">接続先
    <select id="ssEnvironment" aria-label="SpoSched接続先">
-    <option value="production">本番SS（読み取りのみ・書き込み不可）</option>
+    <option value="production">本番SS（イベント単位の承認後のみ登録可）</option>
     <option value="staging">テストSS（ダミーデータへの手動書き込み）</option>
    </select>
   </label>
-  <p id="ssEnvironmentNote" class="small">本番環境から読み取ります。書き込み操作は利用できません。</p>
+  <p id="ssEnvironmentNote" class="small">本番の登録は、正式な団体・試合ID照合とイベント単位の承認が揃った場合だけ可能です。</p>
   <label class="field">SS連携用パスワード（BRIDGE_TOKEN）
     <input id="ssBridgeToken" type="password" name="ss-bridge-password" autocomplete="current-password" autocapitalize="off" spellcheck="false" placeholder="BRIDGE_TOKEN">
   </label>
@@ -207,7 +207,8 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
   <button id="quickEdit" type="button">詳細編集・手動追加・既存ゴール修正</button>
  </div>
- <h2 id="autoRegisterHeading">4. 確認済みのゴールと4試合をTESTへ登録</h2>
+ 
+<h2 id="autoRegisterHeading">4. 確認済みのゴールと4試合をTESTへ登録</h2>
  <p class="step-help">通常は下の<strong>「一覧の内容で4試合を登録（TEST）」</strong>だけを使います。従来方式は予備操作にまとめました。同じイベントで両方押さないでください。</p>
  <div id="autoPanel">
   <div id="autoOutline" aria-label="試合の登録予定"></div>
@@ -292,6 +293,28 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
    <button id="quickCancel" type="button">← 修正に戻る</button>
   </div>
  </details>
+</section>
+<section id="productionPanel" class="panel" hidden>
+ <h2>本番SS：確認した4試合を一括登録</h2>
+ <p class="step-help">本番団体・正式試合ID・リリース承認を読み取り専用で照合するまでは、本番には送信できません。</p>
+ <button id="productionCheck" type="button">本番団体・4試合・登録内容を確認（書き込みなし）</button>
+ <pre id="productionPlan" class="small" hidden></pre>
+ <label class="line" id="productionApproveWrap" hidden><input type="checkbox" id="productionApprove">
+  <strong>表示された本番団体・開催日・試合ID・登録内容を確認し、本番登録を承認します</strong>
+ </label>
+ <button id="productionStart" type="button" class="primary quick-main" disabled>本番SSに4試合を登録</button>
+ <button id="productionRefresh" type="button" hidden>保存済みジョブの進捗を確認（新規送信なし）</button>
+ <p id="productionStatus" class="small" role="status" aria-live="polite"></p>
+ <div id="productionDecision" hidden>
+  <p id="productionDecisionText" role="status"></p>
+  <label class="field">同点時の結果
+   <select id="productionWinner"><option value="">選択してください</option>
+    <option value="left">左チームの勝利</option><option value="right">右チームの勝利</option>
+    <option value="draw">引き分け（3位決定戦・決勝のみ）</option>
+   </select>
+  </label>
+  <button id="productionDecisionSend" type="button" class="primary">本番の結果を確定して続行</button>
+ </div>
 </section>
 <details id="individualFinishTools" class="help"><summary>試合を個別に終了する（例外時）</summary>
 <section class="panel" id="finishPanel" hidden>
@@ -397,6 +420,8 @@ import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
+import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
+import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 import {clearBridgeSession,restoreBridgeSession,rememberBridgeSession} from './sposched-bridge-session.mjs?v=bridge-tab1';
 const $=id=>document.getElementById(id);
@@ -404,6 +429,8 @@ const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textCo
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
 let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='',manualGoals=[];
 let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='',previewOperationKey='';
+let loadedFromProductionDirect=false;
+let ssConnectionRevision=0;
 let batchPrepared=null,batchBusy=false,recoveryBusy=false;
 let quickPrepared=null,quickSending=false;
 let autoTiming=null;
@@ -637,7 +664,7 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
  $('manualAddWrap').hidden=!(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&snapshot.matches.length);
  $('eventTitle').textContent=(snapshot.eventName||'イベント')+
   ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+'件 / 対象ゴール '+rows.length+'件';
- renderGoals();renderScores();renderQuick();renderFinish();
+ renderGoals();renderScores();renderQuick();renderFinish();productionUI.render();
 }
 function renderGoals(){
  $('goalRows').replaceChildren();
@@ -913,13 +940,18 @@ async function fetchSS(path) {
  const token = $('ssBridgeToken').value.trim();
  if(!token) throw Error('BRIDGE_TOKENを入力してください。');
  const env=$('ssEnvironment').value;
- const r = await fetch(selectedGateway() + path, {
+ const gateway=SS_GATEWAYS[env];
+ if(!gateway)throw Error('SSの接続先が不正です');
+ const requestScope={environment:env,token,revision:ssConnectionRevision};
+ const r = await fetch(gateway + path, {
   method:'GET',
   headers:{'X-SS-Bridge-Token':token},
   mode:'cors',
   cache:'no-store'
  });
  const data = await r.json();
+ assertCurrentConnection(requestScope,{environment:$('ssEnvironment').value,
+  token:$('ssBridgeToken').value.trim(),revision:ssConnectionRevision});
  if(!r.ok){
   if(r.status===401||r.status===403)rejectRememberedBridge(env);
   throw Object.assign(Error(data?.error?.message||'SS API HTTP '+r.status),{httpStatus:r.status,code:data?.error?.code||'upstream_error'});
@@ -2447,13 +2479,25 @@ $('finishRecover').addEventListener('click',async()=>{
   $('finishStatus').textContent=state.status==='pending'?'送信結果を確定できません。再送せず管理者に確認してください。':'SSの最新状態を取得しました。書き込み・再送はしていません。';
  }catch(e){$('finishStatus').textContent='照合できません：'+e.message+'。再送はしていません。'}finally{setBatchBusy(false)}
 });
+const productionUI=installProductionUI({
+ current:()=>({active:loadedFromProductionDirect&&$('ssEnvironment').value==='production',
+  snapshot,rows,decisions:snapshot?quickGoalDecisions(snapshot,rows):[]}),
+ read:path=>{
+  if($('ssEnvironment').value!=='production'||!loadedFromProductionDirect)
+   throw Error('本番の公式データが読み込まれていません');
+  return fetchSS(path);
+ },
+ normalize:normalizeSpoSnapshot,
+ onComplete:next=>{snapshot=next;rebuild({preserveEdits:true});}
+});
 $('ssEnvironment').addEventListener('change',()=>{
+ ssConnectionRevision++;
  $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
  hideCompletionPanel();legacyStartedAt=null;legacyStartedEventId='';
  const reused=restoreBridgeInThisTab();
  $('ssSelectWrap').hidden=true;$('ssLoadSnapshot').hidden=true;
  $('ssEventSelect').replaceChildren();
- snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;
+ snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;loadedFromProductionDirect=false;$('productionPanel').hidden=true;
  $('recoveryPanel').hidden=true;
  $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
  document.body.classList.remove('detail-open');
@@ -2461,12 +2505,13 @@ $('ssEnvironment').addEventListener('change',()=>{
  statusSS($('ssEnvironment').value==='staging'
   ?reused?'テスト環境のパスワードをこのタブから再利用できます。イベントを取得してください。'
    :'テスト環境を選択しました。テスト用パスワードを入力してください。'
-  :reused?'本番（読み取り専用）のパスワードを再利用できます。'
-   :'本番（読み取り専用）に切り替えました。書き込み操作はありません。');
+  :reused?'本番の認証情報をこのタブで再利用できます。'
+   :'本番SSを選択しました。正式なイベント単位の書き込み承認がなければ登録できません。');
  $('ssEnvironmentNote').textContent=$('ssEnvironment').value==='staging'
   ?'TESTのみ書き込み可能。'
-  :'本番環境から読み取ります。書き込み操作は利用できません。';
+  :'本番の登録は、正式な団体・試合ID照合とイベント単位の承認が揃った場合だけ可能です。';
 });
+$('ssBridgeToken').addEventListener('input',()=>{ssConnectionRevision++;});
 $('ssRememberTab').addEventListener('change',()=>{
  const store=tabStorage();
  if(!$('ssRememberTab').checked){
@@ -2501,12 +2546,13 @@ $('ssLoadEvents').addEventListener('click',async()=>{
   $('ssSelectWrap').hidden=!select.options.length;
   $('ssLoadSnapshot').hidden=!select.options.length;
   statusSS(select.options.length+'件取得しました。日付を選択してください。');
- } catch(error){statusSS('取得失敗：'+error.message);}
+ } catch(error){if(error.code!=='stale_connection')statusSS('取得失敗：'+error.message);}
  finally{$('ssLoadEvents').disabled=false;}
 });
 $('ssEventSelect').addEventListener('change',()=>{
+ ssConnectionRevision++;
  hideCompletionPanel();legacyStartedAt=null;legacyStartedEventId='';
- snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;
+ snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;loadedFromProductionDirect=false;$('productionPanel').hidden=true;
  $('recoveryPanel').hidden=true;
  $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
  document.body.classList.remove('detail-open');
@@ -2516,13 +2562,17 @@ $('ssEventSelect').addEventListener('change',()=>{
 $('ssLoadSnapshot').addEventListener('click',async()=>{
  const eventId=$('ssEventSelect').value;
  if(!SS_EVENT_ID.test(eventId)){statusSS('イベントを選択してください。');return;}
+ const requestRevision=ssConnectionRevision;
  $('ssLoadSnapshot').disabled=true;
  statusSS('SSの試合と登録済み得点を照合用に読み込み中…');
  try{
   const data=await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId));
+  if(requestRevision!==ssConnectionRevision||$('ssEventSelect').value!==eventId)
+   throw Object.assign(Error('読み込み中に接続先が変わりました'),{code:'stale_connection'});
   // Built-in existing duplicate detector receives exactly this normalised shape.
   snapshot=normalizeSpoSnapshot(data);
   loadedFromStagingDirect=$('ssEnvironment').value==='staging';
+  loadedFromProductionDirect=$('ssEnvironment').value==='production';
   manualGoals=loadedFromStagingDirect?
    restoreManualGoals(localStorage,'staging',snapshot.eventId):[];
   autoMustReload=false;$('autoConflict').hidden=true;
@@ -2530,7 +2580,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   statusSS(snapshot.matches.length===0?
    '試合0件：このイベントには登録先の番号付き試合がありません。別イベントを選ぶか、SSに試合枠を作成してください。':
    (loadedFromStagingDirect?'テスト':'本番')+'読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
- }catch(error){statusSS('読み込み失敗：'+error.message);}
+ }catch(error){if(error.code!=='stale_connection')statusSS('読み込み失敗：'+error.message);}
  finally{$('ssLoadSnapshot').disabled=false;}
 });
 
@@ -2543,7 +2593,7 @@ $('snapshotFile').addEventListener('change',async e=>{
 $('loadSnapshot').addEventListener('click',()=>{
  try{
   snapshot=normalizeSpoSnapshot(JSON.parse($('snapshotText').value));
-  loadedFromStagingDirect=false;manualGoals=[];
+  loadedFromStagingDirect=false;manualGoals=[];loadedFromProductionDirect=false;$('productionPanel').hidden=true;
   $('snapshotStatus').textContent='試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人';
   rebuild();
  }catch(error){$('snapshotStatus').textContent='読み込みエラー：'+error.message}
