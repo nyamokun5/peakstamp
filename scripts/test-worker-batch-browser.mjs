@@ -184,13 +184,14 @@ try{
    await page.waitForFunction(()=>document.getElementById('workerBatchStatus').textContent.includes('一時停止'));
    assert.equal(await page.locator('#workerBatchResume').isVisible(),false,
     'passive reload cannot expose a resume button without explicit state refresh');
+   assert.equal(statusCalls,statusBeforeReload,'page reload must never call active /status');
    await page.click('#workerBatchRefresh');
    await page.locator('#workerBatchResume').waitFor({state:'visible'});
    assert.match(await page.locator('#workerBatchStatus').innerText(),/一時停止/);
    assert.equal(await page.locator('#workerBatchRun').isEnabled(),false);
    assert.equal(starts,1,'reload must preserve the existing job instead of starting again');
    assert.ok(inspectCalls>=1,'reload must use passive inspect');
-   assert.equal(statusCalls,statusBeforeReload,'page reload must never call active /status');
+   assert.equal(statusCalls,statusBeforeReload+1,'explicit refresh must call /status exactly once');
    assert.equal(pauses,1);assert.equal(resumes,0,'reload must not automatically resume');
   }
   await page.click('#workerBatchResume');
