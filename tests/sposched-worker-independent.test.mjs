@@ -14,8 +14,8 @@ const make=(count,overrides={})=>normalizeSpoSnapshot({event_id:eventId,
  })),
  roster:{White:['Aki','Sora'],Red:['Mika']}});
 const build=(snapshot,rows=[],decisions=[])=>prepareWorkerIndependent({snapshot,rows,decisions,requestId});
-test('SS one, three, five and eight independent fixtures use the exact official UUIDs',()=>{
- for(const n of [1,3,5,8]){
+test('SS one, two, three, five and eight independent fixtures use the exact official UUIDs',()=>{
+ for(const n of [1,2,3,5,8]){
   const s=make(n),p=build(s);
   assert.equal(p.layout_mode,'independent-fixtures-v1');assert.equal(p.fixture_count,n);
   assert.equal(p.operations.length,n);
@@ -212,4 +212,44 @@ test('local-only reattachment demands two authentic completed fixtures, no uncer
  assert.ok(backup>0&&pointer>backup,'backup must be written BEFORE changing pointer');
  assert.match(listener,/snapKey\(fresh\)!==initial/);
  assert.match(listener,/journalKey\(first\)!==journalKey\(second\)/);
+});
+
+test('two teams can play one official game or repeated fixtures with distinct IDs and a confirmed scorer',()=>{
+ const single=make(1);
+ const p1=build(single);
+ assert.equal(p1.fixture_count,1);
+ assert.deepEqual(p1.operations,[{seq:1,action:'finish',winner:'auto',expected_match_id:mid(1)}]);
+
+ const repeat=make(2,{1:{title:'第1試合 チーム1 vs チーム2'},
+  2:{title:'第2試合 チーム1 vs チーム2',left_team:'White',right_team:'Red'}});
+ const row={include:true,seq:2,scorer:'Aki',team:'White',assistMode:'none',assist:'',goal:{}};
+ const plan=build(repeat,[row],[{state:'ready'}]);
+ assert.equal(plan.fixture_count,2);
+ assert.deepEqual(plan.operations.map(x=>[x.action,x.seq,x.expected_match_id]),[
+  ['finish',1,mid(1)],['create',2,mid(2)],['finish',2,mid(2)]
+ ]);
+ assert.equal(plan.operations[1].scorer,'Aki');
+ assert.equal(plan.operations[1].team,'White');
+ // An identical team pairing does NOT allow reusing the first match UUID.
+ assert.throws(()=>build(make(2,{2:{match_id:mid(1)}})),/試合|ID|公式/);
+ assert.throws(()=>build(make(2,{2:{status:'finished'}})),/#2 終了済み/);
+ assert.throws(()=>build(make(2,{2:{left_score:1}})),/スコア|ゴール|試合/);
+ assert.throws(()=>build(make(2,{2:{goals:[{goal_id:mid(77)}]}})),/ゴール|試合/);
+ const wrong={...row,seq:1};
+ const swapped=build(repeat,[wrong],[{state:'ready'}]);
+ assert.equal(swapped.operations[0].expected_match_id,mid(1));
+});
+
+test('two-team completion verifies every current official match independently, not just team names',()=>{
+ const fresh=make(2,{1:{status:'finished'},2:{status:'finished'}});
+ const state={event_id:eventId,status:'completed',layout_mode:'independent-fixtures-v1',
+  fixture_count:2,fixture_ids:{1:mid(1),2:mid(2)}};
+ assert.equal(verifyIndependentWorkerCompletion(state,fresh,make(2)),true);
+ for(const wrong of [
+  make(2,{1:{status:'finished'},2:{status:'scheduled'}}),
+  make(2,{1:{status:'finished'},2:{status:'finished',match_id:mid(11)}}),
+  make(1,{1:{status:'finished'}})
+ ])assert.throws(()=>verifyIndependentWorkerCompletion(state,wrong,make(2)));
+ assert.throws(()=>verifyIndependentWorkerCompletion({...state,fixture_ids:{1:mid(2),2:mid(1)}},
+  fresh,make(2)));
 });
