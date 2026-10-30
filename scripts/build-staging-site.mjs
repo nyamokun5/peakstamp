@@ -56,6 +56,13 @@ export async function buildStagingSite(destination=path.join(root,'dist')){
   "export function installProductionUI(){return {render(){const p=document.getElementById('productionPanel');if(p)p.hidden=true;},refresh(){}};}\n");
  await writeFile(path.join(destination,'_headers'),
   '/*\n  X-Robots-Tag: noindex, nofollow\n  X-Content-Type-Options: nosniff\n');
+ // Public build identity: proves which exact STAGING commit Cloudflare Pages
+ // published, without embedding any token or other secret in the website.
+ const releaseId=String(process.env.CF_PAGES_COMMIT_SHA||process.env.GITHUB_SHA||'').trim();
+ await writeFile(path.join(destination,'staging-build.json'),
+  JSON.stringify({environment:'STAGING ONLY',
+   commit_sha:/^[0-9a-f]{40}$/i.test(releaseId)?releaseId.toLowerCase():null})+'\n');
+
  const built=await readFile(path.join(destination,'sposched-review.html'),'utf8');
  if(built.includes(prodHost))throw Error('Unsafe TEST build: production URL leaked');
  return destination;
