@@ -1451,6 +1451,28 @@ function autoWinnerFor(seq){
 let autoBusy=false,autoProblemSeq=null,autoUnsafeStop=false,autoMustReload=false;
 let workerBatchPolling=false,workerRestoredEvent='',workerLatestState=null;
 let workerCompletionProof=null;
+// Separate event + request scoped marker: manual TEST drafts are acknowledged
+// only AFTER a completed Worker job and fresh official fixture readback.
+const workerManualGoalPendingKey=(eventId,requestId)=>
+ 'peakstamp:test:worker-manual-goals:'+eventId+':'+requestId;
+function completeVerifiedManualWorkerGoals(state){
+ if(!workerCompletionVerified(state,snapshot)||
+    state.layout_mode!=='independent-fixtures-v1')return false;
+ const key=workerManualGoalPendingKey(state.event_id,state.request_id);
+ const raw=localStorage.getItem(key);
+ if(!raw)return false;
+ const ids=JSON.parse(raw);
+ if(!Array.isArray(ids)||ids.length<1||ids.length>20||
+    ids.some(id=>!/^([0-9a-f]{8}-)([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id))||
+    new Set(ids).size!==ids.length)throw Error('手動ゴールの保存済みIDが不正です。自動で消しません');
+ const inEvent=new Map(manualGoals.map(g=>[g.id,g]));
+ if(ids.some(id=>!inEvent.has(id)))throw Error('手動ゴールの下書きを確認できません。登録を繰り返さないでください');
+ const completed=markManualCompleted(manualGoals,ids.map(id=>'SS手動入力::'+id));
+ storeManualGoals(localStorage,'staging',state.event_id,completed);
+ manualGoals=completed;
+ localStorage.removeItem(key);
+ return true;
+}
 function workerFixtureFingerprint(current){
  if(!Array.isArray(current?.matches))return '';
  return JSON.stringify(current.matches.map(m=>[m.seq,m.matchId,m.status]).sort((a,b)=>a[0]-b[0]));
@@ -2088,6 +2110,9 @@ async function refreshWorkerBatch({passive=false}={}){
      fixtureFingerprint:workerFixtureFingerprint(fresh)};
   }
   showWorkerBatchState(state);
+  if(state.status==='completed'&&workerCompletionVerified(state,snapshot)){
+   if(completeVerifiedManualWorkerGoals(state))rebuild({preserveEdits:true});
+  }
   if(state.layout_mode!=='independent-fixtures-v1'&&hasRecreatedBracket(state,snapshot)&&
     localStorage.getItem(workerBatchStorageKey(eventId))===state.request_id){
    workerBatchPolling=false;
@@ -2327,10 +2352,14 @@ $('workerBatchRun').addEventListener('click',async()=>{
   // explicitly labeled TEST button. One intentional click is approval;
   // an extra browser confirmation dialog would only duplicate that approval.
   const goalCount=operations.operations.filter(x=>x.action==='create').length;
+  const manualIds=isIndependent?rows.filter(r=>r.include&&r.goal?.manual===true)
+   .map(r=>r.goal.id):[];
   if(isIndependent) await assertIndependentStagingWorkerReady();
   // Store the key BEFORE the network request, so a lost response never
   // enables an accidental second job with a new request ID.
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
+   if(manualIds.length)localStorage.setItem(
+    workerManualGoalPendingKey(eventId,requestId),JSON.stringify(manualIds));
    localStorage.setItem(key,requestId);
    hideCompletionPanel();
   $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋'+(operations.fixture_count||4)+'試合）…';
@@ -2343,7 +2372,9 @@ $('workerBatchRun').addEventListener('click',async()=>{
    // Validation failures definitely did not run the job. Transport errors
    // are ambiguous and the stored request ID must be retained.
    if(['invalid_plan','invalid_event','unsupported_media_type','batch_gate_unavailable'].includes(error.code)){
-    localStorage.removeItem(key);localStorage.removeItem(workerTimeKey(eventId));setBatchBusy(false);
+    localStorage.removeItem(key);
+    localStorage.removeItem(workerManualGoalPendingKey(eventId,requestId));
+    localStorage.removeItem(workerTimeKey(eventId));setBatchBusy(false);
    }
    throw error;
   }
