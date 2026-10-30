@@ -1097,13 +1097,13 @@ function renderQuick(){
  $('quickPanel').hidden=!active;
  if(!active)return;
  // Reuse the exact TEST AI/roster review. Production write controls remain separate.
- $('quickEnvironmentBadge').textContent=staging?'TEST ONLY':'本番・照合';
+ $('quickEnvironmentBadge').textContent=staging?'テストSS':'本番・未送信';
  $('quickTestHelp').hidden=!staging;
  $('quickProductionHelp').hidden=!production;
  $('autoRegisterHeading').hidden=!staging;
  $('autoRegisterHelp').hidden=!staging;
  $('quickIndividualTestTools').hidden=!staging;
- $('quickEdit').textContent=staging?'詳細編集・手動追加・既存ゴール修正':'詳細編集・選手名簿を確認';
+ $('quickEdit').textContent=staging?'詳細編集・手動追加・既存ゴール修正':'詳しく修正する';
  const items=quickGoalDecisions(snapshot,rows);
  const resetCount=rows.filter(r=>r.fixtureIdentityChanged===true).length;
  $('quickResetBulkReview').hidden=!staging||resetCount===0||snapshot.matches.length!==4;
@@ -1116,13 +1116,11 @@ function renderQuick(){
  const manualPending=manual.filter(x=>!x.registeredInSS).length;
  const deferredAssists=items.filter(x=>x.state==='ready'&&x.deferredAssist);
  const other=items.length-ready-attention-duplicates-waiting-manual.length;
- $('quickSummary').textContent=(production?'本番SS・照合のみ（登録は別途承認）　｜　':'')+(attention||duplicates?
-   '先に確認が必要：'+(attention+duplicates)+'件。下の候補を修正してください。':
-   'ゴール候補 '+items.length+'件を確認してください。')+
-   '　｜　'+(production?'名簿照合済み ':'登録可能 ')+ready+'件・対戦待ち（自動登録予定） '+waiting+'件'+
-   (manual.length?'・SSで手動登録する助っ人得点候補 '+manual.length+'件（未登録 '+manualPending+'件）':'')+
-   (deferredAssists.length?'・後からSSで追記するアシスト '+deferredAssists.length+'件':'')+
-   (other?'・対象外 '+other+'件':'');
+ $('quickSummary').textContent='要確認 '+(attention+duplicates)+'件　｜　'+
+   (production?'確認済み ':'登録可能 ')+ready+'件　｜　対戦待ち '+waiting+'件'+
+   (manualPending?'　｜　SSで手動登録 '+manualPending+'件':'')+
+   (deferredAssists.length?'　｜　アシスト追記 '+deferredAssists.length+'件':'')+
+   (other?'　｜　対象外 '+other+'件':'');
  const container=$('quickGoals');container.replaceChildren();
  const noFixtures=snapshot.matches.length===0;
  $('ssFixtureWarning').hidden=!noFixtures;
@@ -1289,7 +1287,7 @@ function renderQuick(){
  renderAutoSummary();
  $('quickPreview').disabled=batchBusy||ready===0;
  if(production){
-  $('quickStatus').textContent='AI提案とSS公式名簿の照合・修正はこの画面で可能です。本番への送信は下の本番専用パネルで別途承認するまで行いません。';
+  $('quickStatus').textContent=attention||duplicates?'「要確認」のゴールを修正してください。':'';
  }else if(!quickPrepared){
   $('quickStatus').textContent=attention||duplicates
    ?'要確認 '+(attention+duplicates)+'件を直すと登録に進めます。'
@@ -2413,8 +2411,8 @@ function updateFlowGuide(){
   const items=quickGoalDecisions(snapshot,rows);
   const uncertain=items.filter(x=>['attention','duplicate'].includes(x.state)).length;
   step='STEP 2 / 2';
-  message=uncertain?'AIとSS名簿の照合で要修正 '+uncertain+'件。候補を確認してください。':
-   'AI提案とSS名簿の照合結果を確認してください（本番送信は別途承認）。';
+  message=uncertain?'要確認 '+uncertain+'件。ゴールを修正してください。':
+   'ゴールを確認して、下の登録に進んでください。';
   target='quickPanel';
  }else if(test&&hasVerifiedCurrentCompletion()){
   step='✓ 完了';message='4試合の登録・照合が完了しました。';target='ssResultPanel';
@@ -2536,10 +2534,11 @@ $('ssEnvironment').addEventListener('change',()=>{
   ?reused?'テスト環境のパスワードをこのタブから再利用できます。イベントを取得してください。'
    :'テスト環境を選択しました。テスト用パスワードを入力してください。'
   :reused?'本番の認証情報をこのタブで再利用できます。'
-   :'本番SSを選択しました。正式なイベント単位の書き込み承認がなければ登録できません。');
+   :'本番SSを選択しました。ターゲットイベントを読み込んでください。');
+ $('ssModeBadge').textContent=$('ssEnvironment').value==='staging'?'テストSS':'本番SS';
  $('ssEnvironmentNote').textContent=$('ssEnvironment').value==='staging'
   ?'TESTのみ書き込み可能。'
-  :'本番の登録は、正式な団体・試合ID照合とイベント単位の承認が揃った場合だけ可能です。';
+  :'ターゲットに設定されたイベントだけ登録できます。';
 });
 $('ssBridgeToken').addEventListener('input',()=>{ssConnectionRevision++;});
 $('ssRememberTab').addEventListener('change',()=>{
@@ -2593,7 +2592,7 @@ $('ssEventSelect').addEventListener('change',()=>{
  $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
  document.body.classList.remove('detail-open');
  touch();updateFlowGuide();
- statusSS('イベントが変わりました。「選んだイベントの試合・得点を読み込む」を押してください。');
+ statusSS('イベントが変わりました。「このイベントを読み込む」を押してください。');
 });
 $('ssLoadSnapshot').addEventListener('click',async()=>{
  const eventId=$('ssEventSelect').value;
@@ -2615,7 +2614,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   rebuild({preserveEdits:true});
   statusSS(snapshot.matches.length===0?
    '試合0件：このイベントには登録先の番号付き試合がありません。別イベントを選ぶか、SSに試合枠を作成してください。':
-   (loadedFromStagingDirect?'テスト':'本番')+'読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
+   '読み込み完了：試合 '+snapshot.matches.length+'件。ゴールを確認してください。');
  }catch(error){if(error.code!=='stale_connection')statusSS('読み込み失敗：'+error.message);}
  finally{$('ssLoadSnapshot').disabled=false;}
 });
