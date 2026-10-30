@@ -5,7 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=guided1';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=reviewagain1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=firsttap1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
@@ -733,6 +733,7 @@ function row(item, index) {
   let seekDrag=null;
   let playVersion=0;
   let initialReplayPrimed=false;
+  let initialReplayPending=false;
   let replayListeners=[];
   const setReplayStatus=message=>{
     if(!replayStatus)return;
@@ -749,6 +750,7 @@ function row(item, index) {
       frameWatchId=null;
       playVersion++;
       initialReplayPrimed=false;
+      initialReplayPending=false;
       for(const [event,handler] of replayListeners)replayVideo.removeEventListener(event,handler);
       replayListeners=[];
       // Detach the player but retain its media source for the next scene.
@@ -931,7 +933,9 @@ function row(item, index) {
       replayListeners.push([event,handler]);
     };
     on('loadedmetadata',()=>{
-      if(initialReplayPrimed){
+      if(initialReplayPending){
+        initialReplayPending=false;
+        if(!initialReplayPrimed)return;
         // The first play() was requested inside the actual Replay tap.
         // Seek on metadata WITHOUT pause/replay: Safari would lose activation.
         initialReplayPrimed=false;
@@ -954,6 +958,7 @@ function row(item, index) {
       // New MOVs were previously first played from loadedmetadata, an async
       // callback outside the trusted iPhone touch gesture. Prime play NOW;
       // loadedmetadata will seek while this play request is still active.
+      initialReplayPending=true;
       initialReplayPrimed=true;
       const attempt=++playVersion;
       try{
