@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {normalizeSpoSnapshot} from '../sposched-review-core.mjs';
-import {prepareWorkerIndependent,verifyIndependentWorkerCompletion} from '../sposched-worker-independent.mjs';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth} from '../sposched-worker-independent.mjs';
 const eventId='01234567-89ab-4cde-8abc-0123456789ab',requestId='11234567-89ab-4cde-8abc-0123456789ab';
 const mid=i=>'21234567-89ab-4cde-8abc-'+String(i).padStart(12,'0');
 const make=(count,overrides={})=>normalizeSpoSnapshot({event_id:eventId,
@@ -56,4 +57,23 @@ test('independent completion requires the same event and all fresh exact finishe
  for(const bad of [make(2),make(3,{2:{status:'waiting'}}),
    make(3,{2:{status:'finished',match_id:mid(21)}})])
   assert.throws(()=>verifyIndependentWorkerCompletion(state,bad,s));
+});
+
+test('independent TEST batch fails closed when live Worker is stale or not write-ready',()=>{
+ const good={service:'shoot-sunday-sync-staging',write_mode:'test-only',
+  batch_job_configured:true,independent_batch_contract:'independent-fixtures-v1'};
+ assert.equal(assertIndependentWorkerHealth(good),true);
+ for(const changes of [
+  {independent_batch_contract:undefined},{independent_batch_contract:'durable-four-match-v1'},
+  {service:'shoot-sunday-sync'},{write_mode:'read-only'},{batch_job_configured:false}
+ ])assert.throws(()=>assertIndependentWorkerHealth({...good,...changes}),/TEST Worker/);
+ const ui=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ const listener=ui.indexOf("$('workerBatchRun').addEventListener('click'");
+ assert.ok(listener>=0);
+ const rest=ui.slice(listener,ui.indexOf("let workerControlBusy=false;",listener));
+ const capability=rest.indexOf('if(isIndependent) await assertIndependentStagingWorkerReady();');
+ const localMarker=rest.indexOf('localStorage.setItem(key,requestId);');
+ const mutation=rest.indexOf("postStaging('/staging/batch/start',operations)");
+ assert.ok(capability>=0&&localMarker>capability&&mutation>localMarker,
+  'GET-only capability preflight must precede the local marker and mutation');
 });
