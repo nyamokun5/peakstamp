@@ -363,6 +363,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <p>元動画がなくてもTEST用のゴールを作れます。追加後に試合番号・得点者・アシスト・得点チームを選び、「このゴールの試合・選手を確認した」にチェックしてください。独立試合ならWorkerがゴール登録→試合終了を一括処理します。4試合トーナメントなど一部の形式では個別登録のみです。本番には送信しません。</p>
   <button id="manualAddGoal" class="primary" type="button">＋ 新規ゴールを手動追加</button>
   <p id="manualAddStatus" class="small" role="status" aria-live="polite"></p>
+  <p id="manualEventScope" class="small" role="status"></p>
  </div>
  <nav id="goalJump" class="line" aria-label="照合するゴールを切り替え"></nav>
  <div id="goalRows"></div>
@@ -686,6 +687,14 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
  $('manualAddStatus').textContent=verifiedRoster
   ?'✓ SS公式の最新チーム編成を取得しました。試合ごとの該当チームの選手だけ選択できます。'
   :'⚠ 最新のSSチーム分けを検証できていません。古い名簿での手動ゴール登録は禁止です。TEST Workerの最新版を確認してください。';
+ // Make the selected TEST event and actual match teams visible beside the
+ // manual goal button. A previous event can otherwise look like a stale roster.
+ const fixtureTeams=[...new Set(snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam])
+  .filter(Boolean))];
+ $('manualEventScope').textContent='登録先のSSイベント：'+(snapshot.eventName||'名称未設定')+
+  '（'+(selectedSSDate()||'日付未取得')+'）／'+snapshot.matches.length+
+  '試合／対戦チーム：'+(fixtureTeams.join('・')||'未確定')+
+  '／イベントID：'+snapshot.eventId;
  $('eventTitle').textContent=(snapshot.eventName||'イベント')+
   ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+
   '件 / 対象ゴール '+rows.length+'件 / 名簿 '+snapshot.players.length+'名 / '+
