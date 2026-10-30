@@ -321,7 +321,7 @@ test('video-free Worker blocks an otherwise confirmed draft from a stale or unve
  const choices=quickGoalDecisions(current,[row]);
  assert.equal(build(current,[row],choices).operations.filter(op=>op.action==='create').length,1);
  const old={...current,rosterSource:''};
- assert.throws(()=>build(old,[row],choices),/現在のSSチーム編成/);
+ assert.throws(()=>build(old,[row],choices),/現在の(?:SSチーム編成|チーム名簿)/);
 });
 
 test('missing current-roster proof blocks even zero-goal independent match finishes',()=>{
