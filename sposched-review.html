@@ -1982,7 +1982,7 @@ function showWorkerBatchState(state){
   (state.observation_only===true?'【TEST確認専用・新規登録停止中】 ':'')+(
   state.status==='completed'?(workerCompletionVerified(state,snapshot)
     ?'✓ Workerで全操作の登録・照合が完了しました（SS公式の全試合ID・終了状態を再確認済み）。'+progress
-    :'⚠ Workerの操作履歴のみ完了。'+
+    :'⚠ Workerの操作履歴は完了していますが、現在のSS公式試合ID・終了状態はまだ照合できていません。'+
      (diagnosis?.detail||'SS公式の試合ID・終了状態を再取得して確認できません。')+
      ' 再登録しないでください。'+progress):
   state.status==='paused'?'一時停止しました。送信済みの操作を繰り返さず、確認済みの続きから再開できます。'+progress:
