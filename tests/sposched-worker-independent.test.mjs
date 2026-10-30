@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeSpoSnapshot} from '../sposched-review-core.mjs';
-import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth} from '../sposched-worker-independent.mjs';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration} from '../sposched-worker-independent.mjs';
 const eventId='01234567-89ab-4cde-8abc-0123456789ab',requestId='11234567-89ab-4cde-8abc-0123456789ab';
 const mid=i=>'21234567-89ab-4cde-8abc-'+String(i).padStart(12,'0');
 const make=(count,overrides={})=>normalizeSpoSnapshot({event_id:eventId,
@@ -85,4 +85,22 @@ test('independent TEST batch fails closed when live Worker is stale or not write
  const mutation=rest.indexOf("postStaging('/staging/batch/start',operations)");
  assert.ok(capability>=0&&localMarker>capability&&mutation>localMarker,
   'GET-only capability preflight must precede the local marker and mutation');
+});
+
+test('retired four-match completed job is shown as separate new 3-match generation',()=>{
+ const fresh=make(3);
+ const old={event_id:eventId,status:'completed',layout_mode:'four-knockout',
+  fixture_count:4,fixture_ids:{1:mid(11),2:mid(12),3:mid(13),4:mid(14)}};
+ assert.equal(hasDifferentIndependentGeneration(old,fresh),true);
+ assert.equal(isRetiredIndependentJob(old,fresh),true);
+ assert.equal(isRetiredIndependentJob({...old,status:'running'},fresh),false);
+ assert.equal(isRetiredIndependentJob({...old,fixture_ids:{1:mid(11),2:mid(12)}},fresh),false);
+ assert.equal(hasDifferentIndependentGeneration({...old,fixture_ids:{1:mid(11),2:mid(12)}},fresh),true,
+  'missing IDs must still suppress misleading four-match completion assertion');
+ assert.equal(isRetiredIndependentJob({...old,fixture_ids:{...old.fixture_ids,3:mid(2)}},fresh),false);
+ assert.equal(isRetiredIndependentJob(old,make(3,{2:{left_score:1}})),false);
+ assert.equal(isRetiredIndependentJob(old,make(3,{2:{status:'finished'}})),false);
+ assert.equal(isRetiredIndependentJob(old,make(3,{2:{title:'#2 決勝'}})),false);
+ assert.equal(hasDifferentIndependentGeneration(old,make(4,{1:{title:'#1 準決勝'},2:{title:'#2 準決勝'},
+  3:{title:'#3 ３位決定戦',status:'waiting'},4:{title:'#4 決勝',status:'waiting'}})),false);
 });
