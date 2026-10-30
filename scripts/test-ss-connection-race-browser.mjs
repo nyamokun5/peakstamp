@@ -61,7 +61,7 @@ try{
  await page.click('#ssLoadEvents');
  await page.locator('#ssLoadSnapshot').waitFor({state:'visible'});
  await page.click('#ssLoadSnapshot');
- await page.waitForFunction(()=>document.getElementById('ssDirectStatus').textContent.includes('テスト読み込み成功'));
+ await page.waitForFunction(()=>document.getElementById('ssDirectStatus').textContent.includes('読み込み完了：試合'));
  assert.equal(stagingSnapshots,1);
  assert.equal(writes,0);
  assert.deepEqual(errors,[]);
