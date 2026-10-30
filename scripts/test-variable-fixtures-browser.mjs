@@ -16,7 +16,16 @@ const match=(seq,left,right,title,status='scheduled')=>({
  status,left_score:0,right_score:0,goals:[]
 });
 const scenarios=[
- {label:'external one match',fixtures:[match(1,'Team1','External','対外試合')],automatic:false},
+ {label:'two-team one official match',fixtures:[
+   match(1,'Team1','Team2','#1 対外試合')],automatic:false,draw:true},
+ {label:'two-team two games same pair',fixtures:[
+   match(1,'Team1','Team2','#1 紅白戦'),
+   match(2,'Team1','Team2','#2 紅白戦')],automatic:false,draw:true},
+ {label:'two-team three games repeated pairing',fixtures:[
+   match(1,'Team1','Team2','#1 紅白戦'),
+   match(2,'Team1','Team2','#2 紅白戦'),
+   match(3,'Team1','Team2','#3 紅白戦')],automatic:false,draw:true},
+  {label:'external one match',fixtures:[match(1,'Team1','External','対外試合')],automatic:false},
  {label:'scrimmage repeated pair',fixtures:Array.from({length:5},(_,i)=>
    match(i+1,'Team1','Team2','#'+(i+1)+' 紅白戦')),automatic:false},
  {label:'three-team league',fixtures:[
