@@ -1101,14 +1101,17 @@ function renderQuick(){
  const officialLayout=describeOfficialFixtures(snapshot);
  const officialRoot=$('ssFixtureOverview');officialRoot.replaceChildren();
  officialRoot.append(node('strong',fixtureSummaryLabel(officialLayout)));
- officialRoot.append(node('p','登録先 '+officialLayout.count+'試合｜対戦確定済み '+officialLayout.ready+
+ officialRoot.append(node('p','対戦確定済み '+officialLayout.ready+
   '試合｜対戦待ち '+officialLayout.waiting+'試合｜終了済み '+officialLayout.finished+'試合','small'));
+ const officialDetails=node('details');
+ officialDetails.append(node('summary','SS公式の試合番号と対戦を確認（'+officialLayout.count+'試合）'));
  for(const m of officialLayout.matches){
   const state=m.status==='finished'?'✓ 終了済み':
    m.status==='waiting'||!m.matchId||!m.leftTeam||!m.rightTeam?'⏳ 対戦確定待ち':
    '登録先あり';
-  officialRoot.append(node('p',matchSlotLabel(m)+'：'+state,'small'));
+  officialDetails.append(node('p',matchSlotLabel(m)+'：'+state,'small'));
  }
+ officialRoot.append(officialDetails);
  if(staging){
   $('autoRegisterHeading').textContent=officialLayout.automaticFourMatch
    ?'4. 確認済みのゴールと4試合をTESTへ登録':'4. SSに登録された試合へゴールを反映';
