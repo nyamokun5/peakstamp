@@ -420,7 +420,7 @@ import {jobControlPayload} from './sposched-job-control.mjs?v=pause1';
 import {auditCurrentTestFixtureGates} from './sposched-gate-audit.mjs?v=gate-audit1';
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
-import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=composite-tatsuo1';
+import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=roster-live-fixture1';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
@@ -681,8 +681,15 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
  $('reviewArea').hidden=quickMode&&!(preserveEdits&&wasEditing);
  renderPendingPanel();
  $('manualAddWrap').hidden=!(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&snapshot.matches.length);
+ const verifiedRoster=snapshot.rosterSource==='official-current-event-teams';
+ $('manualAddGoal').disabled=!verifiedRoster;
+ $('manualAddStatus').textContent=verifiedRoster
+  ?'✓ SS公式の最新チーム編成を取得しました。試合ごとの該当チームの選手だけ選択できます。'
+  :'⚠ 最新のSSチーム分けを検証できていません。古い名簿での手動ゴール登録は禁止です。TEST Workerの最新版を確認してください。';
  $('eventTitle').textContent=(snapshot.eventName||'イベント')+
-  ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+'件 / 対象ゴール '+rows.length+'件';
+  ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+
+  '件 / 対象ゴール '+rows.length+'件 / 名簿 '+snapshot.players.length+'名 / '+
+  (verifiedRoster?'SS最新チーム分け確認済み':'チーム分け未検証');
  renderGoals();renderScores();renderQuick();renderFinish();productionUI.render();updateFlowGuide();
 }
 function renderGoals(){
@@ -691,6 +698,12 @@ function renderGoals(){
  const options=[...snapshot.players].map(name=>({value:name,label:name+'　'+(snapshot.playerTeam.get(name)||'')}));
  for(const [i,row] of rows.entries()){
   const g=row.goal,article=node('article','','grid-item');
+  const matched=snapshot.matches.find(m=>m.seq===Number(row.seq));
+  const scorerOptions=g.manual?fixturePlayerOptions(snapshot,row.seq)
+   .map(name=>({value:name,label:name+'　'+(snapshot.playerTeam.get(name)||'')})):options;
+  const assistTeam=g.manual?(row.team||snapshot.playerTeam.get(row.scorer)||''):'';
+  const assistOptions=g.manual?fixturePlayerOptions(snapshot,row.seq,assistTeam)
+   .map(name=>({value:name,label:name+'　'+(snapshot.playerTeam.get(name)||'')})):options;
   article.id='review-goal-'+(i+1);
   const jump=node('button','ゴール '+(i+1)+(row.include?'':'（除外）'));
   jump.type='button';
@@ -730,17 +743,58 @@ function renderGoals(){
   const bar=node('div','','line');bar.append(include,node('span','このゴールをShoot Sundayへ登録・修正する（要確認）'));article.append(h,quote,guess,bar);
   const wrap=node('div','','fields');
   const matchSelect=select(snapshot.matches.map(m=>({value:m.seq,label:matchSlotLabel(m)})),row.seq);
-  matchSelect.addEventListener('change',()=>{row.seq=Number(matchSelect.value)||null;row.updateGoalId='';invalidate('match')});
-  const scorerSelect=select(options,row.scorer,'得点者を選択（AI: '+(g.scorer||'—')+'）');
-  scorerSelect.addEventListener('change',()=>{row.scorer=scorerSelect.value;invalidate('scorer')});
+  matchSelect.addEventListener('change',()=>{
+   row.seq=Number(matchSelect.value)||null;row.updateGoalId='';
+   if(g.manual){
+    const available=fixturePlayerOptions(snapshot,row.seq);
+    if(row.scorer&&!available.includes(row.scorer)){row.scorer='';row.team='';}
+    if(row.assist&&!available.includes(row.assist))row.assist='';
+    const current=snapshot.matches.find(m=>m.seq===row.seq);
+    if(row.team&&!([current?.leftTeam,current?.rightTeam]
+     .some(t=>normalizeTeam(t)===normalizeTeam(row.team))))row.team='';
+   }
+   invalidate('match');
+   if(g.manual)renderGoals();
+  });
+  const scorerSelect=select(scorerOptions,row.scorer,
+   g.manual?'先に試合を選び得点者を選択':'得点者を選択（AI: '+(g.scorer||'—')+'）');
+  scorerSelect.addEventListener('change',()=>{
+   row.scorer=scorerSelect.value;
+   if(g.manual){
+    const team=snapshot.playerTeam.get(row.scorer)||'';
+    const current=snapshot.matches.find(m=>m.seq===Number(row.seq));
+    row.team=current&&[current.leftTeam,current.rightTeam]
+     .some(t=>normalizeTeam(t)===normalizeTeam(team))?team:'';
+    if(row.assist&&normalizeTeam(snapshot.playerTeam.get(row.assist))!==normalizeTeam(row.team))
+     row.assist='';
+   }
+   invalidate('scorer');
+   if(g.manual)renderGoals();
+  });
   const assistMode=select([{value:'named',label:'あり（選手を選択）'},{value:'none',label:'なし'},{value:'unknown',label:'不明（要確認）'}],row.assistMode);
-  const assistSelect=select(options,row.assist,'アシスト者を選択（AI: '+(g.assist||'—')+'）');
+  const assistSelect=select(assistOptions,row.assist,
+   g.manual?'同じ得点チームのアシスト者を選択':'アシスト者を選択（AI: '+(g.assist||'—')+'）');
   assistSelect.disabled=row.assistMode!=='named';
-  assistMode.addEventListener('change',()=>{row.assistMode=assistMode.value;updateGuestFields();invalidate('assist')});
+  assistMode.addEventListener('change',()=>{
+   row.assistMode=assistMode.value;updateGuestFields();invalidate('assist');
+   if(g.manual)renderGoals();
+  });
   assistSelect.addEventListener('change',()=>{row.assist=assistSelect.value;invalidate('assist')});
-  const teamSelect=select([...new Set(snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]).filter(Boolean))]
+  const teamChoices=g.manual?(matched?[matched.leftTeam,matched.rightTeam].filter(Boolean):[])
+   :snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]).filter(Boolean);
+  const teamSelect=select([...new Set(teamChoices)]
    .map(t=>({value:t,label:t})),row.team,'得点チームを選択');
-  teamSelect.addEventListener('change',()=>{row.team=teamSelect.value;invalidate('team')});
+  teamSelect.addEventListener('change',()=>{
+   row.team=teamSelect.value;
+   if(g.manual){
+    if(row.scorer&&normalizeTeam(snapshot.playerTeam.get(row.scorer))!==normalizeTeam(row.team))
+     row.scorer='';
+    if(row.assist&&normalizeTeam(snapshot.playerTeam.get(row.assist))!==normalizeTeam(row.team))
+     row.assist='';
+   }
+   invalidate('team');
+   if(g.manual)renderGoals();
+  });
   wrap.append(field('試合番号',matchSelect),field('得点者',scorerSelect),field('アシスト',assistMode),
    field('アシスト者',assistSelect),field('得点チーム',teamSelect));
   article.append(wrap);
@@ -2472,6 +2526,10 @@ $('autoReload').addEventListener('click',()=>{
 
 $('manualAddGoal').addEventListener('click',()=>{
  if(batchBusy||!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ if(snapshot.rosterSource!=='official-current-event-teams'){
+  $('manualAddStatus').textContent='最新のSSチーム編成を取得できていないため追加を停止しました。TEST Workerの更新を確認してイベントを再読み込みしてください。';
+  return;
+ }
  if(unsentManualGoals(manualGoals).length>=20){
   $('manualAddStatus').textContent='手動ゴールが20件に達しました。先に登録または不要分を削除してください。';return;
  }
@@ -2721,7 +2779,7 @@ function updateFlowGuide(){
    'ゴールを確認して、下の登録に進んでください。';
   target='quickPanel';
  }else if(test&&hasVerifiedCurrentCompletion()){
-  step='✓ 完了';message='4試合の登録・照合が完了しました。';target='ssResultPanel';
+  step='✓ 完了';message=snapshot.matches.length+'試合の登録・照合が完了しました。';target='ssResultPanel';
  }else if(test&&snapshot.matches.length===0){
   step='試合枠なし';
   message='SSの試合が0件です。イベントを確認してください。';
@@ -2922,7 +2980,9 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   rebuild({preserveEdits:true});
   statusSS(snapshot.matches.length===0?
    '試合0件：このイベントには登録先の番号付き試合がありません。別イベントを選ぶか、SSに試合枠を作成してください。':
-   '読み込み完了：試合 '+snapshot.matches.length+'件。ゴールを確認してください。');
+   '読み込み完了：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+
+   '名。'+(snapshot.rosterSource==='official-current-event-teams'
+    ?'SS公式の最新チーム分けを取得しました。':'旧形式の名簿のため手動ゴール追加を停止しています。'));
  }catch(error){if(error.code!=='stale_connection')statusSS('読み込み失敗：'+error.message);}
  finally{$('ssLoadSnapshot').disabled=false;}
 });

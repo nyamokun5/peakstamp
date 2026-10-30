@@ -177,6 +177,8 @@ export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
   // It never bypasses the same signed Worker + official UUID verification.
   const manual=row.goal?.manual===true;
   if(manual){
+   if(snapshot.rosterSource!=='official-current-event-teams')
+    fail('ゴール'+(i+1)+'：現在のSSチーム編成を確認できません。TEST Workerの最新版で読み込み直してください');
    if(row.goal.source?.name!=='SS手動入力'||!UUID.test(row.goal.id||'')||
       row.goal.sent!==false||decision?.state!=='manual')
     fail('ゴール'+(i+1)+'：未送信のSS手動ゴールであることを確認してください');

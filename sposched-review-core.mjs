@@ -58,14 +58,42 @@ export function normalizeSpoSnapshot(raw){
   }
  }
  const roster=obj.roster&&typeof obj.roster==='object'?obj.roster:{};
+ const rosterSource=string(obj.roster_source);
+ const authoritative=rosterSource==='official-current-event-teams';
+ // Historical goal scorers may have changed teams or left this event.
+ // Show them in registered goal readback, NOT as selectable current players.
+ const rosterNames=Object.values(roster).flatMap(x=>
+  Array.isArray(x)?x.map(string):[]).filter(Boolean);
  const players=[...new Set([
-  ...Object.values(roster).flatMap(x=>Array.isArray(x)?x.map(string):[]),
-  ...matches.flatMap(m=>m.existingGoals.flatMap(g=>[g.scorer,g.assist]))
+  ...rosterNames,
+  ...(authoritative?[]:matches.flatMap(m=>
+   m.existingGoals.flatMap(g=>[g.scorer,g.assist])))
  ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
  const playerTeam=new Map();
- for(const [team,names] of Object.entries(roster))for(const name of Array.isArray(names)?names:[])
-  playerTeam.set(string(name),string(team));
- return {eventId,eventName,matches,players,roster,playerTeam};
+ for(const [team,names] of Object.entries(roster))for(const rawName of Array.isArray(names)?names:[]){
+  const player=string(rawName),teamName=string(team);
+  if(!player)continue;
+  if(authoritative&&playerTeam.has(player)&&
+     normalizeTeam(playerTeam.get(player))!==normalizeTeam(teamName))
+   throw Error('現在のSS名簿で同名選手の所属チームが重複しています。登録を停止してください');
+  playerTeam.set(player,teamName);
+ }
+ return {eventId,eventName,matches,players,roster,playerTeam,rosterSource};
+}
+/** Select ONLY players assigned to the official numbered fixture's sides.
+ * Never leak historical, unassigned, or unrelated third-team players into the
+ * new-goal scorer/assist controls. Missing fixture => no selectable players.
+ */
+export function fixturePlayerOptions(snapshot,seq,team=''){
+ const match=snapshot?.matches?.find(m=>m.seq===number(seq));
+ if(!match)return [];
+ const sides=[match.leftTeam,match.rightTeam].map(normalizeTeam).filter(Boolean);
+ const chosen=normalizeTeam(team);
+ if(chosen&&!sides.includes(chosen))return [];
+ return (snapshot.players||[]).filter(player=>{
+  const membership=normalizeTeam(snapshot.playerTeam?.get(player)||'');
+  return Boolean(membership&&sides.includes(membership)&&(!chosen||membership===chosen));
+ });
 }
 export function selectPlayerCandidates(text,snapshot,team='',limit=7){
  // Use the SAME Japanese/romanized roster inference as the compact review.
@@ -361,6 +389,22 @@ export function preserveReviewRows(nextRows,priorRows,{
   const match=snapshot?.matches?.find(m=>m.seq===Number(row.seq));
   row.updateGoalId=match?.existingGoals?.some(g=>g.id===old.updateGoalId)
    ?old.updateGoalId:'';
+  // Preserve work-in-progress edits, NEVER restore a stale player from an
+  // earlier team assignment when the same event is refreshed.
+  if(row.goal?.manual&&snapshot?.rosterSource==='official-current-event-teams'){
+   const allowed=fixturePlayerOptions(snapshot,row.seq);
+   const inSide=t=>match&&[match.leftTeam,match.rightTeam]
+    .some(x=>normalizeTeam(x)===normalizeTeam(t));
+   if(row.scorer&&!allowed.includes(row.scorer)){row.scorer='';row.team='';}
+   if(row.team&&!inSide(row.team))row.team='';
+   if(row.scorer&&row.team&&
+      normalizeTeam(snapshot.playerTeam.get(row.scorer))!==normalizeTeam(row.team)){
+    row.scorer='';row.assist='';row.team='';
+   }
+   if(row.assist&&(!row.team||
+      !fixturePlayerOptions(snapshot,row.seq,row.team).includes(row.assist)))
+    row.assist='';
+  }
   return row;
  });
 }
@@ -383,6 +427,15 @@ export function validateGoalRow(row,snapshot){
   return '得点チームがこの試合の対戦チームと異なります';
  if(row.assistMode==='named'&&row.scorer===row.assist)
   return '得点者とアシストが同一です';
+ if(row.goal?.manual&&snapshot.rosterSource==='official-current-event-teams'){
+  const members=fixturePlayerOptions(snapshot,row.seq);
+  if(!members.includes(row.scorer))return '得点者が現在の試合チームに所属していません';
+  if(normalizeTeam(snapshot.playerTeam.get(row.scorer))!==normalizeTeam(team))
+   return '得点者と現在のSS得点チームが一致しません';
+  if(row.assistMode==='named'&&
+     !fixturePlayerOptions(snapshot,row.seq,team).includes(row.assist))
+   return 'アシスト者が現在の得点チームに所属していません';
+ }
  return null;
 }
 /** Goals already registered IN Shoot Sunday for the selected official match.
