@@ -68,6 +68,13 @@ export function normalizeSpoSnapshot(raw){
  return {eventId,eventName,matches,players,roster,playerTeam};
 }
 export function selectPlayerCandidates(text,snapshot,team='',limit=7){
+ // Use the SAME Japanese/romanized roster inference as the compact review.
+ // The old detail-editor lookup only compared literal characters, so a
+ // spoken "Tatsuo" failed to find the official roster name "達夫" (and vice
+ // versa), even when the compact AI panel suggested the right member.
+ // Candidate ranking is just a suggestion; no match becomes human-confirmed.
+ const phonetic=scoredPlayerCandidates(text,snapshot,team,limit);
+ if(phonetic.length)return phonetic;
  const term=normalizePerson(text);
  if(!term)return [];
  const targetTeam=normalizeTeam(team);
