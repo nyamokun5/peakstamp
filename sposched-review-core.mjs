@@ -167,6 +167,9 @@ const knownKanjiReadings={
  '達夫':'tatsuo','達雄':'tatsuo','竜夫':'tatsuo','龍夫':'tatsuo',
  '大野':'ohno'
 };
+// Known surname readings are used only to recognize the structure of an AI
+// spoken full name; they do NOT establish a player's official surname.
+const knownSurnameReadings=new Set(Object.values(knownKanjiReadings).filter(x=>x!=='tatsuo'));
 const kanaMap={
  'あ':'a','い':'i','う':'u','え':'e','お':'o',
  'か':'ka','き':'ki','く':'ku','け':'ke','こ':'ko',
@@ -253,6 +256,16 @@ export function scoredPlayerCandidates(text,snapshot,team='',limit=7){
   const norm=normalizePerson(name);
   const components=person.parts;
   let score=0,why='';
+  // An AI full-name call such as "Sato Tatsuo" can have only its given
+  // name ("達夫") recorded in the official SS roster. Prefer that DISTINCTIVE
+  // given-name reading over other members who merely share "Sato".
+  // Never synthesize a surname or ID from this hint. This narrow rule
+  // requires a known surname + Tatsuo, with a single-component roster name.
+  const spokenTatsuo=input.parts.length===2&&input.parts.includes('tatsuo')&&
+   input.parts.some(part=>part!=='tatsuo'&&knownSurnameReadings.has(part));
+  if(spokenTatsuo&&components.length===1&&components[0]==='tatsuo'){
+   score=118;why='達夫の読みが一致（姓は名簿に未記載・要確認）';
+  }
   // Full-name aliases work in both surname-given and given-surname order.
   if(input.joined&&
     (input.joined===person.joined||
@@ -279,6 +292,11 @@ export function scoredPlayerCandidates(text,snapshot,team='',limit=7){
 export function suggestedPlayer(text,snapshot,team=''){
  const candidates=scoredPlayerCandidates(text,snapshot,team);
  const top=candidates[0],next=candidates[1];
+ // If the roster has two people with the same Tatsuo given-name reading,
+ // the missing surname is NOT enough to identify which one scored.
+ if(top?.why==='達夫の読みが一致（姓は名簿に未記載・要確認）'&&
+    candidates.filter(x=>aliasName(x.name).parts.includes('tatsuo')).length>1)
+  return {name:'',confidence:'none',candidates};
  // Require an individual, convincing match. No player is marked confirmed.
  if(!top||top.score<88||(next&&top.score-next.score<15))
   return {name:'',confidence:'none',candidates};

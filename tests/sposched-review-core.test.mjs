@@ -253,6 +253,46 @@ test('Tatsuo and 達夫 match in BOTH quick AI review and detailed roster candid
   'matching two Tatsuo members must leave selection to a human');
 });
 
+test('iPhone regression: AI Sato Tatsuo picks SS 達夫, not Akihiro Sato or satoshi',()=>{
+ // Reproduce the October 30 screenshot: AI hears a full name but the official
+ // roster stores the scorer as the given name alone.
+ const snap=normalizeSpoSnapshot({
+  event_id:'screenshot-regression',event:'Shoot Sunday',
+  matches:[{seq:1,left_team:'Team1',right_team:'Team2',goals:[]}],
+  roster:{Team1:['達夫','Akihiro Sato','satoshi'],Team2:['別選手']}
+ });
+ for(const spoken of ['Sato Tatsuo','Tatsuo Sato','佐藤 達夫']){
+  const list=scoredPlayerCandidates(spoken,snap,'Team1');
+  assert.equal(list[0].name,'達夫',spoken+' must rank the actual Tatsuo ahead of the Sato surname');
+  assert.equal(list[1].name,'Akihiro Sato',spoken+' should retain the second surname-only hint');
+  assert.ok(list[0].score-list[1].score>=15,spoken+' needs a convincing lead over surname-only candidates');
+  assert.equal(suggestedPlayer(spoken,snap,'Team1').name,'達夫');
+  assert.equal(selectPlayerCandidates(spoken,snap,'Team1')[0].name,'達夫');
+  const row=prepareGoalRows({goals:[{
+   id:'goaltime-343',source:{name:'IMG_0286.MOV'},
+   goalTimeSeconds:343,matchSeq:1,scorer:spoken,assistStatus:'none'
+  }]},snap)[0];
+  assert.equal(row.scorer,'達夫');
+  assert.equal(row.scorerGuess.confidence,'high');
+  assert.equal(row.team,'Team1');
+  assert.equal(row.goal.scorer,spoken,'never rewrite the original AI transcription');
+  assert.equal(row.confirmed,false,'inference must not approve writes');
+ }
+});
+test('Sato Tatsuo remains unselected with multiple plausible Tatsuo players',()=>{
+ const snap=normalizeSpoSnapshot({
+  event_id:'same-given-name',event:'Shoot Sunday',
+  matches:[{seq:1,left_team:'Team1',right_team:'Team2',goals:[]}],
+  roster:{Team1:['達夫','Akihiro Sato'],Team2:['Tatsuo Tanaka']}
+ });
+ const ranked=scoredPlayerCandidates('Sato Tatsuo',snap);
+ assert.equal(ranked[0].name,'達夫');
+ const picked=suggestedPlayer('Sato Tatsuo',snap);
+ assert.equal(picked.name,'','same given-name reading across two people is ambiguous');
+ assert.equal(picked.confidence,'none');
+ assert.ok(picked.candidates.some(x=>x.name==='達夫'));
+ assert.ok(picked.candidates.some(x=>x.name==='Tatsuo Tanaka'));
+});
 test('Japanese kana and kanji AI phrases suggest probable roster members but never ambiguous surnames',()=>{
  const snap=normalizeSpoSnapshot(event());
  assert.equal(spokenNameTokens('高崎さん').includes('takasaki'),true);
