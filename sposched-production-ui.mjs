@@ -48,13 +48,14 @@ export function installProductionUI({current,read,normalize,onComplete}){
   $('autoRegisterHeading').hidden=Boolean(x);
   evidence=null;
   $('productionPlan').hidden=true;
+  $('productionAudit').hidden=true;
   $('productionStart').disabled=true;
   $('productionDecision').hidden=true;
   if(!x)return;
   const prior=localStorage.getItem(key(x.snapshot.eventId));
   $('productionRefresh').hidden=!prior;
-  status(prior?'前回の本番登録ジョブがあります。再登録せず保存済みの進捗を確認します。':
-   '現在のSSターゲットのみ本番登録できます。公式データと登録内容を確認してください。');
+  status(prior?'前回の登録があります。「登録の進捗を確認」を押してください。':
+   'まず①で登録内容を確認してください。');
   if(prior&&restoredEvent!==x.snapshot.eventId){
    restoredEvent=x.snapshot.eventId;
    Promise.resolve().then(refresh);
@@ -72,11 +73,12 @@ export function installProductionUI({current,read,normalize,onComplete}){
    const x=await inspect();
    evidence=x;
    const goals=x.plan.operations.filter(o=>o.action==='create').length;
-   out.textContent='本番団体：'+x.teamId+'\n開催日：'+x.date+
-    '\nイベント：'+x.id+'\n'+goals+'ゴール＋4試合の結果を登録予定\n'+
-    x.matchIds.map((id,i)=>'#'+(i+1)+' '+id).join('\n');
+   out.textContent='開催日：'+x.date+'\n登録予定：ゴール'+goals+'件、4試合の結果';
+   $('productionAuditIds').textContent='団体ID：'+x.teamId+'\nイベントID：'+x.id+'\n'+
+    x.matchIds.map((id,i)=>'第'+(i+1)+'試合：'+(id||'対戦確定後に発行')).join('\n');
+   $('productionAudit').hidden=false;
    $('productionStart').disabled=false;
-   status('現在のターゲットと登録内容の照合が完了しました。登録ボタンで送信できます。');
+   status('確認完了。②で本番登録できます。');
   }catch(e){out.textContent='確認未完了：'+e.message;status('本番への送信は行っていません。');}
   finally{busy=false;$('productionCheck').disabled=false;}
  });
@@ -114,8 +116,10 @@ export function installProductionUI({current,read,normalize,onComplete}){
       result.request_id!==requestId||result.inspection_only!==true)
     throw Error('保存済みの本番ジョブの識別情報が不一致');
    lastJob=result;
-   status('本番ジョブ：'+result.status+' / '+result.completed+'/'+result.total+'操作'+
-    (result.status==='blocked'?'。結果不明につき再送信禁止':''));
+   const stateLabel={running:'登録中',completed:'登録完了',blocked:'要確認',
+    needs_decision:'勝者の指定が必要',paused:'一時停止'}[result.status]||result.status;
+   status(stateLabel+'：'+result.completed+'/'+result.total+'件'+
+    (result.status==='blocked'?'。再送せず進捗を確認してください。':''));
    $('productionDecision').hidden=result.status!=='needs_decision';
    if(result.status==='needs_decision'){
     const d=result.decision;
@@ -132,7 +136,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
     const newest=normalize(await read('/snapshot?event_id='+encodeURIComponent(id)));
     verifyCompletedWorkerSnapshot(result,newest,x.snapshot);
     onComplete(newest);
-    status('✓ 本番4試合の終了と試合IDを公式SSデータで照合しました。再送信はしません。');
+    status('✓ 4試合の登録と終了をSSで確認しました。');
    }
    if(result.status==='running')window.setTimeout(refresh,1500);
   }catch(e){status('本番ジョブ確認未了：'+e.message+'。新規送信せず進捗を確認してください。');}
