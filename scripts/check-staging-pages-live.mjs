@@ -35,6 +35,16 @@ async function checkedFetch(url,options={}){
  throw Object.assign(Error('Too many same-origin redirects from '+original.pathname),{permanent_redirect:true});
 }
 async function once(){
+ const manifestResponse=await checkedFetch(SITE+'/staging-build.json',{
+  cache:'no-store',signal:AbortSignal.timeout(12000)});
+ if(manifestResponse.status!==200)
+  throw Error('Cloudflare Pages STAGING is outdated: staging-build.json HTTP '+manifestResponse.status);
+ const manifest=await manifestResponse.json();
+ assert.equal(manifest.environment,'STAGING ONLY');
+ const expected=process.env.GITHUB_SHA||'';
+ if(manifest.commit_sha && expected && manifest.commit_sha!==expected)
+  throw Error('Cloudflare Pages STAGING is outdated: published '+manifest.commit_sha+
+   ' but GitHub staging is '+expected);
  const payload={};
  for(const [file,expected] of MUST_HAVE){
   if(!payload[file]){
