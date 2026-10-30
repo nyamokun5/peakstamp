@@ -1435,9 +1435,30 @@ function autoWinnerFor(seq){
 }
 let autoBusy=false,autoProblemSeq=null,autoUnsafeStop=false,autoMustReload=false;
 let workerBatchPolling=false,workerRestoredEvent='',workerLatestState=null;
+let workerCompletionProof=null;
+function workerFixtureFingerprint(current){
+ if(!Array.isArray(current?.matches))return '';
+ return JSON.stringify(current.matches.map(m=>[m.seq,m.matchId,m.status]).sort((a,b)=>a[0]-b[0]));
+}
+function workerCompletionVerified(state,current){
+ if(!workerCompletionProof||!state||!current||
+    workerCompletionProof.eventId!==current.eventId||
+    workerCompletionProof.eventId!==state.event_id||
+    workerCompletionProof.requestId!==state.request_id||
+    workerCompletionProof.fixtureFingerprint!==workerFixtureFingerprint(current)||
+    localStorage.getItem(workerBatchStorageKey(current.eventId))!==state.request_id)
+  return false;
+ try{
+  if(state.layout_mode==='independent-fixtures-v1')
+   verifyIndependentWorkerCompletion(state,current,current);
+  else verifyCompletedWorkerSnapshot(state,current,current);
+  return true;
+ }catch{return false}
+}
 
 let legacyStartedAt=null,legacyStartedEventId='';
 function hideCompletionPanel(){
+ workerCompletionProof=null;
  $('ssResultPanel').hidden=true;
  $('ssResultPanel').dataset.eventId='';
  $('ssResultPanel').dataset.runId='';
@@ -1446,13 +1467,7 @@ function hasVerifiedCurrentCompletion(){
  const panel=$('ssResultPanel');
  if(panel.hidden||panel.dataset.eventId!==snapshot?.eventId||
     panel.dataset.runId!=='worker:'+workerLatestState?.request_id)return false;
- try{
-  if(workerLatestState?.layout_mode==='independent-fixtures-v1')
-   verifyIndependentWorkerCompletion(workerLatestState,snapshot,snapshot);
-  else verifyCompletedWorkerSnapshot(workerLatestState,snapshot,snapshot);
-  return true;
- }
- catch{return false;}
+ return workerCompletionVerified(workerLatestState,snapshot);
 }
 function selectedSSDate(){
  const label=$('ssEventSelect').selectedOptions?.[0]?.textContent||'';
@@ -1472,6 +1487,7 @@ function refreshSSResultLink(){
 }
 function showCompletionPanel(eventId,seconds,runId){
  if(!snapshot||snapshot.eventId!==eventId||$('ssEnvironment').value!=='staging')return;
+ if(runId.startsWith('worker:')&&!workerCompletionVerified(workerLatestState,snapshot))return;
  const panel=$('ssResultPanel');
  if(!panel.hidden&&panel.dataset.eventId===eventId&&panel.dataset.runId===runId)return;
  panel.querySelector('strong').textContent='✓ '+snapshot.matches.length+'試合の登録・確認が完了しました';
@@ -1957,14 +1973,16 @@ function showWorkerBatchState(state){
  const progress='処理 '+state.completed+'/'+state.total+'件（登録と試合終了の合計）';
  $('workerBatchStatus').textContent=
   (state.observation_only===true?'【TEST確認専用・新規登録停止中】 ':'')+(
-  state.status==='completed'?'✓ Workerで全操作の登録・照合が完了しました。'+progress:
+  state.status==='completed'?(workerCompletionVerified(state,snapshot)
+    ?'✓ WorkerとSS公式の全試合の終了・ID照合が完了しました。'+progress
+    :'⚠ Workerの操作履歴は完了していますが、現在のSS公式試合ID・終了状態はまだ照合できていません。再登録しないでください。'+progress):
   state.status==='paused'?'一時停止しました。送信済みの操作を繰り返さず、確認済みの続きから再開できます。'+progress:
   state.pause_requested?'停止要求を保存しました。進行中の操作を確認してから停止します。'+progress:
   state.status==='needs_decision'?'同点のため試合 #'+state.decision.seq+' の結果を指定してください。'+progress:
   state.status==='blocked'?'⚠ Worker停止：'+(state.blocked_reason||'照合が必要です')+
    '。自動再送しません。'+progress:
   'WorkerがTEST環境で順次処理中です。'+progress);
- if(state.status==='completed'){
+ if(state.status==='completed'&&workerCompletionVerified(state,snapshot)){
   const start=readWorkerTiming(localStorage,state.event_id,state.request_id);
   const total=start===null?null:completionSeconds(start,state.updated_at,Date.now());
   showCompletionPanel(state.event_id,total,'worker:'+state.request_id);
@@ -2008,6 +2026,7 @@ async function refreshWorkerBatch({passive=false}={}){
  const saved=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
  if(!saved)return;
  workerBatchPolling=true;
+ hideCompletionPanel(); // Invalidate any previous proof BEFORE a new journal observation.
  $('workerBatchRun').disabled=true;
  $('workerBatchRefresh').hidden=false;
  const eventId=snapshot.eventId;
@@ -2036,6 +2055,11 @@ async function refreshWorkerBatch({passive=false}={}){
     verifyIndependentWorkerCompletion(state,fresh,snapshot);
    else verifyCompletedWorkerSnapshot(state,fresh,snapshot);
    snapshot=fresh;
+   // An immutable, event-scoped proof is issued ONLY after a fresh official
+   // snapshot has been independently checked against this exact Worker job.
+   if(state.request_id===localStorage.getItem(workerBatchStorageKey(eventId)))
+    workerCompletionProof={eventId,requestId:state.request_id,
+     fixtureFingerprint:workerFixtureFingerprint(fresh)};
   }
   showWorkerBatchState(state);
   if(state.layout_mode!=='independent-fixtures-v1'&&hasRecreatedBracket(state,snapshot)&&
