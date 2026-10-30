@@ -431,7 +431,7 @@ import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from 
 import {describeOfficialFixtures,drawOptionForFixture,fixtureSummaryLabel} from './sposched-fixture-layout.mjs';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
-import {prepareWorkerIndependent,verifyIndependentWorkerCompletion} from './sposched-worker-independent.mjs';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth} from './sposched-worker-independent.mjs';
 import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
 import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
@@ -971,6 +971,21 @@ async function fetchSS(path) {
  }
  rememberBridgeAfterSuccess(env,token);
  return data;
+}
+// GET-only capability check; do not create a local job marker before this passes.
+async function assertIndependentStagingWorkerReady(){
+ let response;
+ try{
+  response=await fetch(SS_GATEWAYS.staging+'/health',{
+   method:'GET',mode:'cors',cache:'no-store',signal:AbortSignal.timeout(12000)
+  });
+ }catch{
+  throw Error('TEST Workerの配信版を確認できません。新規登録は開始していません');
+ }
+ if(!response.ok)throw Error('TEST Workerの状態確認に失敗しました（HTTP '+response.status+'）。登録は開始していません');
+ let health;
+ try{health=await response.json()}catch{throw Error('TEST Workerの状態情報が不正です。登録は開始していません')}
+ assertIndependentWorkerHealth(health);
 }
 async function postStaging(path,payload) {
  if(autoTiming)autoTiming.posts++;
@@ -2160,6 +2175,7 @@ $('workerBatchRun').addEventListener('click',async()=>{
   // explicitly labeled TEST button. One intentional click is approval;
   // an extra browser confirmation dialog would only duplicate that approval.
   const goalCount=operations.operations.filter(x=>x.action==='create').length;
+  if(isIndependent) await assertIndependentStagingWorkerReady();
   // Store the key BEFORE the network request, so a lost response never
   // enables an accidental second job with a new request ID.
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
