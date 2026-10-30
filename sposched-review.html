@@ -2154,6 +2154,72 @@ $('workerBatchRefresh').addEventListener('click',()=>{
  ))return;
  return refreshWorkerBatch();
 });
+// Local pointer recovery only. Every Worker operation is a passive /inspect.
+// No /start, /recreate, /status, /decision or upstream goal/result writes here.
+$('workerBatchReconnect').addEventListener('click',async()=>{
+ if(workerBatchPolling||batchBusy||autoBusy||!snapshot||
+    !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ const eventId=snapshot.eventId, key=workerBatchStorageKey(eventId);
+ const original=localStorage.getItem(key);
+ const pendingKey=workerBatchRecreatePendingKey(eventId);
+ const button=$('workerBatchReconnect');
+ button.disabled=true;
+ const snapKey=current=>JSON.stringify((current?.matches||[]).map(m=>[
+  m.seq,m.matchId,m.status,m.leftTeam,m.rightTeam,m.leftScore,m.rightScore,
+  m.existingGoals?.length||0
+ ]).sort((a,b)=>a[0]-b[0]));
+ const journalKey=job=>JSON.stringify([
+  job.event_id,job.request_id,job.status,job.fixture_count,job.layout_mode,
+  job.total,job.completed,job.cursor,job.generation,job.fixture_ids
+ ]);
+ $('workerBatchStatus').textContent='TEST Workerの旧ジョブとSS公式試合を読み取り専用で再確認中…';
+ try{
+  if(pendingForEvent().length||localStorage.getItem(pendingKey))
+   throw Error('未照合の送信・再作成記録が残っています。端末の記録を変更しません');
+  const first=await postStaging('/staging/batch/inspect',{event_id:eventId});
+  assertRetiredWorkerReconnectable({state:first,snapshot,storedRequestId:original,
+   pendingGoals:pendingForEvent().length>0,pendingRecreation:Boolean(localStorage.getItem(pendingKey))});
+  const initial=snapKey(snapshot);
+  const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+  if(snapshot?.eventId!==eventId||fresh.eventId!==eventId||
+     snapKey(fresh)!==initial)throw Error('SS公式の試合状態が変更されました。端末の記録は変更していません');
+  const second=await postStaging('/staging/batch/inspect',{event_id:eventId});
+  if(journalKey(first)!==journalKey(second))
+   throw Error('Workerのジョブ記録が確認中に変わりました。端末の記録は変更していません');
+  assertRetiredWorkerReconnectable({state:second,snapshot:fresh,storedRequestId:original,
+   pendingGoals:pendingForEvent().length>0,pendingRecreation:Boolean(localStorage.getItem(pendingKey))});
+  if(localStorage.getItem(key)!==original||
+     snapshot?.eventId!==eventId||snapKey(snapshot)!==initial||
+     pendingForEvent().length||localStorage.getItem(pendingKey))
+   throw Error('端末またはイベントの状態が変更されました。再接続は実行していません');
+  // Preserve the user's old local record before repointing this event's
+  // Worker job marker. No historical Worker journal is changed.
+  const backupKey='peakstamp:test:worker-batch:reconnect-backup:'+eventId+':'+original;
+  if(!localStorage.getItem(backupKey))
+   localStorage.setItem(backupKey,JSON.stringify({
+    event_id:eventId,previous_request_id:original,
+    observed_worker_request_id:second.request_id,at:Date.now()
+   }));
+  if(!localStorage.getItem(backupKey))
+   throw Error('端末の旧ジョブ記録を保存できません。再接続を中止しました');
+  localStorage.setItem(key,second.request_id);
+  if(localStorage.getItem(key)!==second.request_id)
+   throw Error('端末の再接続を確認できません。新規登録しないでください');
+  workerLatestState=second;
+  $('workerBatchStatus').textContent=
+   '✓ 旧端末ジョブIDを別キーに保存し、Worker完了履歴に再接続しました。SSへの書き込みはありません。'+
+   '新しい'+fresh.matches.length+'試合はまだ未登録です。';
+  renderAutoSummary();
+  // The next control still invokes the Worker 404/clean-fixture gate; this
+  // local reattachment NEVER itself approves a new SpoSched mutation.
+ }catch(e){
+  $('workerBatchStatus').textContent='再接続を停止：'+e.message+
+   '。旧履歴を消したり再登録したりしないでください。';
+ }finally{
+  button.disabled=false;
+  renderAutoSummary();
+ }
+});
 $('workerBatchRecreate').addEventListener('click',async()=>{
  if(workerBatchPolling||batchBusy||autoBusy||!snapshot||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging')return;
