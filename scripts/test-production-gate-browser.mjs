@@ -13,7 +13,7 @@ const snapshot={event_id:E,
   status:i<2?'scheduled':'waiting',left_team:i<2?'Team '+(i*2+1):'',
   right_team:i<2?'Team '+(i*2+2):'',
   left_score:0,right_score:0,goals:[]})),
- roster:{'Team 1':['Taro Sato','Tatsuo Nishimura','A'],'Team 2':['B'],'Team 3':['C'],'Team 4':['D']}
+ roster:{'Team 1':['Taro Sato','達夫','Akihiro Sato','satoshi','A'],'Team 2':['B'],'Team 3':['C'],'Team 4':['D']}
 };
 let releaseReady=false,productionWrites=0,checks=0,otherReads=0;
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
@@ -33,7 +33,7 @@ await page.addInitScript(()=>{
    status:'confirmed',confirmedAt:'2026-10-30T00:00:00Z'
   },{
    id:'goal-tatsuo',origin:'audio',timeSeconds:64,goalTimeSeconds:62,
-   quote:'達夫さんゴール',scorer:'達夫',assist:'',assistStatus:'none',
+   quote:'Sato Tatsuo goal',scorer:'Sato Tatsuo',assist:'',assistStatus:'none',
    matchSeq:'1',matchLabel:'チーム1対チーム2',teamA:'1',teamB:'2',
    status:'confirmed',confirmedAt:'2026-10-30T00:00:00Z'
   }]}));
@@ -75,11 +75,12 @@ try{
  assert.match(review,/SS登録予定（名簿照合）/);
  assert.match(review,/佐藤さん/);
  assert.match(review,/Taro Sato/,'official romanized scorer roster match must be visible in production');
- const tatsuoCard=page.locator('#quickGoals .quick-goal').filter({hasText:'Tatsuo Nishimura'});
+ const tatsuoCard=page.locator('#quickGoals .quick-goal').filter({hasText:'Sato Tatsuo'});
  await tatsuoCard.waitFor({state:'visible'});
  const tatsuoReview=await tatsuoCard.innerText();
- assert.match(tatsuoReview,/達夫/,'AI original kanji name must remain visible');
- assert.match(tatsuoReview,/Tatsuo Nishimura/,'AI 達夫 must infer the official Tatsuo name in production UI');
+ assert.match(tatsuoReview,/Sato Tatsuo/,'original full-name AI text must remain visible');
+ assert.match(tatsuoReview,/なし\s*→\s*達夫/,'full-name AI Sato Tatsuo must select official 達夫 rather than Akihiro Sato');
+ assert.doesNotMatch(tatsuoReview,/得点者未確定|得点チーム未確定/,'official scorer and team must be populated');
  assert.equal(await page.locator('#quickProductionHelp').isVisible(),true);
  assert.equal(await page.locator('#quickTestHelp').isVisible(),false);
  assert.equal(await page.locator('#quickIndividualTestTools').isVisible(),false);
