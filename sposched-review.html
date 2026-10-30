@@ -431,6 +431,7 @@ import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from 
 import {describeOfficialFixtures,drawOptionForFixture,fixtureSummaryLabel} from './sposched-fixture-layout.mjs';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
+ import {prepareWorkerIndependent,verifyIndependentWorkerCompletion} from './sposched-worker-independent.mjs';
 import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
 import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
@@ -1117,7 +1118,7 @@ function renderQuick(){
    ?'4. 確認済みのゴールと4試合をTESTへ登録':'4. SSに登録された試合へゴールを反映';
   $('autoRegisterHelp').textContent=officialLayout.automaticFourMatch
    ?'4試合トーナメントはWorkerで一括登録します。ほかの操作は予備操作です。'
-   :'このイベントは4試合トーナメントではありません。SSの正式な試合番号にゴールを順次登録し、試合終了は個別に確認してください。勝敗・対戦相手を推測しません。';
+   :'SSで対戦がすべて確定した独立試合は、確認後にWorkerで一括登録できます。対戦待ち・順位決定戦は個別確認してください。';
   $('quickTestHelp').textContent=officialLayout.automaticFourMatch
    ?'AI候補と登録予定を確認してください。3位決定戦・決勝は準決勝終了後に正式な対戦相手を再取得します。'
    :'SSから取得した試合番号・対戦チームを確認してください。同じ対戦カードが複数回ある場合、試合番号を必ず確認してください。';
@@ -1429,7 +1430,12 @@ function hasVerifiedCurrentCompletion(){
  const panel=$('ssResultPanel');
  if(panel.hidden||panel.dataset.eventId!==snapshot?.eventId||
     panel.dataset.runId!=='worker:'+workerLatestState?.request_id)return false;
- try{verifyCompletedWorkerSnapshot(workerLatestState,snapshot,snapshot);return true;}
+ try{
+  if(workerLatestState?.layout_mode==='independent-fixtures-v1')
+   verifyIndependentWorkerCompletion(workerLatestState,snapshot,snapshot);
+  else verifyCompletedWorkerSnapshot(workerLatestState,snapshot,snapshot);
+  return true;
+ }
  catch{return false;}
 }
 function selectedSSDate(){
@@ -1452,6 +1458,7 @@ function showCompletionPanel(eventId,seconds,runId){
  if(!snapshot||snapshot.eventId!==eventId||$('ssEnvironment').value!=='staging')return;
  const panel=$('ssResultPanel');
  if(!panel.hidden&&panel.dataset.eventId===eventId&&panel.dataset.runId===runId)return;
+ panel.querySelector('strong').textContent='✓ '+snapshot.matches.length+'試合の登録・確認が完了しました';
  panel.dataset.eventId=eventId;
  panel.dataset.runId=runId;
  panel.hidden=false;
