@@ -274,8 +274,8 @@ test('conflicting AI assist text and no-assist status do not silently erase extr
 test('all quick goal cards show AI original next to the registered official name',()=>{
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
  assert.match(html,/const heard=quickAIObservation\(row\)/);
- assert.match(html,/AI提案/);
- assert.match(html,/SS登録予定（名簿照合）/);
+ assert.match(html,/AI候補/);
+ assert.match(html,/登録予定','quick-compare-label'/);
  assert.match(html,/heard\.assistRaw\+' → '\+heard\.scorerRaw/);
  assert.match(html,/quick-compare/);
  assert.match(html,/compare\.append\(aiCell,officialCell\);el\.append\(compare\)/);
