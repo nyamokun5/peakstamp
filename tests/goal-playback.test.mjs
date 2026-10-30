@@ -86,7 +86,7 @@ test('choosing next goal from a different video loads once and starts from its c
  assert.equal(controller.currentSourceKey(),'B');
 });
 test('passive queue selection cancels a pending metadata-triggered replay',async()=>{
- const {calls,controller,flush}=fixture();
+ const {video,calls,controller,flush}=fixture();
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:300,autoplay:true});
  controller.open({sourceKey:'B',sourceUrl:'blob:b',at:90,autoplay:false});
  await flush();
