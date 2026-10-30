@@ -2418,13 +2418,14 @@ function syncFinishWinner(){
  const valid=!!m&&Number.isInteger(m.leftScore)&&m.leftScore>=0&&
   Number.isInteger(m.rightScore)&&m.rightScore>=0;
  const tied=valid&&m.leftScore===m.rightScore;
+ const allowDraw=drawOptionForFixture(describeOfficialFixtures(snapshot),m);
  $('finishWinnerWrap').hidden=!tied;
  const drawOption=$('finishWinner').querySelector('option[value="draw"]');
  if(drawOption){
-  drawOption.hidden=Number(m?.seq)<=2;
-  drawOption.disabled=Number(m?.seq)<=2;
+  drawOption.hidden=!allowDraw;
+  drawOption.disabled=!allowDraw;
  }
- if(!tied||Number(m?.seq)<=2&&$('finishWinner').value==='draw')
+ if(!tied||!allowDraw&&$('finishWinner').value==='draw')
   $('finishWinner').value='';
  if(!m){$('finishSummary').textContent='試合を選んでください。';$('finishExecute').disabled=true;return;}
  const result=m.status==='finished'?'終了済み（再登録不可）':
@@ -2440,7 +2441,7 @@ function syncFinishWinner(){
   $('ssEnvironment').value!=='staging'||m.status!=='scheduled'||!m.matchId||
   !m.leftTeam||!m.rightTeam||!valid||
   (tied&&!(['left','right'].includes($('finishWinner').value)||
-   (Number(m.seq)>=3&&$('finishWinner').value==='draw')));
+   (allowDraw&&$('finishWinner').value==='draw')));
 }
 function updateFlowGuide(){
  const test=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
@@ -2495,17 +2496,19 @@ $('finishExecute').addEventListener('click',async()=>{
  if(batchBusy||recoveryBusy||!snapshot||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging'||$('finishExecute').disabled)return;
  const seq=Number($('finishMatch').value),winner=$('finishWinner').value;
+ const selectedFixture=snapshot.matches.find(m=>m.seq===seq);
+ const finishPolicy={drawAllowed:drawOptionForFixture(describeOfficialFixtures(snapshot),selectedFixture)};
  // One human click authorizes exactly the score/winner shown on screen.
  // Signed preview + latest-state verification still happen BEFORE upstream PUT.
  let sent=false,verified=false;
  setBatchBusy(true);
  try{
   if(pendingForEvent().length)throw Error('前回のゴール送信結果を先に確認してください');
-  const shown=finishAction(snapshot,snapshot,seq,winner);
+  const shown=finishAction(snapshot,snapshot,seq,winner,finishPolicy);
   let count=unfinishedGoalCount(snapshot,rows,seq,quickGoalDecisions(snapshot,rows));
   if(count)throw Error('未登録・要確認のゴールが'+count+'件あります。先に登録してください');
   const latest=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(shown.event_id)));
-  const action=finishAction(snapshot,latest,seq,winner);
+  const action=finishAction(snapshot,latest,seq,winner,finishPolicy);
   if(JSON.stringify(action)!==JSON.stringify(shown))
    throw Error('SSのスコアか試合情報が変わりました。イベントを再読み込みして確認してください');
   count=unfinishedGoalCount(latest,rows,seq,quickGoalDecisions(latest,rows));
@@ -2517,7 +2520,7 @@ $('finishExecute').addEventListener('click',async()=>{
    throw Error('試合終了の安全確認ができません。送信していません');
   // A second, read-only GET fences stale scores and regenerated match UUIDs.
   const again=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(action.event_id)));
-  const verifiedAction=finishAction(snapshot,again,seq,winner);
+  const verifiedAction=finishAction(snapshot,again,seq,winner,finishPolicy);
   if(JSON.stringify(verifiedAction)!==JSON.stringify(shown))
    throw Error('確認中にスコアか組み合わせが変わりました。送信せず停止しました');
   sent=true;
