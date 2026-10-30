@@ -1139,21 +1139,20 @@ function renderQuick(){
   const row=rows[item.index],el=node('div','','quick-goal'),top=node('div','','quick-goal-top');
   el.id='quick-goal-'+(item.index+1);
   if(['attention','duplicate','manual-ss'].includes(item.state))el.classList.add('needs-fix');
-  top.append(node('strong','#'+(item.index+1)+' '+
-    (snapshot.matches.find(m=>m.seq===Number(item.seq))?.title||'試合未選択')));
-  const label=item.state==='ready'?(item.helperPlan?'助っ人登録後に自動ゴール':item.deferredAssist?'ゴール自動登録／アシストSS追記':'登録候補'):
-    item.state==='duplicate'?'重複候補・対象外':
-    item.state==='waiting'?'対戦確定後に自動登録':
-    item.state==='manual-ss'?(item.registeredInSS?'SS登録済み／自動対象外':'SSで手動登録／自動対象外'):
-    item.state==='attention'?'要修正':'今回の一括登録から除外';
+  const match=snapshot.matches.find(m=>m.seq===Number(item.seq));
+  const shortTitle=match?.title?.replace(/^\s*\d+\s*試合目\s*/,'').trim()||'';
+  const matchName=match?((shortTitle||'試合')+'（第'+match.seq+'試合）'):'試合未選択';
+  top.append(node('strong','ゴール'+(item.index+1)+' ・ '+matchName));
+  const label=item.state==='ready'?(item.deferredAssist?'アシスト要追記':item.helperPlan?'助っ人を登録':'登録予定'):
+    item.state==='duplicate'?'重複・除外':
+    item.state==='waiting'?'対戦待ち':
+    item.state==='manual-ss'?(item.registeredInSS?'SS登録済み':'SSで手動登録'):
+    item.state==='attention'?'要修正':'登録対象外';
   top.append(node('span',label,['ready','waiting'].includes(item.state)?'quick-ready':'quick-held'));
-  el.append(top,node('p',
-   (snapshot.matches.find(m=>m.seq===Number(item.seq))?
-    matchSlotLabel(snapshot.matches.find(m=>m.seq===Number(item.seq))):
-    '試合番号：未設定（要選択）')+
-   ' / '+(item.team||(snapshot.playerTeam.get(item.scorer)?
-      snapshot.playerTeam.get(item.scorer)+'（名簿候補）':'得点チーム未確定'))+
-   ' / '+(item.source||'動画なし')+' '+(item.time==null?'':item.time+'秒'),'quick-meta'));
+  el.append(top);
+  const sourceInfo=(match?matchSlotLabel(match):'試合番号：未設定')+
+   ' / '+(item.team||snapshot.playerTeam.get(item.scorer)||'得点チーム未確定')+
+   ' / '+(item.source||'動画なし')+(item.time==null?'':' '+item.time+'秒');
   // Original PeakStamp AI wording is displayed even if the official SS
   // player selection has subsequently been corrected. This is display-only.
   const heard=quickAIObservation(row);
@@ -1161,15 +1160,12 @@ function renderQuick(){
   // selection before the single batch-approval click. No silent UI rewrites.
   const compare=node('div','','quick-compare');
   const aiCell=node('div','','quick-compare-cell');
-  aiCell.append(node('span','AI提案','quick-compare-label'),
+  aiCell.append(node('span','AI候補','quick-compare-label'),
    node('strong',heard.assistRaw+' → '+heard.scorerRaw,'quick-compare-value'));
   const officialCell=node('div','','quick-compare-cell proposed');
-  officialCell.append(node('span',item.state==='manual-ss'?'SSで手動登録（自動送信しません）':'SS登録予定（名簿照合）','quick-compare-label'),
+  officialCell.append(node('span',item.state==='manual-ss'?'SSで手動登録':'登録予定','quick-compare-label'),
    node('strong',item.assist+' → '+(item.scorer||'得点者未確定'),'quick-compare-value'));
-  officialCell.append(node('div',
-   (item.team||snapshot.playerTeam.get(item.scorer)||'チーム未確定')+
-   (row.scorerGuess?.source?' ／ '+row.scorerGuess.source:''),
-   'quick-compare-detail'));
+  officialCell.append(node('div',item.team||snapshot.playerTeam.get(item.scorer)||'チーム未確定','quick-compare-detail'));
   compare.append(aiCell,officialCell);el.append(compare);
   if(item.state==='attention'){
    const assistCandidates=heard.noAssist?'なし（AI判定）':
@@ -1181,11 +1177,20 @@ function renderQuick(){
   }
   const inlineEligible=['attention','ready','waiting','manual-ss'].includes(item.state);
   const expanded=item.state==='attention'||quickOpenRows.has(item.key);
-  if(['attention','waiting','duplicate','manual-ss'].includes(item.state)||item.deferredAssist||item.helperPlan)
-   el.append(node('p',(item.helperPlan?'✓ 助っ人を試合に登録してから得点・アシストを記録：':item.deferredAssist?'✓ ゴールは自動登録・アシストだけ保留：':item.state==='manual-ss'?'⚠ SSで対応：':'確認：')+item.reason,'quick-held-note'));
-  if(item.helperPlan)el.append(node('p',
-    'SS助っ人登録予定：'+item.helperPlan.helpers.map(h=>h.name+'（'+h.from+' → '+h.team+'）').join('、')+
-    (item.state==='waiting'?'。準決勝終了後の正式な対戦確認が条件です。':''),'quick-ai-candidates'));
+  if(item.state==='attention')el.append(node('p','確認して修正してください：'+item.reason,'quick-held-note'));
+  else if(item.state==='duplicate')el.append(node('p','重複の可能性があるため登録しません。','quick-held-note'));
+  else if(item.state==='manual-ss'&&!item.registeredInSS)
+   el.append(node('p','このゴールはSSアプリで手動登録してください。','quick-held-note'));
+  else if(item.deferredAssist)el.append(node('p','得点は自動登録、アシストはSSで追記してください。','quick-held-note'));
+  else if(item.helperPlan)el.append(node('p',item.state==='waiting'?
+    '対戦確定後に助っ人を追加し、得点を登録します。':'助っ人を追加してから得点を登録します。','quick-ready'));
+  const trace=node('details','','quick-trace');
+  trace.append(node('summary','動画・判定の詳細'),node('p',sourceInfo));
+  if(row.scorerGuess?.source)trace.append(node('p','照合方法：'+row.scorerGuess.source));
+  if(item.reason&&item.state!=='attention')trace.append(node('p',item.reason));
+  if(item.helperPlan)trace.append(node('p','助っ人：'+item.helperPlan.helpers.map(h=>
+     h.name+'（'+h.from+' → '+h.team+'）').join('、')));
+  el.append(trace);
   if(item.state==='manual-ss'&&!item.registeredInSS){
    const linkUrl=savedSSAppLink(localStorage,'staging',snapshot.eventId,selectedSSDate());
    if(linkUrl){
@@ -1243,14 +1248,11 @@ function renderQuick(){
    }
    el.append(fields);
   }
-  if(!['ready','attention','waiting','manual-ss'].includes(item.state))
-   el.append(node('p',item.reason,'quick-held-note'));
-  if(item.state==='waiting'&&row.include){
-   const automated=snapshot.matches.length===4&&[3,4].includes(Number(row.seq));
-   el.append(node('p',automated
-    ?'✓ ゴールを一括登録に含めます。準決勝の終了後に正式な対戦相手を確認し、自動で登録します。'
-    :'対戦相手の確定までは送信保留です。','quick-ready'));
-  }
+  // Exclusion reason is visible in expandable details.
+  if(item.state==='waiting'&&row.include&&!item.helperPlan)
+   el.append(node('p',snapshot.matches.length===4&&[3,4].includes(Number(row.seq))
+     ?'対戦が確定したら自動登録します。'
+     :'対戦確定まで登録を保留します。','quick-ready'));
   if(inlineEligible){
    if(['ready','waiting','manual-ss'].includes(item.state)){
     const edit=node('button',expanded?'簡易編集を閉じる':
