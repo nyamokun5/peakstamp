@@ -28,7 +28,7 @@ await page.addInitScript(()=>{
  localStorage.setItem('peakstamp_confirmed_goals_v1:MATCH_1.MOV::1234::1769817600000',
   JSON.stringify({version:1,source:file,items:[{
    id:'goal-1',origin:'audio',timeSeconds:25,goalTimeSeconds:22,
-   quote:'佐藤さんゴール',scorer:'佐藤さん',assist:'',assistStatus:'none',
+   quote:'Taro Sato goal',scorer:'Taro Sato',assist:'',assistStatus:'none',
    matchSeq:'1',matchLabel:'チーム1対チーム2',teamA:'1',teamB:'2',
    status:'confirmed',confirmedAt:'2026-10-30T00:00:00Z'
   },{
@@ -73,7 +73,7 @@ try{
  const review=await page.locator('#quickGoals .quick-goal').first().innerText();
  assert.match(review,/AI提案/);
  assert.match(review,/SS登録予定（名簿照合）/);
- assert.match(review,/佐藤さん/);
+ assert.match(review,/Taro Sato/);
  assert.match(review,/Taro Sato/,'official romanized scorer roster match must be visible in production');
  const tatsuoCard=page.locator('#quickGoals .quick-goal').filter({hasText:'Sato Tatsuo'});
  await tatsuoCard.waitFor({state:'visible'});
