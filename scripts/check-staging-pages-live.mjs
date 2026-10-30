@@ -12,18 +12,25 @@ const MUST_HAVE=[
 ];
 const pause=ms=>new Promise(done=>setTimeout(done,ms));
 async function checkedFetch(url,options={}){
- const response=await fetch(url,{...options,redirect:'manual'});
- if(response.status>=300&&response.status<400){
-  const raw=response.headers.get('location');
-  let destination='(missing)';
-  try{
-   const resolved=new URL(raw,url);
-   destination=resolved.origin+resolved.pathname;
-  }catch{}
-  throw Object.assign(Error(new URL(url).hostname+' HTTP '+response.status+
-   ' redirect to '+destination),{permanent_redirect:true});
+ const original=new URL(url);
+ let next=original;
+ for(let step=0;step<3;step++){
+  const response=await fetch(next,{...options,redirect:'manual'});
+  if(response.status<300||response.status>=400)return response;
+  const destHeader=response.headers.get('location');
+  let dest;
+  try{dest=new URL(destHeader,next);}
+  catch{throw Object.assign(Error('Malformed redirect from '+next.hostname),{permanent_redirect:true});}
+  // Cloudflare Pages removes .html from static routes via HTTP 308.
+  // Never follow to another site, downgrade TLS or change request semantics.
+  if(![301,302,307,308].includes(response.status)||
+     dest.protocol!=='https:'||dest.origin!==original.origin||
+     options.method==='OPTIONS' && dest.pathname!==original.pathname)
+   throw Object.assign(Error(original.hostname+' HTTP '+response.status+
+    ' unsafe redirect to '+dest.origin+dest.pathname),{permanent_redirect:true});
+  next=dest;
  }
- return response;
+ throw Object.assign(Error('Too many same-origin redirects from '+original.pathname),{permanent_redirect:true});
 }
 async function once(){
  const payload={};
