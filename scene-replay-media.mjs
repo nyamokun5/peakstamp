@@ -12,6 +12,10 @@ export function createSceneReplayMedia(makeVideo) {
       if (!video) {
         video = makeVideo();
         video.preload = 'metadata';
+        // iPhone requires inline playback mode before setting src/load().
+        video.playsInline = true;
+        video.setAttribute?.('playsinline','');
+        video.setAttribute?.('webkit-playsinline','');
       }
       const sourceChanged = activeSource !== sourceId;
       if (sourceChanged) {
