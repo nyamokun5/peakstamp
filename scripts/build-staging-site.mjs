@@ -21,7 +21,7 @@ export function buildStagingReviewHtml(html){
  out=requireOnce(out,'id="ssModeBadge" class="step">本番SS','id="ssModeBadge" class="step">テストSS','TEST header');
  out=requireOnce(out,'<select id="ssEnvironment" aria-label="SpoSched接続先">',
   '<select id="ssEnvironment" aria-label="SpoSched接続先" disabled>', 'environment control');
- out=requireOnce(out,'     <option value="production">本番SS</option>\n','', 'production dropdown option');
+ out=requireOnce(out,'    <option value="production">本番SS</option>\n','', 'production dropdown option');
  out=requireOnce(out,'<option value="staging">テストSS</option>',
   '<option value="staging" selected>テストSS</option>','staging dropdown option');
  out=requireOnce(out,"production:'"+prodHost+"',\n  ",'','production gateway');
