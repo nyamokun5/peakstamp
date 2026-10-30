@@ -85,7 +85,7 @@ test('nonexistent fixture and inconsistent scorer team are not silently marked h
 });
 test('UI highlights the SS manual-only exclusion and blocks finalizing until official readback',()=>{
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
- assert.match(html,/SSで手動登録してください/);
+ assert.match(html,/SSアプリで手動登録してください/);
  assert.match(html,/SSでこのイベントを開いて登録する/);
  assert.match(html,/SSで手動登録後に最新情報を再取得/);
  assert.match(html,/manualPending\.length/);
