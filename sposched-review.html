@@ -666,7 +666,7 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
  $('manualAddWrap').hidden=!(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&snapshot.matches.length);
  $('eventTitle').textContent=(snapshot.eventName||'イベント')+
   ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+'件 / 対象ゴール '+rows.length+'件';
- renderGoals();renderScores();renderQuick();renderFinish();productionUI.render();
+ renderGoals();renderScores();renderQuick();renderFinish();productionUI.render();updateFlowGuide();
 }
 function renderGoals(){
  $('goalRows').replaceChildren();
@@ -2519,6 +2519,7 @@ $('ssEnvironment').addEventListener('change',()=>{
  $('ssSelectWrap').hidden=true;$('ssLoadSnapshot').hidden=true;
  $('ssEventSelect').replaceChildren();
  snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;loadedFromProductionDirect=false;$('productionPanel').hidden=true;
+ $('quickPanel').hidden=true;
  $('recoveryPanel').hidden=true;
  $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
  document.body.classList.remove('detail-open');
@@ -2574,6 +2575,7 @@ $('ssEventSelect').addEventListener('change',()=>{
  ssConnectionRevision++;
  hideCompletionPanel();legacyStartedAt=null;legacyStartedEventId='';
  snapshot=null;reviewedEventId='';manualGoals=[];loadedFromStagingDirect=false;loadedFromProductionDirect=false;$('productionPanel').hidden=true;
+ $('quickPanel').hidden=true;
  $('recoveryPanel').hidden=true;
  $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
  document.body.classList.remove('detail-open');
