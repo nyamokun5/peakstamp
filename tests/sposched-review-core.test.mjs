@@ -208,6 +208,51 @@ test('repeated same pair is ambiguous; explicit confirmed seq is retained but co
  assert.equal(contradiction.seq,4);
  assert.equal(contradiction.conflict,true);
 });
+test('Tatsuo and 達夫 match in BOTH quick AI review and detailed roster candidate lookup',()=>{
+ const romaji=normalizeSpoSnapshot({
+  event_id:'test-tatsuo-romaji',event:'Test',matches:[
+   {seq:1,left_team:'Team1',right_team:'Team2',goals:[]}
+  ],roster:{Team1:['Tatsuo Nishimura','Taro Sato'],Team2:['Hanako Tanaka']}
+ });
+ assert.ok(spokenNameTokens('達夫さん').includes('tatsuo'));
+ assert.equal(suggestedPlayer('達夫さん',romaji).name,'Tatsuo Nishimura');
+ assert.equal(selectPlayerCandidates('達夫さん',romaji)[0].name,'Tatsuo Nishimura',
+  'detail editor must use the same kanji → Latin name matching as quick review');
+ const [row]=prepareGoalRows({goals:[{
+  id:'g1',source:{name:'match1.MOV'},matchSeq:1,
+  scorer:'達夫',assistStatus:'none'
+ }]},romaji);
+ assert.equal(row.scorer,'Tatsuo Nishimura');
+ assert.equal(row.scorerGuess.confidence,'high');
+ assert.equal(row.confirmed,false,'a probable match is NEVER automatically human-confirmed');
+
+ const kanji=normalizeSpoSnapshot({
+  event_id:'test-tatsuo-kanji',event:'Test',matches:[
+   {seq:1,left_team:'Team1',right_team:'Team2',goals:[]}
+  ],roster:{Team1:['達夫','佐藤'],Team2:['田中']}
+ });
+ assert.equal(suggestedPlayer('Tatsuo',kanji).name,'達夫');
+ assert.equal(selectPlayerCandidates('Tatsuo',kanji)[0].name,'達夫',
+  'Latin AI callout must also find official kanji given name');
+ const [reverse]=prepareGoalRows({goals:[{
+  id:'g2',source:{name:'match2.MOV'},matchSeq:1,
+  scorer:'Tatsuo',assistStatus:'none'
+ }]},kanji);
+ assert.equal(reverse.scorer,'達夫');
+ assert.equal(reverse.confirmed,false);
+
+ const ambiguous=normalizeSpoSnapshot({
+  event_id:'test-tatsuo-ambiguous',event:'Test',matches:[
+   {seq:1,left_team:'Team1',right_team:'Team2',goals:[]}
+  ],roster:{Team1:['Tatsuo Nishimura'],Team2:['Tatsuo Tanaka']}
+ });
+ const options=selectPlayerCandidates('達夫',ambiguous);
+ assert.deepEqual(new Set(options.map(x=>x.name)),
+  new Set(['Tatsuo Nishimura','Tatsuo Tanaka']));
+ assert.equal(suggestedPlayer('達夫',ambiguous).name,'',
+  'matching two Tatsuo members must leave selection to a human');
+});
+
 test('Japanese kana and kanji AI phrases suggest probable roster members but never ambiguous surnames',()=>{
  const snap=normalizeSpoSnapshot(event());
  assert.equal(spokenNameTokens('高崎さん').includes('takasaki'),true);
