@@ -72,8 +72,8 @@ try{
  await page.locator('#quickPanel').waitFor({state:'visible'});
  await page.locator('#quickGoals .quick-goal').first().waitFor({state:'visible'});
  const review=await page.locator('#quickGoals .quick-goal').first().innerText();
- assert.match(review,/AI提案/);
- assert.match(review,/SS登録予定（名簿照合）/);
+ assert.match(review,/AI候補/);
+ assert.match(review,/登録予定/);
  assert.match(review,/Taro Sato/);
  assert.match(review,/Taro Sato/,'official romanized scorer roster match must be visible in production');
  const tatsuoCard=page.locator('#quickGoals .quick-goal').filter({hasText:'Sato Tatsuo'});
@@ -83,6 +83,16 @@ try{
  assert.match(tatsuoReview,/なし\s*→\s*達夫/,'full-name AI Sato Tatsuo must select official 達夫 rather than Akihiro Sato');
  assert.doesNotMatch(tatsuoReview,/得点者未確定|得点チーム未確定/,'official scorer and team must be populated');
  assert.equal(await page.locator('#quickProductionHelp').isVisible(),true);
+ assert.equal(await page.locator('#ssModeBadge').innerText(),'本番SS');
+ assert.equal(await page.locator('#ssSessionOptions').isVisible(),true);
+ assert.equal(await page.locator('#ssRememberTab').isVisible(),false,'advanced token options start collapsed');
+ assert.match(await page.locator('#quickSummary').innerText(),/要確認.*確認済み.*対戦待ち/);
+ assert.equal(await page.locator('#quickGoals .quick-trace').first().getAttribute('open'),null,
+  'technical source details start collapsed');
+ await page.locator('#quickGoals .quick-trace summary').first().click();
+ assert.match(await page.locator('#quickGoals .quick-trace').first().innerText(),/MATCH_1.MOV/);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+2),
+  'mobile page must not overflow the screen horizontally');
  assert.equal(await page.locator('#quickTestHelp').isVisible(),false);
  assert.equal(await page.locator('#quickIndividualTestTools').isVisible(),false);
  assert.equal(await page.locator('#autoRegisterHeading').isVisible(),false);
@@ -97,6 +107,12 @@ try{
  await page.waitForFunction(()=>document.getElementById('productionStart').disabled===false);
  assert.equal(await page.locator('#productionStart').isDisabled(),false,
   'current target is standing-authorized after fresh official preflight');
+ assert.equal(await page.locator('#productionPlan').isVisible(),true);
+ assert.match(await page.locator('#productionPlan').innerText(),/ゴール\d+件、4試合の結果/);
+ assert.equal(await page.locator('#productionAudit').getAttribute('open'),null,
+  'technical event and fixture IDs remain collapsed by default');
+ assert.match(await page.locator('#productionCheck').innerText(),/① 登録内容を確認/);
+ assert.match(await page.locator('#productionStart').innerText(),/② 4試合を本番登録/);
  assert.ok(checks>=2);
  assert.equal(productionWrites,0);
  assert.equal(otherReads,0);
