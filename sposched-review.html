@@ -1890,7 +1890,7 @@ function showWorkerBatchState(state){
   catch{$(id).hidden=true;}
  }
  const stored=localStorage.getItem(workerBatchStorageKey(state.event_id));
- if(stored===state.request_id&&hasRecreatedBracket(state,snapshot)){
+ if(state.layout_mode!=='independent-fixtures-v1'&&stored===state.request_id&&hasRecreatedBracket(state,snapshot)){
   $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
   $('workerTimingDetails').hidden=true;
   hideCompletionPanel();
@@ -1981,16 +1981,19 @@ async function refreshWorkerBatch({passive=false}={}){
   }
   // Completion is shown only after the final official snapshot is available.
   // Status/GET failure must not leave a green success panel behind.
-  if(state.status==='completed'&&!hasRecreatedBracket(state,snapshot)){
+  if(state.status==='completed'&&(state.layout_mode==='independent-fixtures-v1'||
+    !hasRecreatedBracket(state,snapshot))){
    hideCompletionPanel();
-   $('workerBatchStatus').textContent='Workerの登録は完了しました。公式SSの4試合の終了状態を確認中…';
+   $('workerBatchStatus').textContent='Workerの登録は完了しました。SS公式の全試合の終了状態を確認中…';
    const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
    if(snapshot?.eventId!==eventId)return;
-   verifyCompletedWorkerSnapshot(state,fresh,snapshot);
+   if(state.layout_mode==='independent-fixtures-v1')
+    verifyIndependentWorkerCompletion(state,fresh,snapshot);
+   else verifyCompletedWorkerSnapshot(state,fresh,snapshot);
    snapshot=fresh;
   }
   showWorkerBatchState(state);
-  if(hasRecreatedBracket(state,snapshot)&&
+  if(state.layout_mode!=='independent-fixtures-v1'&&hasRecreatedBracket(state,snapshot)&&
     localStorage.getItem(workerBatchStorageKey(eventId))===state.request_id){
    workerBatchPolling=false;
    setBatchBusy(false);
@@ -2148,10 +2151,11 @@ $('workerBatchRun').addEventListener('click',async()=>{
     throw Error('未照合の送信記録があります。下の「送信記録を照合（書き込みなし）」から復旧してください');
    }
   const requestId=crypto.randomUUID();
-  const operations=prepareWorkerTournament({
-   snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId,
-   winnerFor:seq=>autoWinnerFor(seq)
-  });
+  const isIndependent=!describeOfficialFixtures(snapshot).automaticFourMatch;
+  const operations=isIndependent
+   ?prepareWorkerIndependent({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId})
+   :prepareWorkerTournament({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId,
+     winnerFor:seq=>autoWinnerFor(seq)});
   // The complete AI-vs-SS registration plan is visible above this
   // explicitly labeled TEST button. One intentional click is approval;
   // an extra browser confirmation dialog would only duplicate that approval.
@@ -2161,7 +2165,7 @@ $('workerBatchRun').addEventListener('click',async()=>{
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
    localStorage.setItem(key,requestId);
    hideCompletionPanel();
-  $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋4試合）…';
+  $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋'+(operations.fixture_count||4)+'試合）…';
   $('workerBatchRun').disabled=true;
   $('workerBatchRefresh').hidden=false;
   setBatchBusy(true);
