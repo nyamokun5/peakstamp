@@ -297,12 +297,9 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
 </section>
 <section id="productionPanel" class="panel" hidden>
  <h2>本番SS：確認した4試合を一括登録</h2>
- <p class="step-help">本番団体・正式試合ID・リリース承認を読み取り専用で照合するまでは、本番には送信できません。</p>
+ <p class="step-help">SpoSchedで現在「ターゲット」に設定されたイベントのみ書き込み可能です。送信前に正式試合IDと登録内容を再照合します。</p>
  <button id="productionCheck" type="button">本番団体・4試合・登録内容を確認（書き込みなし）</button>
  <pre id="productionPlan" class="small" hidden></pre>
- <label class="line" id="productionApproveWrap" hidden><input type="checkbox" id="productionApprove">
-  <strong>表示された本番団体・開催日・試合ID・登録内容を確認し、本番登録を承認します</strong>
- </label>
  <button id="productionStart" type="button" class="primary quick-main" disabled>本番SSに4試合を登録</button>
  <button id="productionRefresh" type="button" hidden>保存済みジョブの進捗を確認（新規送信なし）</button>
  <p id="productionStatus" class="small" role="status" aria-live="polite"></p>
@@ -2563,11 +2560,16 @@ $('ssLoadEvents').addEventListener('click',async()=>{
    const option=node('option',(e.date||'')+'｜'+(e.name||'イベント')+' ('+(e.status||'')+')');
    option.value=e.event_id;select.append(option);
   }
+  const target=sorted.filter(e=>e.status==='target'&&SS_EVENT_ID.test(String(e.event_id||'')));
   const past=sorted.find(e=>e.date&&e.date<=today&&SS_EVENT_ID.test(String(e.event_id||'')));
-  if(past)select.value=past.event_id;
+  if($('ssEnvironment').value==='production'&&target.length===1)
+   select.value=target[0].event_id;
+  else if(past)select.value=past.event_id;
   $('ssSelectWrap').hidden=!select.options.length;
   $('ssLoadSnapshot').hidden=!select.options.length;
-  statusSS(select.options.length+'件取得しました。日付を選択してください。');
+  statusSS(select.options.length+'件取得しました。'+
+   ($('ssEnvironment').value==='production'&&target.length===1
+    ?'現在のターゲットイベントを選択しました。':'日付を選択してください。'));
  } catch(error){if(error.code!=='stale_connection')statusSS('取得失敗：'+error.message);}
  finally{$('ssLoadEvents').disabled=false;}
 });

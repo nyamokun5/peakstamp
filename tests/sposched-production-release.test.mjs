@@ -12,7 +12,8 @@ const inspect={environment:'PRODUCTION',mode:'read-only',team_pinned:true,
  write_allowed:false,release_approved:false,event_id:E,team_id:T,
  event_date:'2026-11-01',
  matches:ids.map((match_id,i)=>({seq:i+1,match_id,status:i<2?'scheduled':'waiting'}))};
-const release={environment:'PRODUCTION',event_id:E,release_ready:true};
+const release={environment:'PRODUCTION',event_id:E,target_event_id:E,
+ scope:'current-target',release_ready:true};
 
 test('production requires independent matching tenant and immutable four-fixture IDs',()=>{
  const r=validateProductionReleaseEvidence(snapshot,inspect,release);
@@ -22,6 +23,8 @@ test('production requires independent matching tenant and immutable four-fixture
 test('disabled release, mismatched event and duplicate fixture IDs all block',()=>{
  for(const [s,i,l] of [
   [snapshot,inspect,{...release,release_ready:false}],
+  [snapshot,inspect,{...release,target_event_id:T}],
+  [snapshot,inspect,{...release,scope:'single-event'}],
   [snapshot,{...inspect,event_id:T},release],
   [snapshot,{...inspect,write_allowed:true},release],
   [snapshot,{...inspect,team_pinned:false},release],

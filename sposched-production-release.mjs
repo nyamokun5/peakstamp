@@ -1,6 +1,6 @@
 // Thin PRODUCTION adapter for the already-tested four-match TEST planner.
 // Zero browser/HTTP writes here. Production execution requires a separate
-// event-scoped Worker approval, official reads and explicit owner confirmation.
+// official live-target Worker approval, independent reads and reviewed send.
 import {prepareWorkerTournament} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const fail=message=>{throw Error(message);};
@@ -11,6 +11,7 @@ export function validateProductionReleaseEvidence(snapshot,inspect,release){
     inspect.mode!=='read-only'||inspect.team_pinned!==true||
     inspect.write_allowed!==false||inspect.release_approved!==false||
     release?.environment!=='PRODUCTION'||release.release_ready!==true||
+    release.scope!=='current-target'||release.target_event_id?.toLowerCase()!==snapshot.eventId.toLowerCase()||
     inspect.event_id?.toLowerCase()!==snapshot.eventId.toLowerCase()||
     release.event_id?.toLowerCase()!==snapshot.eventId.toLowerCase())
   fail('本番団体・イベント・書き込み承認の独立照合に失敗しました');

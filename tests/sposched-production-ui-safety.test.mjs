@@ -49,13 +49,8 @@ test('production panel cannot enable a send with disabled server release',async(
   x.ui.render();
   assert.equal(x.get('productionPanel').hidden,false);
   assert.equal(x.get('productionStart').disabled,true);
-  assert.equal(x.get('productionApproveWrap').hidden,true);
-  x.get('productionApprove').checked=true;
-  x.get('productionApprove').events.change();
-  assert.equal(x.get('productionStart').disabled,true);
   await x.get('productionCheck').events.click();
   assert.equal(x.get('productionStart').disabled,true);
-  assert.equal(x.get('productionApproveWrap').hidden,true);
   assert.match(x.get('productionPlan').textContent,/確認未完了/);
   assert.equal(x.events.length,3);
   assert.ok(x.events.every(q=>q.startsWith('/production/')||q.startsWith('/snapshot')));
