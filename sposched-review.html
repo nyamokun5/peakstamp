@@ -2524,21 +2524,53 @@ $('autoReload').addEventListener('click',()=>{
  $('ssLoadSnapshot').click(); // authenticated GET only; successful load clears lock
 });
 
-$('manualAddGoal').addEventListener('click',()=>{
- if(batchBusy||!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
- if(snapshot.rosterSource!=='official-current-event-teams'){
-  $('manualAddStatus').textContent='最新のSSチーム編成を取得できていないため追加を停止しました。TEST Workerの更新を確認してイベントを再読み込みしてください。';
-  return;
- }
+$('manualAddGoal').addEventListener('click',async()=>{
+ if(batchBusy||autoBusy||workerBatchPolling||!snapshot||
+    !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
  if(unsentManualGoals(manualGoals).length>=20){
   $('manualAddStatus').textContent='手動ゴールが20件に達しました。先に登録または不要分を削除してください。';return;
  }
- const goal=makeManualGoal(crypto.randomUUID());
- manualGoals.push(goal);saveManual();
- rebuild({preserveEdits:true});
- const el=$('review-goal-'+rows.length);
- if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
- $('manualAddStatus').textContent='新しいゴールを追加しました。試合・得点者・アシストを指定してください。';
+ const eventId=snapshot.eventId,revision=ssConnectionRevision;
+ const button=$('manualAddGoal');
+ button.disabled=true;
+ $('manualAddStatus').textContent='SSの現在の試合とチーム名簿を再取得中（書き込みなし）…';
+ try{
+  // A user might leave an iPhone edit tab open while an organizer changes
+  // the teams or replaces the fixture set. Never create a synthetic scoring
+  // draft against a merely previously loaded team assignment.
+  const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+  if(revision!==ssConnectionRevision||snapshot?.eventId!==eventId||
+     $('ssEventSelect').value!==eventId||$('ssEnvironment').value!=='staging')
+   throw Object.assign(Error('イベント選択が変更されました。新しいイベントを読み込み直してください'),{code:'stale_connection'});
+  if(fresh.eventId!==eventId||fresh.rosterSource!=='official-current-event-teams')
+   throw Error('SSの現在のチーム名簿を検証できません。新しいゴールを作成しません');
+  const oldRoster=JSON.stringify(snapshot.roster);
+  const oldFixtures=workerFixtureFingerprint(snapshot);
+  snapshot=fresh;
+  rebuild({preserveEdits:true});
+  const changed=oldRoster!==JSON.stringify(fresh.roster)||oldFixtures!==workerFixtureFingerprint(fresh);
+  const goal=makeManualGoal(crypto.randomUUID());
+  manualGoals.push(goal);saveManual();
+  rebuild({preserveEdits:true});
+  $('manualAddStatus').textContent=(changed
+    ?'⚠ SS側でチーム・試合情報が更新されています。古い選択内容を再確認してください。'
+    :'✓ 現在のSS名簿・試合IDを再取得しました。')+
+    ' テスト用ゴールを作成しました。試合番号・得点者・アシストを選択してください。';
+  const el=$('review-goal-'+rows.length);
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(e){
+  if(revision===ssConnectionRevision&&snapshot?.eventId===eventId){
+   // Fail closed on a failed refresh: keep existing local drafts, but never
+   // allow them to be submitted as newly verified current-roster goals.
+   snapshot={...snapshot,rosterSource:'unverified-refresh-failed'};
+   rebuild({preserveEdits:true});
+   $('manualAddStatus').textContent='新しいゴールは追加していません。SSの最新名簿を確認できません：'+
+    e.message+'。イベントを再読み込みしてください。';
+  }
+ }finally{
+  if(revision===ssConnectionRevision&&snapshot?.eventId===eventId)
+   button.disabled=snapshot.rosterSource!=='official-current-event-teams';
+ }
 });
 // Old local journal and old Durable Object must NEVER be replayed against
 // a newly created match UUID. Only read-only official API checks occur here.
