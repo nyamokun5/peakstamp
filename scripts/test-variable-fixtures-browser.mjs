@@ -16,6 +16,9 @@ const match=(seq,left,right,title,status='scheduled')=>({
  status,left_score:0,right_score:0,goals:[]
 });
 const scenarios=[
+ {label:'two-team manual goal without source video',fixtures:[
+   match(1,'Team1','Team2','#1 紅白戦'),
+   match(2,'Team1','Team2','#2 紅白戦')],automatic:false,draw:true,manual:true},
  {label:'two-team one official match',fixtures:[
    match(1,'Team1','Team2','#1 対外試合')],automatic:false,draw:true},
  {label:'two-team two games same pair',fixtures:[
@@ -53,7 +56,7 @@ const scenarios=[
 try{
  await buildStagingSite(temp);
  for(const scenario of scenarios){
-  let prod=0,posts=0,healthGets=0;
+  let prod=0,posts=0,healthGets=0,submittedPlan=null;
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   if(scenario.retired)await page.addInitScript(({eventId,requestId})=>{
@@ -73,6 +76,22 @@ try{
    }
    assert.equal(url.hostname,'shoot-sunday-sync-staging.yomax1979.workers.dev');
    if(route.request().method()!=='GET')posts++;
+   if(scenario.manual&&url.pathname==='/staging/batch/start'){
+    submittedPlan=route.request().postDataJSON();
+    return route.fulfill({status:202,json:{
+     environment:'STAGING ONLY',event_id:E,request_id:submittedPlan.request_id,
+     status:'running',write_sent:false
+    },headers:{'Access-Control-Allow-Origin':'*'}});
+   }
+   if(scenario.manual&&url.pathname==='/staging/batch/status'){
+    return route.fulfill({status:200,json:{
+     environment:'STAGING ONLY',event_id:E,request_id:submittedPlan?.request_id,
+     status:'blocked',phase:'preparing',layout_mode:'independent-fixtures-v1',
+     fixture_count:2,fixture_ids:{'1':matchId(1),'2':matchId(2)},
+     completed:0,total:3,blocked_reason:'mock-only: no upstream writes',
+     write_sent:false
+    },headers:{'Access-Control-Allow-Origin':'*'}});
+   }
    if(scenario.retired&&['/staging/batch/inspect','/staging/batch/status'].includes(url.pathname)){
     return route.fulfill({status:200,json:{
      environment:'STAGING ONLY',event_id:E,
@@ -91,13 +110,14 @@ try{
     healthGets++;
     return route.fulfill({status:200,json:{
      service:'shoot-sunday-sync-staging',write_mode:'test-only',
-     batch_job_configured:true,independent_batch_contract:'durable-four-match-v1'
+     batch_job_configured:true,independent_batch_contract:scenario.manual
+      ?'independent-fixtures-v1':'durable-four-match-v1'
     },headers:{'Access-Control-Allow-Origin':'*'}});
    }
    const data=url.pathname==='/events'?
     {events:[{event_id:E,name:'TEST event',date:'2026-10-30',status:'target'}]}:
     url.pathname==='/snapshot'?{event_id:E,matches:scenario.fixtures,
-     roster:{Team1:['Taro'],Team2:['Jiro'],Team3:['Saburo'],Team4:['Shiro'],
+     roster:{Team1:['Taro','Aki'],Team2:['Jiro'],Team3:['Saburo'],Team4:['Shiro'],
       Team5:['Goro'],Team6:['Roku']}}:{error:{message:'unsupported mocked path'}};
    return route.fulfill({status:url.pathname==='/events'||url.pathname==='/snapshot'?200:404,
     json:data,headers:{'Access-Control-Allow-Origin':'*'}});
@@ -172,7 +192,38 @@ try{
       'only verified server-side 404/recreate path can now be separately offered');
     }
    }
-   assert.equal(prod,0);assert.equal(posts,scenario.markerMismatch?3:scenario.retired?1:0,
+   if(scenario.manual){
+    await page.click('#quickEdit');
+    await page.click('#manualAddGoal');
+    const goal=page.locator('#review-goal-1');
+    await goal.waitFor();
+    const fields=goal.locator('.fields').first().locator('select');
+    await fields.nth(0).selectOption('1');
+    await fields.nth(1).selectOption('Taro');
+    await fields.nth(2).selectOption('named');
+    await fields.nth(3).selectOption('Aki');
+    await fields.nth(4).selectOption('Team1');
+    assert.equal(await worker.isDisabled(),true,
+     'manual goal cannot enter Worker plan until row is explicitly confirmed');
+    await goal.locator('label:has-text("このゴールの試合・選手を確認した") input[type=checkbox]').check();
+    assert.equal(await worker.isDisabled(),false,
+     'explicit video-free goal approval enables the independent Worker');
+    await worker.click();
+    await page.waitForFunction(()=>document.querySelector('#workerBatchStatus')?.textContent.includes('mock-only'));
+    assert.equal(healthGets,1,'public Worker capability GET checked before sending');
+    assert.equal(submittedPlan?.layout_mode,'independent-fixtures-v1');
+    assert.equal(submittedPlan?.fixture_count,2);
+    assert.deepEqual(submittedPlan.operations.map(x=>[x.action,x.seq,x.expected_match_id]),[
+     ['create',1,matchId(1)],['finish',1,matchId(1)],['finish',2,matchId(2)]
+    ]);
+    assert.deepEqual(submittedPlan.operations[0].team,'Team1');
+    assert.deepEqual(submittedPlan.operations[0].scorer,'Taro');
+    assert.deepEqual(submittedPlan.operations[0].assist,'Aki');
+    assert.equal(posts,2,'one mocked start and one passive status; no real writes');
+    assert.equal(await worker.isDisabled(),true,'blocked attempt never allows a second start');
+   }
+   assert.equal(prod,0);
+   if(!scenario.manual)assert.equal(posts,scenario.markerMismatch?3:scenario.retired?1:0,
     'only passive inspection POST is allowed; no start/recreate mutation');
    assert.deepEqual(errors,[],scenario.label+' JS errors');
    if(scenario.label==='external one match'){
