@@ -657,6 +657,11 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
  touch();
  const source=chosenGoals();
  if(!snapshot){reviewedEventId='';$('reviewArea').hidden=true;return}
+ // A later official SS reload may change fixture IDs without changing event ID.
+ // Never leave an old green Worker completion card visible across that drift.
+ const completion=$('ssResultPanel');
+ if(!completion.hidden&&completion.dataset.runId.startsWith('worker:')&&
+    !workerCompletionVerified(workerLatestState,snapshot))hideCompletionPanel();
  const prepared=prepareGoalRows({goals:source},snapshot);
  rows=preserveReviewRows(applyManualRowEdits(prepared,manualGoals,snapshot),prior,{
   sameEvent,completedKeys,snapshot
