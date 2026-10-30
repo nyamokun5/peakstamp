@@ -104,8 +104,11 @@ test('staging write recovery cannot silently retry failed requests',()=>{
  assert.match(html,/前回の送信結果が未確認です/);
 });
 
-test('production remains read-only review and manual-detail editor stays open after refresh',()=>{
- assert.match(html,/const quickMode=loadedFromStagingDirect&&\$\('ssEnvironment'\)\.value==='staging'/);
+test('production restores shared AI/roster review with legacy detail as exception; still no direct production POST',()=>{
+ assert.match(html,/const quickMode=\(loadedFromStagingDirect&&\$\('ssEnvironment'\)\.value==='staging'\)\|\|/);
+ assert.match(html,/loadedFromProductionDirect&&\$\('ssEnvironment'\)\.value==='production'/);
+ assert.match(html,/\$\('quickIndividualTestTools'\)\.hidden=!staging/);
+ assert.match(html,/\$\('quickProductionHelp'\)\.hidden=!production/);
  assert.match(html,/\$\('reviewArea'\)\.hidden=quickMode&&!\(preserveEdits&&wasEditing\)/);
  assert.match(html,/const wasEditing=!\$\('reviewArea'\)\.hidden/);
  assert.match(html,/\$\('quickPanel'\)\.hidden=!active/);
