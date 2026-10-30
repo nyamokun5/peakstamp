@@ -67,6 +67,12 @@ export function isRetiredIndependentJob(state,snapshot){
  }
  return true;
 }
+export function assertRetiredIndependentWorkerHealth(health){
+ assertIndependentWorkerHealth(health);
+ if(health?.retired_generation_contract!=='retired-independent-v1')
+  fail('TEST Workerは旧試合から新試合への安全な切替に未対応です。STAGINGの最新版デプロイを確認してください。送信はしていません');
+ return true;
+}
 export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
  if(!snapshot||!UUID.test(snapshot.eventId||'')||!UUID.test(requestId||''))
   fail('正式なTESTイベントとジョブIDを確認できません');
