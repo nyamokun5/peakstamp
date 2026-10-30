@@ -22,6 +22,12 @@ const scenarios=[
  {label:'three-team league',fixtures:[
    match(1,'Team1','Team2','#1 リーグ'),match(2,'Team2','Team3','#2 リーグ'),
    match(3,'Team3','Team1','#3 リーグ')],automatic:false,draw:true},
+ {label:'retired four-match now three-fixture league',fixtures:[
+   match(1,'Team1','Team2','#1 リーグ'),match(2,'Team1','Team3','#2 リーグ'),
+   match(3,'Team2','Team3','#3 リーグ')],automatic:false,retired:true},
+ {label:'retired incomplete old fixture IDs',fixtures:[
+   match(1,'Team1','Team2','#1 リーグ'),match(2,'Team1','Team3','#2 リーグ'),
+   match(3,'Team2','Team3','#3 リーグ')],automatic:false,retired:true,incomplete:true},
  {label:'four-team knockout',fixtures:[
    match(1,'Team1','Team2','#1 準決勝'),match(2,'Team3','Team4','#2 準決勝'),
    match(3,'','','#3 ３位決定戦','waiting'),match(4,'','','#4 決勝','waiting')],automatic:true},
@@ -38,6 +44,9 @@ try{
   let prod=0,posts=0,healthGets=0;
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  if(scenario.retired)await page.addInitScript(({eventId,requestId})=>{
+   localStorage.setItem('peakstamp:test:worker-batch:'+eventId,requestId);
+  },{eventId:E,requestId:'33333333-3333-4333-8333-333333333333'});
   await page.route('**/*',async route=>{
    const url=new URL(route.request().url());
    if(url.hostname==='peakstamp-stage.local'){
@@ -51,6 +60,16 @@ try{
    }
    assert.equal(url.hostname,'shoot-sunday-sync-staging.yomax1979.workers.dev');
    if(route.request().method()!=='GET')posts++;
+   if(scenario.retired&&['/staging/batch/inspect','/staging/batch/status'].includes(url.pathname)){
+    return route.fulfill({status:200,json:{
+     environment:'STAGING ONLY',event_id:E,
+     request_id:'33333333-3333-4333-8333-333333333333',
+     status:'completed',layout_mode:'four-knockout',fixture_count:4,
+     fixture_ids:scenario.incomplete?{'1':matchId(11),'2':matchId(12)}:
+      {'1':matchId(11),'2':matchId(12),'3':matchId(13),'4':matchId(14)},
+     total:4,completed:4,updated_at:Date.now(),inspection_only:true
+    },headers:{'Access-Control-Allow-Origin':'*'}});
+   }
    // Model a Cloudflare Worker that still serves the old 4-match-only release.
    // This is GET-only and never contacts either real Worker.
    if(url.pathname==='/health'){
@@ -84,7 +103,8 @@ try{
    if(scenario.automatic)assert.match(await worker.innerText(),/4試合/);
    else {
     assert.match(await worker.innerText(),new RegExp(String(scenario.fixtures.length)+'試合'));
-    assert.equal(await worker.isDisabled(),scenario.fixtures.some(m=>m.status==='waiting'));
+    assert.equal(await worker.isDisabled(),Boolean(scenario.retired)||
+     scenario.fixtures.some(m=>m.status==='waiting'));
     assert.equal(await page.locator('#legacyBatchDetails').isVisible(),false,
      'generic fixture schedules must never expose legacy knockout register');
    }
@@ -96,7 +116,25 @@ try{
     await page.locator('#finishWinner').selectOption('draw');
     assert.equal(await page.locator('#finishExecute').isDisabled(),false);
    }
-   assert.equal(prod,0);assert.equal(posts,0);
+   if(scenario.retired){
+    await page.waitForFunction(()=>
+     document.querySelector('#workerBatchStatus')?.textContent.includes('旧4試合'));
+    const status=await page.locator('#workerBatchStatus').innerText();
+    const button=page.locator('#workerBatchRecreate');
+    if(scenario.incomplete){
+     assert.equal(await button.isVisible(),false);
+     assert.match(status,/別のTESTイベント/);
+    }else{
+     assert.equal(await button.isVisible(),true);
+     assert.match(await button.innerText(),/旧4試合.*新3試合.*TEST登録/);
+     assert.match(status,/再送せず/);
+    }
+    assert.equal(await page.locator('#ssResultPanel').isVisible(),false,
+     'retired job is NOT a success for the new three fixtures');
+    assert.doesNotMatch(status,/完了後の4試合を取得できません/);
+   }
+   assert.equal(prod,0);assert.equal(posts,scenario.retired?1:0,
+    'only passive inspection POST is allowed; no start/recreate mutation');
    assert.deepEqual(errors,[],scenario.label+' JS errors');
    if(scenario.label==='external one match'){
     assert.equal(await worker.isDisabled(),false,'clean 1-match fixture should offer TEST batch');
