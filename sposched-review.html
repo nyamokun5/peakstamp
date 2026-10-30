@@ -1118,10 +1118,16 @@ function renderQuick(){
   $('quickTestHelp').textContent=officialLayout.automaticFourMatch
    ?'AI候補と登録予定を確認してください。3位決定戦・決勝は準決勝終了後に正式な対戦相手を再取得します。'
    :'SSから取得した試合番号・対戦チームを確認してください。同じ対戦カードが複数回ある場合、試合番号を必ず確認してください。';
-  $('quickIndividualTestTools').open=!officialLayout.automaticFourMatch;
+  const fixtureMode=officialLayout.automaticFourMatch?'knockout':'individual';
+  for(const id of ['quickIndividualTestTools','individualFinishTools']){
+   const details=$(id);
+   if(details.dataset.eventId!==snapshot.eventId||details.dataset.fixtureMode!==fixtureMode){
+    details.open=!officialLayout.automaticFourMatch;
+    details.dataset.eventId=snapshot.eventId;details.dataset.fixtureMode=fixtureMode;
+   }
+  }
   $('quickIndividualTestTools').querySelector('summary').textContent=officialLayout.automaticFourMatch
    ?'個別ゴール登録（従来方式）':'確認済みのゴールをまとめてTEST登録（試合終了は別操作）';
-  $('individualFinishTools').open=!officialLayout.automaticFourMatch;
  }
  // Reuse the exact TEST AI/roster review. Production write controls remain separate.
  $('quickEnvironmentBadge').textContent=staging?'テストSS':'本番・未送信';
