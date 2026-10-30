@@ -52,7 +52,8 @@ await page.route('**/*',async route=>{
  if(url.pathname==='/events')response={events:[{event_id:E,date:'2026-11-01',name:'Sunday',status:'target'}]};
  else if(url.pathname==='/snapshot')response=snapshot;
  else if(url.pathname==='/production/release-state'){
-  checks++;response={environment:'PRODUCTION',event_id:E,release_ready:releaseReady};
+  checks++;response={environment:'PRODUCTION',event_id:E,target_event_id:E,
+   scope:'current-target',release_ready:releaseReady};
  }else if(url.pathname==='/production/inspect'){
   response={environment:'PRODUCTION',mode:'read-only',event_id:E,
    team_pinned:true,team_id:T,event_date:'2026-11-01',write_allowed:false,
@@ -91,15 +92,14 @@ try{
  await page.click('#productionCheck');
  await page.waitForFunction(()=>document.getElementById('productionPlan').textContent.includes('確認未完了'));
  assert.equal(await page.locator('#productionStart').isDisabled(),true);
- assert.equal(await page.locator('#productionApproveWrap').isVisible(),false);
  releaseReady=true;
  await page.click('#productionCheck');
- await page.locator('#productionApproveWrap').waitFor({state:'visible'});
- assert.equal(await page.locator('#productionStart').isDisabled(),true,
-  'production release cannot start without direct operator confirmation');
+ await page.waitForFunction(()=>document.getElementById('productionStart').disabled===false);
+ assert.equal(await page.locator('#productionStart').isDisabled(),false,
+  'current target is standing-authorized after fresh official preflight');
  assert.ok(checks>=2);
  assert.equal(productionWrites,0);
  assert.equal(otherReads,0);
  assert.deepEqual(errors,[]);
- console.log('PASS: mobile production gate stays closed when disabled, requires fresh official GET and explicit approval; zero writes');
+ console.log('PASS: mobile production gate blocks unavailable targets, allows only reviewed current target; zero writes');
 }finally{await browser.close()}
