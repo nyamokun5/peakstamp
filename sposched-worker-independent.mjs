@@ -23,6 +23,22 @@ export function assertIndependentWorkerHealth(health){
  * This is only a button visibility gate. The Worker MUST still prove that
  * every old UUID returns HTTP 404 before any new job is persisted.
  */
+/** Different generation detection is observational only. It is intentionally
+ * broader than isRetiredIndependentJob: even when missing old UUIDs prevent
+ * any safe re-register, the UI must never attempt legacy 4-game completion
+ * verification against a newly published 3-game league.
+ */
+export function hasDifferentIndependentGeneration(state,snapshot){
+ if(!state||!snapshot||state.event_id!==snapshot.eventId||
+    state.status!=='completed')return false;
+ const layout=describeOfficialFixtures(snapshot);
+ if(layout.automaticFourMatch||layout.count<1||layout.count>24)return false;
+ const expectedCount=state.fixture_count||4;
+ if(layout.count!==expectedCount)return true;
+ const old=state.fixture_ids||{};
+ return layout.matches.some(m=>UUID.test(old[m.seq]||'')&&
+  UUID.test(m.matchId||'')&&m.matchId.toLowerCase()!==old[m.seq].toLowerCase());
+}
 export function isRetiredIndependentJob(state,snapshot){
  if(!state||!snapshot||state.event_id!==snapshot.eventId||
     state.status!=='completed')return false;
