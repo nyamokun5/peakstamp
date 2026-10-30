@@ -2291,11 +2291,15 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
       winnerFor:seq=>autoWinnerFor(seq)});
   if(independent)await assertIndependentStagingWorkerReady({recreation:true});
   const goalCount=plan.operations.filter(op=>op.action==='create').length;
+  const manualIds=independent?rows.filter(r=>r.include&&r.goal?.manual===true)
+   .map(r=>r.goal.id):[];
   if(!window.confirm('TESTイベント内で試合が再作成されています。旧'+
      (old.fixture_count||4)+'試合のジョブ（'+oldRequestId+
      '）を履歴へ保管し、新しい'+(plan.fixture_count||4)+'試合に'+goalCount+
      'ゴールを登録します。旧試合には再送しません。開始しますか？'))return;
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
+  if(manualIds.length)localStorage.setItem(
+   workerManualGoalPendingKey(eventId,requestId),JSON.stringify(manualIds));
   localStorage.setItem(pendingKey,JSON.stringify({requestId,previousRequestId:oldRequestId,clickedAt}));
   $('workerBatchRecreate').disabled=true;
   $('workerBatchStatus').textContent='旧試合の削除と新しい'+(plan.fixture_count||4)+'試合の公式IDをWorkerで再照合しています…';
@@ -2318,6 +2322,7 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
        'previous_job_active','previous_job_missing','archive_full',
        'recreation_unavailable'].includes(error.code)){
     localStorage.removeItem(pendingKey);
+    localStorage.removeItem(workerManualGoalPendingKey(eventId,requestId));
    }
    throw error;
   }
