@@ -883,7 +883,7 @@ function renderGoals(){
    row.confirmed=confirm.checked;touch();persistManualRow(row);
    // Manual TEST drafts become eligible for the independent Worker ONLY
    // after this explicit confirmation; update the button without a reload.
-   if(g.manual)renderAutoSummary();
+   if(g.manual)renderQuick();
   });
   // Exception-only single approval for a video goal whose AI identity
   // was uncertain. Never turns a manual/PATCH/duplicate into auto-eligible.
@@ -1179,10 +1179,12 @@ function renderQuick(){
  const manual=items.filter(x=>x.state==='manual-ss');
  const manualPending=manual.filter(x=>!x.registeredInSS).length;
  const deferredAssists=items.filter(x=>x.state==='ready'&&x.deferredAssist);
- const other=items.length-ready-attention-duplicates-waiting-manual.length;
+ const manualDrafts=items.filter(x=>x.state==='manual').length;
+ const other=items.length-ready-attention-duplicates-waiting-manual.length-manualDrafts;
  $('quickSummary').textContent='要確認 '+(attention+duplicates)+'件　｜　'+
    (production?'確認済み ':'登録可能 ')+ready+'件　｜　対戦待ち '+waiting+'件'+
    (manualPending?'　｜　SSで手動登録 '+manualPending+'件':'')+
+   (manualDrafts?'　｜　動画なしの手動ゴール '+manualDrafts+'件':'')+
    (deferredAssists.length?'　｜　アシスト追記 '+deferredAssists.length+'件':'')+
    (other?'　｜　対象外 '+other+'件':'');
  const container=$('quickGoals');container.replaceChildren();
@@ -1211,7 +1213,8 @@ function renderQuick(){
     item.state==='duplicate'?'重複・除外':
     item.state==='waiting'?'対戦待ち':
     item.state==='manual-ss'?(item.registeredInSS?'SS登録済み':'SSで手動登録'):
-    item.state==='attention'?'要修正':'登録対象外';
+    item.state==='attention'?'要修正':
+    item.state==='manual'?'手動ゴール（詳細確認）':'登録対象外';
   top.append(node('span',label,['ready','waiting'].includes(item.state)?'quick-ready':'quick-held'));
   el.append(top);
   const sourceInfo=(match?matchSlotLabel(match):'試合番号：未設定（要選択）')+
@@ -1359,6 +1362,7 @@ function renderQuick(){
    ?'要確認 '+(attention+duplicates)+'件を直すと登録に進めます。'
    :(ready||waiting)?'確認できたら下の「まとめてTESTへ登録」を押してください。'
    :manualPending?'助っ人疑いのゴールはSSで直接登録し、最新情報を再取得してください。'
+   :manualDrafts?'動画なしの手動ゴールは「詳細編集」で試合・選手を確認し、Worker一括登録欄で送信してください。'
     :'登録可能なゴールは現在ありません。対戦待ちは準決勝の終了後に確認します。';
  }
 }
