@@ -116,7 +116,8 @@ try{
    }
    const data=url.pathname==='/events'?
     {events:[{event_id:E,name:'TEST event',date:'2026-10-30',status:'target'}]}:
-    url.pathname==='/snapshot'?{event_id:E,matches:scenario.fixtures,
+    url.pathname==='/snapshot'?{event_id:E,roster_source:'official-current-event-teams',
+     matches:scenario.fixtures,
      roster:{Team1:['Taro','Aki'],Team2:['Jiro'],Team3:['Saburo'],Team4:['Shiro'],
       Team5:['Goro'],Team6:['Roku']}}:{error:{message:'unsupported mocked path'}};
    return route.fulfill({status:url.pathname==='/events'||url.pathname==='/snapshot'?200:404,
@@ -199,7 +200,16 @@ try{
     await goal.waitFor();
     const fields=goal.locator('.fields').first().locator('select');
     await fields.nth(0).selectOption('1');
+    const scorerChoices=await fields.nth(1).locator('option').allTextContents();
+    assert.ok(scorerChoices.some(x=>x.includes('Taro')&&x.includes('Team1')));
+    assert.ok(scorerChoices.some(x=>x.includes('Jiro')&&x.includes('Team2')));
+    assert.ok(scorerChoices.every(x=>!/Team3|Team4|Team5|Team6/.test(x)),
+     'manual scorer dropdown must exclude unrelated current-event teams');
     await fields.nth(1).selectOption('Taro');
+    const assistChoices=await fields.nth(3).locator('option').allTextContents();
+    assert.ok(assistChoices.some(x=>x.includes('Aki')&&x.includes('Team1')));
+    assert.ok(assistChoices.every(x=>!/Team2|Team3|Team4|Team5|Team6/.test(x)),
+     'manual assist dropdown must include only the scorer team');
     await fields.nth(2).selectOption('named');
     await fields.nth(3).selectOption('Aki');
     await fields.nth(4).selectOption('Team1');
