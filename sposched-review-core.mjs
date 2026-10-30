@@ -389,6 +389,22 @@ export function preserveReviewRows(nextRows,priorRows,{
   const match=snapshot?.matches?.find(m=>m.seq===Number(row.seq));
   row.updateGoalId=match?.existingGoals?.some(g=>g.id===old.updateGoalId)
    ?old.updateGoalId:'';
+  // Preserve work-in-progress edits, NEVER restore a stale player from an
+  // earlier team assignment when the same event is refreshed.
+  if(row.goal?.manual&&snapshot?.rosterSource==='official-current-event-teams'){
+   const allowed=fixturePlayerOptions(snapshot,row.seq);
+   const inSide=t=>match&&[match.leftTeam,match.rightTeam]
+    .some(x=>normalizeTeam(x)===normalizeTeam(t));
+   if(row.scorer&&!allowed.includes(row.scorer)){row.scorer='';row.team='';}
+   if(row.team&&!inSide(row.team))row.team='';
+   if(row.scorer&&row.team&&
+      normalizeTeam(snapshot.playerTeam.get(row.scorer))!==normalizeTeam(row.team)){
+    row.scorer='';row.assist='';
+   }
+   if(row.assist&&(!row.team||
+      !fixturePlayerOptions(snapshot,row.seq,row.team).includes(row.assist)))
+    row.assist='';
+  }
   return row;
  });
 }
@@ -411,6 +427,15 @@ export function validateGoalRow(row,snapshot){
   return '得点チームがこの試合の対戦チームと異なります';
  if(row.assistMode==='named'&&row.scorer===row.assist)
   return '得点者とアシストが同一です';
+ if(row.goal?.manual&&snapshot.rosterSource==='official-current-event-teams'){
+  const members=fixturePlayerOptions(snapshot,row.seq);
+  if(!members.includes(row.scorer))return '得点者が現在の試合チームに所属していません';
+  if(normalizeTeam(snapshot.playerTeam.get(row.scorer))!==normalizeTeam(team))
+   return '得点者と現在のSS得点チームが一致しません';
+  if(row.assistMode==='named'&&
+     !fixturePlayerOptions(snapshot,row.seq,team).includes(row.assist))
+   return 'アシスト者が現在の得点チームに所属していません';
+ }
  return null;
 }
 /** Goals already registered IN Shoot Sunday for the selected official match.
