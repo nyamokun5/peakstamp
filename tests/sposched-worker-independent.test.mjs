@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeSpoSnapshot} from '../sposched-review-core.mjs';
-import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration} from '../sposched-worker-independent.mjs';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration} from '../sposched-worker-independent.mjs';
 const eventId='01234567-89ab-4cde-8abc-0123456789ab',requestId='11234567-89ab-4cde-8abc-0123456789ab';
 const mid=i=>'21234567-89ab-4cde-8abc-'+String(i).padStart(12,'0');
 const make=(count,overrides={})=>normalizeSpoSnapshot({event_id:eventId,
@@ -103,4 +103,22 @@ test('retired four-match completed job is shown as separate new 3-match generati
  assert.equal(isRetiredIndependentJob(old,make(3,{2:{title:'#2 決勝'}})),false);
  assert.equal(hasDifferentIndependentGeneration(old,make(4,{1:{title:'#1 準決勝'},2:{title:'#2 準決勝'},
   3:{title:'#3 ３位決定戦',status:'waiting'},4:{title:'#4 決勝',status:'waiting'}})),false);
+});
+
+test('retired fixture migration refuses an old deployed Worker before any mutation',()=>{
+ const health={service:'shoot-sunday-sync-staging',write_mode:'test-only',
+  batch_job_configured:true,independent_batch_contract:'independent-fixtures-v1'};
+ assert.equal(assertIndependentWorkerHealth(health),true);
+ assert.throws(()=>assertRetiredIndependentWorkerHealth(health),/旧試合.*安全な切替/);
+ assert.equal(assertRetiredIndependentWorkerHealth({...health,
+  retired_generation_contract:'retired-independent-v1'}),true);
+ const ui=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(ui,/if\(recreation\)assertRetiredIndependentWorkerHealth\(health\)/);
+ const recreate=ui.slice(ui.indexOf("$('workerBatchRecreate').addEventListener('click'"),
+  ui.indexOf("$('workerBatchRun').addEventListener('click'"));
+ const healthCheck=recreate.indexOf('assertIndependentStagingWorkerReady({recreation:true})');
+ const pending=recreate.indexOf('localStorage.setItem(pendingKey');
+ const mutation=recreate.indexOf("postStaging('/staging/batch/recreate'");
+ assert.ok(healthCheck>=0&&pending>healthCheck&&mutation>pending,
+  'public health feature gate must occur before any recreate pending marker or mutation');
 });
