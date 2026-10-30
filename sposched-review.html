@@ -1524,7 +1524,7 @@ function renderAutoSummary(){
   $('workerGateAudit').hidden=true;
   $('workerBatchJumpToGoal').hidden=true;
   $('autoRun').disabled=true;
-  $('autoRun').textContent='この形式はWorkerで個別の試合を登録します';
+  $('autoRun').textContent=hasFixtures?'この形式はWorkerで個別の試合を登録します':'試合枠がないため登録できません';
   $('workerBatchRun').textContent='SS公式の'+official.count+'試合をまとめてTEST登録';
   $('workerBatchArea').querySelector('p.small').textContent=
    'WorkerがSS公式の試合IDを毎回照合し、ゴールと試合終了を安全に登録します。通信が切れた場合は進捗を再取得します。';
