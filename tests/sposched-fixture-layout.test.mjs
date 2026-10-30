@@ -59,6 +59,19 @@ test('standard four-fixture knockout keeps the existing durable batch and semi d
  assert.throws(()=>finishAction(s,s,1,'draw',{drawAllowed:false}),/勝ち上がり/);
 });
 
+
+test('legacy four-game fixture titles survive completion and remain recognized as knockout',()=>{
+ const before=snap([fixture(1,'Team1','Team2','準決勝'),
+  fixture(2,'Team3','Team4','準決勝'),
+  fixture(3,'','','決勝','waiting'),fixture(4,'','','決勝','waiting')]);
+ assert.equal(describeOfficialFixtures(before).automaticFourMatch,true);
+ const after=snap([fixture(1,'Team1','Team2','準決勝','finished'),
+  fixture(2,'Team3','Team4','準決勝','finished'),
+  fixture(3,'Team2','Team4','決勝','finished'),
+  fixture(4,'Team1','Team3','決勝','finished')]);
+ assert.equal(describeOfficialFixtures(after).automaticFourMatch,true);
+});
+
 test('four fixtures without SS knockout evidence do NOT enter four-fixture worker',()=>{
  const s=snap([fixture(1,'Team1','Team2'),fixture(2,'Team3','Team4'),
   fixture(3,'Team1','Team3'),fixture(4,'Team2','Team4')]);
