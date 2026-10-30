@@ -48,6 +48,15 @@ test('unsafe fixtures and unreviewed goals stop before planning',()=>{
   {state:'ready',helperPlan:{team:'White'}}])
   assert.throws(()=>build(s,[row],[decision]));
 });
+test('blocked 3-match schedules identify the exact SS fixture and never permit batch',()=>{
+ const completed=make(3,{1:{status:'finished'}});
+ assert.throws(()=>build(completed),/#1 終了済み/);
+ const waiting=make(3,{3:{status:'waiting'}});
+ assert.throws(()=>build(waiting),/#3 対戦待ち/);
+ const unknown=make(3,{2:{status:'collecting'}});
+ assert.throws(()=>build(unknown),/#2 状態 collecting/);
+});
+
 test('independent completion requires the same event and all fresh exact finished IDs',()=>{
  const s=make(3),state={event_id:eventId,status:'completed',
   layout_mode:'independent-fixtures-v1',fixture_count:3,

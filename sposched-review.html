@@ -1547,7 +1547,7 @@ function renderAutoSummary(){
   root.append(node('strong','SS公式の'+official.count+'試合を登録'));
   for(const m of official.matches){
    root.append(node('div','#'+m.seq+' '+(m.title||'試合')+'：'+
-    (m.status==='finished'?'終了済み':m.status==='waiting'?'対戦待ち':'登録予定'),
+    (m.status==='finished'?'終了済み':m.status==='waiting'?'対戦待ち':m.status==='scheduled'?'登録予定':'状態未確認 ('+(m.status||'不明')+')'),
     'fixture-status'));
   }
   let error='';
