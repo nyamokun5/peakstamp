@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeSpoSnapshot} from '../sposched-review-core.mjs';
-import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration,describeCompletedWorkerMismatch} from '../sposched-worker-independent.mjs';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration,describeCompletedWorkerMismatch,assertRetiredWorkerReconnectable} from '../sposched-worker-independent.mjs';
 const eventId='01234567-89ab-4cde-8abc-0123456789ab',requestId='11234567-89ab-4cde-8abc-0123456789ab';
 const mid=i=>'21234567-89ab-4cde-8abc-'+String(i).padStart(12,'0');
 const make=(count,overrides={})=>normalizeSpoSnapshot({event_id:eventId,
@@ -174,4 +174,42 @@ test('retired completed Worker diagnosis works without local marker authority an
  assert.equal(unverified.changed,false);
  assert.deepEqual(unverified.unverified,[1,2,3]);
  assert.match(unverified.detail,/終了未確認の試合/);
+});
+
+test('local-only reattachment demands two authentic completed fixtures, no uncertainty or active execution',()=>{
+ const snapshot=make(3), oldRequest='41234567-89ab-4cde-8abc-0123456789ab';
+ const state={environment:'STAGING ONLY',inspection_contract:'event-inspect-v1',
+  inspection_only:true,execution_active:false,status:'completed',event_id:eventId,
+  request_id:requestId,layout_mode:'four-knockout',fixture_count:4,
+  fixture_ids:{1:mid(11),2:mid(12),3:mid(13),4:mid(14)},
+  completed:11,total:11};
+ const check=(changes={},other={})=>assertRetiredWorkerReconnectable({
+  state:{...state,...changes},snapshot,storedRequestId:oldRequest,...other
+ });
+ assert.deepEqual(check(),{eventId,previousRequestId:oldRequest,
+  workerRequestId:requestId,oldCount:4,newCount:3});
+ for(const modification of [
+  {status:'running'},{completed:10},{total:10},{inspection_only:false},
+  {inspection_contract:'unknown'},{execution_active:true},{environment:'PRODUCTION'},
+  {fixture_ids:{1:mid(11),2:mid(12)}},{fixture_ids:{...state.fixture_ids,1:mid(1)}},
+  {event_id:'11234567-89ab-4cde-8abc-0123456789ab'}
+ ])assert.throws(()=>check(modification));
+ assert.throws(()=>check({}, {pendingGoals:true}));
+ assert.throws(()=>check({}, {pendingRecreation:true}));
+ assert.throws(()=>check({}, {storedRequestId:requestId}),
+  'same current job must never be silently reattached');
+ assert.throws(()=>check({}, {storedRequestId:'invalid'}));
+ assert.throws(()=>assertRetiredWorkerReconnectable({
+  state,snapshot:make(3,{1:{status:'finished'}}),storedRequestId:oldRequest}));
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ const listener=html.slice(
+  html.indexOf("$('workerBatchReconnect').addEventListener('click'"),
+  html.indexOf("$('workerBatchRecreate').addEventListener('click'"));
+ assert.match(listener,/\/staging\/batch\/inspect/);
+ assert.doesNotMatch(listener,/\/staging\/batch\/(?:start|recreate|decision|resume)/);
+ const backup=listener.indexOf("localStorage.setItem(backupKey");
+ const pointer=listener.indexOf('localStorage.setItem(key,second.request_id)');
+ assert.ok(backup>0&&pointer>backup,'backup must be written BEFORE changing pointer');
+ assert.match(listener,/snapKey\(fresh\)!==initial/);
+ assert.match(listener,/journalKey\(first\)!==journalKey\(second\)/);
 });
