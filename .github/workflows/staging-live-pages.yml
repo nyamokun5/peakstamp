@@ -2,6 +2,8 @@ name: Verify live PeakStamp STAGING Pages
 on:
   push:
     branches: [staging]
+  pull_request:
+    branches: [staging]
 permissions:
   contents: read
 jobs:
