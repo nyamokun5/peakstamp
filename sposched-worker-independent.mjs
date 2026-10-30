@@ -39,6 +39,40 @@ export function hasDifferentIndependentGeneration(state,snapshot){
  return layout.matches.some(m=>UUID.test(old[m.seq]||'')&&
   UUID.test(m.matchId||'')&&m.matchId.toLowerCase()!==old[m.seq].toLowerCase());
 }
+/** Read-only, event-scoped comparison. A saved browser request ID is not
+ * authoritative for what is stored in the Durable Object: report mismatch
+ * even if localStorage was lost, replaced, or belongs to an earlier job.
+ * Never return authorisation to write from this diagnostic.
+ */
+export function describeCompletedWorkerMismatch(state,snapshot,localRequestId){
+ if(!state||!snapshot||state.status!=='completed'||
+    state.event_id!==snapshot.eventId)return null;
+ const official=describeOfficialFixtures(snapshot);
+ const workerCount=Number.isInteger(state.fixture_count)?state.fixture_count:4;
+ const currentCount=official.count;
+ const ids=state.fixture_ids||{};
+ const known=Array.from({length:workerCount},(_,i)=>ids[i+1])
+  .filter(id=>UUID.test(id||'')).length;
+ const localMatches=Boolean(localRequestId&&state.request_id===localRequestId);
+ const numberMismatch=workerCount!==currentCount;
+ const differentIds=official.matches.filter(m=>
+  UUID.test(ids[m.seq]||'')&&UUID.test(m.matchId||'')&&
+  ids[m.seq].toLowerCase()!==m.matchId.toLowerCase()).map(m=>m.seq);
+ const unverified=official.matches.filter(m=>m.status!=='finished').map(m=>m.seq);
+ const changed=numberMismatch||differentIds.length>0;
+ return {changed,workerCount,currentCount,known,localMatches,differentIds,unverified,
+  detail:changed
+   ?'Workerは旧'+workerCount+'試合、現在のSS公式は'+currentCount+
+    '試合です。旧ジョブの正式試合IDは'+known+'/'+workerCount+'件確認できます。'+
+    (differentIds.length?'変更された試合番号：#'+differentIds.join('、#')+'。':'')+
+    (localMatches?'端末の保存ジョブIDとWorkerは一致しています。':
+     '端末の保存ジョブIDとWorkerが一致しません。端末側の記録を削除・上書きしないでください。')
+   :'Worker側は'+workerCount+'試合です。'+
+    (unverified.length?'SS公式で終了未確認の試合：#'+unverified.join('、#')+'。':
+     '現在のSS公式ID・終了状態について最終の再取得照合が必要です。')+
+    (localMatches?'':'端末の保存ジョブIDとWorkerが一致しません。')
+ };
+}
 export function isRetiredIndependentJob(state,snapshot){
  if(!state||!snapshot||state.event_id!==snapshot.eventId||
     state.status!=='completed')return false;

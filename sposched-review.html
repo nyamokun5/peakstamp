@@ -431,7 +431,7 @@ import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from 
 import {describeOfficialFixtures,drawOptionForFixture,fixtureSummaryLabel} from './sposched-fixture-layout.mjs';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
-import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration} from './sposched-worker-independent.mjs';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration,describeCompletedWorkerMismatch} from './sposched-worker-independent.mjs';
 import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
 import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
@@ -1580,10 +1580,11 @@ function renderAutoSummary(){
   const currentId=snapshot.eventId;
   const previous=localStorage.getItem(workerBatchStorageKey(currentId));
   const unresolved=pendingForEvent().length>0;
-  const oldJob=workerLatestState?.event_id===currentId&&
-   workerLatestState.request_id===previous?workerLatestState:null;
+  const observedJob=workerLatestState?.event_id===currentId?workerLatestState:null;
+  const oldJob=observedJob?.request_id===previous?observedJob:null;
   const retired=Boolean(previous&&oldJob&&isRetiredIndependentJob(oldJob,snapshot));
-  const different=Boolean(previous&&oldJob&&hasDifferentIndependentGeneration(oldJob,snapshot));
+  const different=Boolean(observedJob&&hasDifferentIndependentGeneration(observedJob,snapshot));
+  const diagnostic=observedJob&&describeCompletedWorkerMismatch(observedJob,snapshot,previous);
   $('workerBatchRecreate').hidden=!retired||unresolved;
   $('workerBatchRecreate').disabled=batchBusy||autoBusy||workerBatchPolling;
   $('workerBatchRecreate').textContent='旧'+(oldJob?.fixture_count||4)+'試合を履歴に保存して新'+official.count+'試合をTEST登録';
@@ -1597,8 +1598,9 @@ function renderAutoSummary(){
   $('workerBatchReadiness').textContent=retired
    ?'前回の'+(oldJob.fixture_count||4)+'試合は完了済みです。現在は別の'+official.count+
     '試合です。旧記録を残し、新しい公式試合IDを再照合してから登録できます。':
-   different?'旧ジョブと現在の'+official.count+
-     '試合は別の対戦表です。旧試合IDが不足しているため安全な再登録を確認できません。別のTESTイベントで検証してください。':
+   different?(diagnostic?.detail||'旧ジョブと現在の公式試合が異なります。')+
+     (oldJob?' 旧ジョブの全ID・新試合の初期状態を確認できる場合のみ切り替え可能です。':
+      ' この端末からの再登録は許可しません。') :
    previous?'このイベントにはWorker登録記録があります。先に進捗を再取得してください。':
    error?'開始できません：'+error:'登録準備ができました。';
   $('workerBatchRun').disabled=Boolean(error||previous||unresolved||
@@ -1941,18 +1943,18 @@ function showWorkerBatchState(state){
   catch{$(id).hidden=true;}
  }
  const stored=localStorage.getItem(workerBatchStorageKey(state.event_id));
- if(stored===state.request_id&&hasDifferentIndependentGeneration(state,snapshot)){
+ const diagnosis=describeCompletedWorkerMismatch(state,snapshot,stored);
+ if(hasDifferentIndependentGeneration(state,snapshot)){
   $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
   $('workerTimingDetails').hidden=true;
   hideCompletionPanel();
   workerBatchPolling=false;setBatchBusy(false);
   renderAutoSummary();
-  const safe=isRetiredIndependentJob(state,snapshot);
-  $('workerBatchStatus').textContent='旧'+(state.fixture_count||4)+
-   '試合の登録記録は完了済みですが、SS公式の現在の'+snapshot.matches.length+
-   '試合とは別の登録先です。'+
-   (safe?'旧ジョブを再送せず、新試合用のボタンからWorkerによる正式ID・削除確認を行ってください。':
-    '旧ジョブのすべての正式試合IDを確認できないため、再登録は安全に許可できません。別のTESTイベントをご利用ください。');
+  const safe=Boolean(stored===state.request_id&&isRetiredIndependentJob(state,snapshot));
+  $('workerBatchStatus').textContent='⚠ 新しいSSの試合は未登録・未照合です。'+
+   (diagnosis?.detail||'WorkerとSS公式の試合構成が一致しません。')+
+   (safe?' 旧ジョブを再送せず、別の新試合用ボタンからWorkerの削除証明を行えます。':
+    ' 新規登録・再送は許可しません。必要なら別のTESTイベントで検証してください。');
   $('workerBatchDecision').hidden=true;
   return;
  }
@@ -1980,7 +1982,9 @@ function showWorkerBatchState(state){
   (state.observation_only===true?'【TEST確認専用・新規登録停止中】 ':'')+(
   state.status==='completed'?(workerCompletionVerified(state,snapshot)
     ?'✓ Workerで全操作の登録・照合が完了しました（SS公式の全試合ID・終了状態を再確認済み）。'+progress
-    :'⚠ Workerの操作履歴は完了していますが、現在のSS公式試合ID・終了状態はまだ照合できていません。再登録しないでください。'+progress):
+    :'⚠ Workerの操作履歴は完了していますが、現在のSS公式試合ID・終了状態はまだ照合できていません。'+
+     (diagnosis?.detail||'SS公式の試合ID・終了状態を再取得して確認できません。')+
+     ' 再登録しないでください。'+progress):
   state.status==='paused'?'一時停止しました。送信済みの操作を繰り返さず、確認済みの続きから再開できます。'+progress:
   state.pause_requested?'停止要求を保存しました。進行中の操作を確認してから停止します。'+progress:
   state.status==='needs_decision'?'同点のため試合 #'+state.decision.seq+' の結果を指定してください。'+progress:
