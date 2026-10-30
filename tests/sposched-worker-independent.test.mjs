@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {normalizeSpoSnapshot} from '../sposched-review-core.mjs';
-import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration} from '../sposched-worker-independent.mjs';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration,describeCompletedWorkerMismatch} from '../sposched-worker-independent.mjs';
 const eventId='01234567-89ab-4cde-8abc-0123456789ab',requestId='11234567-89ab-4cde-8abc-0123456789ab';
 const mid=i=>'21234567-89ab-4cde-8abc-'+String(i).padStart(12,'0');
 const make=(count,overrides={})=>normalizeSpoSnapshot({event_id:eventId,
@@ -143,4 +143,35 @@ test('completed Worker UI requires official readback proof before showing a gree
  const independentCheck=refresh.indexOf('verifyIndependentWorkerCompletion(state,fresh,snapshot)');
  assert.ok(proof>finalCheck&&proof>independentCheck,
   'proof must be issued only AFTER independently verifying official match IDs');
+});
+
+test('retired completed Worker diagnosis works without local marker authority and never claims safe success',()=>{
+ const official=make(3);
+ const old={event_id:eventId,request_id:requestId,status:'completed',
+  layout_mode:'four-knockout',fixture_count:4,
+  fixture_ids:{1:mid(11),2:mid(12),3:mid(13),4:mid(14)}};
+ const otherId='41234567-89ab-4cde-8abc-0123456789ab';
+ const mismatched=describeCompletedWorkerMismatch(old,official,otherId);
+ assert.equal(mismatched.changed,true);
+ assert.equal(mismatched.workerCount,4);
+ assert.equal(mismatched.currentCount,3);
+ assert.equal(mismatched.known,4);
+ assert.equal(mismatched.localMatches,false);
+ assert.match(mismatched.detail,/旧4試合.*3試合/);
+ assert.match(mismatched.detail,/保存ジョブIDとWorkerが一致しません/);
+ assert.equal(mismatched.detail.includes(mid(11)),false,'diagnostic must not reveal UUIDs');
+ const matching=describeCompletedWorkerMismatch(old,official,requestId);
+ assert.equal(matching.localMatches,true);
+ assert.equal(describeCompletedWorkerMismatch(old,official,null).changed,true);
+ assert.equal(describeCompletedWorkerMismatch({...old,status:'running'},official,otherId),null);
+ assert.equal(describeCompletedWorkerMismatch({...old,event_id:otherId},official,otherId),null);
+ const partial=describeCompletedWorkerMismatch({...old,fixture_ids:{1:mid(11),2:mid(12)}},official,requestId);
+ assert.equal(partial.known,2);
+ assert.match(partial.detail,/2\/4件/);
+ const same={...old,layout_mode:'independent-fixtures-v1',
+  fixture_count:3,fixture_ids:{1:mid(1),2:mid(2),3:mid(3)}};
+ const unverified=describeCompletedWorkerMismatch(same,official,requestId);
+ assert.equal(unverified.changed,false);
+ assert.deepEqual(unverified.unverified,[1,2,3]);
+ assert.match(unverified.detail,/終了未確認の試合/);
 });
