@@ -69,7 +69,7 @@ try{
  await page.click('#ssLoadSnapshot');
  await page.locator('#productionPanel').waitFor({state:'visible'});
  await page.locator('#quickPanel').waitFor({state:'visible'});
- await page.locator('#quickGoals .quick-goal').waitFor({state:'visible'});
+ await page.locator('#quickGoals .quick-goal').first().waitFor({state:'visible'});
  const review=await page.locator('#quickGoals .quick-goal').first().innerText();
  assert.match(review,/AI提案/);
  assert.match(review,/SS登録予定（名簿照合）/);
