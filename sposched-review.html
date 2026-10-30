@@ -431,7 +431,7 @@ import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from 
 import {describeOfficialFixtures,drawOptionForFixture,fixtureSummaryLabel} from './sposched-fixture-layout.mjs';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
-import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration} from './sposched-worker-independent.mjs';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration} from './sposched-worker-independent.mjs';
 import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
 import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
@@ -973,7 +973,7 @@ async function fetchSS(path) {
  return data;
 }
 // GET-only capability check; do not create a local job marker before this passes.
-async function assertIndependentStagingWorkerReady(){
+async function assertIndependentStagingWorkerReady({recreation=false}={}){
  let response;
  try{
   response=await fetch(SS_GATEWAYS.staging+'/health',{
@@ -986,6 +986,7 @@ async function assertIndependentStagingWorkerReady(){
  let health;
  try{health=await response.json()}catch{throw Error('TEST Workerの状態情報が不正です。登録は開始していません')}
  assertIndependentWorkerHealth(health);
+ if(recreation)assertRetiredIndependentWorkerHealth(health);
 }
 async function postStaging(path,payload) {
  if(autoTiming)autoTiming.posts++;
@@ -2147,7 +2148,7 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
    :prepareWorkerTournament({snapshot:fresh,rows,
       decisions:quickGoalDecisions(fresh,rows),requestId,
       winnerFor:seq=>autoWinnerFor(seq)});
-  if(independent)await assertIndependentStagingWorkerReady();
+  if(independent)await assertIndependentStagingWorkerReady({recreation:true});
   const goalCount=plan.operations.filter(op=>op.action==='create').length;
   if(!window.confirm('TESTイベント内で試合が再作成されています。旧'+
      (old.fixture_count||4)+'試合のジョブ（'+oldRequestId+
