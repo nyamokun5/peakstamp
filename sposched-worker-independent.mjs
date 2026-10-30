@@ -24,8 +24,20 @@ export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
  const layout=describeOfficialFixtures(snapshot);
  if(layout.automaticFourMatch||layout.count<1||layout.count>24)
   fail('この試合構成では独立試合の一括登録は使えません');
- if(layout.waiting||layout.finished||layout.ready!==layout.count)
-  fail('対戦確定待ち・終了済みの試合があります。SSの正式な対戦を確認してください');
+ if(layout.waiting||layout.finished||layout.ready!==layout.count){
+  // Report exactly which SS fixture blocks a safe whole-event write, without
+  // guessing a pending/finished match is safe to replay.
+  const unsafe=layout.matches.filter(m=>m.status!=='scheduled'||
+   !m.matchId||!m.leftTeam||!m.rightTeam);
+  const details=unsafe.slice(0,6).map(m=>'#'+m.seq+' '+
+   (m.status==='finished'?'終了済み':
+    m.status==='waiting'?'対戦待ち':
+    m.status!=='scheduled'?'状態 '+(m.status||'不明'):
+    '対戦相手または公式試合IDが未設定')).join(' / ');
+  fail('対戦確定待ち・終了済みの試合があります。'+
+   (details?'該当するSS公式試合：'+details+'。':'')+
+   '再登録せずSSの正式な試合状態を確認してください');
+ }
  if(!layout.matches.every((m,i)=>m.seq===i+1&&UUID.test(m.matchId||'')&&
     m.status==='scheduled'&&m.leftTeam&&m.rightTeam&&
     m.leftTeam!==m.rightTeam&&m.existingGoals.length===0&&
