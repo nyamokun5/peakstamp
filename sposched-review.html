@@ -431,7 +431,7 @@ import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from 
 import {describeOfficialFixtures,drawOptionForFixture,fixtureSummaryLabel} from './sposched-fixture-layout.mjs';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
-import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth} from './sposched-worker-independent.mjs';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,isRetiredIndependentJob} from './sposched-worker-independent.mjs';
 import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
 import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
@@ -1466,7 +1466,7 @@ function refreshSSResultLink(){
  if(link)$('ssResultLink').href=link;
  else $('ssResultLink').removeAttribute('href');
  $('ssResultLinkNote').textContent=link
-  ?'別タブでSSアプリを開き、登録されたゴールと4試合の結果を確認できます。'
+  ?'別タブでSSアプリを開き、登録されたゴールと'+snapshot.matches.length+'試合の結果を確認できます。'
   :'このイベントのSSアプリURLは未登録です。下の欄へ正しいURLを貼り付けて保存してください。';
 }
 function showCompletionPanel(eventId,seconds,runId){
@@ -1558,12 +1558,23 @@ function renderAutoSummary(){
   const currentId=snapshot.eventId;
   const previous=localStorage.getItem(workerBatchStorageKey(currentId));
   const unresolved=pendingForEvent().length>0;
+  const oldJob=workerLatestState?.event_id===currentId&&
+   workerLatestState.request_id===previous?workerLatestState:null;
+  const retired=Boolean(previous&&oldJob&&isRetiredIndependentJob(oldJob,snapshot));
+  $('workerBatchRecreate').hidden=!retired||unresolved;
+  $('workerBatchRecreate').disabled=batchBusy||autoBusy||workerBatchPolling;
+  $('workerBatchRecreate').textContent='旧'+(oldJob?.fixture_count||4)+'試合を履歴に保存して新'+official.count+'試合をTEST登録';
+  $('workerBatchRecreateHint').hidden=!retired;
+  $('workerBatchRecreateHint').textContent='旧Worker登録は再送せず履歴に保存します。新'+official.count+
+   '試合の公式ID・0-0・旧試合削除をWorkerが再確認してから新規登録します。';
   $('workerBatchRefresh').hidden=!previous;
   $('workerBatchRecover').hidden=!unresolved;
   $('autoBeforeRun').textContent=unresolved?'⚠ 前回の送信結果を照合してください':
    error?'⚠ '+error:'✓ ゴールを確認後、下のボタンで'+official.count+'試合を順番に登録できます。';
-  $('workerBatchReadiness').textContent=previous
-   ?'このイベントにはWorker登録記録があります。先に進捗を再取得してください。':
+  $('workerBatchReadiness').textContent=retired
+   ?'前回の'+(oldJob.fixture_count||4)+'試合は完了済みです。現在は別の'+official.count+
+    '試合です。旧記録を残し、新しい公式試合IDを再照合してから登録できます。':
+   previous?'このイベントにはWorker登録記録があります。先に進捗を再取得してください。':
    error?'開始できません：'+error:'登録準備ができました。';
   $('workerBatchRun').disabled=Boolean(error||previous||unresolved||
    batchBusy||autoBusy||workerBatchPolling);
@@ -1905,6 +1916,18 @@ function showWorkerBatchState(state){
   catch{$(id).hidden=true;}
  }
  const stored=localStorage.getItem(workerBatchStorageKey(state.event_id));
+ if(stored===state.request_id&&isRetiredIndependentJob(state,snapshot)){
+  $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
+  $('workerTimingDetails').hidden=true;
+  hideCompletionPanel();
+  workerBatchPolling=false;setBatchBusy(false);
+  renderAutoSummary();
+  $('workerBatchStatus').textContent='旧'+(state.fixture_count||4)+
+   '試合の登録記録は完了済みですが、SS公式の現在の'+snapshot.matches.length+
+   '試合とは別の登録先です。旧ジョブを再送せず、表示された新試合用のTEST登録ボタンで正式IDの削除・初期状態を確認してください。';
+  $('workerBatchDecision').hidden=true;
+  return;
+ }
  if(state.layout_mode!=='independent-fixtures-v1'&&stored===state.request_id&&hasRecreatedBracket(state,snapshot)){
   $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
   $('workerTimingDetails').hidden=true;
@@ -1996,8 +2019,8 @@ async function refreshWorkerBatch({passive=false}={}){
   }
   // Completion is shown only after the final official snapshot is available.
   // Status/GET failure must not leave a green success panel behind.
-  if(state.status==='completed'&&(state.layout_mode==='independent-fixtures-v1'||
-    !hasRecreatedBracket(state,snapshot))){
+  if(state.status==='completed'&&!isRetiredIndependentJob(state,snapshot)&&
+    (state.layout_mode==='independent-fixtures-v1'||!hasRecreatedBracket(state,snapshot))){
    hideCompletionPanel();
    $('workerBatchStatus').textContent='Workerの登録は完了しました。SS公式の全試合の終了状態を確認中…';
    const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
@@ -2104,24 +2127,30 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
    throw Error('旧ジョブの状態が変更されました。進捗を再取得してください');
   const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
   if(fresh.eventId!==eventId)throw Error('現在のTESTイベントIDが一致しません');
-  if(!hasRecreatedBracket(old,fresh))
-   throw Error('削除・再作成後の4試合IDを確認できません');
+  const newLayout=describeOfficialFixtures(fresh);
+  const independent=!newLayout.automaticFourMatch;
+  if(independent?!isRetiredIndependentJob(old,fresh):!hasRecreatedBracket(old,fresh))
+   throw Error('新旧の公式試合ID・状態を安全に照合できません。再送はしていません');
   // Keep the first click separate from any follow-up status polling.
   // The Worker independently confirms deleted old fixtures, old HTTP 404,
   // and 0-0 clean new semifinals before running even one write.
   const requestId=crypto.randomUUID();
-  const plan=prepareWorkerTournament({
-   snapshot:fresh,rows,decisions:quickGoalDecisions(fresh,rows),requestId,
-   winnerFor:seq=>autoWinnerFor(seq)
-  });
+  const plan=independent
+   ?prepareWorkerIndependent({snapshot:fresh,rows,
+      decisions:quickGoalDecisions(fresh,rows),requestId})
+   :prepareWorkerTournament({snapshot:fresh,rows,
+      decisions:quickGoalDecisions(fresh,rows),requestId,
+      winnerFor:seq=>autoWinnerFor(seq)});
+  if(independent)await assertIndependentStagingWorkerReady();
   const goalCount=plan.operations.filter(op=>op.action==='create').length;
-  if(!window.confirm('TESTイベント内で試合が再作成されています。旧ジョブ（'+
-     oldRequestId+'）は履歴へ保管し、新しい4試合に'+goalCount+
+  if(!window.confirm('TESTイベント内で試合が再作成されています。旧'+
+     (old.fixture_count||4)+'試合のジョブ（'+oldRequestId+
+     '）を履歴へ保管し、新しい'+(plan.fixture_count||4)+'試合に'+goalCount+
      'ゴールを登録します。旧試合には再送しません。開始しますか？'))return;
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
   localStorage.setItem(pendingKey,JSON.stringify({requestId,previousRequestId:oldRequestId,clickedAt}));
   $('workerBatchRecreate').disabled=true;
-  $('workerBatchStatus').textContent='旧試合の削除と新試合IDをWorkerで再照合しています…';
+  $('workerBatchStatus').textContent='旧試合の削除と新しい'+(plan.fixture_count||4)+'試合の公式IDをWorkerで再照合しています…';
   hideCompletionPanel();
   setBatchBusy(true);
   try{
