@@ -191,14 +191,15 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <div id="recoveryDetails"></div>
 </section>
 <section class="panel" id="quickPanel" hidden>
- <div class="top"><h2>3. ゴール候補を確認・修正</h2><span class="step">TEST ONLY</span></div>
+ <div class="top"><h2>3. ゴール候補を確認・修正</h2><span id="quickEnvironmentBadge" class="step">TEST ONLY</span></div>
  <div id="ssFixtureWarning" class="warning" hidden role="alert">
   <strong>このイベントには選択できるSS試合がありません</strong>
   <p id="ssFixtureWarningText"></p>
   <button id="ssChooseEvent" type="button">← SSイベントを選び直す</button>
   <button id="ssReloadFixtures" type="button">試合を再取得（読み取りのみ）</button>
  </div>
- <p class="step-help">AI提案とSS登録予定を確認してください。<strong>別チームの得点者・アシスト者はWorkerがその試合の助っ人として登録してから、ゴールとアシストを記録</strong>します。3位決定戦・決勝は準決勝の正式結果が確定してから登録します。得点チームが不明な場合だけ選択してください。</p>
+ <p id="quickTestHelp" class="step-help">AI提案とSS登録予定を確認してください。<strong>別チームの得点者・アシスト者はWorkerがその試合の助っ人として登録してから、ゴールとアシストを記録</strong>します。3位決定戦・決勝は準決勝の正式結果が確定してから登録します。得点チームが不明な場合だけ選択してください。</p>
+ <p id="quickProductionHelp" class="step-help" hidden>一昨日のTEST版と同じAI提案・公式SS名簿の照合画面です。曖昧な得点者・アシスト者・試合だけ修正できます。<strong>この画面での編集では本番SSに送信しません。</strong>本番への登録は下の専用パネルでイベント単位の承認後のみ可能です。</p>
  <p id="quickSummary" class="quick-summary" role="status" aria-live="polite"></p>
  <button id="quickResetBulkReview" type="button" hidden>試合作り直し後のゴールをまとめて試合番号確認（書き込みなし）</button>
  <p id="quickResetBulkStatus" class="small" role="status" aria-live="polite"></p>
@@ -209,7 +210,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  </div>
  
 <h2 id="autoRegisterHeading">4. 確認済みのゴールと4試合をTESTへ登録</h2>
- <p class="step-help">通常は下の<strong>「一覧の内容で4試合を登録（TEST）」</strong>だけを使います。従来方式は予備操作にまとめました。同じイベントで両方押さないでください。</p>
+ <p id="autoRegisterHelp" class="step-help">通常は下の<strong>「一覧の内容で4試合を登録（TEST）」</strong>だけを使います。従来方式は予備操作にまとめました。同じイベントで両方押さないでください。</p>
  <div id="autoPanel">
   <div id="autoOutline" aria-label="試合の登録予定"></div>
   <p id="autoBeforeRun" class="small" role="status"></p>
@@ -284,7 +285,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
    </details>
   </div>
  </div>
- <details class="help"><summary>個別ゴール登録（従来方式）</summary>
+ <details id="quickIndividualTestTools" class="help"><summary>個別ゴール登録（従来方式）</summary>
   <button id="quickPreview" class="primary quick-main" type="button">登録内容を確認</button>
   <div id="quickConfirmPanel" class="finish-preview-card" hidden>
    <strong id="quickConfirmTitle"></strong>
@@ -658,7 +659,8 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
  // Video-first quick view is TEST-only. Production remains a fully usable
  // read-only goal review. Keep exception/detail view open across local edits
  // and same-event refreshes (e.g., manually added test goal).
- const quickMode=loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
+ const quickMode=(loadedFromStagingDirect&&$('ssEnvironment').value==='staging')||
+  (loadedFromProductionDirect&&$('ssEnvironment').value==='production');
  $('reviewArea').hidden=quickMode&&!(preserveEdits&&wasEditing);
  renderPendingPanel();
  $('manualAddWrap').hidden=!(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&snapshot.matches.length);
@@ -1081,12 +1083,22 @@ $('quickResetBulkReview').addEventListener('click',async()=>{
 });
 function renderQuick(){
  resetFinish();
- const active=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
+ const staging=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
+ const production=!!snapshot&&loadedFromProductionDirect&&$('ssEnvironment').value==='production';
+ const active=staging||production;
  $('quickPanel').hidden=!active;
  if(!active)return;
+ // Reuse the exact TEST AI/roster review. Production write controls remain separate.
+ $('quickEnvironmentBadge').textContent=staging?'TEST ONLY':'本番・照合';
+ $('quickTestHelp').hidden=!staging;
+ $('quickProductionHelp').hidden=!production;
+ $('autoRegisterHeading').hidden=!staging;
+ $('autoRegisterHelp').hidden=!staging;
+ $('quickIndividualTestTools').hidden=!staging;
+ $('quickEdit').textContent=staging?'詳細編集・手動追加・既存ゴール修正':'詳細編集・選手名簿を確認';
  const items=quickGoalDecisions(snapshot,rows);
  const resetCount=rows.filter(r=>r.fixtureIdentityChanged===true).length;
- $('quickResetBulkReview').hidden=resetCount===0||snapshot.matches.length!==4;
+ $('quickResetBulkReview').hidden=!staging||resetCount===0||snapshot.matches.length!==4;
  $('quickResetBulkReview').textContent='試合作り直し後の'+resetCount+'件をまとめて試合番号確認（書き込みなし）';
  const ready=items.filter(x=>x.state==='ready').length;
  const attention=items.filter(x=>x.state==='attention').length;
@@ -1096,7 +1108,7 @@ function renderQuick(){
  const manualPending=manual.filter(x=>!x.registeredInSS).length;
  const deferredAssists=items.filter(x=>x.state==='ready'&&x.deferredAssist);
  const other=items.length-ready-attention-duplicates-waiting-manual.length;
- $('quickSummary').textContent=(attention||duplicates?
+ $('quickSummary').textContent=(production?'本番SS・照合のみ（登録は別途承認）　｜　':'')+(attention||duplicates?
    '先に確認が必要：'+(attention+duplicates)+'件。下の候補を修正してください。':
    'ゴール候補 '+items.length+'件を確認してください。')+
    '　｜　登録可能 '+ready+'件・対戦待ち（自動登録予定） '+waiting+'件'+
@@ -1110,7 +1122,7 @@ function renderQuick(){
   const selected=$('ssEventSelect').selectedOptions[0]?.textContent||'選択したイベント';
   $('ssFixtureWarningText').textContent='「'+selected+
    '」について、SSから番号付き試合を0件取得しました。'+rows.length+'件の動画ゴールだけでは公式の試合番号・対戦チーム・IDは作れません。'+
-   '正しいTESTイベントを選び直すか、SS側で4試合のトーナメント枠を作成してから再取得してください。TESTへの送信は停止しています。';
+   '正しい'+(production?'本番':'TEST')+'イベントを選び直すか、SS側で4試合のトーナメント枠を作成してから再取得してください。書き込みは停止しています。';
  }
  // Fixes are first; already reviewed goals follow. Video counts are reference
  // information only and appear after the actual items, not before them.
@@ -1268,7 +1280,9 @@ function renderQuick(){
  }
  renderAutoSummary();
  $('quickPreview').disabled=batchBusy||ready===0;
- if(!quickPrepared){
+ if(production){
+  $('quickStatus').textContent='AI提案とSS公式名簿の照合・修正はこの画面で可能です。本番への送信は下の本番専用パネルで別途承認するまで行いません。';
+ }else if(!quickPrepared){
   $('quickStatus').textContent=attention||duplicates
    ?'要確認 '+(attention+duplicates)+'件を直すと登録に進めます。'
    :(ready||waiting)?'確認できたら下の「まとめてTESTへ登録」を押してください。'
