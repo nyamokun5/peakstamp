@@ -13,7 +13,7 @@ const snapshot={event_id:E,
   status:i<2?'scheduled':'waiting',left_team:i<2?'Team '+(i*2+1):'',
   right_team:i<2?'Team '+(i*2+2):'',
   left_score:0,right_score:0,goals:[]})),
- roster:{'Team 1':['Taro Sato','A'],'Team 2':['B'],'Team 3':['C'],'Team 4':['D']}
+ roster:{'Team 1':['Taro Sato','Tatsuo Nishimura','A'],'Team 2':['B'],'Team 3':['C'],'Team 4':['D']}
 };
 let releaseReady=false,productionWrites=0,checks=0,otherReads=0;
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
@@ -29,6 +29,11 @@ await page.addInitScript(()=>{
   JSON.stringify({version:1,source:file,items:[{
    id:'goal-1',origin:'audio',timeSeconds:25,goalTimeSeconds:22,
    quote:'佐藤さんゴール',scorer:'佐藤さん',assist:'',assistStatus:'none',
+   matchSeq:'1',matchLabel:'チーム1対チーム2',teamA:'1',teamB:'2',
+   status:'confirmed',confirmedAt:'2026-10-30T00:00:00Z'
+  },{
+   id:'goal-tatsuo',origin:'audio',timeSeconds:64,goalTimeSeconds:62,
+   quote:'達夫さんゴール',scorer:'達夫',assist:'',assistStatus:'none',
    matchSeq:'1',matchLabel:'チーム1対チーム2',teamA:'1',teamB:'2',
    status:'confirmed',confirmedAt:'2026-10-30T00:00:00Z'
   }]}));
@@ -70,6 +75,11 @@ try{
  assert.match(review,/SS登録予定（名簿照合）/);
  assert.match(review,/佐藤さん/);
  assert.match(review,/Taro Sato/,'official romanized scorer roster match must be visible in production');
+ const tatsuoCard=page.locator('#quickGoals .quick-goal').filter({hasText:'達夫さんゴール'});
+ await tatsuoCard.waitFor({state:'visible'});
+ const tatsuoReview=await tatsuoCard.innerText();
+ assert.match(tatsuoReview,/達夫/,'AI original kanji name must remain visible');
+ assert.match(tatsuoReview,/Tatsuo Nishimura/,'AI 達夫 must infer the official Tatsuo name in production UI');
  assert.equal(await page.locator('#quickProductionHelp').isVisible(),true);
  assert.equal(await page.locator('#quickTestHelp').isVisible(),false);
  assert.equal(await page.locator('#quickIndividualTestTools').isVisible(),false);
