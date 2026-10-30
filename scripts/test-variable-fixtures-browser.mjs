@@ -229,6 +229,8 @@ try{
      continue;
     }
     assert.equal(snapshotGets,2,'each video-free draft must re-read the live current roster');
+    assert.match(await page.locator('#manualEventScope').innerText(),
+     /登録先のSSイベント：TEST event.*2試合.*対戦チーム：Team1・Team2.*イベントID/);
     const goal=page.locator('#review-goal-1');
     await goal.waitFor();
     const fields=goal.locator('.fields').first().locator('select');
