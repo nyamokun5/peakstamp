@@ -431,6 +431,7 @@ import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from 
 import {describeOfficialFixtures,drawOptionForFixture,fixtureSummaryLabel} from './sposched-fixture-layout.mjs';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion} from './sposched-worker-independent.mjs';
 import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
 import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
@@ -1117,7 +1118,7 @@ function renderQuick(){
    ?'4. 確認済みのゴールと4試合をTESTへ登録':'4. SSに登録された試合へゴールを反映';
   $('autoRegisterHelp').textContent=officialLayout.automaticFourMatch
    ?'4試合トーナメントはWorkerで一括登録します。ほかの操作は予備操作です。'
-   :'このイベントは4試合トーナメントではありません。SSの正式な試合番号にゴールを順次登録し、試合終了は個別に確認してください。勝敗・対戦相手を推測しません。';
+   :'SSで対戦がすべて確定した独立試合は、確認後にWorkerで一括登録できます。対戦待ち・順位決定戦は個別確認してください。';
   $('quickTestHelp').textContent=officialLayout.automaticFourMatch
    ?'AI候補と登録予定を確認してください。3位決定戦・決勝は準決勝終了後に正式な対戦相手を再取得します。'
    :'SSから取得した試合番号・対戦チームを確認してください。同じ対戦カードが複数回ある場合、試合番号を必ず確認してください。';
@@ -1429,7 +1430,12 @@ function hasVerifiedCurrentCompletion(){
  const panel=$('ssResultPanel');
  if(panel.hidden||panel.dataset.eventId!==snapshot?.eventId||
     panel.dataset.runId!=='worker:'+workerLatestState?.request_id)return false;
- try{verifyCompletedWorkerSnapshot(workerLatestState,snapshot,snapshot);return true;}
+ try{
+  if(workerLatestState?.layout_mode==='independent-fixtures-v1')
+   verifyIndependentWorkerCompletion(workerLatestState,snapshot,snapshot);
+  else verifyCompletedWorkerSnapshot(workerLatestState,snapshot,snapshot);
+  return true;
+ }
  catch{return false;}
 }
 function selectedSSDate(){
@@ -1452,6 +1458,7 @@ function showCompletionPanel(eventId,seconds,runId){
  if(!snapshot||snapshot.eventId!==eventId||$('ssEnvironment').value!=='staging')return;
  const panel=$('ssResultPanel');
  if(!panel.hidden&&panel.dataset.eventId===eventId&&panel.dataset.runId===runId)return;
+ panel.querySelector('strong').textContent='✓ '+snapshot.matches.length+'試合の登録・確認が完了しました';
  panel.dataset.eventId=eventId;
  panel.dataset.runId=runId;
  panel.hidden=false;
@@ -1503,18 +1510,58 @@ function renderAutoSummary(){
  const active=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
  $('autoPanel').hidden=!active;
  if(!active)return;
- // Existing durable Worker is four-knockout-only. Do not synthesize a
- // tournament for SS league, scrimmage, external, or six-team fixtures.
- if(!describeOfficialFixtures(snapshot).automaticFourMatch){
-  $('autoPanel').hidden=true;
-  $('autoBeforeRun').textContent='';
-  $('workerBatchRun').disabled=true;
+ // The legacy four-knockout writer remains a separate mode.
+ const official=describeOfficialFixtures(snapshot);
+ if(!official.automaticFourMatch){
+  const hasFixtures=official.count>0;
+  $('autoPanel').hidden=!hasFixtures;
+  $('legacyBatchDetails').hidden=true;
+  $('autoProgress').hidden=true;
+  $('autoConflict').hidden=true;
+  $('workerBatchArea').hidden=!hasFixtures;
+  $('workerBatchRecreate').hidden=true;
+  $('workerBatchRecreateHint').hidden=true;
+  $('workerGateAudit').hidden=true;
+  $('workerBatchJumpToGoal').hidden=true;
   $('autoRun').disabled=true;
-  $('autoRun').textContent=snapshot.matches.length===0
-   ?'試合枠がないため登録できません'
-   :'この形式は試合ごとに登録してください';
+  $('autoRun').textContent=hasFixtures?'この形式はWorkerで個別の試合を登録します':'試合枠がないため登録できません';
+  $('workerBatchRun').textContent='SS公式の'+official.count+'試合をまとめてTEST登録';
+  $('workerBatchArea').querySelector('p.small').textContent=
+   'WorkerがSS公式の試合IDを毎回照合し、ゴールと試合終了を安全に登録します。通信が切れた場合は進捗を再取得します。';
+  const root=$('autoOutline');root.replaceChildren();
+  root.append(node('strong','SS公式の'+official.count+'試合を登録'));
+  for(const m of official.matches){
+   root.append(node('div','#'+m.seq+' '+(m.title||'試合')+'：'+
+    (m.status==='finished'?'終了済み':m.status==='waiting'?'対戦待ち':'登録予定'),
+    'fixture-status'));
+  }
+  let error='';
+  try{
+   prepareWorkerIndependent({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),
+    requestId:'11111111-1111-4111-8111-111111111111'});
+  }catch(e){error=e.message||'登録内容を確認してください'}
+  const currentId=snapshot.eventId;
+  const previous=localStorage.getItem(workerBatchStorageKey(currentId));
+  const unresolved=pendingForEvent().length>0;
+  $('workerBatchRefresh').hidden=!previous;
+  $('workerBatchRecover').hidden=!unresolved;
+  $('autoBeforeRun').textContent=unresolved?'⚠ 前回の送信結果を照合してください':
+   error?'⚠ '+error:'✓ ゴールを確認後、下のボタンで'+official.count+'試合を順番に登録できます。';
+  $('workerBatchReadiness').textContent=previous
+   ?'このイベントにはWorker登録記録があります。先に進捗を再取得してください。':
+   error?'開始できません：'+error:'登録準備ができました。';
+  $('workerBatchRun').disabled=Boolean(error||previous||unresolved||
+   batchBusy||autoBusy||workerBatchPolling);
+  if(previous&&workerRestoredEvent!==currentId){
+   workerRestoredEvent=currentId;
+   Promise.resolve().then(()=>refreshWorkerBatch({passive:true}));
+  }
   return;
  }
+ $('legacyBatchDetails').hidden=false;
+ $('workerBatchRun').textContent='一覧の内容で4試合を登録（TEST）';
+ $('workerBatchArea').querySelector('p.small').textContent=
+  '通常はこちら（Worker方式）：4試合を順番に登録し、進捗と処理時間の内訳を表示します。通信が切れた場合は進捗を再取得できます。';
  const root=$('autoOutline');root.replaceChildren();
  try{
   if(snapshot.matches.length===0){
@@ -1843,7 +1890,7 @@ function showWorkerBatchState(state){
   catch{$(id).hidden=true;}
  }
  const stored=localStorage.getItem(workerBatchStorageKey(state.event_id));
- if(stored===state.request_id&&hasRecreatedBracket(state,snapshot)){
+ if(state.layout_mode!=='independent-fixtures-v1'&&stored===state.request_id&&hasRecreatedBracket(state,snapshot)){
   $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
   $('workerTimingDetails').hidden=true;
   hideCompletionPanel();
@@ -1934,16 +1981,19 @@ async function refreshWorkerBatch({passive=false}={}){
   }
   // Completion is shown only after the final official snapshot is available.
   // Status/GET failure must not leave a green success panel behind.
-  if(state.status==='completed'&&!hasRecreatedBracket(state,snapshot)){
+  if(state.status==='completed'&&(state.layout_mode==='independent-fixtures-v1'||
+    !hasRecreatedBracket(state,snapshot))){
    hideCompletionPanel();
-   $('workerBatchStatus').textContent='Workerの登録は完了しました。公式SSの4試合の終了状態を確認中…';
+   $('workerBatchStatus').textContent='Workerの登録は完了しました。SS公式の全試合の終了状態を確認中…';
    const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
    if(snapshot?.eventId!==eventId)return;
-   verifyCompletedWorkerSnapshot(state,fresh,snapshot);
+   if(state.layout_mode==='independent-fixtures-v1')
+    verifyIndependentWorkerCompletion(state,fresh,snapshot);
+   else verifyCompletedWorkerSnapshot(state,fresh,snapshot);
    snapshot=fresh;
   }
   showWorkerBatchState(state);
-  if(hasRecreatedBracket(state,snapshot)&&
+  if(state.layout_mode!=='independent-fixtures-v1'&&hasRecreatedBracket(state,snapshot)&&
     localStorage.getItem(workerBatchStorageKey(eventId))===state.request_id){
    workerBatchPolling=false;
    setBatchBusy(false);
@@ -2101,10 +2151,11 @@ $('workerBatchRun').addEventListener('click',async()=>{
     throw Error('未照合の送信記録があります。下の「送信記録を照合（書き込みなし）」から復旧してください');
    }
   const requestId=crypto.randomUUID();
-  const operations=prepareWorkerTournament({
-   snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId,
-   winnerFor:seq=>autoWinnerFor(seq)
-  });
+  const isIndependent=!describeOfficialFixtures(snapshot).automaticFourMatch;
+  const operations=isIndependent
+   ?prepareWorkerIndependent({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId})
+   :prepareWorkerTournament({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId,
+     winnerFor:seq=>autoWinnerFor(seq)});
   // The complete AI-vs-SS registration plan is visible above this
   // explicitly labeled TEST button. One intentional click is approval;
   // an extra browser confirmation dialog would only duplicate that approval.
@@ -2114,7 +2165,7 @@ $('workerBatchRun').addEventListener('click',async()=>{
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
    localStorage.setItem(key,requestId);
    hideCompletionPanel();
-  $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋4試合）…';
+  $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋'+(operations.fixture_count||4)+'試合）…';
   $('workerBatchRun').disabled=true;
   $('workerBatchRefresh').hidden=false;
   setBatchBusy(true);
