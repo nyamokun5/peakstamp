@@ -46,8 +46,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   const x=active();
   $('productionPanel').hidden=!x;
   $('autoRegisterHeading').hidden=Boolean(x);
-  evidence=null;$('productionApprove').checked=false;
-  $('productionApproveWrap').hidden=true;
+  evidence=null;
   $('productionPlan').hidden=true;
   $('productionStart').disabled=true;
   $('productionDecision').hidden=true;
@@ -55,20 +54,16 @@ export function installProductionUI({current,read,normalize,onComplete}){
   const prior=localStorage.getItem(key(x.snapshot.eventId));
   $('productionRefresh').hidden=!prior;
   status(prior?'前回の本番登録ジョブがあります。再登録せず保存済みの進捗を確認します。':
-   '本番団体・試合ID・登録内容・書き込み承認を照合するまでは登録できません。');
+   '現在のSSターゲットのみ本番登録できます。公式データと登録内容を確認してください。');
   if(prior&&restoredEvent!==x.snapshot.eventId){
    restoredEvent=x.snapshot.eventId;
    Promise.resolve().then(refresh);
   }
  }
- $('productionApprove').addEventListener('change',()=>{
-  $('productionStart').disabled=busy||!evidence||!$('productionApprove').checked||!active();
- });
  $('productionCheck').addEventListener('click',async()=>{
   if(!active()||busy)return;
   busy=true;$('productionCheck').disabled=true;
   evidence=null;$('productionStart').disabled=true;
-  $('productionApprove').checked=false;$('productionApproveWrap').hidden=true;
   const out=$('productionPlan');out.hidden=false;
   out.textContent='正式データを読み取りで確認中…';
   try{
@@ -80,13 +75,13 @@ export function installProductionUI({current,read,normalize,onComplete}){
    out.textContent='本番団体：'+x.teamId+'\n開催日：'+x.date+
     '\nイベント：'+x.id+'\n'+goals+'ゴール＋4試合の結果を登録予定\n'+
     x.matchIds.map((id,i)=>'#'+(i+1)+' '+id).join('\n');
-   $('productionApproveWrap').hidden=false;
-   status('本番の送信内容を確認しました。承認チェック後のみ送信できます。');
+   $('productionStart').disabled=false;
+   status('現在のターゲットと登録内容の照合が完了しました。登録ボタンで送信できます。');
   }catch(e){out.textContent='確認未完了：'+e.message;status('本番への送信は行っていません。');}
   finally{busy=false;$('productionCheck').disabled=false;}
  });
  $('productionStart').addEventListener('click',async()=>{
-  if(!active()||busy||!evidence||!$('productionApprove').checked)return;
+  if(!active()||busy||!evidence)return;
   const earlier=evidence,eventId=earlier.id;
   if(localStorage.getItem(key(eventId)))return;
   busy=true;$('productionStart').disabled=true;
@@ -98,8 +93,6 @@ export function installProductionUI({current,read,normalize,onComplete}){
      JSON.stringify(latest.matchIds)!==JSON.stringify(earlier.matchIds)||
      JSON.stringify(normalized)!==JSON.stringify(earlier.plan))
     throw Error('本番の試合IDまたは登録予定が変わりました。再度確認してください');
-   if(!window.confirm('【本番書き込み】'+earlier.date+'の4試合を本番SSに登録しますか？'+
-    '通信が失敗しても自動再送は行いません。'))return;
    // Remember the request BEFORE sending. Unknown outcome cannot be retried.
    localStorage.setItem(key(eventId),earlier.plan.request_id);
    $('productionRefresh').hidden=false;evidence=null;
