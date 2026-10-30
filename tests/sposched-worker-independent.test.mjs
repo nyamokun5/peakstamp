@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {normalizeSpoSnapshot} from '../sposched-review-core.mjs';
+import {normalizeSpoSnapshot,prepareGoalRows} from '../sposched-review-core.mjs';
+import {makeManualGoal} from '../sposched-manual-goals.mjs';
+import {quickGoalDecisions} from '../sposched-quick-review.mjs';
 import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration,describeCompletedWorkerMismatch,assertRetiredWorkerReconnectable} from '../sposched-worker-independent.mjs';
 const eventId='01234567-89ab-4cde-8abc-0123456789ab',requestId='11234567-89ab-4cde-8abc-0123456789ab';
 const mid=i=>'21234567-89ab-4cde-8abc-'+String(i).padStart(12,'0');
@@ -252,4 +254,62 @@ test('two-team completion verifies every current official match independently, n
  ])assert.throws(()=>verifyIndependentWorkerCompletion(state,wrong,make(2)));
  assert.throws(()=>verifyIndependentWorkerCompletion({...state,fixture_ids:{1:mid(2),2:mid(1)}},
   fresh,make(2)));
+});
+
+test('video-free manual goal with explicitly confirmed SS players joins two-team Worker fixture batch',()=>{
+ const official=make(2,{2:{left_team:'White',right_team:'Red',title:'#2 紅白戦'}});
+ const g=makeManualGoal('31234567-89ab-4cde-8abc-0123456789ab');
+ const [row]=prepareGoalRows({goals:[g]},official);
+ assert.equal(row.confirmed,false);
+ Object.assign(row,{seq:2,scorer:'Aki',team:'White',
+  assistMode:'named',assist:'Sora'});
+ let decisions=quickGoalDecisions(official,[row]);
+ assert.equal(decisions[0].state,'manual','manual draft must never be auto-eligible before human approval');
+ assert.throws(()=>build(official,[row],decisions),/確認が必要/);
+ row.confirmed=true;
+ decisions=quickGoalDecisions(official,[row]);
+ const plan=build(official,[row],decisions);
+ assert.equal(plan.fixture_count,2);
+ assert.deepEqual(plan.operations,[
+  {seq:1,action:'finish',winner:'auto',expected_match_id:mid(1)},
+  {seq:2,action:'create',team:'White',scorer:'Aki',assist:'Sora',expected_match_id:mid(2)},
+  {seq:2,action:'finish',winner:'auto',expected_match_id:mid(2)}
+ ]);
+ assert.equal(plan.operations[1].expected_match_id,official.matches[1].matchId);
+});
+
+test('video-free manual goal is blocked on bad SS identity, guest, duplicates, stale or not explicitly approved',()=>{
+ const snapshot=make(2),g=makeManualGoal('31234567-89ab-4cde-8abc-0123456789ab');
+ const valid={...prepareGoalRows({goals:[g]},snapshot)[0],seq:1,scorer:'Aki',
+  team:'White',assist:'Sora',assistMode:'named',confirmed:true};
+ const run=row=>build(snapshot,[row],quickGoalDecisions(snapshot,[row]));
+ assert.equal(run(valid).operations.filter(x=>x.action==='create').length,1);
+ const mutations=[
+  {confirmed:false},{goal:{...g,sent:true}},
+  {goal:{...g,source:{name:'動画の偽装'}}},
+  {goal:{...g,id:'not-uuid'}},{guest:true},{updateGoalId:mid(50)},
+  {fixtureIdentityChanged:true},{seq:99},{team:'Red'},
+  {scorer:'nobody'},{assist:'nobody'},
+  {assist:'Aki'},{assistMode:'unknown'},{include:true,scorer:''}
+ ];
+ for(const changes of mutations){
+  assert.throws(()=>run({...valid,...changes}),undefined,
+   'manual goal must fail closed: '+JSON.stringify(changes));
+ }
+ const duplicate=make(2,{1:{goals:[{
+  goal_id:mid(88),scorer:'Aki',assist:'Sora',team:'White'
+ }]}});
+ assert.throws(()=>build(duplicate,[valid],quickGoalDecisions(duplicate,[valid])));
+ const r1={...valid,goal:makeManualGoal('31234567-89ab-4cde-8abc-0123456789ab')};
+ const r2={...valid,goal:makeManualGoal('41234567-89ab-4cde-8abc-0123456789ab')};
+ assert.throws(()=>build(snapshot,[r1,r2],quickGoalDecisions(snapshot,[r1,r2])),/重複|確認/);
+});
+
+test('manual goal cannot be bundled with the legacy four-knockout Worker',()=>{
+ const knockout=make(4,{1:{title:'#1 準決勝'},2:{title:'#2 準決勝'},
+  3:{title:'#3 3位決定戦',status:'waiting',left_team:'',right_team:''},
+  4:{title:'#4 決勝',status:'waiting',left_team:'',right_team:''}});
+ const row={...prepareGoalRows({goals:[makeManualGoal('31234567-89ab-4cde-8abc-0123456789ab')]},knockout)[0],
+  seq:1,scorer:'Aki',team:'White',assistMode:'none',confirmed:true};
+ assert.throws(()=>build(knockout,[row],quickGoalDecisions(knockout,[row])),/独立試合/);
 });

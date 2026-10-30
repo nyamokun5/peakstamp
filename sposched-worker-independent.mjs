@@ -3,7 +3,7 @@
  * Existing four-match knockout is handled by the old separate builder.
  */
 import {describeOfficialFixtures} from './sposched-fixture-layout.mjs';
-import {normalizeTeam,normalizePerson} from './sposched-review-core.mjs';
+import {normalizeTeam,normalizePerson,validateGoalRow,matchingExistingGoals} from './sposched-review-core.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const fail=reason=>{throw Error(reason)};
 const name=v=>typeof v==='string'?v.trim():'';
@@ -172,11 +172,24 @@ export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
  for(let i=0;i<rows.length;i++){
   const row=rows[i],decision=decisions[i];
   if(!row?.include)continue;
-  if(decision?.state!=='ready')
+  // A video-free goal is permitted ONLY for independent STAGING fixtures,
+  // after the operator has explicitly confirmed this exact manual row.
+  // It never bypasses the same signed Worker + official UUID verification.
+  const manual=row.goal?.manual===true;
+  if(manual){
+   if(row.goal.source?.name!=='SS手動入力'||!UUID.test(row.goal.id||'')||
+      row.goal.sent!==false||decision?.state!=='manual')
+    fail('ゴール'+(i+1)+'：未送信のSS手動ゴールであることを確認してください');
+   const issue=validateGoalRow(row,snapshot);
+   if(issue)fail('ゴール'+(i+1)+'：'+issue);
+   if(matchingExistingGoals(row,snapshot).length)
+    fail('ゴール'+(i+1)+'：SS登録済みゴールと重複する可能性があります。個別確認してください');
+  }else if(decision?.state!=='ready'){
    fail('ゴール'+(i+1)+'：'+(decision?.reason||'選手・試合の確認が必要です'));
-  if(row.goal?.manual||row.updateGoalId||row.guest||row.fixtureIdentityChanged||
-     decision.helperPlan||decision.deferredAssist)
-   fail('ゴール'+(i+1)+'：手動追加・助っ人・既存修正は個別登録を使ってください');
+  }
+  if(row.updateGoalId||row.guest||row.fixtureIdentityChanged||
+     decision?.helperPlan||decision?.deferredAssist)
+   fail('ゴール'+(i+1)+'：助っ人・既存修正・試合ID変更は個別登録を使ってください');
   const seq=Number(row.seq),match=layout.matches.find(m=>m.seq===seq);
   const team=name(row.team||snapshot.playerTeam?.get(row.scorer)),scorer=name(row.scorer);
   const assist=row.assistMode==='named'?name(row.assist):'';

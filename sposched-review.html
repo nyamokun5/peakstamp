@@ -360,7 +360,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <p>実況の対戦カードと当日の選手名簿から試合・得点者・アシストを初期選択します。<strong>動画にゴールがなくても、手動で新規追加できます。</strong> 選手と試合を確認して登録してください。</p>
  <div id="manualAddWrap" class="grid-item" hidden>
   <strong>動画がない場合の新規ゴール登録</strong>
-  <p>テストSSの試合を選んで、得点者・アシストを手入力できます。追加したゴールは下の一覧に並び、一括登録にも含められます。</p>
+  <p>元動画がなくてもTEST用のゴールを作れます。追加後に試合番号・得点者・アシスト・得点チームを選び、「このゴールの試合・選手を確認した」にチェックしてください。独立試合ならWorkerがゴール登録→試合終了を一括処理します。4試合トーナメントなど一部の形式では個別登録のみです。本番には送信しません。</p>
   <button id="manualAddGoal" class="primary" type="button">＋ 新規ゴールを手動追加</button>
   <p id="manualAddStatus" class="small" role="status" aria-live="polite"></p>
  </div>
@@ -879,7 +879,12 @@ function renderGoals(){
    updateStatus.textContent='修正対象を指定しました。得点者・アシストを確認し、下のチェックを入れてください。';
    touch();persistManualRow(row);updateDuplicate();
   });
-  confirm.addEventListener('change',()=>{row.confirmed=confirm.checked;touch();persistManualRow(row)});
+  confirm.addEventListener('change',()=>{
+   row.confirmed=confirm.checked;touch();persistManualRow(row);
+   // Manual TEST drafts become eligible for the independent Worker ONLY
+   // after this explicit confirmation; update the button without a reload.
+   if(g.manual)renderQuick();
+  });
   // Exception-only single approval for a video goal whose AI identity
   // was uncertain. Never turns a manual/PATCH/duplicate into auto-eligible.
   const reviewQuick=node('button','試合・得点者・アシストを確認して一括候補に含める');
@@ -1174,10 +1179,12 @@ function renderQuick(){
  const manual=items.filter(x=>x.state==='manual-ss');
  const manualPending=manual.filter(x=>!x.registeredInSS).length;
  const deferredAssists=items.filter(x=>x.state==='ready'&&x.deferredAssist);
- const other=items.length-ready-attention-duplicates-waiting-manual.length;
+ const manualDrafts=items.filter(x=>x.state==='manual').length;
+ const other=items.length-ready-attention-duplicates-waiting-manual.length-manualDrafts;
  $('quickSummary').textContent='要確認 '+(attention+duplicates)+'件　｜　'+
    (production?'確認済み ':'登録可能 ')+ready+'件　｜　対戦待ち '+waiting+'件'+
    (manualPending?'　｜　SSで手動登録 '+manualPending+'件':'')+
+   (manualDrafts?'　｜　動画なしの手動ゴール '+manualDrafts+'件':'')+
    (deferredAssists.length?'　｜　アシスト追記 '+deferredAssists.length+'件':'')+
    (other?'　｜　対象外 '+other+'件':'');
  const container=$('quickGoals');container.replaceChildren();
@@ -1206,7 +1213,8 @@ function renderQuick(){
     item.state==='duplicate'?'重複・除外':
     item.state==='waiting'?'対戦待ち':
     item.state==='manual-ss'?(item.registeredInSS?'SS登録済み':'SSで手動登録'):
-    item.state==='attention'?'要修正':'登録対象外';
+    item.state==='attention'?'要修正':
+    item.state==='manual'?'手動ゴール（詳細確認）':'登録対象外';
   top.append(node('span',label,['ready','waiting'].includes(item.state)?'quick-ready':'quick-held'));
   el.append(top);
   const sourceInfo=(match?matchSlotLabel(match):'試合番号：未設定（要選択）')+
@@ -1354,6 +1362,7 @@ function renderQuick(){
    ?'要確認 '+(attention+duplicates)+'件を直すと登録に進めます。'
    :(ready||waiting)?'確認できたら下の「まとめてTESTへ登録」を押してください。'
    :manualPending?'助っ人疑いのゴールはSSで直接登録し、最新情報を再取得してください。'
+   :manualDrafts?'動画なしの手動ゴールは「詳細編集」で試合・選手を確認し、Worker一括登録欄で送信してください。'
     :'登録可能なゴールは現在ありません。対戦待ちは準決勝の終了後に確認します。';
  }
 }
@@ -1442,6 +1451,28 @@ function autoWinnerFor(seq){
 let autoBusy=false,autoProblemSeq=null,autoUnsafeStop=false,autoMustReload=false;
 let workerBatchPolling=false,workerRestoredEvent='',workerLatestState=null;
 let workerCompletionProof=null;
+// Separate event + request scoped marker: manual TEST drafts are acknowledged
+// only AFTER a completed Worker job and fresh official fixture readback.
+const workerManualGoalPendingKey=(eventId,requestId)=>
+ 'peakstamp:test:worker-manual-goals:'+eventId+':'+requestId;
+function completeVerifiedManualWorkerGoals(state){
+ if(!workerCompletionVerified(state,snapshot)||
+    state.layout_mode!=='independent-fixtures-v1')return false;
+ const key=workerManualGoalPendingKey(state.event_id,state.request_id);
+ const raw=localStorage.getItem(key);
+ if(!raw)return false;
+ const ids=JSON.parse(raw);
+ if(!Array.isArray(ids)||ids.length<1||ids.length>20||
+    ids.some(id=>!/^([0-9a-f]{8}-)([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id))||
+    new Set(ids).size!==ids.length)throw Error('手動ゴールの保存済みIDが不正です。自動で消しません');
+ const inEvent=new Map(manualGoals.map(g=>[g.id,g]));
+ if(ids.some(id=>!inEvent.has(id)))throw Error('手動ゴールの下書きを確認できません。登録を繰り返さないでください');
+ const completed=markManualCompleted(manualGoals,ids.map(id=>'SS手動入力::'+id));
+ storeManualGoals(localStorage,'staging',state.event_id,completed);
+ manualGoals=completed;
+ localStorage.removeItem(key);
+ return true;
+}
 function workerFixtureFingerprint(current){
  if(!Array.isArray(current?.matches))return '';
  return JSON.stringify(current.matches.map(m=>[m.seq,m.matchId,m.status]).sort((a,b)=>a[0]-b[0]));
@@ -1566,7 +1597,7 @@ function renderAutoSummary(){
   $('autoRun').textContent=hasFixtures?'この形式はWorkerで個別の試合を登録します':'試合枠がないため登録できません';
   $('workerBatchRun').textContent='SS公式の'+official.count+'試合をまとめてTEST登録';
   $('workerBatchArea').querySelector('p.small').textContent=
-   'WorkerがSS公式の試合IDを毎回照合し、ゴールと試合終了を安全に登録します。通信が切れた場合は進捗を再取得します。';
+   'WorkerがSS公式の試合IDを毎回照合し、確認済みのゴール（動画なし・手動追加も可）と試合終了を安全に登録します。通信が切れた場合は進捗を再取得します。';
   const root=$('autoOutline');root.replaceChildren();
   root.append(node('strong','SS公式の'+official.count+'試合を登録'));
   for(const m of official.matches){
@@ -2079,6 +2110,9 @@ async function refreshWorkerBatch({passive=false}={}){
      fixtureFingerprint:workerFixtureFingerprint(fresh)};
   }
   showWorkerBatchState(state);
+  if(state.status==='completed'&&workerCompletionVerified(state,snapshot)){
+   if(completeVerifiedManualWorkerGoals(state))rebuild({preserveEdits:true});
+  }
   if(state.layout_mode!=='independent-fixtures-v1'&&hasRecreatedBracket(state,snapshot)&&
     localStorage.getItem(workerBatchStorageKey(eventId))===state.request_id){
    workerBatchPolling=false;
@@ -2257,11 +2291,15 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
       winnerFor:seq=>autoWinnerFor(seq)});
   if(independent)await assertIndependentStagingWorkerReady({recreation:true});
   const goalCount=plan.operations.filter(op=>op.action==='create').length;
+  const manualIds=independent?rows.filter(r=>r.include&&r.goal?.manual===true)
+   .map(r=>r.goal.id):[];
   if(!window.confirm('TESTイベント内で試合が再作成されています。旧'+
      (old.fixture_count||4)+'試合のジョブ（'+oldRequestId+
      '）を履歴へ保管し、新しい'+(plan.fixture_count||4)+'試合に'+goalCount+
      'ゴールを登録します。旧試合には再送しません。開始しますか？'))return;
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
+  if(manualIds.length)localStorage.setItem(
+   workerManualGoalPendingKey(eventId,requestId),JSON.stringify(manualIds));
   localStorage.setItem(pendingKey,JSON.stringify({requestId,previousRequestId:oldRequestId,clickedAt}));
   $('workerBatchRecreate').disabled=true;
   $('workerBatchStatus').textContent='旧試合の削除と新しい'+(plan.fixture_count||4)+'試合の公式IDをWorkerで再照合しています…';
@@ -2284,6 +2322,7 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
        'previous_job_active','previous_job_missing','archive_full',
        'recreation_unavailable'].includes(error.code)){
     localStorage.removeItem(pendingKey);
+    localStorage.removeItem(workerManualGoalPendingKey(eventId,requestId));
    }
    throw error;
   }
@@ -2318,10 +2357,14 @@ $('workerBatchRun').addEventListener('click',async()=>{
   // explicitly labeled TEST button. One intentional click is approval;
   // an extra browser confirmation dialog would only duplicate that approval.
   const goalCount=operations.operations.filter(x=>x.action==='create').length;
+  const manualIds=isIndependent?rows.filter(r=>r.include&&r.goal?.manual===true)
+   .map(r=>r.goal.id):[];
   if(isIndependent) await assertIndependentStagingWorkerReady();
   // Store the key BEFORE the network request, so a lost response never
   // enables an accidental second job with a new request ID.
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
+   if(manualIds.length)localStorage.setItem(
+    workerManualGoalPendingKey(eventId,requestId),JSON.stringify(manualIds));
    localStorage.setItem(key,requestId);
    hideCompletionPanel();
   $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋'+(operations.fixture_count||4)+'試合）…';
@@ -2334,7 +2377,9 @@ $('workerBatchRun').addEventListener('click',async()=>{
    // Validation failures definitely did not run the job. Transport errors
    // are ambiguous and the stored request ID must be retained.
    if(['invalid_plan','invalid_event','unsupported_media_type','batch_gate_unavailable'].includes(error.code)){
-    localStorage.removeItem(key);localStorage.removeItem(workerTimeKey(eventId));setBatchBusy(false);
+    localStorage.removeItem(key);
+    localStorage.removeItem(workerManualGoalPendingKey(eventId,requestId));
+    localStorage.removeItem(workerTimeKey(eventId));setBatchBusy(false);
    }
    throw error;
   }
