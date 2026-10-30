@@ -62,7 +62,7 @@ try{
  assert.equal(await page.locator('#finishCancel').count(),0);
  assert.equal(await page.locator('#autoGoalDetails').isVisible(),true);
  assert.equal(await page.locator('#quickGoals .quick-goal').count(),1);
- assert.match(await page.locator('#quickGoals').innerText(),/対戦確定後に自動登録/);
+ assert.match(await page.locator('#quickGoals').innerText(),/対戦待ち/);
  // The advanced editor still has both the sticky bottom exit and in-page exit.
  await page.locator('#quickPanel > details.help > summary').click();
  await page.click('#quickEdit');
@@ -103,7 +103,7 @@ try{
  assert.match(await page.locator('#flowGuide').innerText(),/得点・勝敗/);
  assert.match(await page.locator('#quickGoals').innerText(),/西村/);
  assert.match(await page.locator('#quickGoals').innerText(),/徳永/);
- assert.doesNotMatch(await page.locator('#quickGoals').innerText(),/対戦確定後に自動登録/);
+ assert.doesNotMatch(await page.locator('#quickGoals').innerText(),/対戦待ち/);
 
  // A tied result needs an explicit human winner, not an extra confirm screen.
  assert.equal(await page.inputValue('#finishMatch'),'3');
