@@ -235,6 +235,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
    <button id="workerBatchPause" type="button" hidden>このジョブを一時停止</button>
    <button id="workerBatchResume" type="button" hidden>確認済みの続きから再開（TEST）</button>
    <button id="workerBatchRefresh" type="button" hidden>ジョブの進捗を再取得（書き込みなし）</button>
+   <button id="workerBatchReconnect" type="button" hidden>旧ジョブIDを安全に再接続（書き込みなし）</button>
    <button id="workerGateAudit" type="button" hidden>現在の4試合の送信記録を確認（書き込みなし）</button>
    <p id="workerGateAuditStatus" class="small" role="status" aria-live="polite"></p>
    <p id="workerBatchStatus" class="small" role="status" aria-live="polite"></p>
@@ -431,7 +432,7 @@ import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from 
 import {describeOfficialFixtures,drawOptionForFixture,fixtureSummaryLabel} from './sposched-fixture-layout.mjs';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
-import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration,describeCompletedWorkerMismatch} from './sposched-worker-independent.mjs';
+import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration,describeCompletedWorkerMismatch,assertRetiredWorkerReconnectable} from './sposched-worker-independent.mjs';
 import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
 import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
@@ -483,7 +484,7 @@ const setBatchBusy=busy=>{
  batchBusy=busy;
  for(const id of ['ssEnvironment','ssBridgeToken','ssRememberTab','ssForgetToken','ssLoadEvents','ssEventSelect',
   'ssLoadSnapshot','refreshSources','buildPlan','stagingPreview','stagingExecute',
-  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','autoRun','autoResume','autoFix','autoReload','autoRecover','workerBatchRecover','workerBatchRecreate','autoWinner','ssChooseEvent','ssReloadFixtures','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishRecover','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
+  'batchPreview','batchApprove','batchExecute','quickPreview','quickExecute','quickCancel','quickEdit','autoRun','autoResume','autoFix','autoReload','autoRecover','workerBatchRecover','workerBatchRecreate','workerBatchReconnect','autoWinner','ssChooseEvent','ssReloadFixtures','quickBack','quickBackBottom','quickBackFixed','flowJump','finishMatch','finishWinner','finishRecover','finishExecute','snapshotFile','snapshotText','loadSnapshot']){
   $(id).disabled=busy||
    (id==='batchExecute'&&(!batchPrepared||!$('batchApprove').checked))||
    (id==='batchPreview'&&!lastPayload)||
@@ -1556,6 +1557,7 @@ function renderAutoSummary(){
   $('autoProgress').hidden=true;
   $('autoConflict').hidden=true;
   $('workerBatchArea').hidden=!hasFixtures;
+  $('workerBatchReconnect').hidden=true;
   $('workerBatchRecreate').hidden=true;
   $('workerBatchRecreateHint').hidden=true;
   $('workerGateAudit').hidden=true;
@@ -1585,6 +1587,12 @@ function renderAutoSummary(){
   const retired=Boolean(previous&&oldJob&&isRetiredIndependentJob(oldJob,snapshot));
   const different=Boolean(observedJob&&hasDifferentIndependentGeneration(observedJob,snapshot));
   const diagnostic=observedJob&&describeCompletedWorkerMismatch(observedJob,snapshot,previous);
+  const reattach=Boolean(previous&&observedJob&&
+    observedJob.request_id!==previous&&
+    observedJob.status==='completed'&&isRetiredIndependentJob(observedJob,snapshot)&&
+    !unresolved&&!localStorage.getItem(workerBatchRecreatePendingKey(currentId)));
+  $('workerBatchReconnect').hidden=!reattach;
+  $('workerBatchReconnect').disabled=batchBusy||autoBusy||workerBatchPolling;
   $('workerBatchRecreate').hidden=!retired||unresolved;
   $('workerBatchRecreate').disabled=batchBusy||autoBusy||workerBatchPolling;
   $('workerBatchRecreate').textContent='旧'+(oldJob?.fixture_count||4)+'試合を履歴に保存して新'+official.count+'試合をTEST登録';
@@ -2145,6 +2153,72 @@ $('workerBatchRefresh').addEventListener('click',()=>{
   'このTESTジョブは実行中として保存されています。進捗確認によって中断していた処理が再開する場合があります。再開してよろしいですか？'
  ))return;
  return refreshWorkerBatch();
+});
+// Local pointer recovery only. Every Worker operation is a passive /inspect.
+// No /start, /recreate, /status, /decision or upstream goal/result writes here.
+$('workerBatchReconnect').addEventListener('click',async()=>{
+ if(workerBatchPolling||batchBusy||autoBusy||!snapshot||
+    !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ const eventId=snapshot.eventId, key=workerBatchStorageKey(eventId);
+ const original=localStorage.getItem(key);
+ const pendingKey=workerBatchRecreatePendingKey(eventId);
+ const button=$('workerBatchReconnect');
+ button.disabled=true;
+ const snapKey=current=>JSON.stringify((current?.matches||[]).map(m=>[
+  m.seq,m.matchId,m.status,m.leftTeam,m.rightTeam,m.leftScore,m.rightScore,
+  m.existingGoals?.length||0
+ ]).sort((a,b)=>a[0]-b[0]));
+ const journalKey=job=>JSON.stringify([
+  job.event_id,job.request_id,job.status,job.fixture_count,job.layout_mode,
+  job.total,job.completed,job.cursor,job.generation,job.fixture_ids
+ ]);
+ $('workerBatchStatus').textContent='TEST Workerの旧ジョブとSS公式試合を読み取り専用で再確認中…';
+ try{
+  if(pendingForEvent().length||localStorage.getItem(pendingKey))
+   throw Error('未照合の送信・再作成記録が残っています。端末の記録を変更しません');
+  const first=await postStaging('/staging/batch/inspect',{event_id:eventId});
+  assertRetiredWorkerReconnectable({state:first,snapshot,storedRequestId:original,
+   pendingGoals:pendingForEvent().length>0,pendingRecreation:Boolean(localStorage.getItem(pendingKey))});
+  const initial=snapKey(snapshot);
+  const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+  if(snapshot?.eventId!==eventId||fresh.eventId!==eventId||
+     snapKey(fresh)!==initial)throw Error('SS公式の試合状態が変更されました。端末の記録は変更していません');
+  const second=await postStaging('/staging/batch/inspect',{event_id:eventId});
+  if(journalKey(first)!==journalKey(second))
+   throw Error('Workerのジョブ記録が確認中に変わりました。端末の記録は変更していません');
+  assertRetiredWorkerReconnectable({state:second,snapshot:fresh,storedRequestId:original,
+   pendingGoals:pendingForEvent().length>0,pendingRecreation:Boolean(localStorage.getItem(pendingKey))});
+  if(localStorage.getItem(key)!==original||
+     snapshot?.eventId!==eventId||snapKey(snapshot)!==initial||
+     pendingForEvent().length||localStorage.getItem(pendingKey))
+   throw Error('端末またはイベントの状態が変更されました。再接続は実行していません');
+  // Preserve the user's old local record before repointing this event's
+  // Worker job marker. No historical Worker journal is changed.
+  const backupKey='peakstamp:test:worker-batch:reconnect-backup:'+eventId+':'+original;
+  if(!localStorage.getItem(backupKey))
+   localStorage.setItem(backupKey,JSON.stringify({
+    event_id:eventId,previous_request_id:original,
+    observed_worker_request_id:second.request_id,at:Date.now()
+   }));
+  if(!localStorage.getItem(backupKey))
+   throw Error('端末の旧ジョブ記録を保存できません。再接続を中止しました');
+  localStorage.setItem(key,second.request_id);
+  if(localStorage.getItem(key)!==second.request_id)
+   throw Error('端末の再接続を確認できません。新規登録しないでください');
+  workerLatestState=second;
+  $('workerBatchStatus').textContent=
+   '✓ 旧端末ジョブIDを別キーに保存し、Worker完了履歴に再接続しました。SSへの書き込みはありません。'+
+   '新しい'+fresh.matches.length+'試合はまだ未登録です。';
+  renderAutoSummary();
+  // The next control still invokes the Worker 404/clean-fixture gate; this
+  // local reattachment NEVER itself approves a new SpoSched mutation.
+ }catch(e){
+  $('workerBatchStatus').textContent='再接続を停止：'+e.message+
+   '。旧履歴を消したり再登録したりしないでください。';
+ }finally{
+  button.disabled=false;
+  renderAutoSummary();
+ }
 });
 $('workerBatchRecreate').addEventListener('click',async()=>{
  if(workerBatchPolling||batchBusy||autoBusy||!snapshot||!loadedFromStagingDirect||

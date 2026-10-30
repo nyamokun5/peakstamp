@@ -69,6 +69,8 @@ try{
      environment:'STAGING ONLY',event_id:E,
      request_id:'33333333-3333-4333-8333-333333333333',
      status:'completed',layout_mode:'four-knockout',fixture_count:4,
+     inspection_only:true,inspection_contract:'event-inspect-v1',
+     execution_active:false,
      fixture_ids:scenario.incomplete?{'1':matchId(11),'2':matchId(12)}:
       {'1':matchId(11),'2':matchId(12),'3':matchId(13),'4':matchId(14)},
      total:4,completed:4,updated_at:Date.now(),inspection_only:true
@@ -140,8 +142,28 @@ try{
     assert.equal(await page.locator('#ssResultPanel').isVisible(),false,
      'retired job is NOT a success for the new three fixtures');
     assert.doesNotMatch(status,/完了後の4試合を取得できません/);
+    if(scenario.markerMismatch){
+     const reconnect=page.locator('#workerBatchReconnect');
+     assert.equal(await reconnect.isVisible(),true,
+      'Worker completed journal should offer local-only reconnection');
+     assert.equal(await page.locator('#workerBatchRecreate').isVisible(),false,
+      'fixture recreation remains forbidden before local verification');
+     await reconnect.click();
+     await page.waitForFunction(eventId=>
+      localStorage.getItem('peakstamp:test:worker-batch:'+eventId)===
+       '33333333-3333-4333-8333-333333333333',E);
+     const backup=await page.evaluate(eventId=>localStorage.getItem(
+      'peakstamp:test:worker-batch:reconnect-backup:'+eventId+
+      ':44444444-4444-4444-8444-444444444444'),E);
+     assert.equal(JSON.parse(backup).previous_request_id,
+      '44444444-4444-4444-8444-444444444444',
+      'previous local request ID must survive as an immutable backup');
+     assert.equal(await page.locator('#workerBatchReconnect').isVisible(),false);
+     assert.equal(await page.locator('#workerBatchRecreate').isVisible(),true,
+      'only verified server-side 404/recreate path can now be separately offered');
+    }
    }
-   assert.equal(prod,0);assert.equal(posts,scenario.retired?1:0,
+   assert.equal(prod,0);assert.equal(posts,scenario.markerMismatch?3:scenario.retired?1:0,
     'only passive inspection POST is allowed; no start/recreate mutation');
    assert.deepEqual(errors,[],scenario.label+' JS errors');
    if(scenario.label==='external one match'){
