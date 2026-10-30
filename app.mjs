@@ -655,20 +655,21 @@ function nextSceneAfter(current,{wasUnjudged=false}={}) {
     return;
   }
   $('reviewProgress').textContent='次の未判断シーンへ移動しました。';
+  // Keep/Reject is a trusted user gesture on iOS. Open the next Replay
+  // synchronously BEFORE requestAnimationFrame; async .click() loses Safari's
+  // playback permission when the new MOV needs its first source load.
+  const items=[...$('highlightList').querySelectorAll('.highlight-entry')];
+  const element=items.find(entry=>entry.dataset.sourceId===next.source.id && entry.dataset.sceneId===next.item.id);
+  if (!element) return;
+  element.classList.add('review-next');
+  autoOpeningNextReplay = true;
+  try {
+    element.querySelector('.play-btn')?.click();
+  } finally {
+    autoOpeningNextReplay = false;
+  }
+  // Scrolling is layout-dependent, unlike the playback gesture.
   requestAnimationFrame(()=>{
-    const items=[...$('highlightList').querySelectorAll('.highlight-entry')];
-    const element=items.find(entry=>entry.dataset.sourceId===next.source.id && entry.dataset.sceneId===next.item.id);
-    if (!element) return;
-    element.classList.add('review-next');
-    // Open the video first, then scroll after layout expands. This ensures
-    // Keep and Reject follow the same motion on mobile Safari.
-    autoOpeningNextReplay = true;
-    try {
-      element.querySelector('.play-btn')?.click();
-    } finally {
-      autoOpeningNextReplay = false;
-    }
-    requestAnimationFrame(()=>{
       element.scrollIntoView({behavior:'auto',block:'start'});
       // A rejected clip briefly shows a bottom Undo toast. If it would
       // cover the next card's Replay/Keep/Reject row, nudge the card up.
