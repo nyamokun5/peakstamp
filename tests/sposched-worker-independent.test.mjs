@@ -323,3 +323,11 @@ test('video-free Worker blocks an otherwise confirmed draft from a stale or unve
  const old={...current,rosterSource:''};
  assert.throws(()=>build(old,[row],choices),/現在のSSチーム編成/);
 });
+
+test('missing current-roster proof blocks even zero-goal independent match finishes',()=>{
+ const good=make(2);
+ assert.equal(build(good).fixture_count,2);
+ for(const rosterSource of ['', 'event-embedded-fallback','unverified-refresh-failed']){
+  assert.throws(()=>build({...good,rosterSource}),/現在のチーム名簿/);
+ }
+});
