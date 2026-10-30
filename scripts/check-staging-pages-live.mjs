@@ -39,7 +39,14 @@ async function once(){
   cache:'no-store',signal:AbortSignal.timeout(12000)});
  if(manifestResponse.status!==200)
   throw Error('Cloudflare Pages STAGING is outdated: staging-build.json HTTP '+manifestResponse.status);
- const manifest=await manifestResponse.json();
+ const manifestType=manifestResponse.headers.get('content-type')||'';
+ const manifestRaw=await manifestResponse.text();
+ if(!manifestType.includes('application/json')||!manifestRaw.trimStart().startsWith('{'))
+  throw Error('Cloudflare Pages has NOT published this STAGING build: /staging-build.json is '+manifestType+
+   ' (old site or HTML fallback). Check Cloudflare Pages → Deployments and branch staging.');
+ let manifest;
+ try{manifest=JSON.parse(manifestRaw)}
+ catch{throw Error('Cloudflare Pages /staging-build.json is not valid build metadata')}
  assert.equal(manifest.environment,'STAGING ONLY');
  const expected=process.env.GITHUB_SHA||'';
  if(manifest.commit_sha && expected && manifest.commit_sha!==expected)
