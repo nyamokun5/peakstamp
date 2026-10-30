@@ -18,11 +18,15 @@ export function describeOfficialFixtures(snapshot){
  const bySeq=new Map(ordered.map(m=>[m.seq,m]));
  const exactFour=ordered.length===4&&[1,2,3,4].every(seq=>bySeq.has(seq));
  const medalPair=exactFour&&hasThird(bySeq.get(3)?.title)&&hasFinal(bySeq.get(4)?.title);
- // A title is supplied by SS; alternatively *both* unresolved slots provide
- // explicit 4-game dependency evidence. Never assume any four games are KO.
- const bracket=Boolean(exactFour&&(medalPair||
-  (bySeq.get(3)?.status==='waiting'&&bySeq.get(4)?.status==='waiting'&&
-   (hasSemi(bySeq.get(1)?.title)||hasSemi(bySeq.get(2)?.title)))));
+ const semiPair=exactFour&&hasSemi(bySeq.get(1)?.title)&&hasSemi(bySeq.get(2)?.title);
+ const bothWaiting=exactFour&&bySeq.get(3)?.status==='waiting'&&bySeq.get(4)?.status==='waiting';
+ // A genuine legacy four-game bracket may label both placement matches
+ // "決勝". Preserve its identity after SS marks the games finished; otherwise
+ // completed-job reconciliation would hide the parent completion panel.
+ const bothFinals=exactFour&&hasFinal(bySeq.get(3)?.title)&&hasFinal(bySeq.get(4)?.title);
+ // Never infer knockout merely from count or teams. Require explicit SS
+ // semifinal title evidence, or the unique bronze/final pair.
+ const bracket=Boolean(exactFour&&(medalPair||(semiPair&&(bothWaiting||bothFinals))));
  const ready=ordered.filter(m=>m.status==='scheduled'&&m.matchId&&m.leftTeam&&m.rightTeam);
  const waiting=ordered.filter(m=>m.status==='waiting'||!m.matchId||!m.leftTeam||!m.rightTeam);
  const finished=ordered.filter(m=>m.status==='finished');
