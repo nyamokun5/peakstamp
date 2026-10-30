@@ -16,6 +16,12 @@ const match=(seq,left,right,title,status='scheduled')=>({
  status,left_score:0,right_score:0,goals:[]
 });
 const scenarios=[
+ {label:'manual goal refetches updated event roster',fixtures:[
+   match(1,'Team1','Team2','#1 紅白戦'),
+   match(2,'Team1','Team2','#2 紅白戦')],automatic:false,draw:true,manual:true,rosterShift:true},
+ {label:'manual goal refuses a failed latest-roster refresh',fixtures:[
+   match(1,'Team1','Team2','#1 紅白戦'),
+   match(2,'Team1','Team2','#2 紅白戦')],automatic:false,draw:true,manual:true,refreshFail:true},
  {label:'two-team manual goal without source video',fixtures:[
    match(1,'Team1','Team2','#1 紅白戦'),
    match(2,'Team1','Team2','#2 紅白戦')],automatic:false,draw:true,manual:true},
@@ -56,7 +62,7 @@ const scenarios=[
 try{
  await buildStagingSite(temp);
  for(const scenario of scenarios){
-  let prod=0,posts=0,healthGets=0,submittedPlan=null;
+  let prod=0,posts=0,healthGets=0,submittedPlan=null,snapshotGets=0;
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   if(scenario.retired)await page.addInitScript(({eventId,requestId})=>{
@@ -114,13 +120,25 @@ try{
       ?'independent-fixtures-v1':'durable-four-match-v1'
     },headers:{'Access-Control-Allow-Origin':'*'}});
    }
+   if(url.pathname==='/snapshot'){
+    snapshotGets++;
+    if(scenario.refreshFail&&snapshotGets>1)
+     return route.fulfill({status:503,json:{error:{message:'TEST roster temporarily unavailable'}},
+      headers:{'Access-Control-Allow-Origin':'*'}});
+    const beforeShift=scenario.rosterShift&&snapshotGets===1;
+    return route.fulfill({status:200,json:{
+     event_id:E,roster_source:'official-current-event-teams',
+     matches:scenario.fixtures,
+     roster:beforeShift?
+      {Team1:['OldCaptain'],Team2:['Jiro'],Team3:['Saburo']}:
+      {Team1:['Taro','Aki'],Team2:['Jiro'],Team3:['Saburo'],Team4:['Shiro'],
+       Team5:['Goro'],Team6:['Roku']}
+    },headers:{'Access-Control-Allow-Origin':'*'}});
+   }
    const data=url.pathname==='/events'?
     {events:[{event_id:E,name:'TEST event',date:'2026-10-30',status:'target'}]}:
-    url.pathname==='/snapshot'?{event_id:E,roster_source:'official-current-event-teams',
-     matches:scenario.fixtures,
-     roster:{Team1:['Taro','Aki'],Team2:['Jiro'],Team3:['Saburo'],Team4:['Shiro'],
-      Team5:['Goro'],Team6:['Roku']}}:{error:{message:'unsupported mocked path'}};
-   return route.fulfill({status:url.pathname==='/events'||url.pathname==='/snapshot'?200:404,
+    {error:{message:'unsupported mocked path'}};
+   return route.fulfill({status:url.pathname==='/events'?200:404,
     json:data,headers:{'Access-Control-Allow-Origin':'*'}});
   });
   try{
@@ -195,7 +213,22 @@ try{
    }
    if(scenario.manual){
     await page.click('#quickEdit');
+    if(scenario.rosterShift){
+     assert.match(await page.locator('#eventTitle').innerText(),/名簿 3名/);
+    }
     await page.click('#manualAddGoal');
+    if(scenario.refreshFail){
+     await page.waitForFunction(()=>document.querySelector('#manualAddStatus')?.textContent.includes('最新名簿を確認できません'));
+     assert.equal(await page.locator('#review-goal-1').count(),0);
+     assert.equal(await page.locator('#manualAddGoal').isDisabled(),true);
+     assert.equal(await worker.isDisabled(),true);
+     assert.equal(snapshotGets,2,'the refresh must occur before creating any draft');
+     assert.equal(posts,0,'failed roster refresh cannot POST any registration');
+     assert.equal(prod,0);
+     assert.deepEqual(errors,[]);
+     continue;
+    }
+    assert.equal(snapshotGets,2,'each video-free draft must re-read the live current roster');
     const goal=page.locator('#review-goal-1');
     await goal.waitFor();
     const fields=goal.locator('.fields').first().locator('select');
@@ -203,6 +236,13 @@ try{
     const scorerChoices=await fields.nth(1).locator('option').allTextContents();
     assert.ok(scorerChoices.some(x=>x.includes('Taro')&&x.includes('Team1')));
     assert.ok(scorerChoices.some(x=>x.includes('Jiro')&&x.includes('Team2')));
+    if(scenario.rosterShift){
+     assert.ok(!scorerChoices.some(x=>x.includes('OldCaptain')),
+      'a just-replaced roster member must not remain in new manual goal choices');
+     assert.ok(!scorerChoices.some(x=>x.includes('Saburo')),
+      'unrelated old Team3 member must not remain in new manual goal choices');
+     assert.match(await page.locator('#manualAddStatus').innerText(),/更新されています/);
+    }
     assert.ok(scorerChoices.every(x=>!/Team3|Team4|Team5|Team6/.test(x)),
      'manual scorer dropdown must exclude unrelated current-event teams');
     await fields.nth(1).selectOption('Taro');
