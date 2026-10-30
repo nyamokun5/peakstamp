@@ -680,7 +680,6 @@ function nextSceneAfter(current,{wasUnjudged=false}={}) {
         const clearance=reviewUndoClearance(actions.getBoundingClientRect(),toast.getBoundingClientRect());
         if(clearance>0)window.scrollBy({top:clearance,behavior:'auto'});
       });
-    });
   });
 }
 function decideReview(source,item,decision) {
