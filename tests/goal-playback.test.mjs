@@ -49,15 +49,18 @@ test('passive first goal shows Replay but never preloads/decodes/seeks a long MO
  assert.equal(calls.plays.length,0);
  assert.match(calls.messages.at(-1),/リプレイ/);
 });
-test('one Replay tap triggers source load, exact deep seek and play as with highlight previews',async()=>{
+test('one Replay tap requests playback before metadata, then seeks to the goal without a second play',async()=>{
  const {video,calls,controller,flush}=fixture();
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:365.2,autoplay:false});
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:365.2,autoplay:true});
+ assert.equal(calls.plays.length,1,'first play request must be made inside tap before asynchronous metadata');
+ assert.equal(video.readyState,0);
  await flush();
  assert.equal(video.hidden,false);
  assert.equal(calls.sources,1);
  assert.equal(calls.plays.length,1);
- assert.equal(calls.plays[0].time,365.2);
+ assert.equal(calls.plays[0].time,0,'new media must request play during the tap, before metadata');
+ assert.equal(video.currentTime,365.2,'metadata event seeks to the exact goal time without replaying');
  assert.equal(controller.diagnostic().phase,'playing');
  assert.equal(calls.before,1);
 });
@@ -68,7 +71,7 @@ test('repeat Replay of the same MOV reuses the decoder with no source reassignme
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:103,autoplay:true});
  await flush();
  assert.equal(calls.sources,1);
- assert.deepEqual(calls.plays.map(x=>x.time),[105,103]);
+ assert.deepEqual(calls.plays.map(x=>x.time),[0,103]);
 });
 test('choosing next goal from a different video loads once and starts from its clip',async()=>{
  const {video,calls,controller,flush}=fixture();
@@ -78,16 +81,18 @@ test('choosing next goal from a different video loads once and starts from its c
  await flush();
  assert.equal(video.src,'blob:b');
  assert.equal(calls.sources,2);
- assert.deepEqual(calls.plays.map(x=>x.time),[379,117]);
+ assert.deepEqual(calls.plays.map(x=>x.time),[0,0]);
+ assert.equal(video.currentTime,117,'second MOV is sought to its goal on metadata');
  assert.equal(controller.currentSourceKey(),'B');
 });
 test('passive queue selection cancels a pending metadata-triggered replay',async()=>{
- const {calls,controller,flush}=fixture();
+ const {video,calls,controller,flush}=fixture();
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:300,autoplay:true});
  controller.open({sourceKey:'B',sourceUrl:'blob:b',at:90,autoplay:false});
  await flush();
- assert.equal(calls.plays.length,0);
+ assert.equal(calls.plays.length,1,'initial user gesture request occurred but is never replayed after cancellation');
  assert.equal(controller.currentSourceKey(),'B');
+ assert.equal(video.paused,true,'passive selection pauses the old player');
 });
 test('play failures report a repeatable button action, not an endless seek wait',async()=>{
  const {video,calls,controller,flush}=fixture();
@@ -95,7 +100,7 @@ test('play failures report a repeatable button action, not an endless seek wait'
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
  await flush();
  assert.equal(calls.plays.length,1);
- assert.match(calls.messages.at(-1),/もう一度押して/);
+ assert.match(calls.messages.at(-1),/リプレイを再度押す/);
  assert.equal(controller.diagnostic().gestureNeeded,true);
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
  await flush();
@@ -109,7 +114,7 @@ test('manual trim start and user scrub time are respected without old goal -10s 
  await flush();
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:363,autoplay:true});
  await flush();
- assert.deepEqual(calls.plays.map(x=>x.time),[374.2,363]);
+ assert.deepEqual(calls.plays.map(x=>x.time),[0,363]);
 });
 test('dispose detaches media and resets shared goal decoder',async()=>{
  const {video,calls,controller,flush}=fixture();

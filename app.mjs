@@ -5,7 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=guided1';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=reviewagain1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=firsttap1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
@@ -18,7 +18,7 @@ import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeA
 import { attachScenePinchEditor } from './scene-gesture.mjs?v=compact49';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds, reviewUndoClearance } from './review-flow.mjs?v=undo50';
-import { createSceneReplayMedia } from './scene-replay-media.mjs?v=1';
+import { createSceneReplayMedia } from './scene-replay-media.mjs?v=firsttap1';
 import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
 import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=autoplay51';
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
@@ -655,20 +655,21 @@ function nextSceneAfter(current,{wasUnjudged=false}={}) {
     return;
   }
   $('reviewProgress').textContent='次の未判断シーンへ移動しました。';
+  // Keep/Reject is a trusted user gesture on iOS. Open the next Replay
+  // synchronously BEFORE requestAnimationFrame; async .click() loses Safari's
+  // playback permission when the new MOV needs its first source load.
+  const items=[...$('highlightList').querySelectorAll('.highlight-entry')];
+  const element=items.find(entry=>entry.dataset.sourceId===next.source.id && entry.dataset.sceneId===next.item.id);
+  if (!element) return;
+  element.classList.add('review-next');
+  autoOpeningNextReplay = true;
+  try {
+    element.querySelector('.play-btn')?.click();
+  } finally {
+    autoOpeningNextReplay = false;
+  }
+  // Scrolling is layout-dependent, unlike the playback gesture.
   requestAnimationFrame(()=>{
-    const items=[...$('highlightList').querySelectorAll('.highlight-entry')];
-    const element=items.find(entry=>entry.dataset.sourceId===next.source.id && entry.dataset.sceneId===next.item.id);
-    if (!element) return;
-    element.classList.add('review-next');
-    // Open the video first, then scroll after layout expands. This ensures
-    // Keep and Reject follow the same motion on mobile Safari.
-    autoOpeningNextReplay = true;
-    try {
-      element.querySelector('.play-btn')?.click();
-    } finally {
-      autoOpeningNextReplay = false;
-    }
-    requestAnimationFrame(()=>{
       element.scrollIntoView({behavior:'auto',block:'start'});
       // A rejected clip briefly shows a bottom Undo toast. If it would
       // cover the next card's Replay/Keep/Reject row, nudge the card up.
@@ -679,7 +680,6 @@ function nextSceneAfter(current,{wasUnjudged=false}={}) {
         const clearance=reviewUndoClearance(actions.getBoundingClientRect(),toast.getBoundingClientRect());
         if(clearance>0)window.scrollBy({top:clearance,behavior:'auto'});
       });
-    });
   });
 }
 function decideReview(source,item,decision) {
@@ -732,6 +732,8 @@ function row(item, index) {
   let pauseResumeButton=null;
   let seekDrag=null;
   let playVersion=0;
+  let initialReplayPrimed=false;
+  let initialReplayPending=false;
   let replayListeners=[];
   const setReplayStatus=message=>{
     if(!replayStatus)return;
@@ -747,6 +749,8 @@ function row(item, index) {
       }
       frameWatchId=null;
       playVersion++;
+      initialReplayPrimed=false;
+      initialReplayPending=false;
       for(const [event,handler] of replayListeners)replayVideo.removeEventListener(event,handler);
       replayListeners=[];
       // Detach the player but retain its media source for the next scene.
@@ -928,7 +932,18 @@ function row(item, index) {
       video.addEventListener(event,handler);
       replayListeners.push([event,handler]);
     };
-    on('loadedmetadata',restartReplay);
+    on('loadedmetadata',()=>{
+      if(initialReplayPending){
+        initialReplayPending=false;
+        if(!initialReplayPrimed)return;
+        // The first play() was requested inside the actual Replay tap.
+        // Seek on metadata WITHOUT pause/replay: Safari would lose activation.
+        initialReplayPrimed=false;
+        const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
+        try{video.currentTime=bounds.start;updatePlayhead();}
+        catch(_){setReplayStatus('再生開始位置に移動できませんでした。▶ リプレイを再度押してください。');}
+      }else restartReplay();
+    });
     on('timeupdate',clampAndStop);
     on('seeked',clampAndStop);
     on('play',()=>{updatePlayhead();updatePauseResume();watchVideoFrames();});
@@ -939,6 +954,26 @@ function row(item, index) {
     // sourceChanged is only true on first load or when switching files.
     // For consecutive scenes of the same MOV, no src reassignment or load().
     if(!sourceChanged && video.readyState>=1)restartReplay();
+    else{
+      // New MOVs were previously first played from loadedmetadata, an async
+      // callback outside the trusted iPhone touch gesture. Prime play NOW;
+      // loadedmetadata will seek while this play request is still active.
+      initialReplayPending=true;
+      initialReplayPrimed=true;
+      const attempt=++playVersion;
+      try{
+        void scenePreviewAudio.wake();
+        Promise.resolve(video.play()).catch(error=>{
+          if(replayVideo!==video||attempt!==playVersion)return;
+          initialReplayPrimed=false;
+          setReplayStatus('Safariで自動再生できませんでした。▶ リプレイをもう一度押してください。'+
+            (error?.name?'（'+error.name+'）':''));
+        });
+      }catch(error){
+        initialReplayPrimed=false;
+        setReplayStatus('Safariで自動再生できませんでした。▶ リプレイをもう一度押してください。');
+      }
+    }
     if (!autoOpeningNextReplay) {
       inline.scrollIntoView({behavior:'smooth',block:'nearest'});
     }

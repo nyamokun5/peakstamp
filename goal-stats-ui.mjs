@@ -8,7 +8,7 @@ import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
  confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=goalprefill1';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
-import {createGoalPlaybackController} from './goal-playback.mjs?v=goalnative1';
+import {createGoalPlaybackController} from './goal-playback.mjs?v=firsttap1';
 import {createGoalSceneControls} from './goal-scene-editor.mjs?v=goalnative2';
 
 const $=id=>document.getElementById(id);

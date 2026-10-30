@@ -39,3 +39,14 @@ test('missing reference is rejected without allocating a player',()=>{
  const m=createSceneReplayMedia(()=>{throw Error('should not run')});
  assert.throws(()=>m.acquire('','blob:url'),/参照先/);
 });
+
+test('inline playback is enabled before first source load on iPhone',()=>{
+ const sequence=[];
+ const v={pause(){},remove(){},setAttribute(name){sequence.push('attribute:'+name)},
+  load(){sequence.push('load');assert.equal(this.playsInline,true)}};
+ const m=createSceneReplayMedia(()=>v);
+ m.acquire('A','blob:first');
+ assert.equal(v.playsInline,true);
+ assert.ok(sequence.indexOf('attribute:playsinline')<sequence.indexOf('load'));
+ assert.ok(sequence.indexOf('attribute:webkit-playsinline')<sequence.indexOf('load'));
+});
