@@ -35,7 +35,7 @@ const scenarios=[
 try{
  await buildStagingSite(temp);
  for(const scenario of scenarios){
-  let prod=0,posts=0;
+  let prod=0,posts=0,healthGets=0;
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',async route=>{
@@ -51,6 +51,15 @@ try{
    }
    assert.equal(url.hostname,'shoot-sunday-sync-staging.yomax1979.workers.dev');
    if(route.request().method()!=='GET')posts++;
+   // Model a Cloudflare Worker that still serves the old 4-match-only release.
+   // This is GET-only and never contacts either real Worker.
+   if(url.pathname==='/health'){
+    healthGets++;
+    return route.fulfill({status:200,json:{
+     service:'shoot-sunday-sync-staging',write_mode:'test-only',
+     batch_job_configured:true,independent_batch_contract:'durable-four-match-v1'
+    },headers:{'Access-Control-Allow-Origin':'*'}});
+   }
    const data=url.pathname==='/events'?
     {events:[{event_id:E,name:'TEST event',date:'2026-10-30',status:'target'}]}:
     url.pathname==='/snapshot'?{event_id:E,matches:scenario.fixtures,
@@ -89,6 +98,18 @@ try{
    }
    assert.equal(prod,0);assert.equal(posts,0);
    assert.deepEqual(errors,[],scenario.label+' JS errors');
+   if(scenario.label==='external one match'){
+    assert.equal(await worker.isDisabled(),false,'clean 1-match fixture should offer TEST batch');
+    const localKeys=await page.evaluate(()=>Object.keys(localStorage).sort());
+    await worker.click();
+    await page.waitForFunction(()=>
+     document.querySelector('#workerBatchStatus')?.textContent.includes('最新版'));
+    assert.match(await page.locator('#workerBatchStatus').innerText(),/TEST Worker.*最新版/);
+    assert.equal(healthGets,1,'one public GET health capability preflight');
+    assert.equal(posts,0,'stale Worker must not receive any POST');
+    assert.deepEqual(await page.evaluate(()=>Object.keys(localStorage).sort()),localKeys,
+     'failed capability check cannot persist a pending batch marker');
+   }
    console.log('PASS: '+scenario.label+' official fixtures='+scenario.fixtures.length+', no writes');
   }finally{await page.close()}
  }
