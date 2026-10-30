@@ -145,7 +145,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <button id="flowJump" type="button">ここへ移動</button>
 </div>
 <details class="help"><summary>使い方・安全上の注意</summary>
- <p>①イベントを選択 → ②ゴールを確認 → ③登録。送信は最後の「登録」ボタンを押したときだけ行います。通信エラー時は重複防止のため自動再送しません。</p>
+ <p>①イベントを選択 → ②ゴールを確認 → ③登録。送信は最後の「登録」ボタンを押したときだけ行います。不明な試合や選手は人が選択して修正します。通信エラー時は重複防止のため自動再送しません。</p>
 </details>
 <section class="panel">
  <h2>1. 動画のゴール</h2>
@@ -1150,7 +1150,7 @@ function renderQuick(){
     item.state==='attention'?'要修正':'登録対象外';
   top.append(node('span',label,['ready','waiting'].includes(item.state)?'quick-ready':'quick-held'));
   el.append(top);
-  const sourceInfo=(match?matchSlotLabel(match):'試合番号：未設定')+
+  const sourceInfo=(match?matchSlotLabel(match):'試合番号：未設定（要選択）')+
    ' / '+(item.team||snapshot.playerTeam.get(item.scorer)||'得点チーム未確定')+
    ' / '+(item.source||'動画なし')+(item.time==null?'':' '+item.time+'秒');
   // Original PeakStamp AI wording is displayed even if the official SS
