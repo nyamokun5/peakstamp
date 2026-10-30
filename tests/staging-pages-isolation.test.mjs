@@ -37,12 +37,15 @@ test('TEST deployment produces static assets but excludes production-only writin
  try{
   await buildStagingSite(dir);
   const names=await readdir(dir);
-  for(const name of ['index.html','sposched-review.html','staging-production-disabled.mjs','app.mjs','_headers'])
+  for(const name of ['index.html','sposched-review.html','staging-production-disabled.mjs','app.mjs','_headers','staging-build.json'])
    assert.ok(names.includes(name),name+' missing');
   assert.ok(!names.includes('sposched-production-ui.mjs'));
   assert.ok(!names.includes('sposched-production-release.mjs'));
   const disabled=await readFile(path.join(dir,'staging-production-disabled.mjs'),'utf8');
   assert.ok(!disabled.includes(productionHost));
+  const marker=JSON.parse(await readFile(path.join(dir,'staging-build.json'),'utf8'));
+  assert.equal(marker.environment,'STAGING ONLY');
+  assert.ok(marker.commit_sha===null||/^[a-f0-9]{40}$/.test(marker.commit_sha));
   const page=await readFile(path.join(dir,'sposched-review.html'),'utf8');
   assert.ok(!page.includes(productionHost));
  }finally{await rm(dir,{recursive:true,force:true});}

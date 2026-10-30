@@ -11,11 +11,44 @@ const MUST_HAVE=[
  ['sposched-fixture-layout.mjs','function drawOptionForFixture']
 ];
 const pause=ms=>new Promise(done=>setTimeout(done,ms));
+async function checkedFetch(url,options={}){
+ const original=new URL(url);
+ let next=original;
+ for(let step=0;step<3;step++){
+  const response=await fetch(next,{...options,redirect:'manual'});
+  if(response.status<300||response.status>=400)return response;
+  const destHeader=response.headers.get('location');
+  let dest;
+  try{dest=new URL(destHeader,next);}
+  catch{throw Object.assign(Error('Malformed redirect from '+next.hostname),{permanent_redirect:true});}
+  // Cloudflare Pages canonicalizes only .html GET files to extensionless
+  // paths with 308. Allow exactly that one transformation, nothing else.
+  const pagesHtmlGet=(original.origin===SITE&&(!options.method||options.method==='GET')&&
+   original.pathname.endsWith('.html')&&next.pathname===original.pathname&&
+   dest.pathname===original.pathname.slice(0,-5)&&!dest.search&&!dest.hash);
+  if(response.status!==308||dest.protocol!=='https:'||
+     dest.origin!==original.origin||!pagesHtmlGet)
+   throw Object.assign(Error(original.hostname+' HTTP '+response.status+
+    ' unsafe redirect to '+dest.origin+dest.pathname),{permanent_redirect:true});
+  next=dest;
+ }
+ throw Object.assign(Error('Too many same-origin redirects from '+original.pathname),{permanent_redirect:true});
+}
 async function once(){
+ const manifestResponse=await checkedFetch(SITE+'/staging-build.json',{
+  cache:'no-store',signal:AbortSignal.timeout(12000)});
+ if(manifestResponse.status!==200)
+  throw Error('Cloudflare Pages STAGING is outdated: staging-build.json HTTP '+manifestResponse.status);
+ const manifest=await manifestResponse.json();
+ assert.equal(manifest.environment,'STAGING ONLY');
+ const expected=process.env.GITHUB_SHA||'';
+ if(manifest.commit_sha && expected && manifest.commit_sha!==expected)
+  throw Error('Cloudflare Pages STAGING is outdated: published '+manifest.commit_sha+
+   ' but GitHub staging is '+expected);
  const payload={};
  for(const [file,expected] of MUST_HAVE){
   if(!payload[file]){
-   const r=await fetch(SITE+'/'+file,{redirect:'error',cache:'no-store',
+   const r=await checkedFetch(SITE+'/'+file,{redirect:'manual',cache:'no-store',
     signal:AbortSignal.timeout(12000)});
    if(r.status!==200)throw Error('Pages /'+file+' HTTP '+r.status);
    payload[file]=await r.text();
@@ -30,13 +63,13 @@ async function once(){
   'production SS is forbidden in the TEST build');
  assert.ok(!page.includes("from './sposched-production-ui.mjs"),
   'production UI writer must not be shipped');
- const health=await fetch(WORKER+'/health',{redirect:'error',
+ const health=await checkedFetch(WORKER+'/health',{redirect:'manual',
   signal:AbortSignal.timeout(12000)});
  assert.equal(health.status,200);
  const status=await health.json();
  assert.equal(status.service,'shoot-sunday-sync-staging');
  assert.equal(status.write_mode,'test-only');
- const preflight=await fetch(WORKER+'/events',{method:'OPTIONS',redirect:'error',
+ const preflight=await checkedFetch(WORKER+'/events',{method:'OPTIONS',redirect:'manual',
   headers:{Origin:SITE,'Access-Control-Request-Method':'GET',
    'Access-Control-Request-Headers':'x-ss-bridge-token'},
   signal:AbortSignal.timeout(12000)});
@@ -51,7 +84,7 @@ for(let attempt=1;attempt<=15;attempt++){
   console.log('PASS: live STAGING Pages has variable-fixture UI; production writer stripped; Worker CORS and health verified. GET/OPTIONS only.');
   process.exit(0);
  }catch(e){
-  if(attempt===15)throw e;
+  if(attempt===15||e.permanent_redirect)throw e;
   console.log('Pages/Worker release not yet ready (attempt '+attempt+'/15): '+e.message);
   await pause(8000);
  }
