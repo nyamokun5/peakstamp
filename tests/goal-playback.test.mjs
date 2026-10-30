@@ -100,7 +100,7 @@ test('play failures report a repeatable button action, not an endless seek wait'
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
  await flush();
  assert.equal(calls.plays.length,1);
- assert.match(calls.messages.at(-1),/もう一度押して/);
+ assert.match(calls.messages.at(-1),/リプレイを再度押す/);
  assert.equal(controller.diagnostic().gestureNeeded,true);
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
  await flush();
