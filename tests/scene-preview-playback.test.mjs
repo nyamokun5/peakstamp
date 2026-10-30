@@ -165,3 +165,16 @@ test('failed scrub autoplay reports the playback problem instead of changing tri
  assert.equal(at,15);
  assert.deepEqual(errors,['Safari denied play']);
 });
+
+test('first new MOV replay starts from the direct user tap, not loadedmetadata callback',()=>{
+ const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const replay=app.split('const restartReplay=()=>')[1].split("const fields = make('div','item-fields')")[0];
+ assert.match(replay,/initialReplayPending=true;\s*initialReplayPrimed=true;/);
+ assert.match(replay,/Promise\.resolve\(video\.play\(\)\)\.catch/);
+ assert.match(replay,/on\('loadedmetadata',\(\)=>\{/);
+ assert.match(replay,/if\(initialReplayPending\)/);
+ assert.match(replay,/video\.currentTime=bounds\.start;updatePlayhead\(\)/);
+ assert.doesNotMatch(replay.split("on('loadedmetadata',()=>{")[1].split("on('timeupdate'")[0],/video\.play\(/);
+ assert.match(html,/src="app\.mjs\?v=firsttap-replay1"/);
+});
