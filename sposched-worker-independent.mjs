@@ -18,6 +18,39 @@ export function assertIndependentWorkerHealth(health){
   fail('TEST Workerが可変試合数の最新版ではありません。Cloudflare WorkerのSTAGINGデプロイを確認してください。送信は開始していません');
  return true;
 }
+/** Pure UI eligibility: an older COMPLETED generation may have been deleted
+ * and replaced by a new independent schedule within the SAME TEST event.
+ * This is only a button visibility gate. The Worker MUST still prove that
+ * every old UUID returns HTTP 404 before any new job is persisted.
+ */
+export function isRetiredIndependentJob(state,snapshot){
+ if(!state||!snapshot||state.event_id!==snapshot.eventId||
+    state.status!=='completed')return false;
+ const layout=describeOfficialFixtures(snapshot);
+ if(layout.automaticFourMatch||layout.count<1||layout.count>24||
+    layout.ready!==layout.count||layout.waiting||layout.finished)return false;
+ const old=state.fixture_ids||{},oldCount=state.fixture_count||4;
+ if(!Number.isInteger(oldCount)||oldCount<1||oldCount>24||
+    Object.keys(old).length!==oldCount||
+    !Array.from({length:oldCount},(_,i)=>String(i+1)).every(k=>UUID.test(old[k]||'')))
+  return false;
+ const oldIds=new Set(Object.values(old).map(id=>id.toLowerCase()));
+ if(oldIds.size!==oldCount)return false;
+ const newIds=new Set();
+ for(let i=0;i<layout.count;i++){
+  const m=layout.matches[i];
+  if(m.seq!==i+1||!UUID.test(m.matchId||'')||
+     m.status!=='scheduled'||!m.leftTeam||!m.rightTeam||
+     m.leftTeam===m.rightTeam||m.leftScore!==0||m.rightScore!==0||
+     m.existingGoals?.length!==0||
+     /準決勝|3位決定|３位決定|順位決定|決勝|semifinal|semi-final|final|playoff/i.test(m.title||''))
+   return false;
+  const id=m.matchId.toLowerCase();
+  if(oldIds.has(id)||newIds.has(id))return false;
+  newIds.add(id);
+ }
+ return true;
+}
 export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
  if(!snapshot||!UUID.test(snapshot.eventId||'')||!UUID.test(requestId||''))
   fail('正式なTESTイベントとジョブIDを確認できません');
