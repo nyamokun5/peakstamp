@@ -21,11 +21,13 @@ async function checkedFetch(url,options={}){
   let dest;
   try{dest=new URL(destHeader,next);}
   catch{throw Object.assign(Error('Malformed redirect from '+next.hostname),{permanent_redirect:true});}
-  // Cloudflare Pages removes .html from static routes via HTTP 308.
-  // Never follow to another site, downgrade TLS or change request semantics.
-  if(![301,302,307,308].includes(response.status)||
-     dest.protocol!=='https:'||dest.origin!==original.origin||
-     options.method==='OPTIONS' && dest.pathname!==original.pathname)
+  // Cloudflare Pages canonicalizes only .html GET files to extensionless
+  // paths with 308. Allow exactly that one transformation, nothing else.
+  const pagesHtmlGet=(original.origin===SITE&&(!options.method||options.method==='GET')&&
+   original.pathname.endsWith('.html')&&next.pathname===original.pathname&&
+   dest.pathname===original.pathname.slice(0,-5)&&!dest.search&&!dest.hash);
+  if(response.status!==308||dest.protocol!=='https:'||
+     dest.origin!==original.origin||!pagesHtmlGet)
    throw Object.assign(Error(original.hostname+' HTTP '+response.status+
     ' unsafe redirect to '+dest.origin+dest.pathname),{permanent_redirect:true});
   next=dest;
