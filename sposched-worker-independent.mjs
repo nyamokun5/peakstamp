@@ -160,6 +160,10 @@ export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
     m.leftTeam!==m.rightTeam&&m.existingGoals.length===0&&
     m.leftScore===0&&m.rightScore===0))
   fail('試合番号・公式試合ID・初期スコアを確認してください。既存ゴールがある場合は個別確認してください');
+ // A repeated two-team pairing still requires a DIFFERENT canonical UUID per
+ // game. Match IDs must never be inferred from the same visible teams.
+ if(new Set(layout.matches.map(m=>m.matchId.toLowerCase())).size!==layout.count)
+  fail('SS公式の試合IDが重複しています。新規登録せず試合番号と正式IDを確認してください');
  if(layout.matches.some(m=>/準決勝|3位決定|３位決定|順位決定|決勝|semifinal|semi-final|final|playoff/i.test(m.title||'')))
   fail('順位決定戦・トーナメントの対戦は独立試合として登録できません');
  if(!Array.isArray(rows)||!Array.isArray(decisions)||decisions.length!==rows.length)
