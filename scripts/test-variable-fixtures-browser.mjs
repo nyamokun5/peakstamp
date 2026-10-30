@@ -25,6 +25,9 @@ const scenarios=[
  {label:'retired four-match now three-fixture league',fixtures:[
    match(1,'Team1','Team2','#1 リーグ'),match(2,'Team1','Team3','#2 リーグ'),
    match(3,'Team2','Team3','#3 リーグ')],automatic:false,retired:true},
+ {label:'retired Worker but local marker points to another job',fixtures:[
+   match(1,'Team1','Team2','#1 リーグ'),match(2,'Team1','Team3','#2 リーグ'),
+   match(3,'Team2','Team3','#3 リーグ')],automatic:false,retired:true,markerMismatch:true},
  {label:'retired incomplete old fixture IDs',fixtures:[
    match(1,'Team1','Team2','#1 リーグ'),match(2,'Team1','Team3','#2 リーグ'),
    match(3,'Team2','Team3','#3 リーグ')],automatic:false,retired:true,incomplete:true},
@@ -46,7 +49,8 @@ try{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   if(scenario.retired)await page.addInitScript(({eventId,requestId})=>{
    localStorage.setItem('peakstamp:test:worker-batch:'+eventId,requestId);
-  },{eventId:E,requestId:'33333333-3333-4333-8333-333333333333'});
+  },{eventId:E,requestId:scenario.markerMismatch
+    ?'44444444-4444-4444-8444-444444444444':'33333333-3333-4333-8333-333333333333'});
   await page.route('**/*',async route=>{
    const url=new URL(route.request().url());
    if(url.hostname==='peakstamp-stage.local'){
@@ -121,9 +125,13 @@ try{
      document.querySelector('#workerBatchStatus')?.textContent.includes('旧4試合'));
     const status=await page.locator('#workerBatchStatus').innerText();
     const button=page.locator('#workerBatchRecreate');
-    if(scenario.incomplete){
+    if(scenario.incomplete||scenario.markerMismatch){
      assert.equal(await button.isVisible(),false);
      assert.match(status,/別のTESTイベント/);
+     if(scenario.markerMismatch) {
+      assert.match(status,/保存ジョブIDとWorkerが一致しません/);
+      assert.match(status,/旧4試合.*3試合/);
+     }
     }else{
      assert.equal(await button.isVisible(),true);
      assert.match(await button.innerText(),/旧4試合.*新3試合.*TEST登録/);
