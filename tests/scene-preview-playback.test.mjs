@@ -178,3 +178,13 @@ test('first new MOV replay starts from the direct user tap, not loadedmetadata c
  assert.doesNotMatch(replay.split("on('loadedmetadata',()=>{")[1].split("on('timeupdate'")[0],/video\.play\(/);
  assert.match(html,/src="app\.mjs\?v=firsttap-replay1"/);
 });
+
+test('Keep and Reject immediately open next Replay inside original Safari user gesture',()=>{
+ const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
+ const body=app.split('function nextSceneAfter(current,{wasUnjudged=false}={}) {')[1].split('function decideReview(')[0];
+ const replay=body.indexOf("element.querySelector('.play-btn')?.click()");
+ const nextFrame=body.indexOf('requestAnimationFrame(()=>');
+ assert.ok(replay>=0,'next scene must open Replay');
+ assert.ok(nextFrame>=0,'layout scroll still uses animation frame');
+ assert.ok(replay<nextFrame,'opening playback only after requestAnimationFrame loses iOS user activation');
+});
