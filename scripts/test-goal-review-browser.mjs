@@ -59,7 +59,7 @@ try{
  await load();
  const visible=page.locator('#quickGoals .quick-goal');
  assert.equal(await visible.count(),1);
- assert.match(await visible.first().innerText(),/試合番号：未設定/);
+ assert.match(await visible.first().innerText(),/試合番号を選択してください/);
  assert.match(await visible.first().innerText(),/試合番号が未設定/);
  assert.equal(await page.locator('#autoRun').isDisabled(),true);
  assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
