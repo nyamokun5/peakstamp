@@ -399,7 +399,7 @@ export function preserveReviewRows(nextRows,priorRows,{
    if(row.team&&!inSide(row.team))row.team='';
    if(row.scorer&&row.team&&
       normalizeTeam(snapshot.playerTeam.get(row.scorer))!==normalizeTeam(row.team)){
-    row.scorer='';row.assist='';
+    row.scorer='';row.assist='';row.team='';
    }
    if(row.assist&&(!row.team||
       !fixturePlayerOptions(snapshot,row.seq,row.team).includes(row.assist)))
