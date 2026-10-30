@@ -69,8 +69,16 @@ try{
    const text=await page.locator('#ssFixtureOverview').innerText();
    assert.match(text,new RegExp(String(scenario.fixtures.length)+'試合'));
    assert.match(text,/SS公式/);
-   assert.equal(await page.locator('#autoPanel').isVisible(),scenario.automatic,
-    scenario.label+' must not silently use the four-KO worker');
+   assert.equal(await page.locator('#autoPanel').isVisible(),true,
+    scenario.label+' must show the official fixture summary');
+   const worker=page.locator('#workerBatchRun');
+   if(scenario.automatic)assert.match(await worker.innerText(),/4試合/);
+   else {
+    assert.match(await worker.innerText(),new RegExp(String(scenario.fixtures.length)+'試合'));
+    assert.equal(await worker.isDisabled(),scenario.fixtures.some(m=>m.status==='waiting'));
+    assert.equal(await page.locator('#legacyBatchDetails').isVisible(),false,
+     'generic fixture schedules must never expose legacy knockout register');
+   }
    assert.equal(await page.locator('#quickIndividualTestTools').getAttribute('open'),
     scenario.automatic?null:'',scenario.label+' goal tools visibility');
    if(scenario.draw){
