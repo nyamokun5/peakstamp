@@ -73,6 +73,34 @@ export function describeCompletedWorkerMismatch(state,snapshot,localRequestId){
     (localMatches?'':'端末の保存ジョブIDとWorkerが一致しません。')
  };
 }
+/** A local-only rescue of the event's Worker request pointer.
+ * IMPORTANT: This is not a release gate or server-side permission to recreate.
+ * Always re-read the authenticated /inspect on the real Worker before invoking.
+ */
+export function assertRetiredWorkerReconnectable({state,snapshot,storedRequestId,
+ pendingGoals=false,pendingRecreation=false}={}){
+ if(pendingGoals||pendingRecreation)fail('未照合の登録記録が残っています。先に照合してください');
+ if(!UUID.test(storedRequestId||''))fail('端末の旧ジョブIDが不正です。自動復旧しません');
+ if(state?.environment!=='STAGING ONLY'||
+    state?.inspection_contract!=='event-inspect-v1'||
+    state?.inspection_only!==true||
+    !UUID.test(state?.request_id||'')||
+    !UUID.test(state?.event_id||'')||
+    state.request_id===storedRequestId||
+    state.status!=='completed'||
+    state.execution_active===true||
+    !snapshot||state.event_id!==snapshot.eventId)
+  fail('TEST Workerの完了記録・ジョブID・イベント範囲を確認できません。変更しません');
+ if(!isRetiredIndependentJob(state,snapshot))
+  fail('旧試合IDと新公式試合IDを安全に照合できません。変更しません');
+ const count=state.fixture_count||4;
+ if(!Number.isInteger(state.completed)||!Number.isInteger(state.total)||
+    state.total< count||state.completed!==state.total)
+  fail('旧Workerの全操作が完了した証明がありません。変更しません');
+ return {eventId:state.event_id,previousRequestId:storedRequestId,
+  workerRequestId:state.request_id,oldCount:count,
+  newCount:describeOfficialFixtures(snapshot).count};
+}
 export function isRetiredIndependentJob(state,snapshot){
  if(!state||!snapshot||state.event_id!==snapshot.eventId||
     state.status!=='completed')return false;
