@@ -112,7 +112,7 @@ try{
  await page.click('#ssReloadFixtures');
  await page.locator('#ssFixtureWarning').waitFor({state:'hidden'});
  assert.equal(await page.locator('#autoRun').isEnabled(),true);
- assert.match(await page.locator('#quickGoals .quick-goal').innerText(),/#1 準決勝/);
+ assert.match(await page.locator('#quickGoals .quick-goal').innerText(),/準決勝（第1試合）/);
  assert.deepEqual(writes,[]);
  assert.deepEqual(errors,[]);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
