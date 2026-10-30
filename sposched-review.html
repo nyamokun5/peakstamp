@@ -1507,6 +1507,9 @@ function renderAutoSummary(){
   $('autoBeforeRun').textContent='';
   $('workerBatchRun').disabled=true;
   $('autoRun').disabled=true;
+  $('autoRun').textContent=snapshot.matches.length===0
+   ?'試合枠がないため登録できません'
+   :'この形式は試合ごとに登録してください';
   return;
  }
  const root=$('autoOutline');root.replaceChildren();
