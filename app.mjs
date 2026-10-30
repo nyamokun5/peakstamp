@@ -18,7 +18,7 @@ import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeA
 import { attachScenePinchEditor } from './scene-gesture.mjs?v=compact49';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
 import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds, reviewUndoClearance } from './review-flow.mjs?v=undo50';
-import { createSceneReplayMedia } from './scene-replay-media.mjs?v=1';
+import { createSceneReplayMedia } from './scene-replay-media.mjs?v=firsttap1';
 import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
 import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=autoplay51';
 import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
