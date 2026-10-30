@@ -58,14 +58,42 @@ export function normalizeSpoSnapshot(raw){
   }
  }
  const roster=obj.roster&&typeof obj.roster==='object'?obj.roster:{};
+ const rosterSource=string(obj.roster_source);
+ const authoritative=rosterSource==='official-current-event-teams';
+ // Historical goal scorers may have changed teams or left this event.
+ // Show them in registered goal readback, NOT as selectable current players.
+ const rosterNames=Object.values(roster).flatMap(x=>
+  Array.isArray(x)?x.map(string):[]).filter(Boolean);
  const players=[...new Set([
-  ...Object.values(roster).flatMap(x=>Array.isArray(x)?x.map(string):[]),
-  ...matches.flatMap(m=>m.existingGoals.flatMap(g=>[g.scorer,g.assist]))
+  ...rosterNames,
+  ...(authoritative?[]:matches.flatMap(m=>
+   m.existingGoals.flatMap(g=>[g.scorer,g.assist])))
  ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
  const playerTeam=new Map();
- for(const [team,names] of Object.entries(roster))for(const name of Array.isArray(names)?names:[])
-  playerTeam.set(string(name),string(team));
- return {eventId,eventName,matches,players,roster,playerTeam};
+ for(const [team,names] of Object.entries(roster))for(const rawName of Array.isArray(names)?names:[]){
+  const player=string(rawName),teamName=string(team);
+  if(!player)continue;
+  if(authoritative&&playerTeam.has(player)&&
+     normalizeTeam(playerTeam.get(player))!==normalizeTeam(teamName))
+   throw Error('現在のSS名簿で同名選手の所属チームが重複しています。登録を停止してください');
+  playerTeam.set(player,teamName);
+ }
+ return {eventId,eventName,matches,players,roster,playerTeam,rosterSource};
+}
+/** Select ONLY players assigned to the official numbered fixture's sides.
+ * Never leak historical, unassigned, or unrelated third-team players into the
+ * new-goal scorer/assist controls. Missing fixture => no selectable players.
+ */
+export function fixturePlayerOptions(snapshot,seq,team=''){
+ const match=snapshot?.matches?.find(m=>m.seq===number(seq));
+ if(!match)return [];
+ const sides=[match.leftTeam,match.rightTeam].map(normalizeTeam).filter(Boolean);
+ const chosen=normalizeTeam(team);
+ if(chosen&&!sides.includes(chosen))return [];
+ return (snapshot.players||[]).filter(player=>{
+  const membership=normalizeTeam(snapshot.playerTeam?.get(player)||'');
+  return Boolean(membership&&sides.includes(membership)&&(!chosen||membership===chosen));
+ });
 }
 export function selectPlayerCandidates(text,snapshot,team='',limit=7){
  // Use the SAME Japanese/romanized roster inference as the compact review.
