@@ -75,7 +75,7 @@ try{
  assert.match(review,/SS登録予定（名簿照合）/);
  assert.match(review,/佐藤さん/);
  assert.match(review,/Taro Sato/,'official romanized scorer roster match must be visible in production');
- const tatsuoCard=page.locator('#quickGoals .quick-goal').filter({hasText:'達夫さんゴール'});
+ const tatsuoCard=page.locator('#quickGoals .quick-goal').filter({hasText:'Tatsuo Nishimura'});
  await tatsuoCard.waitFor({state:'visible'});
  const tatsuoReview=await tatsuoCard.innerText();
  assert.match(tatsuoReview,/達夫/,'AI original kanji name must remain visible');
