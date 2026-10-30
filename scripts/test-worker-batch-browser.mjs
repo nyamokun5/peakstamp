@@ -138,7 +138,7 @@ try{
  await page.locator('#workerBatchArea').waitFor({state:'visible'});
  assert.equal(await page.locator('#quickGoals .quick-goal').count(),1);
  assert.match(await page.locator('#quickGoals').innerText(),/対戦確定後に自動登録/);
- assert.match(await page.locator('#quickGoals .quick-compare').innerText(),/AI提案/);
+ assert.match(await page.locator('#quickGoals .quick-compare').innerText(),/AI候補/);
  assert.match(await page.locator('#quickGoals .quick-compare').innerText(),/藤井さん/);
  assert.match(await page.locator('#quickGoals .quick-compare').innerText(),/達夫/);
  assert.match(await page.locator('#quickGoals .quick-compare').innerText(),/Taro Fujii/);
