@@ -7,6 +7,17 @@ import {normalizeTeam,normalizePerson} from './sposched-review-core.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const fail=reason=>{throw Error(reason)};
 const name=v=>typeof v==='string'?v.trim():'';
+/** A public GET /health preflight, before the first mutation or local job marker.
+ * Verify the deployed STAGING Worker actually supports the independent batch path.
+ */
+export function assertIndependentWorkerHealth(health){
+ if(health?.service!=='shoot-sunday-sync-staging'||
+    health?.write_mode!=='test-only'||
+    health?.batch_job_configured!==true||
+    health?.independent_batch_contract!=='independent-fixtures-v1')
+  fail('TEST Workerが可変試合数の最新版ではありません。Cloudflare WorkerのSTAGINGデプロイを確認してください。送信は開始していません');
+ return true;
+}
 export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
  if(!snapshot||!UUID.test(snapshot.eventId||'')||!UUID.test(requestId||''))
   fail('正式なTESTイベントとジョブIDを確認できません');
