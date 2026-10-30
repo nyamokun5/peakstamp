@@ -24,7 +24,7 @@ export function buildStagingReviewHtml(html){
  out=requireOnce(out,'    <option value="production">本番SS</option>\n','', 'production dropdown option');
  out=requireOnce(out,'<option value="staging">テストSS</option>',
   '<option value="staging" selected>テストSS</option>','staging dropdown option');
- out=requireOnce(out,"production:'"+prodHost+"',\n  ",'','production gateway');
+ out=requireOnce(out,"production:'"+prodHost+"',\n",'','production gateway');
  out=requireOnce(out,"import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';",
   "import {installProductionUI} from './staging-production-disabled.mjs';",'production UI module');
  out=requireOnce(out,'<p id="ssEnvironmentNote" class="small">ターゲットに設定されたイベントだけ登録できます。</p>',
