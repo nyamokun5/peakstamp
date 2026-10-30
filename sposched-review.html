@@ -211,6 +211,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <p id="quickTestHelp" class="step-help">AI提案とSS登録予定を確認してください。<strong>別チームの得点者・アシスト者はWorkerがその試合の助っ人として登録してから、ゴールとアシストを記録</strong>します。3位決定戦・決勝は準決勝の正式結果が確定してから登録します。得点チームが不明な場合だけ選択してください。</p>
  <p id="quickProductionHelp" class="step-help" hidden>AI候補と登録予定を確認してください。修正が必要な場合は「修正する」を押してください。<strong>まだSSには送信されません。</strong></p>
  <p id="quickSummary" class="quick-summary" role="status" aria-live="polite"></p>
+ <div id="ssFixtureOverview" class="grid-item" aria-label="SS公式の試合一覧"></div>
  <button id="quickResetBulkReview" type="button" hidden>試合作り直し後のゴールをまとめて試合番号確認（書き込みなし）</button>
  <p id="quickResetBulkStatus" class="small" role="status" aria-live="polite"></p>
  <div id="autoGoalDetails">
@@ -427,6 +428,7 @@ import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObser
 import {validateResetGoalRebinding} from './sposched-reset-fixture-review.mjs?v=reset-bulk1';
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
+import {describeOfficialFixtures,drawOptionForFixture,fixtureSummaryLabel} from './sposched-fixture-layout.mjs';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
 import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
@@ -1096,6 +1098,31 @@ function renderQuick(){
  const active=staging||production;
  $('quickPanel').hidden=!active;
  if(!active)return;
+ const officialLayout=describeOfficialFixtures(snapshot);
+ const officialRoot=$('ssFixtureOverview');officialRoot.replaceChildren();
+ officialRoot.append(node('strong',fixtureSummaryLabel(officialLayout)));
+ officialRoot.append(node('p','登録先 '+officialLayout.count+'試合｜対戦確定済み '+officialLayout.ready+
+  '試合｜対戦待ち '+officialLayout.waiting+'試合｜終了済み '+officialLayout.finished+'試合','small'));
+ for(const m of officialLayout.matches){
+  const state=m.status==='finished'?'✓ 終了済み':
+   m.status==='waiting'||!m.matchId||!m.leftTeam||!m.rightTeam?'⏳ 対戦確定待ち':
+   '登録先あり';
+  officialRoot.append(node('p',matchSlotLabel(m)+'：'+state,'small'));
+ }
+ if(staging){
+  $('autoRegisterHeading').textContent=officialLayout.automaticFourMatch
+   ?'4. 確認済みのゴールと4試合をTESTへ登録':'4. SSに登録された試合へゴールを反映';
+  $('autoRegisterHelp').textContent=officialLayout.automaticFourMatch
+   ?'4試合トーナメントはWorkerで一括登録します。ほかの操作は予備操作です。'
+   :'このイベントは4試合トーナメントではありません。SSの正式な試合番号にゴールを順次登録し、試合終了は個別に確認してください。勝敗・対戦相手を推測しません。';
+  $('quickTestHelp').textContent=officialLayout.automaticFourMatch
+   ?'AI候補と登録予定を確認してください。3位決定戦・決勝は準決勝終了後に正式な対戦相手を再取得します。'
+   :'SSから取得した試合番号・対戦チームを確認してください。同じ対戦カードが複数回ある場合、試合番号を必ず確認してください。';
+  $('quickIndividualTestTools').open=!officialLayout.automaticFourMatch;
+  $('quickIndividualTestTools').querySelector('summary').textContent=officialLayout.automaticFourMatch
+   ?'個別ゴール登録（従来方式）':'確認済みのゴールをまとめてTEST登録（試合終了は別操作）';
+  $('individualFinishTools').open=!officialLayout.automaticFourMatch;
+ }
  // Reuse the exact TEST AI/roster review. Production write controls remain separate.
  $('quickEnvironmentBadge').textContent=staging?'テストSS':'本番・未送信';
  $('quickTestHelp').hidden=!staging;
@@ -1128,7 +1155,7 @@ function renderQuick(){
   const selected=$('ssEventSelect').selectedOptions[0]?.textContent||'選択したイベント';
   $('ssFixtureWarningText').textContent='「'+selected+
    '」について、SSから番号付き試合を0件取得しました。'+rows.length+'件の動画ゴールだけでは公式の試合番号・対戦チーム・IDは作れません。'+
-   '正しい'+(production?'本番':'TEST')+'イベントを選び直すか、SS側で4試合のトーナメント枠を作成してから再取得してください。書き込みは停止しています。';
+   '正しい'+(production?'本番':'TEST')+'イベントを選び直すか、SS側で正式な試合枠を作成してから再取得してください。書き込みは停止しています。';
  }
  // Fixes are first; already reviewed goals follow. Video counts are reference
  // information only and appear after the actual items, not before them.
@@ -1467,6 +1494,15 @@ function renderAutoSummary(){
  const active=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
  $('autoPanel').hidden=!active;
  if(!active)return;
+ // Existing durable Worker is four-knockout-only. Do not synthesize a
+ // tournament for SS league, scrimmage, external, or six-team fixtures.
+ if(!describeOfficialFixtures(snapshot).automaticFourMatch){
+  $('autoPanel').hidden=true;
+  $('autoBeforeRun').textContent='';
+  $('workerBatchRun').disabled=true;
+  $('autoRun').disabled=true;
+  return;
+ }
  const root=$('autoOutline');root.replaceChildren();
  try{
   if(snapshot.matches.length===0){
