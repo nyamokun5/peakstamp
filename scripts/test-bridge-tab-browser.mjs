@@ -33,6 +33,7 @@ await page.route('**/*',async route=>{
 });
 try{
  await page.goto('https://peakstamp.local/');
+ await page.locator('#ssSessionOptions summary').click();
  assert.equal(await page.locator('#ssBridgeToken').inputValue(),'');
  assert.equal(await page.locator('#ssBridgeToken').getAttribute('autocomplete'),'current-password');
  assert.equal(await page.locator('#ssRememberTab').isChecked(),false);
@@ -49,6 +50,7 @@ try{
  assert.equal(contents.local,null,'never persist secret in localStorage');
  await page.reload();
  assert.equal(await page.locator('#ssBridgeToken').inputValue(),'','default PROD must not inherit staging');
+ await page.locator('#ssSessionOptions summary').click();
  await page.selectOption('#ssEnvironment','staging');
  assert.equal(await page.locator('#ssBridgeToken').inputValue(),'test-secret');
  assert.equal(await page.locator('#ssRememberTab').isChecked(),true);

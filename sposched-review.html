@@ -123,24 +123,33 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
 #autoOutline{font-size:13px;line-height:1.7;color:#d5e7e7}
 #autoOutline .fixture-status{border-bottom:1px solid #476472;padding:5px 1px}
 #autoOutline .fixture-status:last-child{border:0}
+.quick-goal .quick-trace{margin:8px 0 2px}
+.quick-goal .quick-trace summary{color:#bfd2d8;font-size:11px}
+.quick-goal .quick-trace p{margin:5px 0;font-size:11px}
+.quick-goal .quick-goal-top strong{flex:1;min-width:0}
+.quick-goal .quick-goal-top .quick-ready,.quick-goal .quick-goal-top .quick-held{max-width:125px;font-size:11px;text-align:right}
+#productionPanel #productionCheck,#productionPanel #productionStart{display:block;width:100%;min-height:48px}
+#productionPanel #productionPlan{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.6}
+#productionAudit pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;color:#b8d1d8}
+@media(max-width:480px){.quick-compare{gap:6px}.quick-compare-cell{padding:8px 7px}.quick-goal{padding:10px}.quick-goal-top{align-items:flex-start;flex-wrap:nowrap}.quick-compare-value{font-size:13px}}
 [hidden]{display:none!important}
 @media(max-width:480px){.flow-guide{gap:6px}.flow-guide strong{font-size:12px}.flow-guide button{min-width:77px;font-size:12px;padding:8px}}
 </style>
 </head>
 <body><main>
 <a href="./?v=external65">← PeakStampに戻る</a>
-<header class="top"><h1>⚽ SSにゴール・試合結果を登録</h1><span class="step">TESTのみ書き込み</span></header>
+<header class="top"><h1>⚽ SSに試合結果を登録</h1><span id="ssModeBadge" class="step">本番SS</span></header>
 <div id="flowGuide" class="flow-guide" role="status" aria-live="polite">
  <div><span id="flowStepLabel" class="hint-step">STEP 1 / 2</span>
  <strong id="flowGuideText">SSに接続し、イベントを選んでください。</strong></div>
  <button id="flowJump" type="button">ここへ移動</button>
 </div>
 <details class="help"><summary>使い方・安全上の注意</summary>
- <p>イベントを読み込み、ゴールを確認して登録し、最後に試合を終了します。不確かな試合・選手は人が選択して修正し、判断できないゴールは保留します。<strong>本番SSは読み取りのみ</strong>で、TESTへの送信も最終ボタンを押すまで行いません。エラー時は自動再送しません。</p>
+ <p>①イベントを選択 → ②ゴールを確認 → ③登録。送信は最後の「登録」ボタンを押したときだけ行います。不明な試合や選手は人が選択して修正します。通信エラー時は重複防止のため自動再送しません。</p>
 </details>
 <section class="panel">
- <h2>1. このプロジェクトのゴール</h2>
- <p class="step-help">まず、今回の動画から集めたゴールを確認。</p>
+ <h2>1. 動画のゴール</h2>
+ <p class="step-help">今回登録する動画のゴールです。</p>
  <div id="projectSummary" class="registered-goals" role="status"></div>
  <details id="sourceAdvanced">
   <summary>対象動画を確認・変更する（通常は不要）</summary>
@@ -154,27 +163,28 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <div class="line"><button id="refreshSources">プロジェクトを再読み込み</button><span id="sourceStatus" class="small"></span></div>
 </section>
 <section class="panel">
- <h2>2. SSのイベントを選ぶ</h2><p class="step-help">接続先を選び、SS連携用パスワードで接続します。希望すれば同じタブでは4時間入力を省略できます。</p>
+ <h2>2. 登録するイベントを選ぶ</h2>
  <div class="grid-item" id="ssDirectPanel">
-  <strong>SSアプリから直接読み込む（おすすめ）</strong>
-  <p class="small">パスワードは初回接続時に必要です。通常は保存しません。タブ内での一時記憶は任意です。</p>
+  <strong>SSに接続</strong>
   <label class="field">接続先
    <select id="ssEnvironment" aria-label="SpoSched接続先">
-    <option value="production">本番SS（イベント単位の承認後のみ登録可）</option>
-    <option value="staging">テストSS（ダミーデータへの手動書き込み）</option>
+    <option value="production">本番SS</option>
+    <option value="staging">テストSS</option>
    </select>
   </label>
-  <p id="ssEnvironmentNote" class="small">本番の登録は、正式な団体・試合ID照合とイベント単位の承認が揃った場合だけ可能です。</p>
-  <label class="field">SS連携用パスワード（BRIDGE_TOKEN）
+  <p id="ssEnvironmentNote" class="small">ターゲットに設定されたイベントだけ登録できます。</p>
+  <label class="field">接続パスワード
     <input id="ssBridgeToken" type="password" name="ss-bridge-password" autocomplete="current-password" autocapitalize="off" spellcheck="false" placeholder="BRIDGE_TOKEN">
   </label>
-  <div class="line"><label class="small"><input id="ssRememberTab" type="checkbox"> このタブで4時間記憶する</label><button id="ssForgetToken" type="button">パスワードの記憶を削除</button></div>
-  <p id="ssRememberNote" class="small">任意：同じタブの再読み込みで入力を省略できます。共有端末ではオフにしてください。ブラウザを閉じると引き継がれない場合があります。</p>
-  <div class="line"><button id="ssLoadEvents" type="button">イベント一覧を取得</button><span id="ssDirectStatus" class="small" role="status" aria-live="polite"></span></div>
+  <details id="ssSessionOptions"><summary>パスワードの保存設定（任意）</summary>
+    <div class="line"><label class="small"><input id="ssRememberTab" type="checkbox"> このタブで4時間記憶</label><button id="ssForgetToken" type="button">保存を削除</button></div>
+    <p id="ssRememberNote" class="small">このタブだけで一時保存します。共有端末では使用しないでください。</p>
+   </details>
+  <div class="line"><button id="ssLoadEvents" type="button">イベントを探す</button><span id="ssDirectStatus" class="small" role="status" aria-live="polite"></span></div>
   <label class="field" id="ssSelectWrap" hidden>開催日・イベント
     <select id="ssEventSelect" aria-label="SSイベント選択"></select>
   </label>
-  <button id="ssLoadSnapshot" type="button" class="primary" hidden>選んだイベントの試合・得点を読み込む</button>
+  <button id="ssLoadSnapshot" type="button" class="primary quick-main" hidden>このイベントを読み込む</button>
  </div>
  <details><summary>手元に保存したSSのJSONファイルから読み込む（従来方式）</summary>
  <p class="small">SS連携が使えないときは、保存済みのJSONを読み込むこともできます。</p>
@@ -191,7 +201,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <div id="recoveryDetails"></div>
 </section>
 <section class="panel" id="quickPanel" hidden>
- <div class="top"><h2>3. ゴール候補を確認・修正</h2><span id="quickEnvironmentBadge" class="step">TEST ONLY</span></div>
+ <div class="top"><h2>3. ゴールを確認</h2><span id="quickEnvironmentBadge" class="step">本番・未送信</span></div>
  <div id="ssFixtureWarning" class="warning" hidden role="alert">
   <strong>このイベントには選択できるSS試合がありません</strong>
   <p id="ssFixtureWarningText"></p>
@@ -199,7 +209,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <button id="ssReloadFixtures" type="button">試合を再取得（読み取りのみ）</button>
  </div>
  <p id="quickTestHelp" class="step-help">AI提案とSS登録予定を確認してください。<strong>別チームの得点者・アシスト者はWorkerがその試合の助っ人として登録してから、ゴールとアシストを記録</strong>します。3位決定戦・決勝は準決勝の正式結果が確定してから登録します。得点チームが不明な場合だけ選択してください。</p>
- <p id="quickProductionHelp" class="step-help" hidden>一昨日のTEST版と同じAI提案・公式SS名簿の照合画面です。曖昧な得点者・アシスト者・試合だけ修正できます。<strong>この画面での編集では本番SSに送信しません。</strong>本番への登録は下の専用パネルでイベント単位の承認後のみ可能です。</p>
+ <p id="quickProductionHelp" class="step-help" hidden>AI候補と登録予定を確認してください。修正が必要な場合は「修正する」を押してください。<strong>まだSSには送信されません。</strong></p>
  <p id="quickSummary" class="quick-summary" role="status" aria-live="polite"></p>
  <button id="quickResetBulkReview" type="button" hidden>試合作り直し後のゴールをまとめて試合番号確認（書き込みなし）</button>
  <p id="quickResetBulkStatus" class="small" role="status" aria-live="polite"></p>
@@ -296,12 +306,13 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  </details>
 </section>
 <section id="productionPanel" class="panel" hidden>
- <h2>本番SS：確認した4試合を一括登録</h2>
- <p class="step-help">SpoSchedで現在「ターゲット」に設定されたイベントのみ書き込み可能です。送信前に正式試合IDと登録内容を再照合します。</p>
- <button id="productionCheck" type="button">本番団体・4試合・登録内容を確認（書き込みなし）</button>
+ <h2>4. SSに登録</h2>
+ <p class="step-help">① 内容を確認してから、② で本番SSに登録します。</p>
+ <button id="productionCheck" type="button">① 登録内容を確認（送信なし）</button>
  <pre id="productionPlan" class="small" hidden></pre>
- <button id="productionStart" type="button" class="primary quick-main" disabled>本番SSに4試合を登録</button>
- <button id="productionRefresh" type="button" hidden>保存済みジョブの進捗を確認（新規送信なし）</button>
+ <details id="productionAudit" hidden><summary>イベント・試合IDを確認</summary><pre id="productionAuditIds"></pre></details>
+ <button id="productionStart" type="button" class="primary quick-main" disabled>② 4試合を本番登録</button>
+ <button id="productionRefresh" type="button" hidden>登録の進捗を確認（再送なし）</button>
  <p id="productionStatus" class="small" role="status" aria-live="polite"></p>
  <div id="productionDecision" hidden>
   <p id="productionDecisionText" role="status"></p>
@@ -311,7 +322,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
     <option value="draw">引き分け（3位決定戦・決勝のみ）</option>
    </select>
   </label>
-  <button id="productionDecisionSend" type="button" class="primary">本番の結果を確定して続行</button>
+  <button id="productionDecisionSend" type="button" class="primary">結果を確定して続ける</button>
  </div>
 </section>
 <details id="individualFinishTools" class="help"><summary>試合を個別に終了する（例外時）</summary>
@@ -1086,13 +1097,13 @@ function renderQuick(){
  $('quickPanel').hidden=!active;
  if(!active)return;
  // Reuse the exact TEST AI/roster review. Production write controls remain separate.
- $('quickEnvironmentBadge').textContent=staging?'TEST ONLY':'本番・照合';
+ $('quickEnvironmentBadge').textContent=staging?'テストSS':'本番・未送信';
  $('quickTestHelp').hidden=!staging;
  $('quickProductionHelp').hidden=!production;
  $('autoRegisterHeading').hidden=!staging;
  $('autoRegisterHelp').hidden=!staging;
  $('quickIndividualTestTools').hidden=!staging;
- $('quickEdit').textContent=staging?'詳細編集・手動追加・既存ゴール修正':'詳細編集・選手名簿を確認';
+ $('quickEdit').textContent=staging?'詳細編集・手動追加・既存ゴール修正':'詳しく修正する';
  const items=quickGoalDecisions(snapshot,rows);
  const resetCount=rows.filter(r=>r.fixtureIdentityChanged===true).length;
  $('quickResetBulkReview').hidden=!staging||resetCount===0||snapshot.matches.length!==4;
@@ -1105,13 +1116,11 @@ function renderQuick(){
  const manualPending=manual.filter(x=>!x.registeredInSS).length;
  const deferredAssists=items.filter(x=>x.state==='ready'&&x.deferredAssist);
  const other=items.length-ready-attention-duplicates-waiting-manual.length;
- $('quickSummary').textContent=(production?'本番SS・照合のみ（登録は別途承認）　｜　':'')+(attention||duplicates?
-   '先に確認が必要：'+(attention+duplicates)+'件。下の候補を修正してください。':
-   'ゴール候補 '+items.length+'件を確認してください。')+
-   '　｜　'+(production?'名簿照合済み ':'登録可能 ')+ready+'件・対戦待ち（自動登録予定） '+waiting+'件'+
-   (manual.length?'・SSで手動登録する助っ人得点候補 '+manual.length+'件（未登録 '+manualPending+'件）':'')+
-   (deferredAssists.length?'・後からSSで追記するアシスト '+deferredAssists.length+'件':'')+
-   (other?'・対象外 '+other+'件':'');
+ $('quickSummary').textContent='要確認 '+(attention+duplicates)+'件　｜　'+
+   (production?'確認済み ':'登録可能 ')+ready+'件　｜　対戦待ち '+waiting+'件'+
+   (manualPending?'　｜　SSで手動登録 '+manualPending+'件':'')+
+   (deferredAssists.length?'　｜　アシスト追記 '+deferredAssists.length+'件':'')+
+   (other?'　｜　対象外 '+other+'件':'');
  const container=$('quickGoals');container.replaceChildren();
  const noFixtures=snapshot.matches.length===0;
  $('ssFixtureWarning').hidden=!noFixtures;
@@ -1130,21 +1139,20 @@ function renderQuick(){
   const row=rows[item.index],el=node('div','','quick-goal'),top=node('div','','quick-goal-top');
   el.id='quick-goal-'+(item.index+1);
   if(['attention','duplicate','manual-ss'].includes(item.state))el.classList.add('needs-fix');
-  top.append(node('strong','#'+(item.index+1)+' '+
-    (snapshot.matches.find(m=>m.seq===Number(item.seq))?.title||'試合未選択')));
-  const label=item.state==='ready'?(item.helperPlan?'助っ人登録後に自動ゴール':item.deferredAssist?'ゴール自動登録／アシストSS追記':'登録候補'):
-    item.state==='duplicate'?'重複候補・対象外':
-    item.state==='waiting'?'対戦確定後に自動登録':
-    item.state==='manual-ss'?(item.registeredInSS?'SS登録済み／自動対象外':'SSで手動登録／自動対象外'):
-    item.state==='attention'?'要修正':'今回の一括登録から除外';
+  const match=snapshot.matches.find(m=>m.seq===Number(item.seq));
+  const shortTitle=match?.title?.replace(/^\s*\d+\s*試合目\s*/,'').trim()||'';
+  const matchName=match?((shortTitle||'試合')+'（第'+match.seq+'試合）'):'試合未選択';
+  top.append(node('strong','ゴール'+(item.index+1)+' ・ '+matchName));
+  const label=item.state==='ready'?(item.deferredAssist?'アシスト要追記':item.helperPlan?'助っ人を登録':'登録予定'):
+    item.state==='duplicate'?'重複・除外':
+    item.state==='waiting'?'対戦待ち':
+    item.state==='manual-ss'?(item.registeredInSS?'SS登録済み':'SSで手動登録'):
+    item.state==='attention'?'要修正':'登録対象外';
   top.append(node('span',label,['ready','waiting'].includes(item.state)?'quick-ready':'quick-held'));
-  el.append(top,node('p',
-   (snapshot.matches.find(m=>m.seq===Number(item.seq))?
-    matchSlotLabel(snapshot.matches.find(m=>m.seq===Number(item.seq))):
-    '試合番号：未設定（要選択）')+
-   ' / '+(item.team||(snapshot.playerTeam.get(item.scorer)?
-      snapshot.playerTeam.get(item.scorer)+'（名簿候補）':'得点チーム未確定'))+
-   ' / '+(item.source||'動画なし')+' '+(item.time==null?'':item.time+'秒'),'quick-meta'));
+  el.append(top);
+  const sourceInfo=(match?matchSlotLabel(match):'試合番号：未設定（要選択）')+
+   ' / '+(item.team||snapshot.playerTeam.get(item.scorer)||'得点チーム未確定')+
+   ' / '+(item.source||'動画なし')+(item.time==null?'':' '+item.time+'秒');
   // Original PeakStamp AI wording is displayed even if the official SS
   // player selection has subsequently been corrected. This is display-only.
   const heard=quickAIObservation(row);
@@ -1152,15 +1160,12 @@ function renderQuick(){
   // selection before the single batch-approval click. No silent UI rewrites.
   const compare=node('div','','quick-compare');
   const aiCell=node('div','','quick-compare-cell');
-  aiCell.append(node('span','AI提案','quick-compare-label'),
+  aiCell.append(node('span','AI候補','quick-compare-label'),
    node('strong',heard.assistRaw+' → '+heard.scorerRaw,'quick-compare-value'));
   const officialCell=node('div','','quick-compare-cell proposed');
-  officialCell.append(node('span',item.state==='manual-ss'?'SSで手動登録（自動送信しません）':'SS登録予定（名簿照合）','quick-compare-label'),
+  officialCell.append(node('span',item.state==='manual-ss'?'SSで手動登録':'登録予定','quick-compare-label'),
    node('strong',item.assist+' → '+(item.scorer||'得点者未確定'),'quick-compare-value'));
-  officialCell.append(node('div',
-   (item.team||snapshot.playerTeam.get(item.scorer)||'チーム未確定')+
-   (row.scorerGuess?.source?' ／ '+row.scorerGuess.source:''),
-   'quick-compare-detail'));
+  officialCell.append(node('div',item.team||snapshot.playerTeam.get(item.scorer)||'チーム未確定','quick-compare-detail'));
   compare.append(aiCell,officialCell);el.append(compare);
   if(item.state==='attention'){
    const assistCandidates=heard.noAssist?'なし（AI判定）':
@@ -1172,11 +1177,20 @@ function renderQuick(){
   }
   const inlineEligible=['attention','ready','waiting','manual-ss'].includes(item.state);
   const expanded=item.state==='attention'||quickOpenRows.has(item.key);
-  if(['attention','waiting','duplicate','manual-ss'].includes(item.state)||item.deferredAssist||item.helperPlan)
-   el.append(node('p',(item.helperPlan?'✓ 助っ人を試合に登録してから得点・アシストを記録：':item.deferredAssist?'✓ ゴールは自動登録・アシストだけ保留：':item.state==='manual-ss'?'⚠ SSで対応：':'確認：')+item.reason,'quick-held-note'));
-  if(item.helperPlan)el.append(node('p',
-    'SS助っ人登録予定：'+item.helperPlan.helpers.map(h=>h.name+'（'+h.from+' → '+h.team+'）').join('、')+
-    (item.state==='waiting'?'。準決勝終了後の正式な対戦確認が条件です。':''),'quick-ai-candidates'));
+  if(item.state==='attention')el.append(node('p','確認して修正してください：'+item.reason,'quick-held-note'));
+  else if(item.state==='duplicate')el.append(node('p','重複の可能性があるため登録しません。','quick-held-note'));
+  else if(item.state==='manual-ss'&&!item.registeredInSS)
+   el.append(node('p','このゴールはSSアプリで手動登録してください。','quick-held-note'));
+  else if(item.deferredAssist)el.append(node('p','得点は自動登録、アシストはSSで追記してください。','quick-held-note'));
+  else if(item.helperPlan)el.append(node('p',item.state==='waiting'?
+    '対戦確定後に助っ人を追加し、得点を登録します。':'助っ人を追加してから得点を登録します。','quick-ready'));
+  const trace=node('details','','quick-trace');
+  trace.append(node('summary','動画・判定の詳細'),node('p',sourceInfo));
+  if(row.scorerGuess?.source)trace.append(node('p','照合方法：'+row.scorerGuess.source));
+  if(item.reason&&item.state!=='attention')trace.append(node('p',item.reason));
+  if(item.helperPlan)trace.append(node('p','助っ人：'+item.helperPlan.helpers.map(h=>
+     h.name+'（'+h.from+' → '+h.team+'）').join('、')));
+  el.append(trace);
   if(item.state==='manual-ss'&&!item.registeredInSS){
    const linkUrl=savedSSAppLink(localStorage,'staging',snapshot.eventId,selectedSSDate());
    if(linkUrl){
@@ -1234,14 +1248,11 @@ function renderQuick(){
    }
    el.append(fields);
   }
-  if(!['ready','attention','waiting','manual-ss'].includes(item.state))
-   el.append(node('p',item.reason,'quick-held-note'));
-  if(item.state==='waiting'&&row.include){
-   const automated=snapshot.matches.length===4&&[3,4].includes(Number(row.seq));
-   el.append(node('p',automated
-    ?'✓ ゴールを一括登録に含めます。準決勝の終了後に正式な対戦相手を確認し、自動で登録します。'
-    :'対戦相手の確定までは送信保留です。','quick-ready'));
-  }
+  // Exclusion reason is visible in expandable details.
+  if(item.state==='waiting'&&row.include&&!item.helperPlan)
+   el.append(node('p',snapshot.matches.length===4&&[3,4].includes(Number(row.seq))
+     ?'対戦が確定したら自動登録します。'
+     :'対戦確定まで登録を保留します。','quick-ready'));
   if(inlineEligible){
    if(['ready','waiting','manual-ss'].includes(item.state)){
     const edit=node('button',expanded?'簡易編集を閉じる':
@@ -1278,7 +1289,7 @@ function renderQuick(){
  renderAutoSummary();
  $('quickPreview').disabled=batchBusy||ready===0;
  if(production){
-  $('quickStatus').textContent='AI提案とSS公式名簿の照合・修正はこの画面で可能です。本番への送信は下の本番専用パネルで別途承認するまで行いません。';
+  $('quickStatus').textContent=attention||duplicates?'「要確認」のゴールを修正してください。':'';
  }else if(!quickPrepared){
   $('quickStatus').textContent=attention||duplicates
    ?'要確認 '+(attention+duplicates)+'件を直すと登録に進めます。'
@@ -2402,8 +2413,8 @@ function updateFlowGuide(){
   const items=quickGoalDecisions(snapshot,rows);
   const uncertain=items.filter(x=>['attention','duplicate'].includes(x.state)).length;
   step='STEP 2 / 2';
-  message=uncertain?'AIとSS名簿の照合で要修正 '+uncertain+'件。候補を確認してください。':
-   'AI提案とSS名簿の照合結果を確認してください（本番送信は別途承認）。';
+  message=uncertain?'要確認 '+uncertain+'件。ゴールを修正してください。':
+   'ゴールを確認して、下の登録に進んでください。';
   target='quickPanel';
  }else if(test&&hasVerifiedCurrentCompletion()){
   step='✓ 完了';message='4試合の登録・照合が完了しました。';target='ssResultPanel';
@@ -2525,10 +2536,11 @@ $('ssEnvironment').addEventListener('change',()=>{
   ?reused?'テスト環境のパスワードをこのタブから再利用できます。イベントを取得してください。'
    :'テスト環境を選択しました。テスト用パスワードを入力してください。'
   :reused?'本番の認証情報をこのタブで再利用できます。'
-   :'本番SSを選択しました。正式なイベント単位の書き込み承認がなければ登録できません。');
+   :'本番SSを選択しました。ターゲットイベントを読み込んでください。');
+ $('ssModeBadge').textContent=$('ssEnvironment').value==='staging'?'テストSS':'本番SS';
  $('ssEnvironmentNote').textContent=$('ssEnvironment').value==='staging'
   ?'TESTのみ書き込み可能。'
-  :'本番の登録は、正式な団体・試合ID照合とイベント単位の承認が揃った場合だけ可能です。';
+  :'ターゲットに設定されたイベントだけ登録できます。';
 });
 $('ssBridgeToken').addEventListener('input',()=>{ssConnectionRevision++;});
 $('ssRememberTab').addEventListener('change',()=>{
@@ -2582,7 +2594,7 @@ $('ssEventSelect').addEventListener('change',()=>{
  $('reviewArea').hidden=true;$('detailReturnBar').hidden=true;
  document.body.classList.remove('detail-open');
  touch();updateFlowGuide();
- statusSS('イベントが変わりました。「選んだイベントの試合・得点を読み込む」を押してください。');
+ statusSS('イベントが変わりました。「このイベントを読み込む」を押してください。');
 });
 $('ssLoadSnapshot').addEventListener('click',async()=>{
  const eventId=$('ssEventSelect').value;
@@ -2604,7 +2616,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   rebuild({preserveEdits:true});
   statusSS(snapshot.matches.length===0?
    '試合0件：このイベントには登録先の番号付き試合がありません。別イベントを選ぶか、SSに試合枠を作成してください。':
-   (loadedFromStagingDirect?'テスト':'本番')+'読み込み成功：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+'人。得点登録前に個別確認してください。');
+   '読み込み完了：試合 '+snapshot.matches.length+'件。ゴールを確認してください。');
  }catch(error){if(error.code!=='stale_connection')statusSS('読み込み失敗：'+error.message);}
  finally{$('ssLoadSnapshot').disabled=false;}
 });

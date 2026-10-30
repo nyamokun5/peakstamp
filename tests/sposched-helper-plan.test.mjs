@@ -81,8 +81,8 @@ test('unverified client helper plan is rejected before anything can be submitted
 });
 test('iPhone UI keeps a single TEST batch click and clearly shows helper enrollment',()=>{
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
- assert.match(html,/SS助っ人登録予定/);
- assert.match(html,/準決勝終了後の正式な対戦確認が条件/);
+ assert.match(html,/助っ人：/);
+ assert.match(html,/対戦確定後に助っ人を追加/);
  assert.match(html,/helperEnrollment>0/);
  assert.match(html,/Workerがその試合の助っ人として登録/);
 });

@@ -59,7 +59,7 @@ try{
  await load();
  const visible=page.locator('#quickGoals .quick-goal');
  assert.equal(await visible.count(),1);
- assert.match(await visible.first().innerText(),/試合番号：未設定/);
+ assert.match(await visible.first().innerText(),/試合番号を選択してください/);
  assert.match(await visible.first().innerText(),/試合番号が未設定/);
  assert.equal(await page.locator('#autoRun').isDisabled(),true);
  assert.equal(await page.locator('#workerBatchRun').isDisabled(),true);
@@ -72,7 +72,7 @@ try{
  const button=await page.locator('#autoPanel').boundingBox();
  assert.ok(card.y<button.y,'corrections must appear ABOVE registration');
  await page.locator('[aria-label="#1 試合"]').selectOption('1');
- assert.match(await page.locator('#quickGoals .quick-goal').innerText(),/#1 準決勝/);
+ assert.match(await page.locator('#quickGoals .quick-goal').innerText(),/準決勝（第1試合）/);
  assert.equal(await page.locator('#autoRun').isEnabled(),true);
 
  // A conflicting voice interpretation proposes a video slot but must
@@ -112,7 +112,7 @@ try{
  await page.click('#ssReloadFixtures');
  await page.locator('#ssFixtureWarning').waitFor({state:'hidden'});
  assert.equal(await page.locator('#autoRun').isEnabled(),true);
- assert.match(await page.locator('#quickGoals .quick-goal').innerText(),/#1 準決勝/);
+ assert.match(await page.locator('#quickGoals .quick-goal').innerText(),/準決勝（第1試合）/);
  assert.deepEqual(writes,[]);
  assert.deepEqual(errors,[]);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);

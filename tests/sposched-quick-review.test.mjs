@@ -274,17 +274,17 @@ test('conflicting AI assist text and no-assist status do not silently erase extr
 test('all quick goal cards show AI original next to the registered official name',()=>{
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
  assert.match(html,/const heard=quickAIObservation\(row\)/);
- assert.match(html,/AI提案/);
- assert.match(html,/SS登録予定（名簿照合）/);
+ assert.match(html,/AI候補/);
+ assert.match(html,/登録予定','quick-compare-label'/);
  assert.match(html,/heard\.assistRaw\+' → '\+heard\.scorerRaw/);
  assert.match(html,/quick-compare/);
  assert.match(html,/compare\.append\(aiCell,officialCell\);el\.append\(compare\)/);
  const quick=html.slice(html.indexOf('function renderQuick(){'),
   html.indexOf("$('quickEdit').addEventListener"));
  assert.doesNotMatch(quick,/\.innerHTML\s*=/);
- assert.match(quick,/node\('span','AI提案'/);
- assert.match(quick,/SS登録予定（名簿照合）/);
- assert.match(quick,/SSで手動登録（自動送信しません）/);
+ assert.match(quick,/node\('span','AI候補'/);
+ assert.match(quick,/item\.state==='manual-ss'\?'SSで手動登録':'登録予定'/);
+ assert.match(quick,/SSアプリで手動登録してください/);
 });
 
 test('unconfirmed player dropdown exposes short AI hint but never preselects a guess',()=>{
@@ -342,7 +342,7 @@ test('UI lists official fixture numbers and holds waiting matches without enabli
  assert.match(html,/const matchSlotLabel=m=>/);
  assert.match(html,/goalCandidatesByMatchNumber\(snapshot,rows\)/);
  assert.match(html,/item\.state==='waiting'/);
- assert.match(html,/対戦確定後に自動登録/);
+ assert.match(html,/対戦が確定したら自動登録します/);
  assert.match(html,/試合別の候補件数（参考）/);
  assert.match(html,/label:matchSlotLabel\(v\)/);
 });
@@ -480,7 +480,7 @@ test('one-click Worker review visibly compares AI transcript with selected offic
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
  assert.match(html,/quick-compare/);
  assert.match(html,/AI提案/);
- assert.match(html,/SS登録予定（名簿照合）/);
+ assert.match(html,/登録予定','quick-compare-label'/);
  assert.match(html,/heard\.assistRaw\+' → '\+heard\.scorerRaw/);
  assert.match(html,/item\.assist\+' → '\+\(item\.scorer\|\|'得点者未確定'\)/);
  const start=html.split("$('workerBatchRun').addEventListener('click',async()=>{")[1]

@@ -124,7 +124,7 @@ test('match score is ONLY included after explicit include and human confirmation
  assert.equal(payload.operations[0].args.left_score,3);
  assert.equal(payload.operations[1].action,'record_goal');
 });
-test('production remains read-only; test writes require distinct Worker and manual confirmation',()=>{
+test('production uses an independent Worker; TEST writes stay isolated behind manual confirmation',()=>{
  const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
  const home=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.match(home,/sposched-review\.html/);
