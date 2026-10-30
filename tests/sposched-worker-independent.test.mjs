@@ -7,7 +7,7 @@ import {quickGoalDecisions} from '../sposched-quick-review.mjs';
 import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration,describeCompletedWorkerMismatch,assertRetiredWorkerReconnectable} from '../sposched-worker-independent.mjs';
 const eventId='01234567-89ab-4cde-8abc-0123456789ab',requestId='11234567-89ab-4cde-8abc-0123456789ab';
 const mid=i=>'21234567-89ab-4cde-8abc-'+String(i).padStart(12,'0');
-const make=(count,overrides={})=>normalizeSpoSnapshot({event_id:eventId,
+const make=(count,overrides={})=>normalizeSpoSnapshot({event_id:eventId,roster_source:'official-current-event-teams',
  matches:Array.from({length:count},(_,i)=>({
   seq:i+1,match_id:mid(i+1),title:count===5?'#'+(1+Math.floor(i/2))+' Pitch'+(1+i%2):'リーグ #'+(i+1),
   left_team:i%2?'Red':'White',right_team:i%2?'White':'Red',
@@ -312,4 +312,14 @@ test('manual goal cannot be bundled with the legacy four-knockout Worker',()=>{
  const row={...prepareGoalRows({goals:[makeManualGoal('31234567-89ab-4cde-8abc-0123456789ab')]},knockout)[0],
   seq:1,scorer:'Aki',team:'White',assistMode:'none',confirmed:true};
  assert.throws(()=>build(knockout,[row],quickGoalDecisions(knockout,[row])),/独立試合/);
+});
+
+test('video-free Worker blocks an otherwise confirmed draft from a stale or unverified event roster',()=>{
+ const current=make(2),draft=makeManualGoal('31234567-89ab-4cde-8abc-0123456789ab');
+ const [row]=prepareGoalRows({goals:[draft]},current);
+ Object.assign(row,{seq:1,scorer:'Aki',team:'White',assistMode:'none',confirmed:true});
+ const choices=quickGoalDecisions(current,[row]);
+ assert.equal(build(current,[row],choices).operations.filter(op=>op.action==='create').length,1);
+ const old={...current,rosterSource:''};
+ assert.throws(()=>build(old,[row],choices),/現在のSSチーム編成/);
 });
