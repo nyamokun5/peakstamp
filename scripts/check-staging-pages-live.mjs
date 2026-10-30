@@ -11,11 +11,25 @@ const MUST_HAVE=[
  ['sposched-fixture-layout.mjs','function drawOptionForFixture']
 ];
 const pause=ms=>new Promise(done=>setTimeout(done,ms));
+async function checkedFetch(url,options={}){
+ const response=await fetch(url,{...options,redirect:'manual'});
+ if(response.status>=300&&response.status<400){
+  const raw=response.headers.get('location');
+  let destination='(missing)';
+  try{
+   const resolved=new URL(raw,url);
+   destination=resolved.origin+resolved.pathname;
+  }catch{}
+  throw Object.assign(Error(new URL(url).hostname+' HTTP '+response.status+
+   ' redirect to '+destination),{permanent_redirect:true});
+ }
+ return response;
+}
 async function once(){
  const payload={};
  for(const [file,expected] of MUST_HAVE){
   if(!payload[file]){
-   const r=await fetch(SITE+'/'+file,{redirect:'error',cache:'no-store',
+   const r=await checkedFetch(SITE+'/'+file,{redirect:'manual',cache:'no-store',
     signal:AbortSignal.timeout(12000)});
    if(r.status!==200)throw Error('Pages /'+file+' HTTP '+r.status);
    payload[file]=await r.text();
@@ -30,13 +44,13 @@ async function once(){
   'production SS is forbidden in the TEST build');
  assert.ok(!page.includes("from './sposched-production-ui.mjs"),
   'production UI writer must not be shipped');
- const health=await fetch(WORKER+'/health',{redirect:'error',
+ const health=await checkedFetch(WORKER+'/health',{redirect:'manual',
   signal:AbortSignal.timeout(12000)});
  assert.equal(health.status,200);
  const status=await health.json();
  assert.equal(status.service,'shoot-sunday-sync-staging');
  assert.equal(status.write_mode,'test-only');
- const preflight=await fetch(WORKER+'/events',{method:'OPTIONS',redirect:'error',
+ const preflight=await checkedFetch(WORKER+'/events',{method:'OPTIONS',redirect:'manual',
   headers:{Origin:SITE,'Access-Control-Request-Method':'GET',
    'Access-Control-Request-Headers':'x-ss-bridge-token'},
   signal:AbortSignal.timeout(12000)});
@@ -51,7 +65,7 @@ for(let attempt=1;attempt<=15;attempt++){
   console.log('PASS: live STAGING Pages has variable-fixture UI; production writer stripped; Worker CORS and health verified. GET/OPTIONS only.');
   process.exit(0);
  }catch(e){
-  if(attempt===15)throw e;
+  if(attempt===15||e.permanent_redirect)throw e;
   console.log('Pages/Worker release not yet ready (attempt '+attempt+'/15): '+e.message);
   await pause(8000);
  }
