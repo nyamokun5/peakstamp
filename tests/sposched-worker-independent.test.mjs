@@ -122,3 +122,25 @@ test('retired fixture migration refuses an old deployed Worker before any mutati
  assert.ok(healthCheck>=0&&pending>healthCheck&&mutation>pending,
   'public health feature gate must occur before any recreate pending marker or mutation');
 });
+
+test('completed Worker UI requires official readback proof before showing a green success panel',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ assert.match(html,/let workerCompletionProof=null;/);
+ assert.match(html,/function workerCompletionVerified\(state,current\)/);
+ assert.match(html,/workerCompletionProof\.fixtureFingerprint!==workerFixtureFingerprint\(current\)/);
+ assert.match(html,/workerCompletionProof\.requestId!==state\.request_id/);
+ assert.match(html,/localStorage\.getItem\(workerBatchStorageKey\(current\.eventId\)\)!==state\.request_id/);
+ const show=html.slice(html.indexOf('function showWorkerBatchState(state){'),
+  html.indexOf('async function refreshWorkerBatch(',html.indexOf('function showWorkerBatchState(state){')));
+ assert.match(show,/state\.status==='completed'&&workerCompletionVerified\(state,snapshot\)/,
+  'Worker status=completed is insufficient to display green success');
+ assert.match(show,/Workerの操作履歴は完了していますが、現在のSS公式試合ID・終了状態はまだ照合できていません/);
+ const refresh=html.slice(html.indexOf('async function refreshWorkerBatch('),
+  html.indexOf('function openPendingRecovery(',html.indexOf('async function refreshWorkerBatch(')));
+ assert.ok(refresh.indexOf('hideCompletionPanel();')>=0);
+ const proof=refresh.indexOf('workerCompletionProof={eventId,requestId:state.request_id');
+ const finalCheck=refresh.indexOf('verifyCompletedWorkerSnapshot(state,fresh,snapshot)');
+ const independentCheck=refresh.indexOf('verifyIndependentWorkerCompletion(state,fresh,snapshot)');
+ assert.ok(proof>finalCheck&&proof>independentCheck,
+  'proof must be issued only AFTER independently verifying official match IDs');
+});
