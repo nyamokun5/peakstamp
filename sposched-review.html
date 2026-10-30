@@ -360,7 +360,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <p>実況の対戦カードと当日の選手名簿から試合・得点者・アシストを初期選択します。<strong>動画にゴールがなくても、手動で新規追加できます。</strong> 選手と試合を確認して登録してください。</p>
  <div id="manualAddWrap" class="grid-item" hidden>
   <strong>動画がない場合の新規ゴール登録</strong>
-  <p>テストSSの試合を選んで、得点者・アシストを手入力できます。追加したゴールは下の一覧に並び、一括登録にも含められます。</p>
+  <p>元動画がなくてもTEST用のゴールを作れます。追加後に試合番号・得点者・アシスト・得点チームを選び、「このゴールの試合・選手を確認した」にチェックしてください。独立試合ならWorkerがゴール登録→試合終了を一括処理します。4試合トーナメントなど一部の形式では個別登録のみです。本番には送信しません。</p>
   <button id="manualAddGoal" class="primary" type="button">＋ 新規ゴールを手動追加</button>
   <p id="manualAddStatus" class="small" role="status" aria-live="polite"></p>
  </div>
@@ -879,7 +879,12 @@ function renderGoals(){
    updateStatus.textContent='修正対象を指定しました。得点者・アシストを確認し、下のチェックを入れてください。';
    touch();persistManualRow(row);updateDuplicate();
   });
-  confirm.addEventListener('change',()=>{row.confirmed=confirm.checked;touch();persistManualRow(row)});
+  confirm.addEventListener('change',()=>{
+   row.confirmed=confirm.checked;touch();persistManualRow(row);
+   // Manual TEST drafts become eligible for the independent Worker ONLY
+   // after this explicit confirmation; update the button without a reload.
+   if(g.manual)renderAutoSummary();
+  });
   // Exception-only single approval for a video goal whose AI identity
   // was uncertain. Never turns a manual/PATCH/duplicate into auto-eligible.
   const reviewQuick=node('button','試合・得点者・アシストを確認して一括候補に含める');
@@ -1566,7 +1571,7 @@ function renderAutoSummary(){
   $('autoRun').textContent=hasFixtures?'この形式はWorkerで個別の試合を登録します':'試合枠がないため登録できません';
   $('workerBatchRun').textContent='SS公式の'+official.count+'試合をまとめてTEST登録';
   $('workerBatchArea').querySelector('p.small').textContent=
-   'WorkerがSS公式の試合IDを毎回照合し、ゴールと試合終了を安全に登録します。通信が切れた場合は進捗を再取得します。';
+   'WorkerがSS公式の試合IDを毎回照合し、確認済みのゴール（動画なし・手動追加も可）と試合終了を安全に登録します。通信が切れた場合は進捗を再取得します。';
   const root=$('autoOutline');root.replaceChildren();
   root.append(node('strong','SS公式の'+official.count+'試合を登録'));
   for(const m of official.matches){
