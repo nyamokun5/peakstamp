@@ -1111,7 +1111,7 @@ function renderQuick(){
  $('quickSummary').textContent=(production?'本番SS・照合のみ（登録は別途承認）　｜　':'')+(attention||duplicates?
    '先に確認が必要：'+(attention+duplicates)+'件。下の候補を修正してください。':
    'ゴール候補 '+items.length+'件を確認してください。')+
-   '　｜　登録可能 '+ready+'件・対戦待ち（自動登録予定） '+waiting+'件'+
+   '　｜　'+(production?'名簿照合済み ':'登録可能 ')+ready+'件・対戦待ち（自動登録予定） '+waiting+'件'+
    (manual.length?'・SSで手動登録する助っ人得点候補 '+manual.length+'件（未登録 '+manualPending+'件）':'')+
    (deferredAssists.length?'・後からSSで追記するアシスト '+deferredAssists.length+'件':'')+
    (other?'・対象外 '+other+'件':'');
@@ -2401,7 +2401,14 @@ function syncFinishWinner(){
 function updateFlowGuide(){
  const test=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
  let step='STEP 1 / 2',message='SSに接続し、イベントを選んでください。',target='ssDirectPanel';
- if(test&&hasVerifiedCurrentCompletion()){
+ if(snapshot&&loadedFromProductionDirect&&$('ssEnvironment').value==='production'){
+  const items=quickGoalDecisions(snapshot,rows);
+  const uncertain=items.filter(x=>['attention','duplicate'].includes(x.state)).length;
+  step='STEP 2 / 2';
+  message=uncertain?'AIとSS名簿の照合で要修正 '+uncertain+'件。候補を確認してください。':
+   'AI提案とSS名簿の照合結果を確認してください（本番送信は別途承認）。';
+  target='quickPanel';
+ }else if(test&&hasVerifiedCurrentCompletion()){
   step='✓ 完了';message='4試合の登録・照合が完了しました。';target='ssResultPanel';
  }else if(test&&snapshot.matches.length===0){
   step='試合枠なし';
