@@ -732,6 +732,7 @@ function row(item, index) {
   let pauseResumeButton=null;
   let seekDrag=null;
   let playVersion=0;
+  let initialReplayPrimed=false;
   let replayListeners=[];
   const setReplayStatus=message=>{
     if(!replayStatus)return;
@@ -747,6 +748,7 @@ function row(item, index) {
       }
       frameWatchId=null;
       playVersion++;
+      initialReplayPrimed=false;
       for(const [event,handler] of replayListeners)replayVideo.removeEventListener(event,handler);
       replayListeners=[];
       // Detach the player but retain its media source for the next scene.
@@ -928,7 +930,16 @@ function row(item, index) {
       video.addEventListener(event,handler);
       replayListeners.push([event,handler]);
     };
-    on('loadedmetadata',restartReplay);
+    on('loadedmetadata',()=>{
+      if(initialReplayPrimed){
+        // The first play() was requested inside the actual Replay tap.
+        // Seek on metadata WITHOUT pause/replay: Safari would lose activation.
+        initialReplayPrimed=false;
+        const bounds=replayBounds(source,item,(s,c)=>getCandidateEnd(s,c,currentClipOptions()));
+        try{video.currentTime=bounds.start;updatePlayhead();}
+        catch(_){setReplayStatus('再生開始位置に移動できませんでした。▶ リプレイを再度押してください。');}
+      }else restartReplay();
+    });
     on('timeupdate',clampAndStop);
     on('seeked',clampAndStop);
     on('play',()=>{updatePlayhead();updatePauseResume();watchVideoFrames();});
@@ -939,6 +950,25 @@ function row(item, index) {
     // sourceChanged is only true on first load or when switching files.
     // For consecutive scenes of the same MOV, no src reassignment or load().
     if(!sourceChanged && video.readyState>=1)restartReplay();
+    else{
+      // New MOVs were previously first played from loadedmetadata, an async
+      // callback outside the trusted iPhone touch gesture. Prime play NOW;
+      // loadedmetadata will seek while this play request is still active.
+      initialReplayPrimed=true;
+      const attempt=++playVersion;
+      try{
+        void scenePreviewAudio.wake();
+        Promise.resolve(video.play()).catch(error=>{
+          if(replayVideo!==video||attempt!==playVersion)return;
+          initialReplayPrimed=false;
+          setReplayStatus('Safariで自動再生できませんでした。▶ リプレイをもう一度押してください。'+
+            (error?.name?'（'+error.name+'）':''));
+        });
+      }catch(error){
+        initialReplayPrimed=false;
+        setReplayStatus('Safariで自動再生できませんでした。▶ リプレイをもう一度押してください。');
+      }
+    }
     if (!autoOpeningNextReplay) {
       inline.scrollIntoView({behavior:'smooth',block:'nearest'});
     }
