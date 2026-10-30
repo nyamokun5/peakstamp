@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {normalizePerson,normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,
- selectPlayerCandidates,findPotentialDuplicate,existingGoalsForMatch,matchingExistingGoals,
+ selectPlayerCandidates,fixturePlayerOptions,findPotentialDuplicate,existingGoalsForMatch,matchingExistingGoals,
  inferMatchFromCommentary,spokenNameTokens,scoredPlayerCandidates,suggestedPlayer,
  validateGoalRow,buildReviewPayload}
  from '../sposched-review-core.mjs';
@@ -696,4 +696,56 @@ test('related spellings do not auto-select when two different roster entries mat
  assert.equal(suggestedPlayer('全然別の人',snap).name,'');
  assert.equal(suggestedPlayer('小野',snap).name,'',
   'unlisted kanji readings are never guessed as another surname');
+});
+
+test('current SS roster excludes stale event teams, unrelated team and historical goal scorers from manual selections',()=>{
+ const raw={event_id:'eeaed234-e9f0-4999-b05e-ec01c7b656fc',
+  roster_source:'official-current-event-teams',
+  roster:{Team1:['New A','New B'],Team2:['Current C'],Team3:['Other D']},
+  matches:[
+   {seq:1,match_id:'2d4cf942-11a2-48ba-a23f-92db892f02e1',
+    left_team:'Team1',right_team:'Team2',status:'scheduled',goals:[
+     {goal_id:'2d4cf942-11a2-48ba-a23f-92db892f02e2',
+      scorer:'Old Player',team:'Team1'}]},
+   {seq:2,match_id:'2d4cf942-11a2-48ba-a23f-92db892f02e3',
+    left_team:'Team2',right_team:'Team3',status:'scheduled',goals:[]}
+  ]};
+ const ss=normalizeSpoSnapshot(raw);
+ assert.equal(ss.rosterSource,'official-current-event-teams');
+ assert.equal(ss.players.includes('Old Player'),false,
+  'historical goal scorer cannot appear in the current assignment');
+ assert.deepEqual(fixturePlayerOptions(ss,1),['Current C','New A','New B']);
+ assert.deepEqual(fixturePlayerOptions(ss,1,'Team1'),['New A','New B']);
+ assert.deepEqual(fixturePlayerOptions(ss,2),['Current C','Other D']);
+ assert.deepEqual(fixturePlayerOptions(ss,99),[]);
+ assert.deepEqual(fixturePlayerOptions(ss,1,'Team3'),[]);
+ const manualGoal={manual:true};
+ const valid={goal:manualGoal,include:true,confirmed:true,seq:1,scorer:'New A',
+  team:'Team1',assistMode:'named',assist:'New B'};
+ assert.equal(validateGoalRow(valid,ss),null);
+ assert.match(validateGoalRow({...valid,scorer:'Other D'},ss),/現在の試合チーム/);
+ assert.match(validateGoalRow({...valid,assist:'Current C'},ss),/アシスト者.*得点チーム/);
+ assert.match(validateGoalRow({...valid,team:'Team2'},ss),/得点者と.*SS得点チーム/);
+ assert.throws(()=>normalizeSpoSnapshot({...raw,roster:{
+  Team1:['Duplicated'],Team2:['Duplicated']}}),/同名選手/);
+});
+
+test('same-event reload clears stale manual scorer/assist and team after SS reassigns players',()=>{
+ const eventId='eeaed234-e9f0-4999-b05e-ec01c7b656fc';
+ const mk=(roster)=>normalizeSpoSnapshot({event_id:eventId,
+  roster_source:'official-current-event-teams',roster,
+  matches:[{seq:1,match_id:'2d4cf942-11a2-48ba-a23f-92db892f02e1',
+    status:'scheduled',left_team:'Team1',right_team:'Team2',goals:[]}]});
+ const old=mk({Team1:['Scorer','Helper'],Team2:['Other']});
+ const now=mk({Team1:['Other'],Team2:['Scorer','Helper']});
+ const g={id:'2d4cf942-11a2-48ba-a23f-92db892f02e5',
+  manual:true,source:{name:'SS手動入力'},scorer:'',assist:''};
+ const earlier={...prepareGoalRows({goals:[g]},old)[0],seq:1,scorer:'Scorer',
+  assist:'Helper',team:'Team1',assistMode:'named',include:true,confirmed:true};
+ const updated=prepareGoalRows({goals:[g]},now);
+ const [row]=preserveReviewRows(updated,[earlier],{sameEvent:true,snapshot:now});
+ assert.equal(row.scorer,'');
+ assert.equal(row.assist,'');
+ assert.equal(row.team,'');
+ assert.equal(row.confirmed,false);
 });
