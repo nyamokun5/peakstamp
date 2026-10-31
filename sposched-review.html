@@ -780,7 +780,9 @@ function renderGoals(){
    ' ／ アシスト：'+(row.assist?
    '「'+g.assist+'」→ '+row.assist+'（推定）':'未選択、またはアシストなし'),'details'));
   const include=mkInput('checkbox');include.checked=row.include;include.addEventListener('change',()=>{row.include=include.checked;touch();persistManualRow(row);updateDuplicate();renderQuick()});
-  const bar=node('div','','line');bar.append(include,node('span','このゴールをShoot Sundayへ登録・修正する（要確認）'));article.append(h,quote,guess,bar);
+  const bar=node('div','','line');bar.append(include,node('span','このゴールをShoot Sundayへ登録・修正する（要確認）'));
+  article.append(h,quote,guess);
+  if(!g.manual||describeOfficialFixtures(snapshot).automaticFourMatch)article.append(bar);
   const wrap=node('div','','fields');
   const matchSelect=select(snapshot.matches.map(m=>({value:m.seq,label:matchSlotLabel(m)})),row.seq);
   matchSelect.addEventListener('change',()=>{
@@ -1443,7 +1445,7 @@ function renderQuick(){
     item.state==='waiting'?'対戦待ち':
     item.state==='manual-ss'?(item.registeredInSS?'SS登録済み':'SSで手動登録'):
     item.state==='attention'?'要修正':
-    item.state==='manual'?'手動ゴール（詳細確認）':'登録対象外';
+    item.state==='manual'?'手動入力・スコアへ反映':'登録対象外';
   top.append(node('span',label,['ready','waiting'].includes(item.state)?'quick-ready':'quick-held'));
   el.append(top);
   const sourceInfo=(match?matchSlotLabel(match):'試合番号：未設定（要選択）')+
@@ -1592,7 +1594,7 @@ function renderQuick(){
    ?'要確認 '+(attention+duplicates)+'件を直すと登録に進めます。'
    :(ready||waiting)?'確認できたら下の「まとめてTESTへ登録」を押してください。'
    :manualPending?'助っ人疑いのゴールはSSで直接登録し、最新情報を再取得してください。'
-   :manualDrafts?'動画なしの手動ゴールは「詳細編集」で試合・選手を確認し、Worker一括登録欄で送信してください。'
+   :manualDrafts?'手動ゴールの入力欄で試合・選手を選び、自動集計されたスコアを確認して一括登録してください。'
     :'登録可能なゴールは現在ありません。対戦待ちは準決勝の終了後に確認します。';
  }
 }
@@ -1830,15 +1832,21 @@ function renderAutoSummary(){
    'WorkerがSS公式の試合IDを毎回照合し、確認済みのゴール（動画なし・手動追加も可）と試合終了を安全に登録します。通信が切れた場合は進捗を再取得します。';
   const root=$('autoOutline');root.replaceChildren();
   root.append(node('strong','SS公式の'+official.count+'試合を登録'));
+  const manualReview=summarizeManualFixtureEntry(snapshot,rows,quickGoalDecisions(snapshot,rows));
   for(const m of official.matches){
+   const projected=manualReview.fixtures.find(f=>f.seq===m.seq);
    root.append(node('div','#'+m.seq+' '+(m.title||'試合')+'：'+
-    (m.status==='finished'?'終了済み':m.status==='waiting'?'対戦待ち':m.status==='scheduled'?'登録予定':'状態未確認 ('+(m.status||'不明')+')'),
+    (m.status==='finished'?'終了済み':m.status==='waiting'?'対戦待ち':
+     m.status==='scheduled'?'登録予定'+(projected?' → '+projected.left+
+      '–'+projected.right+'（ゴール'+projected.goals.length+'件）':''):
+     '状態未確認 ('+(m.status||'不明')+')'),
     'fixture-status'));
   }
   let error='';
   try{
    prepareWorkerIndependent({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),
-    requestId:'11111111-1111-4111-8111-111111111111'});
+    requestId:'11111111-1111-4111-8111-111111111111',
+    winnerFor:f=>manualFinishWinner(snapshot.eventId,f,manualTieWinners)});
   }catch(e){error=e.message||'登録内容を確認してください'}
   const currentId=snapshot.eventId;
   const previous=localStorage.getItem(workerBatchStorageKey(currentId));
@@ -2515,7 +2523,8 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
   const requestId=crypto.randomUUID();
   const plan=independent
    ?prepareWorkerIndependent({snapshot:fresh,rows,
-      decisions:quickGoalDecisions(fresh,rows),requestId})
+      decisions:quickGoalDecisions(fresh,rows),requestId,
+      winnerFor:f=>manualFinishWinner(fresh.eventId,f,manualTieWinners)})
    :prepareWorkerTournament({snapshot:fresh,rows,
       decisions:quickGoalDecisions(fresh,rows),requestId,
       winnerFor:seq=>autoWinnerFor(seq)});
@@ -2580,7 +2589,8 @@ $('workerBatchRun').addEventListener('click',async()=>{
   const requestId=crypto.randomUUID();
   const isIndependent=!describeOfficialFixtures(snapshot).automaticFourMatch;
   const operations=isIndependent
-   ?prepareWorkerIndependent({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId})
+   ?prepareWorkerIndependent({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId,
+      winnerFor:f=>manualFinishWinner(snapshot.eventId,f,manualTieWinners)})
    :prepareWorkerTournament({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId,
      winnerFor:seq=>autoWinnerFor(seq)});
   // The complete AI-vs-SS registration plan is visible above this
@@ -2726,14 +2736,20 @@ $('manualAddGoal').addEventListener('click',async()=>{
   rebuild({preserveEdits:true});
   const changed=oldRoster!==JSON.stringify(fresh.roster)||oldFixtures!==workerFixtureFingerprint(fresh);
   const goal=makeManualGoal(crypto.randomUUID());
+  const previousManual=[...rows].reverse().find(r=>r.goal?.manual&&r.include&&r.seq);
+  goal.review={seq:snapshot.matches.length===1?snapshot.matches[0].seq:
+    previousManual?.seq??null,scorer:'',assist:'',assistMode:'none',team:'',
+    guest:false,include:true};
   manualGoals.push(goal);saveManual();
   rebuild({preserveEdits:true});
   $('manualAddStatus').textContent=(changed
     ?'⚠ SS側でチーム・試合情報が更新されています。古い選択内容を再確認してください。'
     :'✓ 現在のSS名簿・試合IDを再取得しました。')+
     ' テスト用ゴールを作成しました。試合番号・得点者・アシストを選択してください。';
-  const el=$('review-goal-'+rows.length);
-  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+  const target=$('reviewArea').hidden
+   ?$('manualEntry-'+unsentManualGoals(manualGoals).length)
+   :$('review-goal-'+rows.length);
+  if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){
   if(revision===ssConnectionRevision&&snapshot?.eventId===eventId){
    // Fail closed on a failed refresh: keep existing local drafts, but never
