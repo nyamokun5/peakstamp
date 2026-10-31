@@ -1,0 +1,24 @@
+# Project-local roles; inherit the session model, auth, sandbox and approval policy.
+# Managed Cloud uses its host-provided collaboration tools; CLI uses these roles.
+[features]
+multi_agent = true
+
+[agents.coordinator]
+description = "Coordinate both repositories, assign exclusive paths, integrate and open PRs."
+config_file = "agents/coordinator.toml"
+
+[agents.frontend]
+description = "Own PeakStamp UI and browser behavior within assigned paths."
+config_file = "agents/frontend.toml"
+
+[agents.backend]
+description = "Own Worker gateway, fixture validation and recovery within assigned paths."
+config_file = "agents/backend.toml"
+
+[agents.qa]
+description = "Independently verify candidate changes and own assigned regression tests."
+config_file = "agents/qa.toml"
+
+[agents.release_reviewer]
+description = "Read-only independent safety and release review of exact SHA pairs."
+config_file = "agents/release_reviewer.toml"

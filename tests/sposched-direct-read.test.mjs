@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {manualDraftEnvironment,makeManualGoal,storeManualGoals,restoreManualGoals}
+ from '../sposched-manual-goals.mjs';
 
 // This page is a module script embedded in HTML, so Node cannot import it.
 // Compile its script separately to catch syntax errors without loading the DOM.
@@ -74,20 +76,50 @@ test('second confirmed goal stays editable after first sent and official SS refr
  assert.doesNotMatch(html,/scorerSelect\.addEventListener\('change',[^\n]*rebuild\(/);
 });
 
-test('manual goal without video is available in TEST-only review and existing batch',()=>{
+test('manual goal drafts use the authenticated environment while TEST batch guards remain intact',()=>{
  assert.match(html,/id="manualAddWrap"/);
  assert.match(html,/id="manualAddGoal"/);
  assert.match(html,/id="manualAddStatus"/);
  assert.match(html,/makeManualGoal\(crypto\.randomUUID\(\)\)/);
  assert.match(html,/unsentManualGoals\(manualGoals\)/);
  assert.match(html,/prepareGoalRows\(\{goals:source\},snapshot\)/);
- assert.match(html,/storeManualGoals\(localStorage,'staging'/);
- assert.match(html,/restoreManualGoals\(localStorage,'staging'/);
+ assert.match(html,/const manualEnvironment=\(\)=>manualDraftEnvironment\(\{environment:\$\('ssEnvironment'\)\.value,/);
+ assert.match(html,/stagingLoaded:loadedFromStagingDirect,productionLoaded:loadedFromProductionDirect/);
+ assert.match(html,/const environment=manualEnvironment\(\);if\(!environment\)return/);
+ assert.match(html,/storeManualGoals\(localStorage,environment,snapshot\.eventId,manualGoals\)/);
+ assert.match(html,/manualGoals=draftEnvironment\?restoreManualGoals\(localStorage,draftEnvironment,snapshot\.eventId\):\[\]/);
+ assert.match(html,/if\(batchBusy\|\|!snapshot\|\|!manualEnvironment\(\)\)return/);
  assert.match(html,/manualGoals=markManualCompleted\(manualGoals/);
  assert.match(html,/g\.manual\?'SS手動登録（動画なし）'/);
  assert.match(html,/loadedFromStagingDirect&&\$\('ssEnvironment'\)\.value==='staging'/);
  assert.match(html,/id="batchPreview"/);
  assert.match(html,/id="batchExecute"/);
+ assert.match(html,/if\(\$\('ssEnvironment'\)\.value!=='staging'\|\|!loadedFromStagingDirect\)/);
+ assert.match(html,/confirm:'TEST-ONLY WRITE'/);
+});
+
+test('manual drafts cannot leak across environments, events or unauthenticated snapshots',()=>{
+ const eventId='11111111-1111-4111-8111-111111111111';
+ const anotherEvent='22222222-2222-4222-8222-222222222222';
+ const entries=new Map();
+ const storage={getItem:key=>entries.get(key)??null,setItem:(key,value)=>entries.set(key,value)};
+ const stagingGoal=makeManualGoal('33333333-3333-4333-8333-333333333333');
+ const productionGoal=makeManualGoal('44444444-4444-4444-8444-444444444444');
+ for(const [environment,goal] of [['staging',stagingGoal],['production',productionGoal]]){
+  const draftEnvironment=manualDraftEnvironment({environment,eventId,
+   stagingLoaded:environment==='staging',productionLoaded:environment==='production'});
+  assert.equal(draftEnvironment,environment);
+  storeManualGoals(storage,draftEnvironment,eventId,[goal]);
+ }
+ assert.deepEqual(restoreManualGoals(storage,'staging',eventId).map(g=>g.id),[stagingGoal.id]);
+ assert.deepEqual(restoreManualGoals(storage,'production',eventId).map(g=>g.id),[productionGoal.id]);
+ assert.deepEqual(restoreManualGoals(storage,'production',anotherEvent),[]);
+ for(const state of [
+  {environment:'production'},
+  {environment:'production',stagingLoaded:true},
+  {environment:'staging',productionLoaded:true},
+  {environment:'production',stagingLoaded:true,productionLoaded:true}
+ ])assert.equal(manualDraftEnvironment({eventId,...state}),null);
 });
 
 test('staging write recovery cannot silently retry failed requests',()=>{

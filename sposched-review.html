@@ -358,7 +358,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <p>実況の対戦カードと当日の選手名簿から試合・得点者・アシストを初期選択します。<strong>動画にゴールがなくても、手動で新規追加できます。</strong> 選手と試合を確認して登録してください。</p>
  <div id="manualAddWrap" class="grid-item" hidden>
   <strong>動画がない場合の新規ゴール登録</strong>
-  <p>テストSSの試合を選んで、得点者・アシストを手入力できます。追加したゴールは下の一覧に並び、一括登録にも含められます。</p>
+  <p>読み込んだSSの試合を選んで、得点者・アシストを指定できます。追加したゴールはこの接続先・イベント専用の下書きとして保存され、登録前の確認に含まれます。</p>
   <button id="manualAddGoal" class="primary" type="button">＋ 新規ゴールを手動追加</button>
   <p id="manualAddStatus" class="small" role="status" aria-live="polite"></p>
  </div>
@@ -421,7 +421,7 @@ import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,appr
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=composite-tatsuo1';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
-import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
+import {makeManualGoal,manualDraftEnvironment,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual-production1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy,retiredMatchRecoveryPolicy,archiveRetiredAttempt} from './sposched-write-journal.mjs?v=ss-recovery3';
 import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=helper-wait-side1';
 import {validateResetGoalRebinding} from './sposched-reset-fixture-review.mjs?v=reset-bulk1';
@@ -492,9 +492,11 @@ const setBatchBusy=busy=>{
  $('quickGoals').inert=busy;
  $('batchGoals').inert=busy;
 };
+const manualEnvironment=()=>manualDraftEnvironment({environment:$('ssEnvironment').value,
+ eventId:snapshot?.eventId,stagingLoaded:loadedFromStagingDirect,productionLoaded:loadedFromProductionDirect});
 const saveManual=()=>{
- if(!snapshot?.eventId||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
- try{storeManualGoals(localStorage,'staging',snapshot.eventId,manualGoals)}
+ const environment=manualEnvironment();if(!environment)return;
+ try{storeManualGoals(localStorage,environment,snapshot.eventId,manualGoals)}
  catch(e){$('manualAddStatus').textContent='手動ゴールの保存に失敗：'+e.message}
 };
 const persistManualRow=row=>{
@@ -671,7 +673,7 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
   (loadedFromProductionDirect&&$('ssEnvironment').value==='production');
  $('reviewArea').hidden=quickMode&&!(preserveEdits&&wasEditing);
  renderPendingPanel();
- $('manualAddWrap').hidden=!(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&snapshot.matches.length);
+ $('manualAddWrap').hidden=!(manualEnvironment()&&snapshot.matches.length);
  $('eventTitle').textContent=(snapshot.eventName||'イベント')+
   ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+'件 / 対象ゴール '+rows.length+'件';
  renderGoals();renderScores();renderQuick();renderFinish();productionUI.render();updateFlowGuide();
@@ -1103,7 +1105,7 @@ function renderQuick(){
  $('autoRegisterHeading').hidden=!staging;
  $('autoRegisterHelp').hidden=!staging;
  $('quickIndividualTestTools').hidden=!staging;
- $('quickEdit').textContent=staging?'詳細編集・手動追加・既存ゴール修正':'詳しく修正する';
+ $('quickEdit').textContent=staging?'詳細編集・手動追加・既存ゴール修正':'詳細編集・手動ゴール追加';
  const items=quickGoalDecisions(snapshot,rows);
  const resetCount=rows.filter(r=>r.fixtureIdentityChanged===true).length;
  $('quickResetBulkReview').hidden=!staging||resetCount===0||snapshot.matches.length!==4;
@@ -2168,7 +2170,7 @@ $('autoReload').addEventListener('click',()=>{
 });
 
 $('manualAddGoal').addEventListener('click',()=>{
- if(batchBusy||!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ if(batchBusy||!snapshot||!manualEnvironment())return;
  if(unsentManualGoals(manualGoals).length>=20){
   $('manualAddStatus').textContent='手動ゴールが20件に達しました。先に登録または不要分を削除してください。';return;
  }
@@ -2610,8 +2612,8 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   snapshot=normalizeSpoSnapshot(data);
   loadedFromStagingDirect=$('ssEnvironment').value==='staging';
   loadedFromProductionDirect=$('ssEnvironment').value==='production';
-  manualGoals=loadedFromStagingDirect?
-   restoreManualGoals(localStorage,'staging',snapshot.eventId):[];
+  const draftEnvironment=manualEnvironment();
+  manualGoals=draftEnvironment?restoreManualGoals(localStorage,draftEnvironment,snapshot.eventId):[];
   autoMustReload=false;$('autoConflict').hidden=true;
   rebuild({preserveEdits:true});
   statusSS(snapshot.matches.length===0?

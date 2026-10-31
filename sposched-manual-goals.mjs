@@ -10,6 +10,14 @@ export function manualStoreKey(environment,eventId){
   throw Error('SSイベントと接続先を確認してください');
  return MANUAL_KEY_PREFIX+environment+':'+eventId;
 }
+// Draft editing is available only for a directly authenticated snapshot of
+// the selected environment, never imported JSON or a stale environment switch.
+export function manualDraftEnvironment({environment,eventId,stagingLoaded=false,productionLoaded=false}){
+ if(!UUID.test(String(eventId||'')))return null;
+ if(environment==='staging'&&stagingLoaded&&!productionLoaded)return 'staging';
+ if(environment==='production'&&productionLoaded&&!stagingLoaded)return 'production';
+ return null;
+}
 export function makeManualGoal(id){
  if(!UUID.test(String(id||'')))throw Error('手動ゴールIDが不正です');
  return {id,source:{name:'SS手動入力'},quote:'映像なし・手動登録',

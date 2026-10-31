@@ -7,9 +7,10 @@ const browser=await chromium.launch({headless:true,
 const E='11111111-1111-4111-8111-111111111111';
 const T='22222222-2222-4222-8222-222222222222';
 const ids=[1,2,3,4].map(n=>'33333333-3333-4333-8333-33333333333'+n);
+const titles=['準決勝 #1','準決勝 #2','3位決定戦','決勝'];
 const snapshot={event_id:E,
  event:{date:'2026-11-01',name:'Sunday',status:'target'},
- matches:ids.map((match_id,i)=>({seq:i+1,match_id,
+ matches:ids.map((match_id,i)=>({seq:i+1,match_id,title:titles[i],
   status:i<2?'scheduled':'waiting',left_team:i<2?'Team '+(i*2+1):'',
   right_team:i<2?'Team '+(i*2+2):'',
   left_score:0,right_score:0,goals:[]})),
@@ -113,9 +114,24 @@ try{
   'technical event and fixture IDs remain collapsed by default');
  assert.match(await page.locator('#productionCheck').innerText(),/① 登録内容を確認/);
  assert.match(await page.locator('#productionStart').innerText(),/② 4試合を本番登録/);
+ // Count and waiting slots alone are not official knockout evidence. Reload
+ // the same authenticated event without titles and verify it stays blocked,
+ // even though the mocked current-target release remains approved.
+ for(const match of snapshot.matches)delete match.title;
+ await page.reload();
+ await page.fill('#ssBridgeToken','production-bridge-mock-only');
+ await page.click('#ssLoadEvents');
+ await page.locator('#ssLoadSnapshot').waitFor({state:'visible'});
+ await page.click('#ssLoadSnapshot');
+ await page.locator('#productionPanel').waitFor({state:'visible'});
+ await page.click('#productionCheck');
+ await page.waitForFunction(()=>document.getElementById('productionPlan').textContent.includes('確認未完了'));
+ assert.match(await page.locator('#productionPlan').innerText(),/独立試合形式/);
+ assert.equal(await page.locator('#productionStart').isDisabled(),true,
+  'unlabelled waiting fixtures must not inherit knockout write eligibility');
  assert.ok(checks>=2);
  assert.equal(productionWrites,0);
  assert.equal(otherReads,0);
  assert.deepEqual(errors,[]);
- console.log('PASS: mobile production gate blocks unavailable targets, allows only reviewed current target; zero writes');
+ console.log('PASS: mobile production gate requires official knockout titles and reviewed current target; ambiguous waiting fixtures blocked; zero writes');
 }finally{await browser.close()}
