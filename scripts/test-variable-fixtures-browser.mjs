@@ -42,7 +42,7 @@ const scenarios=[
    match(3,'Team3','Team1','#3 リーグ')],automatic:false,draw:true},
  {label:'retired 2-match same two-team event re-created with new match IDs',fixtures:[
    match(1,'Team1','Team2','#1 紅白戦'),match(2,'Team1','Team2','#2 紅白戦')
- ],automatic:false,retired:true,retiredSameCount:true},
+ ],automatic:false,retired:true,retiredSameCount:true,recreateSmoke:true},
  {label:'retired four-match now three-fixture league',fixtures:[
    match(1,'Team1','Team2','#1 リーグ'),match(2,'Team1','Team3','#2 リーグ'),
    match(3,'Team2','Team3','#3 リーグ')],automatic:false,retired:true},
@@ -66,8 +66,14 @@ try{
  await buildStagingSite(temp);
  for(const scenario of scenarios){
   let prod=0,posts=0,healthGets=0,submittedPlan=null,snapshotGets=0;
+  let recreatePosts=0,confirmedRecreate=0;
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  if(scenario.recreateSmoke)page.on('dialog',async dialog=>{
+   if(dialog.type()==='confirm'&&dialog.message().includes('旧2試合')){
+    confirmedRecreate++;await dialog.accept();
+   }else await dialog.dismiss();
+  });
   if(scenario.retired)await page.addInitScript(({eventId,requestId})=>{
    localStorage.setItem('peakstamp:test:worker-batch:'+eventId,requestId);
   },{eventId:E,requestId:scenario.markerMismatch
@@ -101,6 +107,27 @@ try{
      write_sent:false
     },headers:{'Access-Control-Allow-Origin':'*'}});
    }
+   if(scenario.recreateSmoke&&url.pathname==='/staging/batch/recreate'){
+    recreatePosts++;
+    submittedPlan=route.request().postDataJSON();
+    return route.fulfill({status:202,json:{
+     environment:'STAGING ONLY',event_id:E,
+     request_id:submittedPlan.request_id,layout_mode:'independent-fixtures-v1',
+     fixture_count:2,status:'running',phase:'preparing',cursor:0,completed:0,
+     fixture_ids:{'1':matchId(1),'2':matchId(2)},write_sent:false
+    },headers:{'Access-Control-Allow-Origin':'*'}});
+   }
+   if(scenario.recreateSmoke&&recreatePosts>0&&
+      ['/staging/batch/inspect','/staging/batch/status'].includes(url.pathname)){
+    return route.fulfill({status:200,json:{
+     environment:'STAGING ONLY',event_id:E,
+     request_id:submittedPlan.request_id,layout_mode:'independent-fixtures-v1',
+     fixture_count:2,status:'blocked',phase:'preparing',cursor:0,completed:0,
+     blocked_reason:'mock-only: new generation is not sent upstream',
+     fixture_ids:{'1':matchId(1),'2':matchId(2)},write_sent:false,
+     execution_active:false
+    },headers:{'Access-Control-Allow-Origin':'*'}});
+   }
    if(scenario.retired&&['/staging/batch/inspect','/staging/batch/status'].includes(url.pathname)){
     return route.fulfill({status:200,json:{
      environment:'STAGING ONLY',event_id:E,
@@ -123,8 +150,10 @@ try{
     healthGets++;
     return route.fulfill({status:200,json:{
      service:'shoot-sunday-sync-staging',write_mode:'test-only',
-     batch_job_configured:true,independent_batch_contract:scenario.manual
-      ?'independent-fixtures-v1':'durable-four-match-v1'
+     batch_job_configured:true,independent_batch_contract:
+      scenario.manual||scenario.recreateSmoke?
+      'independent-fixtures-v1':'durable-four-match-v1',
+     retired_generation_contract:scenario.recreateSmoke?'retired-independent-v1':undefined
     },headers:{'Access-Control-Allow-Origin':'*'}});
    }
    if(url.pathname==='/snapshot'){
@@ -227,6 +256,45 @@ try{
       'only verified server-side 404/recreate path can now be separately offered');
     }
    }
+   if(scenario.recreateSmoke){
+    // Completed old 2-match Worker job is still present, but the official
+    // current 2 fixtures have NEW IDs. A new video-free goal MUST join the
+    // explicit recreate plan, never /start, and cannot replay the old IDs.
+    assert.equal(await page.locator('#manualEntryPanel').isVisible(),true);
+    assert.equal(await worker.isDisabled(),true,'existing Worker job blocks /start');
+    await page.click('#manualEntryAdd');
+    const draft=page.locator('.manual-entry-goal').first();
+    await draft.waitFor();
+    await draft.locator('select[aria-label="ゴール1の試合"]').selectOption('2');
+    await draft.locator('select[aria-label="ゴール1の得点者"]').selectOption('Jiro');
+    assert.match(await page.locator('#manualEntryPreview').innerText(),
+     /#2\s+Team1 0 – 1 Team2/);
+    const button=page.locator('#workerBatchRecreate');
+    assert.equal(await button.isVisible(),true);
+    assert.equal(recreatePosts,0,'manual draft/edit is read-only');
+    await button.click();
+    await page.waitForFunction(()=>
+     document.querySelector('#workerBatchStatus')?.textContent.includes('mock-only'));
+    assert.equal(confirmedRecreate,1,'exactly one explicit new-generation approval');
+    assert.equal(recreatePosts,1,'exactly one new-generation POST, no replay');
+    assert.equal(healthGets,1,'real public health feature gate checked before recreate');
+    assert.equal(submittedPlan.layout_mode,'independent-fixtures-v1');
+    assert.equal(submittedPlan.fixture_count,2);
+    assert.equal(submittedPlan.previous_request_id,
+     '33333333-3333-4333-8333-333333333333');
+    assert.equal(submittedPlan.confirm_recreation,'TEST-ONLY RECREATE DELETED FIXTURES');
+    assert.deepEqual(submittedPlan.operations.map(x=>[x.action,x.seq,x.expected_match_id]),[
+      ['finish',1,matchId(1)],['create',2,matchId(2)],['finish',2,matchId(2)]
+    ]);
+    assert.deepEqual(submittedPlan.operations.filter(x=>x.action==='finish')
+      .map(x=>x.winner),['draw','auto']);
+    assert.equal(submittedPlan.operations[1].scorer,'Jiro');
+    assert.ok(submittedPlan.operations.every(x=>![matchId(11),matchId(12)].includes(x.expected_match_id)),
+     'old fixture IDs can never appear in new-generation operations');
+    assert.equal(await worker.isDisabled(),true,'old job cannot be overwritten by /start');
+    assert.equal(prod,0,'browser must never invoke production');
+    assert.deepEqual(errors,[]);
+   }
    if(scenario.manual){
     assert.equal(await page.locator('#manualEntryPanel').isVisible(),true,
      'manual entry is immediately discoverable in normal quick view');
@@ -302,7 +370,7 @@ try{
     assert.equal(await worker.isDisabled(),true,'blocked job must not be replayed');
    }
    assert.equal(prod,0);
-   if(!scenario.manual)assert.equal(posts,scenario.markerMismatch?3:scenario.retired?1:0,
+   if(!scenario.manual&&!scenario.recreateSmoke)assert.equal(posts,scenario.markerMismatch?3:scenario.retired?1:0,
     'only passive inspection POST is allowed; no start/recreate mutation');
    assert.deepEqual(errors,[],scenario.label+' JS errors');
    if(scenario.label==='external one match'){
