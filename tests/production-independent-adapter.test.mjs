@@ -34,3 +34,22 @@ test('production adapter validates matching current-target independent fixtures 
   ...inspect,matches:inspect.matches.map((m,i)=>i===1?{...m,match_id:id(1)}:m)
  },release));
 });
+
+test('production completed independent batch verifies every official ID and finished status',async()=>{
+ const {verifyIndependentWorkerCompletion}=await import('../sposched-worker-independent.mjs');
+ const eventId=id(99);
+ for(const n of [2,3,4,8]){
+  const previous={eventId,matches:Array.from({length:n},(_,i)=>({
+   seq:i+1,matchId:id(i+1),status:'scheduled'}))};
+  const fresh={eventId,matches:previous.matches.map(m=>({...m,status:'finished'}))};
+  const state={event_id:eventId,status:'completed',layout_mode:'independent-fixtures-v1',
+   fixture_count:n,fixture_ids:Object.fromEntries(previous.matches.map(m=>[m.seq,m.matchId]))};
+  assert.equal(verifyIndependentWorkerCompletion(state,fresh,previous),true);
+  assert.throws(()=>verifyIndependentWorkerCompletion(state,{
+   ...fresh,matches:fresh.matches.map((m,i)=>i===0?{...m,matchId:id(55)}:m)
+  },previous),/正式ID/);
+  assert.throws(()=>verifyIndependentWorkerCompletion(state,{
+   ...fresh,matches:fresh.matches.map((m,i)=>i===n-1?{...m,status:'scheduled'}:m)
+  },previous),/終了状態/);
+ }
+});
