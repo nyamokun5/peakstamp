@@ -313,6 +313,13 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <details id="productionAudit" hidden><summary>イベント・試合IDを確認</summary><pre id="productionAuditIds"></pre></details>
  <button id="productionStart" type="button" class="primary quick-main" disabled>② 4試合を本番登録</button>
  <button id="productionRefresh" type="button" hidden>登録の進捗を確認（再送なし）</button>
+ <details id="productionRecreate" hidden><summary>SSで試合を作り直した場合（旧試合削除済みのみ）</summary>
+  <p class="step-help">旧試合の削除・新しい正式試合ID・得点未登録をWorkerが確認します。確認できない場合は送信しません。</p>
+  <button id="productionRecreateCheck" type="button">新しい試合を確認（送信なし）</button>
+  <pre id="productionRecreatePlan" class="small" hidden></pre>
+  <label><input id="productionRecreateConfirm" type="checkbox">旧試合をSSで削除し、新試合への本番登録を承認します</label>
+  <button id="productionRecreateStart" type="button" disabled>旧試合削除を確認して再登録</button>
+ </details>
  <p id="productionStatus" class="small" role="status" aria-live="polite"></p>
  <div id="productionDecision" hidden>
   <p id="productionDecisionText" role="status"></p>

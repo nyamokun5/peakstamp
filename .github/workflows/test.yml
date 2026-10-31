@@ -53,3 +53,4 @@ jobs:
           node scripts/test-retired-match-browser.mjs
           node scripts/test-ss-connection-race-browser.mjs
           node scripts/test-production-gate-browser.mjs
+          node scripts/test-staging-site-browser.mjs
