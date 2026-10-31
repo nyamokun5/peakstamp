@@ -53,3 +53,5 @@ jobs:
           node scripts/test-retired-match-browser.mjs
           node scripts/test-ss-connection-race-browser.mjs
           node scripts/test-production-gate-browser.mjs
+          node scripts/test-production-manual-completion-browser.mjs
+          PLAYWRIGHT_MODULE=playwright node --test tests/production-manual-goals.test.mjs

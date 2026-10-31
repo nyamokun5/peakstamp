@@ -23,6 +23,6 @@ test('production registration remains two explicit steps with a hidden technical
  assert.match(prod,/validateProductionReleaseEvidence/);
  assert.match(prod,/productionAuditIds/);
  assert.match(prod,/await inspect\(\)/);
- assert.match(prod,/await post\('\/production\/batch\/start',earlier\.plan\)/);
+ assert.match(prod,/await post\('\/production\/batch\/start',earlier\.plan,earlier\.scope\)/);
  assert.doesNotMatch(prod,/window\.confirm/);
 });
