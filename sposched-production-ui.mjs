@@ -148,10 +148,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
    }
    if(result.status==='completed'){
     const newest=normalize(await read('/snapshot?event_id='+encodeURIComponent(id)));
-    const expectedMode=describeOfficialFixtures(x.snapshot).automaticFourMatch?
-     'four-knockout':'independent-fixtures-v1';
-    if(result.layout_mode!==expectedMode)
-     throw Error('登録ジョブと現在の正式試合形式が一致しません');
+    if(!['four-knockout','independent-fixtures-v1'].includes(result.layout_mode))
+     throw Error('登録ジョブの試合形式を確認できません');
     if(result.layout_mode==='independent-fixtures-v1')
      verifyIndependentWorkerCompletion(result,newest,x.snapshot);
     else verifyCompletedWorkerSnapshot(result,newest,x.snapshot);
