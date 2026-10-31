@@ -166,10 +166,16 @@ try{
    assert.equal(await page.locator('#quickIndividualTestTools').getAttribute('open'),null,
     scenario.label+' exception-only goal tools should be collapsed in normal flow');
    if(scenario.draw){
+    // Exception-only individual finish controls are intentionally closed in
+    // the new one-click workflow, but remain available when opened.
+    const fallback=page.locator('#individualFinishTools');
+    await fallback.locator('summary').first().click();
+    assert.equal(await fallback.getAttribute('open'),'');
     assert.equal(await page.locator('#finishMatch').inputValue(),'1');
     assert.equal(await page.locator('#finishWinner option[value="draw"]').isEnabled(),true);
     await page.locator('#finishWinner').selectOption('draw');
     assert.equal(await page.locator('#finishExecute').isDisabled(),false);
+    await fallback.locator('summary').first().click();
    }
    if(scenario.retired){
     await page.waitForFunction(()=>
