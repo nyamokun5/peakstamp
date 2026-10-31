@@ -1,3 +1,40 @@
+# Current real-workerd storage checkpoint — 2026-10-31T06:05:03.126566+00:00
+
+## Resume / safety
+Continue existing PeakStamp PR179 and Worker PR73 on agent/coordinator/autonomous-development-20261031. Baselines fetched and matched clean local HEADs: FE05490afb6cab6b546c30cb94aa82cb03a04235a7, Worker0c952dd082a6a8102852689678ac19a05cfa8e7b. No merges, production deploys/SpoSched writes, credentials or environment settings were changed. All subagent write leases are released.
+
+## Exact implementation and scope
+Worker implementation81ff729735f6a5891a76a574cbf2aa2b17ff05dc adds only .github/workflows/ci.yml integration, scripts/run-workerd-production-storage.mjs and two test-support/workerd-*.mjs modules. Production src, wrangler config, lockfiles/dependency declarations and Frontend app code remain unchanged. The pair CI still pins public Frontend0fa09b4bc9f1c9c37e6e719cb0eb4980a5ccb20a; later Frontend commits here are documentation only.
+
+## Completed
+Coordinator delegated Backend real-runtime harness, QA scenario runner and independent Release Reviewer. Actual production-durable-entry.js is bundled without app edits and run under workerd with real SQLite Durable Object storage. Miniflare outboundService exclusively handles synthetic officialAPI requests; there is no native external fallback or inherited live credential. Loopback runtime and temporary storage are isolated and always stopped/cleaned with bounded waits.
+
+Found and fixed TEST HARNESS configuration issues: Miniflare5's supported V4 conversion, matching scriptPath/modulesRoot to avoid path breakout, and explicit shared resource/isolated persistence paths so conversion does not silently discard disk persistence. These were diagnosed instead of weakening storage assertions. Startup-error cleanup received a deadline, and ancestor symlinks are refused before mkdir.
+
+Runtime QA verified four cases using actual restart and both BatchJob/WriteGate state SQLite headers:
+1. needs_decision and completed progress survive multiple runtime recreations, only remaining decision work resumes, mutation totals stay one pass.
+2. Committed goal ACK loss preserves blocked batch, pending gate and consumed signature tombstone across restart; no blind replay.
+3. Concurrent identical starts produce one batch.
+4. Different concurrent request IDs accept one owner and refuse the other409 job_exists, preserving owner/progress after restart.
+Original auto-plan start after a draw decision is correctly409 because the stored plan now has explicit draw; passive inspection remains completed. Tests require that refusal, not a relaxed application behavior.
+
+## Validation
+- Real runtime runner4/4 passed under the final run-* name; /tmp/workerd-production-storage-final.log. Independent reviewer reran4/4; /tmp/workerd-production-storage-review.log.
+- Verified runtime: Node22.23.4, esbuild0.28.2, Miniflare5.20261023.3-beta, workerd1.20261023.1. Durable local safe evidence is Worker docs/workerd-local-evidence-20261031.json.
+- Clean clone WITHOUT node_modules passed ordinary npm test101/101, fail/skip0; /tmp/workerd-preinstall-ci-suite.log. The explicit post-install run-* name does not leak native dependency requirements into the pre-install unit phase.
+- CI actionlint1.7.7 and source syntax/diff checks passed. CI adds the explicit runtime command only after its existing dependency/dry-run install step, uses pipefail,5-minute timeout and always available-log artifact retention.
+- Independent final review: development PR update GO, production release NO-GO; no remaining required correction. No hosted/remote/mobile success is inferred.
+
+## Reproduce / next tasks
+Read docs/WORKERD_STORAGE_TEST.md in either repository for the exact command, persistence proof and limits. Existing paired browser and CI instructions remain in docs/PAIRED_BROWSER_TEST.md.
+
+Next safe automation: connect the existing real HTML paired-browser runner to this real workerd provider (currently paired browser uses actual core handlers with synthetic memory DO storage; real workerd persistence is separately proven). Retain strict outbound interception and exact source pairing. Then observe hosted Actions and obtain actual device/staging/artifact/rollback evidence before any release consideration. Physical iPhone and Cloudflare remote storage are NOT verified by the local result. No live writes are authorized.
+
+This old session still cannot query GitHub API status; Git refs and push work. Do not re-add domains, ask for duplicate secrets or recreate #179/#73. Hosted workflow outcomes must be checked as a separate observation; local workerd4/4 and clean-clone unit101/101 are the completed evidence here.
+
+---
+## Historical checkpoints (superseded above)
+
 # Current paired CI checkpoint — 2026-10-31T05:33:16.251203+00:00
 
 ## Resume / safety

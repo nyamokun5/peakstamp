@@ -11,3 +11,6 @@ Paired-browser iteration: actual HTML now drives the actual paired public Worker
 
 
 Paired CI is now defined in Worker .github/workflows/paired-browser.yml: read-only checkouts of exact Worker candidate and reviewed public PeakStamp0fa09b4, full10 synthetic browser cases, before/after clean source verification and safe artifacts. New verifier8/8 and Worker full101 passed. Clean-clone local replay also passed all10 with identical manifests, using fresh Playwright1.51.1 and existing system Chromium. GitHub-hosted result/browser-install remains unverified; no new secrets/deploy/merge/live writes. See paired CI checkpoint and local replay evidence.
+
+
+Real local runtime storage regression now uses the unchanged production entry and real workerd SQLite DOs, with synthetic outbound only. Four cases passed (restart of pending/completed/unknownACK records and same/different-request concurrency), including independent rerun. Ordinary unit phase passed101/101 in a clean clone with no node_modules. CI invokes the native runtime script explicitly after its existing install/dry-run step; no deployment workflow/app/config/credential change. Hosted CI/Cloudflare remote/iPhone evidence remains unverified. See docs/WORKERD_STORAGE_TEST.md.
