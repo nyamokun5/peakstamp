@@ -1232,7 +1232,8 @@ function renderManualEntry(){
  if(!active)return;
  const rosterReady=snapshot.rosterSource==='official-current-event-teams';
  const locked=!!(batchBusy||autoBusy||workerBatchPolling||
-  snapshot.matches.some(m=>m.status!=='scheduled'));
+  snapshot.matches.some(m=>m.status!=='scheduled'||m.existingGoals.length>0||
+    m.leftScore!==0||m.rightScore!==0));
  const eventName=snapshot.eventName||'イベント名未設定';
  $('manualEntryEvent').textContent='登録先：'+eventName+' ／ '+
   snapshot.matches.length+'試合 ／ '+snapshot.eventId;
