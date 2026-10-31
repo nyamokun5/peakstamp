@@ -63,6 +63,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   $('productionAudit').hidden=true;
   $('productionStart').disabled=true;
   $('productionDecision').hidden=true;
+  $('productionStart').textContent='② '+(x?.snapshot?.matches?.length||4)+'試合を本番登録';
   if(!x)return;
   const prior=localStorage.getItem(key(x.snapshot.eventId));
   $('productionRefresh').hidden=!prior;
@@ -89,6 +90,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
    $('productionAuditIds').textContent='団体ID：'+x.teamId+'\nイベントID：'+x.id+'\n'+
     x.matchIds.map((id,i)=>'第'+(i+1)+'試合：'+(id||'対戦確定後に発行')).join('\n');
    $('productionAudit').hidden=false;
+   $('productionStart').textContent='② '+x.matchIds.length+'試合を本番登録';
    $('productionStart').disabled=false;
    status('確認完了。②で本番登録できます。');
   }catch(e){out.textContent='確認未完了：'+e.message;status('本番への送信は行っていません。');}
@@ -146,6 +148,10 @@ export function installProductionUI({current,read,normalize,onComplete}){
    }
    if(result.status==='completed'){
     const newest=normalize(await read('/snapshot?event_id='+encodeURIComponent(id)));
+    const expectedMode=describeOfficialFixtures(x.snapshot).automaticFourMatch?
+     'four-knockout':'independent-fixtures-v1';
+    if(result.layout_mode!==expectedMode)
+     throw Error('登録ジョブと現在の正式試合形式が一致しません');
     if(result.layout_mode==='independent-fixtures-v1')
      verifyIndependentWorkerCompletion(result,newest,x.snapshot);
     else verifyCompletedWorkerSnapshot(result,newest,x.snapshot);
