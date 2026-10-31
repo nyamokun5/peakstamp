@@ -161,7 +161,11 @@ export function installProductionUI({current,read,normalize,onComplete}){
     status('✓ '+(result.fixture_count||4)+'試合の登録と終了をSSで確認しました。');
    }
    if(result.status==='running')window.setTimeout(refresh,1500);
-  }catch(e){status('本番ジョブ確認未了：'+e.message+'。新規送信せず進捗を確認してください。');}
+  }catch(e){
+   const previous=localStorage.getItem(key(id)+':previous');
+   status('本番ジョブ確認未了：'+e.message+(previous?'。旧ジョブID：'+previous:'')+
+    '。自動再送せず、SSの登録状況を確認してください。');
+  }
   finally{polling=false;$('productionRefresh').disabled=false;}
  }
  $('productionRecreateCheck').addEventListener('click',async()=>{
