@@ -8,7 +8,7 @@ import {verifyIndependentWorkerCompletion} from './sposched-worker-independent.m
 
 export function installProductionUI({current,read,normalize,onComplete}){
  const $=id=>document.getElementById(id);
- let evidence=null,busy=false,polling=false,lastJob=null,restoredEvent='';
+ let evidence=null,recreateEvidence=null,busy=false,polling=false,lastJob=null,restoredEvent='';
  const active=()=>{const x=current();return x?.active&&x.snapshot?.eventId?x:null;};
  const status=v=>{$('productionStatus').textContent=v;};
  const key=id=>productionBatchStorageKey(id);
@@ -58,7 +58,10 @@ export function installProductionUI({current,read,normalize,onComplete}){
   const x=active();
   $('productionPanel').hidden=!x;
   $('autoRegisterHeading').hidden=Boolean(x);
-  evidence=null;
+  evidence=null;recreateEvidence=null;
+  $('productionRecreate').hidden=!x||!localStorage.getItem(key(x.snapshot.eventId));
+  $('productionRecreateStart').disabled=true;
+  $('productionRecreatePlan').hidden=true;
   $('productionPlan').hidden=true;
   $('productionAudit').hidden=true;
   $('productionStart').disabled=true;
@@ -130,6 +133,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
       result.request_id!==requestId||result.inspection_only!==true)
     throw Error('保存済みの本番ジョブの識別情報が不一致');
    lastJob=result;
+   $('productionRecreate').hidden=result.status!=='completed';
    const stateLabel={running:'登録中',completed:'登録完了',blocked:'要確認',
     needs_decision:'勝者の指定が必要',paused:'一時停止'}[result.status]||result.status;
    status(stateLabel+'：'+result.completed+'/'+result.total+'件'+
@@ -160,6 +164,60 @@ export function installProductionUI({current,read,normalize,onComplete}){
   }catch(e){status('本番ジョブ確認未了：'+e.message+'。新規送信せず進捗を確認してください。');}
   finally{polling=false;$('productionRefresh').disabled=false;}
  }
+ $('productionRecreateCheck').addEventListener('click',async()=>{
+  const x=active();if(!x||busy)return;
+  busy=true;recreateEvidence=null;
+  $('productionRecreateStart').disabled=true;
+  const out=$('productionRecreatePlan');out.hidden=false;
+  out.textContent='新しい正式試合を確認中…';
+  try{
+   const previous=localStorage.getItem(key(x.snapshot.eventId));
+   const job=await post('/production/batch/inspect',{event_id:x.snapshot.eventId,request_id:previous});
+   if(job.status!=='completed'||job.request_id!==previous||job.event_id!==x.snapshot.eventId)
+    throw Error('完了済みの旧登録ジョブを確認できません');
+   const next=await inspect();
+   if(next.plan.layout_mode!=='independent-fixtures-v1')
+    throw Error('新しい独立試合形式の正式登録先が必要です');
+   const oldIds=Object.values(job.fixture_ids||{}).filter(Boolean).map(v=>v.toLowerCase());
+   const newIds=next.matchIds.map(v=>v?.toLowerCase());
+   if(oldIds.length!==(job.fixture_count||4)||newIds.some(id=>!id||oldIds.includes(id)))
+    throw Error('旧試合と異なる新しい試合IDを確認できません');
+   if(active()?.snapshot?.eventId!==next.id)throw Error('イベントが変更されました');
+   recreateEvidence={next,previous};
+   out.textContent='旧ジョブ：'+previous+'\n新しいイベント：'+next.id+
+    '\n新しい正式試合ID：\n'+next.matchIds.join('\n')+
+    '\n送信時にWorkerが旧試合削除と新試合未登録を再確認します。';
+   $('productionRecreateStart').disabled=false;
+  }catch(e){out.textContent='再登録確認未完了：'+e.message;}
+  finally{busy=false;}
+ });
+ $('productionRecreateStart').addEventListener('click',async()=>{
+  const checked=recreateEvidence,x=active();if(!checked||!x||busy)return;
+  const {next,previous}=checked;
+  if(x.snapshot.eventId!==next.id||localStorage.getItem(key(next.id))!==previous)return;
+  if(!window.confirm('旧試合がSSで削除済みであることを確認しましたか？ 新しい'+next.matchIds.length+'試合へ本番再登録します。'))return;
+  busy=true;$('productionRecreateStart').disabled=true;
+  try{
+   const latest=await inspect();
+   if(latest.id!==next.id||latest.teamId!==next.teamId||
+      JSON.stringify(latest.matchIds)!==JSON.stringify(next.matchIds)||
+      JSON.stringify({...latest.plan,request_id:next.plan.request_id})!==JSON.stringify(next.plan))
+    throw Error('正式試合または登録内容が変更されました。再確認してください');
+   // Record the new ID before any network mutation; unknown replies must not be resent.
+   localStorage.setItem(key(next.id),next.plan.request_id);
+   recreateEvidence=null;
+   try{
+    await post('/production/batch/recreate',{...next.plan,
+     previous_request_id:previous,
+     confirm_recreation:'PRODUCTION EVENT RECREATE DELETED FIXTURES'});
+   }catch(e){
+    status('再登録の送信結果が不確定です：'+e.message+'。自動再送しません。進捗を確認してください。');
+    return;
+   }
+   await refresh();
+  }catch(e){status('再登録を停止：'+e.message);}
+  finally{busy=false;}
+ });
  $('productionRefresh').addEventListener('click',refresh);
  $('productionDecisionSend').addEventListener('click',async()=>{
   const x=active(),job=lastJob;if(!x||busy||job?.status!=='needs_decision')return;
