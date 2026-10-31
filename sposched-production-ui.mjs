@@ -5,7 +5,7 @@ import {verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worke
 import {prepareIndependentProductionBatch,validateIndependentProductionEvidence} from './sposched-production-independent.mjs';
 import {describeOfficialFixtures} from './sposched-fixture-layout.mjs';
 import {verifyIndependentWorkerCompletion} from './sposched-worker-independent.mjs';
-import {makeProductionSubmission,storeProductionSubmission,readProductionSubmission,verifyProductionSubmission}
+import {makeProductionSubmission,storeProductionSubmission,readProductionSubmission,verifyProductionSubmission,productionSubmissionKey}
  from './sposched-production-submission.mjs?v=production-submission1';
 
 export function installProductionUI({current,read,normalize,onComplete}){
@@ -106,6 +106,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   busy=true;$('productionStart').disabled=true;
   try{
    assertConnection(earlier.scope);
+   const priorReceipt=localStorage.getItem(productionSubmissionKey(eventId));
    const latest=await inspect();
    const normalized={...latest.plan,request_id:earlier.plan.request_id};
    if(!active()||active().snapshot.eventId!==eventId||
@@ -114,6 +115,12 @@ export function installProductionUI({current,read,normalize,onComplete}){
      JSON.stringify(normalized)!==JSON.stringify(earlier.plan))
     throw Error('本番の試合IDまたは登録予定が変わりました。再度確認してください');
    assertConnection(earlier.scope);
+   // Another tab may have claimed this event while official reads awaited.
+   // Preserve its evidence. This check is not an atomic cross-tab lock; the
+   // Worker event journal remains the authority for simultaneous submissions.
+   if(localStorage.getItem(key(eventId))||
+      localStorage.getItem(productionSubmissionKey(eventId))!==priorReceipt)
+    throw Error('別のタブで本番ジョブの記録が変更されました。再送せず進捗を確認してください');
    // Remember the request BEFORE sending. Unknown outcome cannot be retried.
    storeProductionSubmission(localStorage,earlier.submission);
    localStorage.setItem(key(eventId),earlier.plan.request_id);
