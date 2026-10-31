@@ -15,7 +15,7 @@ const snapshot={event_id:E,
   left_score:0,right_score:0,goals:[]})),
  roster:{'Team 1':['Taro Sato','達夫','Akihiro Sato','satoshi','A'],'Team 2':['B'],'Team 3':['C'],'Team 4':['D']}
 };
-let releaseReady=false,productionWrites=0,checks=0,otherReads=0;
+let releaseReady=false,productionWrites=0,checks=0,otherReads=0,failedInspectReads=0;
 const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 // A locally confirmed Gemini audio goal exists in PeakStamp before SS is opened.
@@ -47,6 +47,11 @@ await page.route('**/*',async route=>{
   catch{return route.fulfill({status:404,body:'Missing local asset '+path})}
  }
  assert.equal(url.host,'shoot-sunday-sync.yomax1979.workers.dev');
+ if(route.request().method()==='POST'&&url.pathname==='/production/batch/inspect'){
+  failedInspectReads++;
+  return route.fulfill({status:503,json:{error:{message:'Simulated offline inspection'}},
+   headers:{'Access-Control-Allow-Origin':'*'}});
+ }
  if(route.request().method()!=='GET'){productionWrites++;throw Error('Unexpected production mutation');}
  let response;
  if(url.pathname==='/events')response={events:[{event_id:E,date:'2026-11-01',name:'Sunday',status:'target'}]};
@@ -116,6 +121,28 @@ try{
  assert.ok(checks>=2);
  assert.equal(productionWrites,0);
  assert.equal(otherReads,0);
+ // A previous generation exists, but its read-only status request fails.
+ // The UI must not offer a new write or discard the persisted request ID.
+ await page.evaluate(({eventId})=>{
+  localStorage.setItem('peakstamp:production:worker-batch:'+eventId,'44444444-4444-4444-8444-444444444444');
+  localStorage.setItem('peakstamp:production:worker-batch:'+eventId+':previous',
+   '55555555-5555-4555-8555-555555555555');
+ },{eventId:E});
+ await page.reload();
+ await page.fill('#ssBridgeToken','production-bridge-mock-only');
+ await page.click('#ssLoadEvents');
+ await page.locator('#ssLoadSnapshot').waitFor({state:'visible'});
+ await page.click('#ssLoadSnapshot');
+ await page.locator('#productionPanel').waitFor({state:'visible'});
+ await page.waitForFunction(()=>document.getElementById('productionStatus').textContent.includes('Simulated offline inspection'));
+ assert.equal(await page.locator('#productionStart').isDisabled(),true);
+ assert.equal(await page.locator('#productionRecreate').isVisible(),false);
+ assert.match(await page.locator('#productionStatus').innerText(),/旧ジョブID/);
+ assert.equal(await page.evaluate(eventId=>localStorage.getItem(
+  'peakstamp:production:worker-batch:'+eventId),E),
+  '44444444-4444-4444-8444-444444444444');
+ assert.ok(failedInspectReads>=1);
+ assert.equal(productionWrites,0,'offline inspection must never trigger a write');
  assert.deepEqual(errors,[]);
  console.log('PASS: mobile production gate blocks unavailable targets, allows only reviewed current target; zero writes');
 }finally{await browser.close()}
