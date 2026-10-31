@@ -1880,11 +1880,19 @@ function renderAutoSummary(){
   $('workerBatchReconnect').hidden=!reattach;
   $('workerBatchReconnect').disabled=batchBusy||autoBusy||workerBatchPolling;
   $('workerBatchRecreate').hidden=!retired||unresolved;
-  $('workerBatchRecreate').disabled=batchBusy||autoBusy||workerBatchPolling;
+  $('workerBatchRecreate').disabled=Boolean(error||batchBusy||autoBusy||workerBatchPolling);
   $('workerBatchRecreate').textContent='旧'+(oldJob?.fixture_count||4)+'試合を履歴に保存して新'+official.count+'試合をTEST登録';
   $('workerBatchRecreateHint').hidden=!retired;
+  // Old sent manual goals are preserved as historical evidence, never
+  // silently replayed just because the same event has NEW match UUIDs.
+  // The operator must intentionally enter new goals after a reset.
+  const oldManual=manualGoals.filter(g=>g.sent===true).length;
+  const newManual=manualGoals.filter(g=>g.sent!==true).length;
   $('workerBatchRecreateHint').textContent='旧Worker登録は再送せず履歴に保存します。新'+official.count+
-   '試合の公式ID・0-0・旧試合削除をWorkerが再確認してから新規登録します。';
+   '試合の公式ID・0-0・旧試合削除をWorkerが再確認してから新規登録します。'+
+   (oldManual?
+    ' 前回登録済みの手動ゴール'+oldManual+'件は履歴に残りますが、自動再登録しません。'+
+    '今回は新規入力した'+newManual+'件のみが対象です。必要な得点は上の「＋1ゴール追加する」で入力してください。':'');
   $('workerBatchRefresh').hidden=!previous;
   $('workerBatchRecover').hidden=!unresolved;
   $('autoBeforeRun').textContent=unresolved?'⚠ 前回の送信結果を照合してください':
