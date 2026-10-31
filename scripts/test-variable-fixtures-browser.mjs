@@ -127,7 +127,8 @@ try{
       headers:{'Access-Control-Allow-Origin':'*'}});
     const beforeShift=scenario.rosterShift&&snapshotGets===1;
     return route.fulfill({status:200,json:{
-     event_id:E,roster_source:'official-current-event-teams',
+     event_id:E,event:{name:'TEST event',date:'2026-10-30'},
+     roster_source:'official-current-event-teams',
      matches:scenario.fixtures,
      roster:beforeShift?
       {Team1:['OldCaptain'],Team2:['Jiro'],Team3:['Saburo']}:
