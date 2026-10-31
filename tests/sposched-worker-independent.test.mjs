@@ -333,3 +333,49 @@ test('missing current-roster proof blocks even zero-goal independent match finis
  }
 });
 
+
+test('same 2-team 2-match event can be safely re-created as 2 NEW official match IDs',()=>{
+ const old={environment:'STAGING ONLY',event_id:eventId,
+  status:'completed',layout_mode:'independent-fixtures-v1',
+  fixture_count:2,request_id,
+  fixture_ids:{1:mid(11),2:mid(12)}};
+ const clean=make(2,{1:{match_id:mid(31)},2:{match_id:mid(32)}});
+ assert.equal(hasDifferentIndependentGeneration(old,clean),true,
+  'same fixture count can still be a different generation');
+ assert.equal(isRetiredIndependentJob(old,clean),true);
+ const diagnostic=describeCompletedWorkerMismatch(old,clean,requestId);
+ assert.equal(diagnostic.changed,true);
+ assert.equal(diagnostic.workerCount,2);
+ assert.equal(diagnostic.currentCount,2);
+ assert.equal(diagnostic.known,2);
+ assert.deepEqual(diagnostic.differentIds,[1,2]);
+ assert.equal(diagnostic.localMatches,true);
+ assert.match(diagnostic.detail,/旧2試合.*現在のSS公式は2試合/);
+ // A merely reset score with reused official match IDs must fail closed.
+ const sameIds=make(2,{1:{match_id:mid(11)},2:{match_id:mid(12)}});
+ assert.equal(isRetiredIndependentJob(old,sameIds),false);
+ assert.equal(hasDifferentIndependentGeneration(old,sameIds),false);
+ // Missing old IDs, nonzero score or finished fixture also block recreation.
+ assert.equal(isRetiredIndependentJob({...old,fixture_ids:{1:mid(11)}},clean),false);
+ assert.equal(isRetiredIndependentJob(old,make(2,{1:{match_id:mid(31),left_score:1},
+  2:{match_id:mid(32)}})),false);
+ assert.equal(isRetiredIndependentJob(old,make(2,{1:{match_id:mid(31),status:'finished'},
+  2:{match_id:mid(32)}})),false);
+});
+
+test('new manual score UI keeps old 2-to-2 fixture recreation path and cannot start new job over old marker',()=>{
+ const html=readFileSync(new URL('../sposched-review.html',import.meta.url),'utf8');
+ const indicator=html.indexOf("const retired=Boolean(previous&&oldJob&&isRetiredIndependentJob");
+ assert.ok(indicator>0);
+ const recreate=html.indexOf("$('workerBatchRecreate').addEventListener('click'");
+ assert.ok(recreate>indicator);
+ const handler=html.slice(recreate,html.indexOf("$('workerBatchRun').addEventListener('click'",recreate));
+ assert.match(handler,/isRetiredIndependentJob\(old,fresh\)/);
+ assert.match(handler,/assertIndependentStagingWorkerReady\(\{recreation:true\}\)/);
+ assert.match(handler,/postStaging\('\/staging\/batch\/recreate'/);
+ assert.match(handler,/previous_request_id:oldRequestId/);
+ assert.match(handler,/manualFinishWinner\(fresh.eventId,f,manualTieWinners\)/,
+  'new video-free results preview must be retained on reset recreation');
+ assert.match(html,/workerBatchRun'\)\.disabled=Boolean\(error\|\|previous/,
+  'main independent start remains blocked when old journal marker exists');
+});
