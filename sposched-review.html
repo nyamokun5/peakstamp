@@ -1853,6 +1853,10 @@ function renderAutoSummary(){
       '–'+projected.right+'（ゴール'+projected.goals.length+'件）':''):
      '状態未確認 ('+(m.status||'不明')+')'),
     'fixture-status'));
+   if(projected?.goals.length)
+    root.append(node('p',projected.goals.map(g=>
+     g.scorer+'（'+g.team+'）'+(g.assist?'／アシスト '+g.assist:'／アシストなし'))
+     .join('、'),'small'));
   }
   let error='';
   try{
