@@ -40,6 +40,22 @@ select{width:100%}input[type=number]{width:90px}input[type=checkbox]{width:18px;
 .error{color:#ffd1b7}a{color:#a9f8d6}summary{cursor:pointer;font-size:12px}
 details{margin:12px 0}.status{font-weight:700;color:#c7f5dc}
 .quick-goal{padding:10px 12px;border:1px solid #476775;border-radius:10px;background:#193446;margin:8px 0}
+#manualEntryPanel{padding:14px;background:#102e35;border:1px solid #5da78f;border-radius:13px;margin:12px 0}
+#manualEntryPanel h3{margin:2px 0 9px}
+#manualEntryAdd{width:100%;min-height:51px;font-size:15px;margin-top:12px}
+.manual-entry-goal{padding:12px;margin:10px 0;border:1px solid #4b7480;border-radius:11px;background:#193b45}
+.manual-entry-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.manual-entry-head strong{font-size:15px}
+.manual-entry-head button{min-height:36px;font-size:12px;background:#305361}
+.manual-entry-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.manual-entry-fields .wide{grid-column:1/-1}
+.manual-entry-fields select{min-height:46px;font-size:16px}
+.manual-entry-score{padding:10px 12px;border-bottom:1px solid #41616c}
+.manual-entry-score strong{display:block;font-size:15px;color:#e2f9ed}
+.manual-entry-score .small{margin:4px 0}
+.manual-entry-score select{min-height:43px}
+#manualEntryReview{margin-top:12px;min-height:49px;width:100%;font-size:15px}
+@media(max-width:420px){.manual-entry-fields{grid-template-columns:1fr}}
 .quick-goal-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .quick-goal-top strong{font-size:14px}.quick-goal .quick-meta{font-size:12px;color:#cadde2;margin:6px 0}
 .quick-ready{color:#a4f4cc}.quick-held{color:#ffcd9a}
@@ -211,6 +227,17 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <p id="quickTestHelp" class="step-help">AI提案とSS登録予定を確認してください。<strong>別チームの得点者・アシスト者はWorkerがその試合の助っ人として登録してから、ゴールとアシストを記録</strong>します。3位決定戦・決勝は準決勝の正式結果が確定してから登録します。得点チームが不明な場合だけ選択してください。</p>
  <p id="quickProductionHelp" class="step-help" hidden>AI候補と登録予定を確認してください。修正が必要な場合は「修正する」を押してください。<strong>まだSSには送信されません。</strong></p>
  <p id="quickSummary" class="quick-summary" role="status" aria-live="polite"></p>
+ <section id="manualEntryPanel" aria-label="動画なしのゴール手動入力" hidden>
+  <h3>動画なしでゴールを入力（TEST）</h3>
+  <p>①試合と得点者を選択 → ②必要な分だけ追加 → ③自動計算されたスコアを最後に確認して登録。ゴールごとの承認チェックやスコアの手入力は不要です。</p>
+  <p id="manualEntryEvent" class="small"></p>
+  <div id="manualEntryRows" aria-label="追加したゴールの一覧"></div>
+  <button id="manualEntryAdd" class="primary" type="button">＋ 1ゴール追加する</button>
+  <p id="manualEntryState" class="small" role="status" aria-live="polite"></p>
+  <h3>試合ごとのスコア（自動集計）</h3>
+  <div id="manualEntryPreview" aria-label="ゴールから計算した試合結果"></div>
+  <button id="manualEntryReview" class="primary" type="button">スコアを確認して最終登録へ ↓</button>
+ </section>
  <div id="ssFixtureOverview" class="grid-item" aria-label="SS公式の試合一覧"></div>
  <button id="quickResetBulkReview" type="button" hidden>試合作り直し後のゴールをまとめて試合番号確認（書き込みなし）</button>
  <p id="quickResetBulkStatus" class="small" role="status" aria-live="polite"></p>
@@ -360,16 +387,18 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <p>実況の対戦カードと当日の選手名簿から試合・得点者・アシストを初期選択します。<strong>動画にゴールがなくても、手動で新規追加できます。</strong> 選手と試合を確認して登録してください。</p>
  <div id="manualAddWrap" class="grid-item" hidden>
   <strong>動画がない場合の新規ゴール登録</strong>
-  <p>元動画がなくてもTEST用のゴールを作れます。追加後に試合番号・得点者・アシスト・得点チームを選び、「このゴールの試合・選手を確認した」にチェックしてください。独立試合ならWorkerがゴール登録→試合終了を一括処理します。4試合トーナメントなど一部の形式では個別登録のみです。本番には送信しません。</p>
+  <p>独立試合の通常操作は上の「動画なしでゴールを入力」を使ってください。ここは動画ゴールの詳細確認・特殊ケースの編集用です。独立試合のゴールとスコアは最終登録時に一括処理されます。</p>
   <button id="manualAddGoal" class="primary" type="button">＋ 新規ゴールを手動追加</button>
   <p id="manualAddStatus" class="small" role="status" aria-live="polite"></p>
   <p id="manualEventScope" class="small" role="status"></p>
  </div>
  <nav id="goalJump" class="line" aria-label="照合するゴールを切り替え"></nav>
  <div id="goalRows"></div>
- <h3>試合スコアを修正する場合（任意）</h3>
- <p>得点集計の見逃しを考慮して、ゴール件数からスコアを勝手に決めません。試合の得点を更新する場合にだけ選択し、明示的に確認します。未選択ならゴール登録のみ。</p>
- <div id="matchRows"></div>
+ <details class="help" id="legacyScoreEdit">
+  <summary>例外時のスコア修正（従来方式・通常は不要）</summary>
+  <p>独立試合のWorker一括登録では、登録するゴールからスコアが自動で計算されます。この例外用入力欄は通常のゴール一括登録には使用しません。</p>
+  <div id="matchRows"></div>
+ </details>
  <div class="line"><button class="primary" id="buildPlan">確認した登録内容を作成</button><span id="reviewStatus" class="small"></span></div>
  <button id="quickBackBottom" class="primary quick-main" type="button">← ゴール一覧に戻る</button>
 </section>
@@ -425,6 +454,7 @@ import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,se
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
+import {summarizeManualFixtureEntry,manualTieKey,manualFinishWinner} from './sposched-manual-entry.mjs';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy,retiredMatchRecoveryPolicy,archiveRetiredAttempt} from './sposched-write-journal.mjs?v=ss-recovery3';
 import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=helper-wait-side1';
 import {validateResetGoalRebinding} from './sposched-reset-fixture-review.mjs?v=reset-bulk1';
@@ -442,6 +472,7 @@ const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
 let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='',manualGoals=[];
+const manualTieWinners=new Map(); // key includes SS event, official UUID and auto-counted score
 let loadedFromStagingDirect=false,lastPayload=null,approvedAction=null,previewToken='',previewOperationKey='';
 let loadedFromProductionDirect=false;
 let ssConnectionRevision=0;
@@ -966,7 +997,11 @@ function renderGoals(){
   }
   const footer=node('label','','line');
   footer.append(confirm,node('strong','このゴールの試合・選手を確認した'));
-  article.append(registered,updateFields,footer,warn,duplicateWrap);
+  // Manual independent goals are reviewed as a single fixture/score plan.
+  // The detailed legacy form stays available, but has no per-goal approval.
+  if(g.manual&&!describeOfficialFixtures(snapshot).automaticFourMatch)
+   article.append(registered,updateFields,warn,duplicateWrap);
+  else article.append(registered,updateFields,footer,warn,duplicateWrap);
   $('goalRows').append(article);updateDuplicate();
  }
 }
