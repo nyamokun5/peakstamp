@@ -1373,10 +1373,10 @@ function renderQuick(){
  officialRoot.append(officialDetails);
  if(staging){
   $('autoRegisterHeading').textContent=officialLayout.automaticFourMatch
-   ?'4. 確認済みのゴールと4試合をTESTへ登録':'4. SSに登録された試合へゴールを反映';
+   ?'4. 確認済みのゴールと4試合をTESTへ登録':'4. ゴールと自動計算スコアを最終確認して一括登録';
   $('autoRegisterHelp').textContent=officialLayout.automaticFourMatch
    ?'4試合トーナメントはWorkerで一括登録します。ほかの操作は予備操作です。'
-   :'SSで対戦がすべて確定した独立試合は、確認後にWorkerで一括登録できます。対戦待ち・順位決定戦は個別確認してください。';
+   :'上で全ゴールと試合結果を確認したら、下のTEST登録ボタンを一度だけ押します。Workerがゴールを登録し、そのスコアで試合を終了します。';
   $('quickTestHelp').textContent=officialLayout.automaticFourMatch
    ?'AI候補と登録予定を確認してください。3位決定戦・決勝は準決勝終了後に正式な対戦相手を再取得します。'
    :'SSから取得した試合番号・対戦チームを確認してください。同じ対戦カードが複数回ある場合、試合番号を必ず確認してください。';
@@ -1384,12 +1384,12 @@ function renderQuick(){
   for(const id of ['quickIndividualTestTools','individualFinishTools']){
    const details=$(id);
    if(details.dataset.eventId!==snapshot.eventId||details.dataset.fixtureMode!==fixtureMode){
-    details.open=!officialLayout.automaticFourMatch;
+    details.open=false; // fallback controls remain collapsed by default
     details.dataset.eventId=snapshot.eventId;details.dataset.fixtureMode=fixtureMode;
    }
   }
   $('quickIndividualTestTools').querySelector('summary').textContent=officialLayout.automaticFourMatch
-   ?'個別ゴール登録（従来方式）':'確認済みのゴールをまとめてTEST登録（試合終了は別操作）';
+   ?'個別ゴール登録（従来方式）':'例外時：個別ゴール登録（通常はWorker一括登録）';
  }
  // Reuse the exact TEST AI/roster review. Production write controls remain separate.
  $('quickEnvironmentBadge').textContent=staging?'テストSS':'本番・未送信';
@@ -1398,7 +1398,9 @@ function renderQuick(){
  $('autoRegisterHeading').hidden=!staging;
  $('autoRegisterHelp').hidden=!staging;
  $('quickIndividualTestTools').hidden=!staging;
- $('quickEdit').textContent=staging?'詳細編集・手動追加・既存ゴール修正':'詳しく修正する';
+ $('quickEdit').textContent=staging?
+  (officialLayout.automaticFourMatch?'詳細編集・手動追加・既存ゴール修正':
+   '詳細設定・既存ゴールの修正（通常は不要）'):'詳しく修正する';
  const items=quickGoalDecisions(snapshot,rows);
  const resetCount=rows.filter(r=>r.fixtureIdentityChanged===true).length;
  $('quickResetBulkReview').hidden=!staging||resetCount===0||snapshot.matches.length!==4;
@@ -1433,7 +1435,11 @@ function renderQuick(){
  const displayItems=items.slice().sort((a,b)=>
   (rank[a.state]??2)-(rank[b.state]??2)||a.index-b.index);
  for(const item of displayItems){
-  const row=rows[item.index],el=node('div','','quick-goal'),top=node('div','','quick-goal-top');
+  const row=rows[item.index];
+  // Manual goals are now edited and reviewed above, not repeated as
+  // confusing AI-vs-SS cards in the older video workflow.
+  if(staging&&!officialLayout.automaticFourMatch&&row.goal?.manual)continue;
+  const el=node('div','','quick-goal'),top=node('div','','quick-goal-top');
   el.id='quick-goal-'+(item.index+1);
   if(['attention','duplicate','manual-ss'].includes(item.state))el.classList.add('needs-fix');
   const match=snapshot.matches.find(m=>m.seq===Number(item.seq));
@@ -1827,7 +1833,7 @@ function renderAutoSummary(){
   $('workerBatchJumpToGoal').hidden=true;
   $('autoRun').disabled=true;
   $('autoRun').textContent=hasFixtures?'この形式はWorkerで個別の試合を登録します':'試合枠がないため登録できません';
-  $('workerBatchRun').textContent='SS公式の'+official.count+'試合をまとめてTEST登録';
+  $('workerBatchRun').textContent='このゴール・スコアで'+official.count+'試合をTEST登録（最終確認）';
   $('workerBatchArea').querySelector('p.small').textContent=
    'WorkerがSS公式の試合IDを毎回照合し、確認済みのゴール（動画なし・手動追加も可）と試合終了を安全に登録します。通信が切れた場合は進捗を再取得します。';
   const root=$('autoOutline');root.replaceChildren();
