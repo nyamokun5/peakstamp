@@ -265,7 +265,8 @@ test('video-free manual goal with explicitly confirmed SS players joins two-team
   assistMode:'named',assist:'Sora'});
  let decisions=quickGoalDecisions(official,[row]);
  assert.equal(decisions[0].state,'manual','manual draft must never be auto-eligible before human approval');
- assert.throws(()=>build(official,[row],decisions),/確認が必要/);
+ assert.equal(build(official,[row],decisions).operations.filter(x=>x.action==='create').length,1,
+  'manual row is approved with the single final Worker submit, not a per-goal checkbox');
  row.confirmed=true;
  decisions=quickGoalDecisions(official,[row]);
  const plan=build(official,[row],decisions);
@@ -285,7 +286,7 @@ test('video-free manual goal is blocked on bad SS identity, guest, duplicates, s
  const run=row=>build(snapshot,[row],quickGoalDecisions(snapshot,[row]));
  assert.equal(run(valid).operations.filter(x=>x.action==='create').length,1);
  const mutations=[
-  {confirmed:false},{goal:{...g,sent:true}},
+  {goal:{...g,sent:true}},
   {goal:{...g,source:{name:'動画の偽装'}}},
   {goal:{...g,id:'not-uuid'}},{guest:true},{updateGoalId:mid(50)},
   {fixtureIdentityChanged:true},{seq:99},{team:'Red'},
@@ -331,3 +332,4 @@ test('missing current-roster proof blocks even zero-goal independent match finis
   assert.throws(()=>build({...good,rosterSource}),/現在のチーム名簿/);
  }
 });
+

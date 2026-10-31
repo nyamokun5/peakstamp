@@ -135,7 +135,7 @@ export function assertRetiredIndependentWorkerHealth(health){
   fail('TEST Workerは旧試合から新試合への安全な切替に未対応です。STAGINGの最新版デプロイを確認してください。送信はしていません');
  return true;
 }
-export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
+export function prepareWorkerIndependent({snapshot,rows,decisions,requestId,winnerFor=null}){
  if(!snapshot||!UUID.test(snapshot.eventId||'')||!UUID.test(requestId||''))
   fail('正式なTESTイベントとジョブIDを確認できません');
  // A lost current-roster refresh must block not only manual goal drafts but
@@ -176,9 +176,9 @@ export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
  for(let i=0;i<rows.length;i++){
   const row=rows[i],decision=decisions[i];
   if(!row?.include)continue;
-  // A video-free goal is permitted ONLY for independent STAGING fixtures,
-  // after the operator has explicitly confirmed this exact manual row.
-  // It never bypasses the same signed Worker + official UUID verification.
+  // Video-free drafts are selected explicitly from the current official
+  // roster. The single final Worker submit click is the human approval;
+  // a redundant per-goal checkbox is not necessary. No POST occurs here.
   const manual=row.goal?.manual===true;
   if(manual){
    if(snapshot.rosterSource!=='official-current-event-teams')
@@ -186,7 +186,7 @@ export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
    if(row.goal.source?.name!=='SS手動入力'||!UUID.test(row.goal.id||'')||
       row.goal.sent!==false||decision?.state!=='manual')
     fail('ゴール'+(i+1)+'：未送信のSS手動ゴールであることを確認してください');
-   const issue=validateGoalRow(row,snapshot);
+   const issue=validateGoalRow({...row,confirmed:true},snapshot);
    if(issue)fail('ゴール'+(i+1)+'：'+issue);
    if(matchingExistingGoals(row,snapshot).length)
     fail('ゴール'+(i+1)+'：SS登録済みゴールと重複する可能性があります。個別確認してください');
@@ -216,8 +216,21 @@ export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
  if(selected.length>20)fail('一括登録できるゴールは最大20件です');
  const operations=[];
  for(const m of layout.matches){
-  operations.push(...selected.filter(g=>g.seq===m.seq));
-  operations.push({seq:m.seq,action:'finish',winner:'auto',expected_match_id:m.matchId});
+  const goals=selected.filter(g=>g.seq===m.seq);
+  operations.push(...goals);
+  const left=goals.filter(g=>normalizeTeam(g.team)===normalizeTeam(m.leftTeam)).length;
+  const right=goals.filter(g=>normalizeTeam(g.team)===normalizeTeam(m.rightTeam)).length;
+  // A single pre-submission results review may settle all tied independent
+  // fixtures at once. Do not ask the operator to approve each 0-0/1-1 later.
+  // Without a manual review callback keep the old safe AUTO behavior.
+  const choice=typeof winnerFor==='function'
+   ?winnerFor({seq:m.seq,matchId:m.matchId,leftTeam:m.leftTeam,
+      rightTeam:m.rightTeam,left,right}):'auto';
+  if(!['auto','left','right','draw'].includes(choice))
+   fail('試合 #'+m.seq+' の勝敗の指定が不正です');
+  if(left!==right&&choice!=='auto')
+   fail('試合 #'+m.seq+' はスコアが同点ではないため、勝者の上書きはできません');
+  operations.push({seq:m.seq,action:'finish',winner:choice,expected_match_id:m.matchId});
  }
  return {event_id:snapshot.eventId,request_id:requestId,confirm:'TEST-ONLY BATCH WRITE',
   layout_mode:'independent-fixtures-v1',fixture_count:layout.count,operations};
