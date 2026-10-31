@@ -133,7 +133,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
       result.request_id!==requestId||result.inspection_only!==true)
     throw Error('保存済みの本番ジョブの識別情報が不一致');
    lastJob=result;
-   $('productionRecreate').hidden=result.status!=='completed';
+   $('productionRecreate').hidden=result.status!=='completed'||Boolean(localStorage.getItem(key(id)+':previous'));
    const stateLabel={running:'登録中',completed:'登録完了',blocked:'要確認',
     needs_decision:'勝者の指定が必要',paused:'一時停止'}[result.status]||result.status;
    status(stateLabel+'：'+result.completed+'/'+result.total+'件'+
