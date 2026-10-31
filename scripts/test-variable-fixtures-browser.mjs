@@ -257,6 +257,7 @@ try{
     assert.match(await page.locator('#manualEntryAdd').innerText(),/2点目/);
     await page.click('#manualEntryAdd');
     assert.equal(snapshotGets,3,'every new goal refreshes the SS current roster');
+    await page.locator('.manual-entry-goal').nth(1).waitFor();
     assert.equal(await page.locator('.manual-entry-goal').count(),2);
     await page.locator('select[aria-label="ゴール2の得点者"]').selectOption('Jiro');
     assert.match(await page.locator('#manualEntryPreview').innerText(),/Team1 1 – 1 Team2/);
