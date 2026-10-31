@@ -163,8 +163,8 @@ try{
     assert.equal(await page.locator('#legacyBatchDetails').isVisible(),false,
      'generic fixture schedules must never expose legacy knockout register');
    }
-   assert.equal(await page.locator('#quickIndividualTestTools').getAttribute('open'),
-    scenario.automatic?null:'',scenario.label+' goal tools visibility');
+   assert.equal(await page.locator('#quickIndividualTestTools').getAttribute('open'),null,
+    scenario.label+' exception-only goal tools should be collapsed in normal flow');
    if(scenario.draw){
     assert.equal(await page.locator('#finishMatch').inputValue(),'1');
     assert.equal(await page.locator('#finishWinner option[value="draw"]').isEnabled(),true);
