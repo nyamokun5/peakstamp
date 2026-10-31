@@ -58,6 +58,16 @@ export function normalizeSpoSnapshot(raw){
   }
  }
  const roster=obj.roster&&typeof obj.roster==='object'?obj.roster:{};
+ // Preserve only the producer's explicit evidence on this same snapshot.
+ // Roster presence, wrapper metadata or a legacy imported roster is not proof
+ // of a fresh authenticated event-team read (the UI also checks its connection).
+ const rosterSource=obj.kind==='peakstamp-sposched-snapshot'&&obj.version===1&&
+  obj.source==='SpoSched Match API v1.3'&&
+  obj.roster_source==='official-current-event-teams'&&
+  obj.roster&&typeof obj.roster==='object'&&!Array.isArray(obj.roster)&&
+  Object.entries(obj.roster).every(([team,names])=>team.trim()&&Array.isArray(names)&&
+   names.every(name=>typeof name==='string'&&name.trim()))
+  ?'official-current-event-teams':null;
  const players=[...new Set([
   ...Object.values(roster).flatMap(x=>Array.isArray(x)?x.map(string):[]),
   ...matches.flatMap(m=>m.existingGoals.flatMap(g=>[g.scorer,g.assist]))
@@ -65,7 +75,7 @@ export function normalizeSpoSnapshot(raw){
  const playerTeam=new Map();
  for(const [team,names] of Object.entries(roster))for(const name of Array.isArray(names)?names:[])
   playerTeam.set(string(name),string(team));
- return {eventId,eventName,matches,players,roster,playerTeam};
+ return {eventId,eventName,matches,players,roster,rosterSource,playerTeam};
 }
 export function selectPlayerCandidates(text,snapshot,team='',limit=7){
  // Use the SAME Japanese/romanized roster inference as the compact review.

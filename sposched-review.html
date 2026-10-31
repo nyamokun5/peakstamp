@@ -418,9 +418,10 @@ import {jobControlPayload} from './sposched-job-control.mjs?v=pause1';
 import {auditCurrentTestFixtureGates} from './sposched-gate-audit.mjs?v=gate-audit1';
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
-import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=composite-tatsuo1';
+import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=production-roster-evidence1';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
+import {reconcileProductionManualGoals} from './sposched-production-submission.mjs?v=production-submission1';
 import {makeManualGoal,manualDraftEnvironment,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual-production1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy,retiredMatchRecoveryPolicy,archiveRetiredAttempt} from './sposched-write-journal.mjs?v=ss-recovery3';
 import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=helper-wait-side1';
@@ -429,7 +430,7 @@ import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
-import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
+import {installProductionUI} from './sposched-production-ui.mjs?v=production-submission1';
 import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 import {clearBridgeSession,restoreBridgeSession,rememberBridgeSession} from './sposched-bridge-session.mjs?v=bridge-tab1';
@@ -2512,14 +2513,24 @@ $('finishRecover').addEventListener('click',async()=>{
 });
 const productionUI=installProductionUI({
  current:()=>({active:loadedFromProductionDirect&&$('ssEnvironment').value==='production',
-  snapshot,rows,decisions:snapshot?quickGoalDecisions(snapshot,rows):[]}),
+  connectionRevision:ssConnectionRevision,snapshot,rows,decisions:snapshot?quickGoalDecisions(snapshot,rows):[]}),
  read:path=>{
   if($('ssEnvironment').value!=='production'||!loadedFromProductionDirect)
    throw Error('本番の公式データが読み込まれていません');
   return fetchSS(path);
  },
  normalize:normalizeSpoSnapshot,
- onComplete:next=>{snapshot=next;rebuild({preserveEdits:true});}
+ onComplete:(next,completion)=>{
+  if(manualEnvironment()!=='production'||snapshot?.eventId!==completion.eventId||
+     next.eventId!==completion.eventId)throw Error('本番の完了イベントが変更されました');
+  const reconciled=reconcileProductionManualGoals(manualGoals,completion.submission,
+   completion.eventId,completion.requestId);
+  // Persist before replacing the current review; storage failure remains visible
+  // and never clears the request marker or permits another submission.
+  storeManualGoals(localStorage,'production',completion.eventId,reconciled.goals);
+  manualGoals=reconciled.goals;snapshot=next;
+  rebuild({preserveEdits:true,completedKeys:reconciled.completedKeys});
+ }
 });
 $('ssEnvironment').addEventListener('change',()=>{
  ssConnectionRevision++;

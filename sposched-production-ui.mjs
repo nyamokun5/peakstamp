@@ -5,6 +5,8 @@ import {verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worke
 import {prepareIndependentProductionBatch,validateIndependentProductionEvidence} from './sposched-production-independent.mjs';
 import {describeOfficialFixtures} from './sposched-fixture-layout.mjs';
 import {verifyIndependentWorkerCompletion} from './sposched-worker-independent.mjs';
+import {makeProductionSubmission,storeProductionSubmission,readProductionSubmission,verifyProductionSubmission}
+ from './sposched-production-submission.mjs?v=production-submission1';
 
 export function installProductionUI({current,read,normalize,onComplete}){
  const $=id=>document.getElementById(id);
@@ -12,7 +14,13 @@ export function installProductionUI({current,read,normalize,onComplete}){
  const active=()=>{const x=current();return x?.active&&x.snapshot?.eventId?x:null;};
  const status=v=>{$('productionStatus').textContent=v;};
  const key=id=>productionBatchStorageKey(id);
- async function post(path,body){
+ const connection=()=>{const x=active();return x?{eventId:x.snapshot.eventId,
+  revision:x.connectionRevision,token:$('ssBridgeToken').value.trim()}:null;};
+ const unchanged=scope=>{const now=connection();return Boolean(scope&&now&&
+  scope.eventId===now.eventId&&scope.revision===now.revision&&scope.token===now.token);};
+ const assertConnection=scope=>{if(!unchanged(scope))throw Error('確認中に本番の接続先・認証・イベントが変わりました');};
+ async function post(path,body,scope=connection()){
+  assertConnection(scope);
   if(!active())throw Error('本番のイベントを正式に読み込んでください');
   const token=$('ssBridgeToken').value.trim();
   if(!token)throw Error('本番用のBRIDGE_TOKENが必要です');
@@ -22,19 +30,20 @@ export function installProductionUI({current,read,normalize,onComplete}){
    body:JSON.stringify(body)
   });
   const result=await r.json();
+  assertConnection(scope);
   if(!r.ok)throw Object.assign(Error(result?.error?.message||'本番Worker HTTP '+r.status),
    {code:result?.error?.code||'upstream_error'});
   return result;
  }
  async function inspect(){
   const x=active();if(!x)throw Error('本番イベントを選択してください');
-  const id=x.snapshot.eventId;
+  const id=x.snapshot.eventId,scope=connection();
   const [release,official,latestRaw]=await Promise.all([
    read('/production/release-state?event_id='+encodeURIComponent(id)),
    read('/production/inspect?event_id='+encodeURIComponent(id)),
    read('/snapshot?event_id='+encodeURIComponent(id))
   ]);
-  if(active()?.snapshot?.eventId!==id)throw Error('確認中に本番イベントが変更されました');
+  assertConnection(scope);
   const newest=normalize(latestRaw);
   const independent=!describeOfficialFixtures(x.snapshot).automaticFourMatch;
   const validate=independent?validateIndependentProductionEvidence:validateProductionReleaseEvidence;
@@ -48,7 +57,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
    requestId:crypto.randomUUID()};
   const plan=independent?prepareIndependentProductionBatch(args):prepareProductionBatch(args);
   return {id,date:baseline.date,teamId:baseline.team_id,
-   matchIds:baseline.fixture_ids,plan};
+   matchIds:baseline.fixture_ids,plan,scope,submission:makeProductionSubmission({plan,rows:x.rows,teamId:baseline.team_id})};
  }
  function render(){
   const x=active();
@@ -96,6 +105,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   if(localStorage.getItem(key(eventId)))return;
   busy=true;$('productionStart').disabled=true;
   try{
+   assertConnection(earlier.scope);
    const latest=await inspect();
    const normalized={...latest.plan,request_id:earlier.plan.request_id};
    if(!active()||active().snapshot.eventId!==eventId||
@@ -103,10 +113,12 @@ export function installProductionUI({current,read,normalize,onComplete}){
      JSON.stringify(latest.matchIds)!==JSON.stringify(earlier.matchIds)||
      JSON.stringify(normalized)!==JSON.stringify(earlier.plan))
     throw Error('本番の試合IDまたは登録予定が変わりました。再度確認してください');
+   assertConnection(earlier.scope);
    // Remember the request BEFORE sending. Unknown outcome cannot be retried.
+   storeProductionSubmission(localStorage,earlier.submission);
    localStorage.setItem(key(eventId),earlier.plan.request_id);
    $('productionRefresh').hidden=false;evidence=null;
-   try{await post('/production/batch/start',earlier.plan);}
+   try{await post('/production/batch/start',earlier.plan,earlier.scope);}
    catch(e){status('送信結果が不確定です：'+e.message+'。再送しないで進捗を確認してください。');return;}
    await refresh();
   }catch(e){status('本番登録を停止：'+e.message);}
@@ -114,11 +126,11 @@ export function installProductionUI({current,read,normalize,onComplete}){
  });
  async function refresh(){
   const x=active();if(!x||polling)return;
-  const id=x.snapshot.eventId,requestId=localStorage.getItem(key(id));
+  const id=x.snapshot.eventId,requestId=localStorage.getItem(key(id)),scope=connection();
   if(!requestId)return;
   polling=true;$('productionRefresh').disabled=true;
   try{
-   const result=await post('/production/batch/inspect',{event_id:id,request_id:requestId});
+   const result=await post('/production/batch/inspect',{event_id:id,request_id:requestId},scope);
    if(!active()||active().snapshot.eventId!==id)return;
    if(result.environment!=='PRODUCTION'||result.event_id!==id||
       result.request_id!==requestId||result.inspection_only!==true)
@@ -142,10 +154,14 @@ export function installProductionUI({current,read,normalize,onComplete}){
    }
    if(result.status==='completed'){
     const newest=normalize(await read('/snapshot?event_id='+encodeURIComponent(id)));
+    assertConnection(scope);
+    if(localStorage.getItem(key(id))!==requestId)throw Error('保存済み本番ジョブが変更されました');
     if(result.layout_mode==='independent-fixtures-v1')
      verifyIndependentWorkerCompletion(result,newest,x.snapshot);
     else verifyCompletedWorkerSnapshot(result,newest,x.snapshot);
-    onComplete(newest);
+    const submission=readProductionSubmission(localStorage,id,requestId);
+    if(submission)verifyProductionSubmission(submission,result,newest);
+    onComplete(newest,{eventId:id,requestId,submission});
     status('✓ '+(result.fixture_count||4)+'試合の登録と終了をSSで確認しました。');
    }
    if(result.status==='running')window.setTimeout(refresh,1500);
