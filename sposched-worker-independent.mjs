@@ -138,6 +138,10 @@ export function assertRetiredIndependentWorkerHealth(health){
 export function prepareWorkerIndependent({snapshot,rows,decisions,requestId}){
  if(!snapshot||!UUID.test(snapshot.eventId||'')||!UUID.test(requestId||''))
   fail('正式なTESTイベントとジョブIDを確認できません');
+ // A lost current-roster refresh must block not only manual goal drafts but
+ // also a misleading 0-0 whole-event finish from the same stale snapshot.
+ if(snapshot.rosterSource!=='official-current-event-teams')
+  fail('SSの現在のチーム名簿を検証できません。イベントを再読み込みしてください（書き込みなし）');
  const layout=describeOfficialFixtures(snapshot);
  if(layout.automaticFourMatch||layout.count<1||layout.count>24)
   fail('この試合構成では独立試合の一括登録は使えません');
