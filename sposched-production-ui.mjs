@@ -59,7 +59,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
   $('productionPanel').hidden=!x;
   $('autoRegisterHeading').hidden=Boolean(x);
   evidence=null;recreateEvidence=null;
-  $('productionRecreate').hidden=!x||!localStorage.getItem(key(x.snapshot.eventId));
+  $('productionRecreate').hidden=!x||!localStorage.getItem(key(x.snapshot.eventId))||
+   Boolean(localStorage.getItem(key(x.snapshot.eventId)+':previous'));
   $('productionRecreateStart').disabled=true;
   $('productionRecreatePlan').hidden=true;
   $('productionPlan').hidden=true;
@@ -162,6 +163,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
    }
    if(result.status==='running')window.setTimeout(refresh,1500);
   }catch(e){
+   $('productionRecreate').hidden=true;
    const previous=localStorage.getItem(key(id)+':previous');
    status('本番ジョブ確認未了：'+e.message+(previous?'。旧ジョブID：'+previous:'')+
     '。自動再送せず、SSの登録状況を確認してください。');
