@@ -1,3 +1,42 @@
+# Current continuation checkpoint — 2026-10-31T05:05:59.605164+00:00
+
+## Resume / safety
+Active PRs already exist: PeakStamp #179 and Worker #73. Do not recreate them. Both use agent/coordinator/autonomous-development-20261031 and target the existing release candidate. Their upstream candidates #177/#71 and release branch heads remain unchanged. No existing PR merge, deploy, production SpoSched write, auth/binding change or environment setting change is authorized or performed.
+
+The Coordinator reused host subagents and exclusive file leases, waited for all implementation and QA results, fixed failed checks, obtained independent review, and integrated this bounded iteration. All write leases are released. Only Coordinator may mutate Git/shared docs/CI.
+
+## Reviewed implementation commit pair
+- PeakStamp: f22691fe645d95b8fd113a05bf69c1ed6518e612 (parent checkpoint e4a38071159672748400813649cda495373f736e)
+- Worker: 2eb8457434c5ba03b73443414913b37aa81eaf94 (parent checkpoint 079b6b1d38276b01f0c654f96ea4507e1575af64)
+This checkpoint itself is a subsequent documentation-only commit. Compare source trees before reusing evidence after a later change.
+
+## Completed this iteration
+1. Frontend records an immutable production submission receipt before POST: event/request/team, plan fingerprint and selected manual draft identities/reviews. The legacy request marker remains compatible. Unknown ACK never clears the marker or triggers resend.
+2. Verified completion checks official fixture identity/finished state and, for submitted manual independent plans, full goal team/scorer/assist and score parity. Only unchanged submitted drafts become sent. Added/edited drafts stay unsent, including after reload. Connection/event/token/revision changes after awaits fail closed. Receipt-less legacy jobs never infer which manual draft was sent. Manual knockout remains unsupported and is refused BEFORE POST/marker persistence.
+3. QA added a real public router -> DO core -> executor -> signed per-match gate -> production operation handler -> readback synthetic suite. It uses target-auto with official target GETs, distinct scores/scorers/assists for 2/3/4 fixtures, duplicate/auth/target/fixture drift refusal, lost ACK and wrong readback stop, and passive inspect after target change.
+4. Real HTML browser testing discovered a production-blocking roster contract gap: neither producer nor normalizer carried the provenance required by the independent planner. Worker now emits explicit roster_source only for structurally valid official event.teams. Frontend preserves it only from the canonical Worker envelope and valid roster; missing/stale/malformed/wrapper-outside metadata never upgrades trust. Direct authenticated snapshot checks remain separate and mandatory.
+5. Real HTML browser confirms submitted sent persistence, late unsent draft preservation, reload, exactly one start POST, staging storage separation and zero page errors. Registered in browser CI. Core/UI import cache versions updated following independent review. Updated one obsolete static post-signature assertion; runtime tests verify stronger connection scope behavior.
+
+## Final validation (local synthetic, not live production)
+- Node 22.23.4; PeakStamp full suite: 581 individual tests passed, fail/skip 0; /tmp/peakstamp-roster-evidence-suite.log.
+- Worker full suite: 82 individual tests passed, fail/skip 0; /tmp/worker-roster-evidence-suite.log.
+- Browser CI command matrix: 21/21 passed; /tmp/peakstamp-continuation-browser-*.log. Manual goal browser case also executed by full suite with PLAYWRIGHT_MODULE and CHROMIUM_PATH set.
+- Real HTML completion browser rerun passed after final core cache query update.
+- Coordinator exercised actual Worker makePeakStampSnapshot -> Frontend normalizeSpoSnapshot -> production independent planner -> Worker validateIndependentFixturePlan for 2/3/4 fixtures with manual scorer/assist: all passed. No fake rosterSource inserted between modules.
+- Worker Wrangler 4.156.0 dry-run passed, no deployment. Changed module syntax checks and both git diff --check passed.
+- Release Reviewer independently ran public router 8 cases, submission/UI harness 10, roster 3 and real HTML completion. Found cache query issue, corrected and re-reviewed. Development PR update GO; production release NO-GO. No required source fixes remain from this review.
+
+## Next bounded tasks
+- Extend realistic paired Frontend/Worker contract regression so browser submission and completion consume the actual synthetic Worker handler together, covering reload/storage failure, cross-tab request changes and 1/8/24 fixture edges. Current evidence combines real HTML with mocked worker responses and separate actual Worker executor tests; it does not claim browser-to-workerd end-to-end proof.
+- Review independent helper, same-scorer/same-assist repeated goals and manual knockout requirements before changing existing refusal rules. Keep recreation public 405 until a separately reviewed contract and explicit gate; do not port staging wholesale (#176/#70).
+- Before any release: exact-head GitHub CI/review, real workerd/Cloudflare storage, mobile device evidence, staging validation, public artifact/cache and rollback checks. None inferred from local success; no release authorized.
+
+## GitHub / environment status
+Git read/push works. GitHub API remains proxy CONNECT 403 in this older session; PR metadata/CI is not available here. #179/#73 existence was confirmed through Git PR refs. Do not repeat earlier historical instructions to add/save/publish api.github.com: the user already configured it; no environment settings were changed this iteration. Use existing PRs, and do not manufacture a duplicate after an uncertain API result. PR descriptions are prepared in docs/AUTONOMY_PR.md if API access later permits updating metadata. Remote push/ref outcomes are recorded by Coordinator's final report.
+
+---
+## Historical checkpoints (superseded above)
+
 # Autonomous Coordinator checkpoint
 
 Updated UTC: 2026-10-31T04:31:05.665177+00:00
