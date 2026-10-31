@@ -2,6 +2,9 @@
 import {prepareProductionBatch,validateProductionReleaseEvidence,productionBatchStorageKey}
  from './sposched-production-release.mjs?v=production-bridge1';
 import {verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
+import {prepareIndependentProductionBatch,validateIndependentProductionEvidence} from './sposched-production-independent.mjs';
+import {describeOfficialFixtures} from './sposched-fixture-layout.mjs';
+import {verifyIndependentWorkerCompletion} from './sposched-worker-independent.mjs';
 
 export function installProductionUI({current,read,normalize,onComplete}){
  const $=id=>document.getElementById(id);
@@ -33,12 +36,15 @@ export function installProductionUI({current,read,normalize,onComplete}){
   ]);
   if(active()?.snapshot?.eventId!==id)throw Error('確認中に本番イベントが変更されました');
   const newest=normalize(latestRaw);
-  const baseline=validateProductionReleaseEvidence(x.snapshot,official,release);
-  const updated=validateProductionReleaseEvidence(newest,official,release);
+  const independent=!describeOfficialFixtures(x.snapshot).automaticFourMatch;
+  const validate=independent?validateIndependentProductionEvidence:validateProductionReleaseEvidence;
+  const baseline=validate(x.snapshot,official,release);
+  const updated=validate(newest,official,release);
   if(JSON.stringify(baseline.fixture_ids)!==JSON.stringify(updated.fixture_ids))
    throw Error('最新の試合IDが変わりました');
-  const plan=prepareProductionBatch({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions,
-   requestId:crypto.randomUUID()});
+  const args={snapshot:x.snapshot,rows:x.rows,decisions:x.decisions,
+   requestId:crypto.randomUUID()};
+  const plan=independent?prepareIndependentProductionBatch(args):prepareProductionBatch(args);
   return {id,date:baseline.date,teamId:baseline.team_id,
    matchIds:baseline.fixture_ids,plan};
  }
@@ -73,7 +79,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
    const x=await inspect();
    evidence=x;
    const goals=x.plan.operations.filter(o=>o.action==='create').length;
-   out.textContent='開催日：'+x.date+'\n登録予定：ゴール'+goals+'件、4試合の結果';
+   out.textContent='開催日：'+x.date+'\n登録予定：ゴール'+goals+'件、'+x.matchIds.length+'試合の結果';
    $('productionAuditIds').textContent='団体ID：'+x.teamId+'\nイベントID：'+x.id+'\n'+
     x.matchIds.map((id,i)=>'第'+(i+1)+'試合：'+(id||'対戦確定後に発行')).join('\n');
    $('productionAudit').hidden=false;
@@ -134,9 +140,11 @@ export function installProductionUI({current,read,normalize,onComplete}){
    }
    if(result.status==='completed'){
     const newest=normalize(await read('/snapshot?event_id='+encodeURIComponent(id)));
-    verifyCompletedWorkerSnapshot(result,newest,x.snapshot);
+    if(result.layout_mode==='independent-fixtures-v1')
+     verifyIndependentWorkerCompletion(result,newest,x.snapshot);
+    else verifyCompletedWorkerSnapshot(result,newest,x.snapshot);
     onComplete(newest);
-    status('✓ 4試合の登録と終了をSSで確認しました。');
+    status('✓ '+(result.fixture_count||4)+'試合の登録と終了をSSで確認しました。');
    }
    if(result.status==='running')window.setTimeout(refresh,1500);
   }catch(e){status('本番ジョブ確認未了：'+e.message+'。新規送信せず進捗を確認してください。');}
