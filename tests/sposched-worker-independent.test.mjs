@@ -337,7 +337,7 @@ test('missing current-roster proof blocks even zero-goal independent match finis
 test('same 2-team 2-match event can be safely re-created as 2 NEW official match IDs',()=>{
  const old={environment:'STAGING ONLY',event_id:eventId,
   status:'completed',layout_mode:'independent-fixtures-v1',
-  fixture_count:2,request_id,
+  fixture_count:2,request_id:requestId,
   fixture_ids:{1:mid(11),2:mid(12)}};
  const clean=make(2,{1:{match_id:mid(31)},2:{match_id:mid(32)}});
  assert.equal(hasDifferentIndependentGeneration(old,clean),true,
