@@ -213,67 +213,77 @@ try{
     }
    }
    if(scenario.manual){
-    await page.click('#quickEdit');
-    if(scenario.rosterShift){
-     assert.match(await page.locator('#eventTitle').innerText(),/名簿 3名/);
-    }
-    await page.click('#manualAddGoal');
+    assert.equal(await page.locator('#manualEntryPanel').isVisible(),true,
+     'manual entry is immediately discoverable in normal quick view');
+    await page.click('#manualEntryAdd');
     if(scenario.refreshFail){
-     await page.waitForFunction(()=>document.querySelector('#manualAddStatus')?.textContent.includes('最新名簿を確認できません'));
-     assert.equal(await page.locator('#review-goal-1').count(),0);
-     assert.equal(await page.locator('#manualAddGoal').isDisabled(),true);
+     await page.waitForFunction(()=>
+      document.querySelector('#manualAddStatus')?.textContent.includes('最新名簿を確認できません'));
+     assert.equal(await page.locator('.manual-entry-goal').count(),0);
+     assert.equal(await page.locator('#manualEntryAdd').isDisabled(),true);
      assert.equal(await worker.isDisabled(),true);
-     assert.equal(snapshotGets,2,'the refresh must occur before creating any draft');
-     assert.equal(posts,0,'failed roster refresh cannot POST any registration');
+     assert.equal(snapshotGets,2);
+     assert.equal(posts,0);
      assert.equal(prod,0);
      assert.deepEqual(errors,[]);
      continue;
     }
-    assert.equal(snapshotGets,2,'each video-free draft must re-read the live current roster');
+    assert.equal(snapshotGets,2,'current roster fetched before draft creation');
     assert.match(await page.locator('#manualEventScope').innerText(),
      /登録先のSSイベント：TEST event.*2試合.*対戦チーム：Team1・Team2.*イベントID/);
-    const goal=page.locator('#review-goal-1');
-    await goal.waitFor();
-    const fields=goal.locator('.fields').first().locator('select');
-    await fields.nth(0).selectOption('1');
-    const scorerChoices=await fields.nth(1).locator('option').allTextContents();
-    assert.ok(scorerChoices.some(x=>x.includes('Taro')&&x.includes('Team1')));
-    assert.ok(scorerChoices.some(x=>x.includes('Jiro')&&x.includes('Team2')));
+    const first=page.locator('.manual-entry-goal').first();
+    await first.waitFor();
+    assert.equal(await first.locator('input[type=checkbox]').count(),0,
+     'no confirmation checkbox per manual goal');
+    await first.locator('select[aria-label="ゴール1の試合"]').selectOption('1');
+    const scorer=first.locator('select[aria-label="ゴール1の得点者"]');
+    const choices=await scorer.locator('option').allTextContents();
+    assert.ok(choices.some(x=>x.includes('Taro')&&x.includes('Team1')));
+    assert.ok(choices.some(x=>x.includes('Jiro')&&x.includes('Team2')));
+    assert.ok(choices.every(x=>!/Team3|Team4|Team5|Team6/.test(x)));
     if(scenario.rosterShift){
-     assert.ok(!scorerChoices.some(x=>x.includes('OldCaptain')),
-      'a just-replaced roster member must not remain in new manual goal choices');
-     assert.ok(!scorerChoices.some(x=>x.includes('Saburo')),
-      'unrelated old Team3 member must not remain in new manual goal choices');
+     assert.ok(!choices.some(x=>x.includes('OldCaptain')));
+     assert.ok(!choices.some(x=>x.includes('Saburo')));
      assert.match(await page.locator('#manualAddStatus').innerText(),/更新されています/);
     }
-    assert.ok(scorerChoices.every(x=>!/Team3|Team4|Team5|Team6/.test(x)),
-     'manual scorer dropdown must exclude unrelated current-event teams');
-    await fields.nth(1).selectOption('Taro');
-    const assistChoices=await fields.nth(3).locator('option').allTextContents();
-    assert.ok(assistChoices.some(x=>x.includes('Aki')&&x.includes('Team1')));
-    assert.ok(assistChoices.every(x=>!/Team2|Team3|Team4|Team5|Team6/.test(x)),
-     'manual assist dropdown must include only the scorer team');
-    await fields.nth(2).selectOption('named');
-    await fields.nth(3).selectOption('Aki');
-    await fields.nth(4).selectOption('Team1');
-    assert.equal(await worker.isDisabled(),true,
-     'manual goal cannot enter Worker plan until row is explicitly confirmed');
-    await goal.locator('label:has-text("このゴールの試合・選手を確認した") input[type=checkbox]').check();
-    assert.equal(await worker.isDisabled(),false,
-     'explicit video-free goal approval enables the independent Worker');
+    await scorer.selectOption('Taro');
+    await first.locator('select[aria-label="ゴール1のアシスト有無"]').selectOption('named');
+    const assist=first.locator('select[aria-label="ゴール1のアシスト者"]');
+    assert.ok((await assist.locator('option').allTextContents()).some(x=>x.includes('Aki')));
+    assert.ok((await assist.locator('option').allTextContents()).every(x=>!x.includes('Jiro')));
+    await assist.selectOption('Aki');
+    assert.match(await page.locator('#manualEntryPreview').innerText(),/Team1 1 – 0 Team2/);
+    assert.equal(await worker.isDisabled(),false,'one final submit only');
+    assert.match(await page.locator('#manualEntryAdd').innerText(),/2点目/);
+    await page.click('#manualEntryAdd');
+    assert.equal(snapshotGets,3,'every new goal refreshes the SS current roster');
+    assert.equal(await page.locator('.manual-entry-goal').count(),2);
+    await page.locator('select[aria-label="ゴール2の得点者"]').selectOption('Jiro');
+    assert.match(await page.locator('#manualEntryPreview').innerText(),/Team1 1 – 1 Team2/);
+    assert.match(await page.locator('#manualEntryPreview').innerText(),/Team1 0 – 0 Team2/);
+    assert.match(await page.locator('#manualEntryAdd').innerText(),/3点目/);
+    const ties=page.locator('#manualEntryPreview select[aria-label*="同点時の結果"]');
+    assert.equal(await ties.count(),2);
+    assert.equal(await ties.nth(0).inputValue(),'draw');
+    assert.equal(await ties.nth(1).inputValue(),'draw');
+    await page.click('#manualEntryReview');
+    assert.equal(posts,0,'final preview scroll must never write to SS');
     await worker.click();
-    await page.waitForFunction(()=>document.querySelector('#workerBatchStatus')?.textContent.includes('mock-only'));
-    assert.equal(healthGets,1,'public Worker capability GET checked before sending');
+    await page.waitForFunction(()=>
+     document.querySelector('#workerBatchStatus')?.textContent.includes('mock-only'));
+    assert.equal(healthGets,1);
     assert.equal(submittedPlan?.layout_mode,'independent-fixtures-v1');
     assert.equal(submittedPlan?.fixture_count,2);
     assert.deepEqual(submittedPlan.operations.map(x=>[x.action,x.seq,x.expected_match_id]),[
-     ['create',1,matchId(1)],['finish',1,matchId(1)],['finish',2,matchId(2)]
+     ['create',1,matchId(1)],['create',1,matchId(1)],
+     ['finish',1,matchId(1)],['finish',2,matchId(2)]
     ]);
-    assert.deepEqual(submittedPlan.operations[0].team,'Team1');
-    assert.deepEqual(submittedPlan.operations[0].scorer,'Taro');
-    assert.deepEqual(submittedPlan.operations[0].assist,'Aki');
-    assert.equal(posts,2,'one mocked start and one passive status; no real writes');
-    assert.equal(await worker.isDisabled(),true,'blocked attempt never allows a second start');
+    assert.deepEqual(submittedPlan.operations.filter(x=>x.action==='finish')
+     .map(x=>x.winner),['draw','draw']);
+    assert.deepEqual(submittedPlan.operations.filter(x=>x.action==='create')
+     .map(x=>[x.team,x.scorer,x.assist]),[['Team1','Taro','Aki'],['Team2','Jiro','']]);
+    assert.equal(posts,2,'one start and one passive status only, no real upstream write');
+    assert.equal(await worker.isDisabled(),true,'blocked job must not be replayed');
    }
    assert.equal(prod,0);
    if(!scenario.manual)assert.equal(posts,scenario.markerMismatch?3:scenario.retired?1:0,
