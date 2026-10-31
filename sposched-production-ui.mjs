@@ -59,6 +59,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   $('productionPanel').hidden=!x;
   $('autoRegisterHeading').hidden=Boolean(x);
   evidence=null;recreateEvidence=null;
+  $('productionRecreateConfirm').checked=false;
   $('productionRecreate').hidden=!x||!localStorage.getItem(key(x.snapshot.eventId))||
    Boolean(localStorage.getItem(key(x.snapshot.eventId)+':previous'));
   $('productionRecreateStart').disabled=true;
@@ -172,6 +173,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
  }
  $('productionRecreateCheck').addEventListener('click',async()=>{
   const x=active();if(!x||busy)return;
+  if(localStorage.getItem(key(x.snapshot.eventId)+':previous'))return;
+  $('productionRecreateConfirm').checked=false;
   busy=true;recreateEvidence=null;
   $('productionRecreateStart').disabled=true;
   const out=$('productionRecreatePlan');out.hidden=false;
@@ -200,7 +203,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
  $('productionRecreateStart').addEventListener('click',async()=>{
   const checked=recreateEvidence,x=active();if(!checked||!x||busy)return;
   const {next,previous}=checked;
-  if(x.snapshot.eventId!==next.id||localStorage.getItem(key(next.id))!==previous)return;
+  if(x.snapshot.eventId!==next.id||localStorage.getItem(key(next.id))!==previous||
+     localStorage.getItem(key(next.id)+':previous'))return;
   if($('productionRecreateConfirm').checked!==true)return;
   busy=true;$('productionRecreateStart').disabled=true;
   try{
