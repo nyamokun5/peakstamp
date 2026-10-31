@@ -1342,6 +1342,8 @@ function renderManualEntry(){
 $('manualEntryAdd').addEventListener('click',()=>{
  // Reuse the previously audited on-click SS snapshot re-fetch, current roster
  // lock and local-draft persistence. Never introduce a second write pathway.
+ $('manualEntryAdd').disabled=true;
+ $('manualEntryState').textContent='SSの最新チーム・名簿を確認して次のゴールを追加中…（書き込みなし）';
  $('manualAddGoal').click();
 });
 $('manualEntryReview').addEventListener('click',()=>{
@@ -1413,9 +1415,13 @@ function renderQuick(){
  const manualPending=manual.filter(x=>!x.registeredInSS).length;
  const deferredAssists=items.filter(x=>x.state==='ready'&&x.deferredAssist);
  const manualDrafts=items.filter(x=>x.state==='manual').length;
+ const manualStatus=staging&&!officialLayout.automaticFourMatch
+  ?summarizeManualFixtureEntry(snapshot,rows,items):null;
+ const manualReady=manualStatus?manualDrafts-manualStatus.issues.length:0;
  const other=items.length-ready-attention-duplicates-waiting-manual.length-manualDrafts;
- $('quickSummary').textContent='要確認 '+(attention+duplicates)+'件　｜　'+
-   (production?'確認済み ':'登録可能 ')+ready+'件　｜　対戦待ち '+waiting+'件'+
+ $('quickSummary').textContent='要確認 '+(attention+duplicates+(manualStatus?.issues.length||0))+
+   '件　｜　'+(production?'確認済み ':'登録可能 ')+(ready+manualReady)+
+   '件　｜　対戦待ち '+waiting+'件'+
    (manualPending?'　｜　SSで手動登録 '+manualPending+'件':'')+
    (manualDrafts?'　｜　動画なしの手動ゴール '+manualDrafts+'件':'')+
    (deferredAssists.length?'　｜　アシスト追記 '+deferredAssists.length+'件':'')+
