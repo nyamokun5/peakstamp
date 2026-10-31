@@ -1,3 +1,40 @@
+# Current paired CI checkpoint — 2026-10-31T05:33:16.251203+00:00
+
+## Resume / safety
+Continue existing PR179 PeakStamp and PR73 Worker, branch agent/coordinator/autonomous-development-20261031. Baselines this iteration: FE0fa09b4bc9f1c9c37e6e719cb0eb4980a5ccb20a / Workerab9db64ffa5273b8cc667076ca7bedcf3d3a687a, fetched and matched. All Agent write leases released. No production deploy, real SpoSched mutation, PR merge, new credentials or environment setting changes.
+
+## Exact reviewed/tested source pair
+- Worker CI implementation commit c25b161b7a9b2de790f7c8b0f4530e8a7e8f2da6.
+- Public PeakStamp counterpart pinned to 0fa09b4bc9f1c9c37e6e719cb0eb4980a5ccb20a.
+- This iteration changes no Frontend app/test source; later commits in either repo may update documentation only. Hosted workflow verifies the exact event's Worker SHA, not a moving branch; FE stays at the explicit pin until a reviewed code change updates it.
+
+## Completed
+Coordinator implemented Worker .github/workflows/paired-browser.yml; Backend subagent implemented exact-checkout verifier/tests; independent QA and Release Reviewer reviewed and tested both. QA caught the shared-manifest overwrite problem, and actionlint caught an invalid top-level runner context. Both were fixed before commit: two immutable manifests and per-step runner.temp contexts.
+
+Paired CI runs in private Worker repository using contents:read, persist-credentials:false, fixed public PeakStamp SHA, exact Worker PR head, Node22 and isolated Playwright1.51.1. Public PeakStamp web access returned200/Public; private Worker web returned404 while authorized Git works. This avoids adding cross-private-repo credentials. No production secrets, environment, deploy or pull_request_target.
+
+Before/after source verification rejects non-SHA refs, mismatched/dirty/aliased/overlapping roots, wrong sanitized origins and missing/untracked/symlink assets. It emits safe manifests outside source checkouts and refuses overwrite. Full ten-scenario execution clears focused-only flags, preserves pipeline failures and stores available manifests/log as Actions artifacts. Existing app/start/auth configuration was maintained.
+
+## Validation evidence and limits
+- New verifier8/8 individual tests passed; Worker full suite101/101, failed/skipped0, /tmp/worker-paired-ci-checkouts-suite.log.
+- New workflow actionlint1.7.7 passed independently; official release SHA256 was checked. No ShellCheck/Pyflakes pass is claimed (those integrations were disabled for the lint command).
+- Clean sibling clones at the exact tested SHA pair passed source verification, fresh isolated Playwright1.51.1 install, full10 browser matrix and after-source verification. Before/after JSON manifests were equal and both sources remained clean. Replay path /tmp/paired-ci-replay-k7pp28wu.
+- Local replay used existing system Chromium; hosted Chromium install-with-deps was NOT executed here. No GitHub-hosted success is claimed.
+- Safe durable local evidence: Worker docs/paired-ci-local-replay-20261031.json. Reproduction/CI behavior: docs/PAIRED_BROWSER_TEST.md in both repos.
+- Independent release review: development PR update GO, production release NO-GO; no remaining required correction. Optional improvement left: after verification currently runs after successful matrix; failures already fail the job and retain available evidence.
+
+## Next bounded work
+1. Observe actual paired-browser Actions results for final Worker PR head and recorded FE pin. This older runtime still cannot access GitHub API; do not confuse definition/local replay with hosted pass or repeat environment-save instructions. Do not recreate existing PRs.
+2. Prepare local real-workerd/Durable Object persistence verification with strict synthetic upstream before requesting live staging or mobile proof. No live production writes are permitted. Mobile/iPhone/hosted artifact/rollback evidence remains outstanding.
+3. If Frontend implementation changes, coordinate a reviewed exactSHA pin update in Worker workflow and rerun pair checks. Do not silently advance main/staging.
+4. Fully simultaneous localStorage ownership, helper/manual knockout/repeated-goal policies and recreation remain separately reviewed scope. Existing event gate/unknownACK stops/recreation405 are preserved.
+
+## Remote continuation
+Use existing branch/PRs; Coordinator pushes this docs-only checkpoint after the source commit. GitHub API limitation affects metadata/status observation, not verified Git read/push. Record final remote refs in the final report. Hosted CI may execute on the PR push, but execution/result must be confirmed rather than inferred.
+
+---
+## Historical checkpoints (superseded above)
+
 # Current paired-browser checkpoint — 2026-10-31T05:19:00.745001+00:00
 
 ## Resume / safety
