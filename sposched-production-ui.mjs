@@ -195,7 +195,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   const checked=recreateEvidence,x=active();if(!checked||!x||busy)return;
   const {next,previous}=checked;
   if(x.snapshot.eventId!==next.id||localStorage.getItem(key(next.id))!==previous)return;
-  if(!window.confirm('旧試合がSSで削除済みであることを確認しましたか？ 新しい'+next.matchIds.length+'試合へ本番再登録します。'))return;
+  if($('productionRecreateConfirm').checked!==true)return;
   busy=true;$('productionRecreateStart').disabled=true;
   try{
    const latest=await inspect();
@@ -204,6 +204,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
       JSON.stringify({...latest.plan,request_id:next.plan.request_id})!==JSON.stringify(next.plan))
     throw Error('正式試合または登録内容が変更されました。再確認してください');
    // Record the new ID before any network mutation; unknown replies must not be resent.
+   localStorage.setItem(key(next.id)+':previous',previous);
    localStorage.setItem(key(next.id),next.plan.request_id);
    recreateEvidence=null;
    try{
