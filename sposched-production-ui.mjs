@@ -36,7 +36,11 @@ export function installProductionUI({current,read,normalize,onComplete}){
   ]);
   if(active()?.snapshot?.eventId!==id)throw Error('確認中に本番イベントが変更されました');
   const newest=normalize(latestRaw);
-  const independent=!describeOfficialFixtures(x.snapshot).automaticFourMatch;
+  const layout=describeOfficialFixtures(x.snapshot);
+  // The official legacy four-match bracket may omit titles while placement
+  // fixtures are still waiting. Never route those unresolved IDs into the
+  // independent writer, which requires every fixture to be scheduled.
+  const independent=!layout.automaticFourMatch&&layout.waiting===0&&layout.finished===0;
   const validate=independent?validateIndependentProductionEvidence:validateProductionReleaseEvidence;
   const baseline=validate(x.snapshot,official,release);
   const updated=validate(newest,official,release);
