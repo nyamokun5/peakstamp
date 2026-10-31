@@ -1,3 +1,45 @@
+# Current paired-browser checkpoint — 2026-10-31T05:19:00.745001+00:00
+
+## Resume / safety
+Continue existing PR #179 (PeakStamp) and #73 (Worker), branch agent/coordinator/autonomous-development-20261031 in both. Do not recreate PRs. Baselines at start: f0af66e71033764197234e5195a071ba35f4360b / e85c350ab168b2f37ce418f94667c8ce11efd965. No merge, production deploy/SpoSched write, secret/binding/permission or environment-setting change occurred or is authorized. All values and storage in new paired tests are synthetic.
+
+## Reviewed source commit pair
+- PeakStamp: d827c1e9eb40844e39255fde3d5bb557c4947a97
+- Worker: 643064c58e8519042ce1ec383a291bfad6fef4d0
+This checkpoint is a subsequent docs-only commit. Future evidence must identify both source refs and any uncommitted changes. All write leases are released; Coordinator alone performs Git/CI/handoff operations.
+
+## Completed bounded iteration
+Backend, Frontend QA, adversarial storage QA and independent Release Reviewer were spawned; Coordinator waited for their reports, integrated/fixed/retested changes and recorded resumption evidence.
+
+- Added reusable Worker test-support/production-browser-harness.mjs. Actual public routes, snapshot adapter, DO core, executor, signed per-match gate and operation readback run against strictly intercepted synthetic upstream. The harness owns global fetch until close drains waitUntil tasks and restores it; unexpected URL/method cannot escape to native fetch.
+- Added PeakStamp scripts/test-paired-production-browser.mjs. Actual HTML uses actual Worker HTTP status/body/CORS rather than canned success responses. Official production origin is locally intercepted; no live site/SS request is made. WORKER_CHECKOUT_PATH is mandatory and missing checkout fails rather than silently skipping.
+- Paired matrix covers 1/2/3/4/8/24 fixtures, real human draw decision UI, scorer/assist/score and sent receipt, late draft/reload, lost start response after Worker acceptance, lost goal response after synthetic upstream commit, receipt storage failure and cross-tab marker changes during completion. All cases assert no blind resend and no page/route errors.
+- Storage QA reproduced a real bug: during awaited final inspection, another tab's request marker+receipt could be overwritten before start. Coordinator added final marker absence and unchanged-receipt checks, preserving other-tab evidence and sending no POST. Receipt-only changes also refuse submission. Quota failures send no POST.
+- This is NOT an atomic browser mutex. Truly simultaneous localStorage claims remain protected from repeated upstream writes by the existing Worker event journal. Do not weaken that gate or claim complete cross-tab exclusion.
+- Independent review found unbounded deferred test waits. Added 15-second deadlines with labels and finally-cleared timers; an unnotified negative case and cleanup were verified. HTML production UI cache query was advanced for the application guard.
+- docs/PAIRED_BROWSER_TEST.md in both repos contains exact two-checkout commands, harness lifetime rules, focused matrix options and limitations. Existing single-checkout CI automatically executes new per-repo unit tests; the paired runner is NOT registered as hosted CI and requires explicitly supplied paired checkouts/refs. No cross-repo credentials were added or assumed.
+
+## Validation
+- PeakStamp Node22 full suite: 588/588 individual tests, fail/skip0, browser dependencies explicitly supplied; /tmp/peakstamp-paired-storage-suite.log.
+- Worker Node22 full suite: 93/93 individual tests, fail/skip0; /tmp/worker-paired-harness-suite.log.
+- Existing browser CI matrix: 21/21 passed; /tmp/peakstamp-paired-regression-*.log.
+- Paired browser matrix: 10/10 passed; after test-path/error strictness and deadline changes, affected five scenarios were rerun and passed. Coordinator reran all 10 scenarios on the final committed source pair: 10/10 passed; /tmp/paired-browser-final-committed-matrix.log.
+- Unit targets: Worker harness11/11 and storage races7/7. Independent reviewer reran both plus actual one-fixture browser completion/reload. Negative timeout helper test confirmed rejection label and no surviving timer.
+- Changed module syntax and both diff checks passed. Worker runtime src/build/dependency declarations were unchanged in this iteration, so no additional deployment/build is claimed.
+- Independent final review: development PR update GO; production release NO-GO; no remaining required source correction from that review. All outcomes are local synthetic, not workerd/Cloudflare-storage/mobile/live-staging evidence.
+
+## Next bounded work
+1. Add an explicit paired CI job with exact counterpart SHA and supported repository read access; do not assume single-repo CI checks out the other repository. Keep credentials out of code. Until such a job executes, report paired evidence as local only.
+2. Assess fully simultaneous browser-tab claims with real multi-context scheduling if needed; choose a reviewed mutex/ownership protocol without weakening the event-scoped server journal or legacy request evidence. Existing guard handles changes observed across final async inspection, not atomic CAS.
+3. Review repeated same-scorer/same-assist goals, helper and manual knockout requirements before changing refusal policy. Recreation public405 remains intentional, not an automatic wiring task.
+4. Release remains gated by exact-head GitHub CI/review, real workerd/storage, mobile/staging/artifact/rollback evidence. No release action is authorized.
+
+## GitHub connectivity
+Git reads/pushes work; API CONNECT403 remained a known limit of this older session. Existing PRs were previously confirmed via Git refs, and their current heads matched before edits. No environment settings were changed and no repeated publish/add-domain instructions are needed. Check Git refs after push; do not invent new PR URLs or imply hosted CI passed. docs/AUTONOMY_PR.md holds updated review text if metadata API access later permits.
+
+---
+## Historical checkpoints (superseded above)
+
 # Current continuation checkpoint — 2026-10-31T05:05:59.605164+00:00
 
 ## Resume / safety
