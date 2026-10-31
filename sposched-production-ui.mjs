@@ -40,6 +40,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
   const validate=independent?validateIndependentProductionEvidence:validateProductionReleaseEvidence;
   const baseline=validate(x.snapshot,official,release);
   const updated=validate(newest,official,release);
+  if(independent&&newest.rosterSource!=='official-current-event-teams')
+   throw Error('最新のSS公式チーム名簿を確認できません');
   if(JSON.stringify(baseline.fixture_ids)!==JSON.stringify(updated.fixture_ids))
    throw Error('最新の試合IDが変わりました');
   const args={snapshot:x.snapshot,rows:x.rows,decisions:x.decisions,
