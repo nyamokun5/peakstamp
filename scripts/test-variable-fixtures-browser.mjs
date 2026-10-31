@@ -40,6 +40,9 @@ const scenarios=[
  {label:'three-team league',fixtures:[
    match(1,'Team1','Team2','#1 リーグ'),match(2,'Team2','Team3','#2 リーグ'),
    match(3,'Team3','Team1','#3 リーグ')],automatic:false,draw:true},
+ {label:'retired 2-match same two-team event re-created with new match IDs',fixtures:[
+   match(1,'Team1','Team2','#1 紅白戦'),match(2,'Team1','Team2','#2 紅白戦')
+ ],automatic:false,retired:true,retiredSameCount:true},
  {label:'retired four-match now three-fixture league',fixtures:[
    match(1,'Team1','Team2','#1 リーグ'),match(2,'Team1','Team3','#2 リーグ'),
    match(3,'Team2','Team3','#3 リーグ')],automatic:false,retired:true},
@@ -102,12 +105,16 @@ try{
     return route.fulfill({status:200,json:{
      environment:'STAGING ONLY',event_id:E,
      request_id:'33333333-3333-4333-8333-333333333333',
-     status:'completed',layout_mode:'four-knockout',fixture_count:4,
+     status:'completed',
+     layout_mode:scenario.retiredSameCount?'independent-fixtures-v1':'four-knockout',
+     fixture_count:scenario.retiredSameCount?2:4,
      inspection_only:true,inspection_contract:'event-inspect-v1',
      execution_active:false,
-     fixture_ids:scenario.incomplete?{'1':matchId(11),'2':matchId(12)}:
-      {'1':matchId(11),'2':matchId(12),'3':matchId(13),'4':matchId(14)},
-     total:4,completed:4,updated_at:Date.now(),inspection_only:true
+     fixture_ids:scenario.retiredSameCount||scenario.incomplete
+      ?{'1':matchId(11),'2':matchId(12)}:
+       {'1':matchId(11),'2':matchId(12),'3':matchId(13),'4':matchId(14)},
+     total:scenario.retiredSameCount?2:4,completed:scenario.retiredSameCount?2:4,
+     updated_at:Date.now(),inspection_only:true
     },headers:{'Access-Control-Allow-Origin':'*'}});
    }
    // Model a Cloudflare Worker that still serves the old 4-match-only release.
@@ -178,8 +185,9 @@ try{
     await fallback.locator('summary').first().click();
    }
    if(scenario.retired){
-    await page.waitForFunction(()=>
-     document.querySelector('#workerBatchStatus')?.textContent.includes('旧4試合'));
+    const oldCount=scenario.retiredSameCount?2:4;
+    await page.waitForFunction(oldN=>
+     document.querySelector('#workerBatchStatus')?.textContent.includes('旧'+oldN+'試合'),oldCount);
     const status=await page.locator('#workerBatchStatus').innerText();
     const button=page.locator('#workerBatchRecreate');
     if(scenario.incomplete||scenario.markerMismatch){
@@ -191,7 +199,8 @@ try{
      }
     }else{
      assert.equal(await button.isVisible(),true);
-     assert.match(await button.innerText(),/旧4試合.*新3試合.*TEST登録/);
+     assert.match(await button.innerText(),
+      new RegExp('旧'+oldCount+'試合.*新'+scenario.fixtures.length+'試合.*TEST登録'));
      assert.match(status,/再送せず/);
     }
     assert.equal(await page.locator('#ssResultPanel').isVisible(),false,
