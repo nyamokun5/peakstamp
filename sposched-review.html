@@ -2621,9 +2621,10 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   if(count){
    fixturePreview.append(node('strong','読み込んだ公式試合（確認のみ）'));
    for(const match of [...snapshot.matches].sort((a,b)=>Number(a.seq)-Number(b.seq))){
-    const label='試合 '+match.seq+'｜'+(match.left?.name||match.left||'対戦相手未確認')+' vs '+
-     (match.right?.name||match.right||'対戦相手未確認');
-    fixturePreview.append(node('p',label));
+    const label=matchSlotLabel(match);
+    const item=node('p',label);
+    item.dataset.fixtureSeq=String(match.seq);
+    fixturePreview.append(item);
    }
   }
   const formatMatchesCount=officialFormat==='4teams_1pitch'&&count===4;
