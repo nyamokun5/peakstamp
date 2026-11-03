@@ -15,13 +15,15 @@ test('TEST transport requires explicit authorization and never contacts producti
  };
  await assert.rejects(startIndependentTestBatch({plan,official,bridgeToken:'test',fetchImpl}),/明示的/);
  assert.equal(calls,0);
- await startIndependentTestBatch({plan,official,bridgeToken:'test',allowTestWrites:true,fetchImpl});
+ await assert.rejects(startIndependentTestBatch({plan,official,bridgeToken:'test',allowTestWrites:true,fetchImpl}),/登録契約が未確認/);
+ assert.equal(calls,0);
+ await startIndependentTestBatch({plan,official,bridgeToken:'test',allowTestWrites:true,workerContract:'independent-test-batch-v1',fetchImpl});
  assert.equal(calls,1);
 });
 test('TEST transport fails closed on production evidence and mismatched response',async()=>{
  let calls=0;
  const fetchImpl=async()=>{calls++;return {ok:true,json:async()=>({environment:'PRODUCTION'})}};
- await assert.rejects(startIndependentTestBatch({plan,official:{...official,environment:'PRODUCTION'},bridgeToken:'test',allowTestWrites:true,fetchImpl}),/正式な登録先/);
+ await assert.rejects(startIndependentTestBatch({plan,official:{...official,environment:'PRODUCTION'},bridgeToken:'test',allowTestWrites:true,workerContract:'independent-test-batch-v1',fetchImpl}),/正式な登録先/);
  assert.equal(calls,0);
- await assert.rejects(startIndependentTestBatch({plan,official,bridgeToken:'test',allowTestWrites:true,fetchImpl}),/再送しないでください/);
+ await assert.rejects(startIndependentTestBatch({plan,official,bridgeToken:'test',allowTestWrites:true,workerContract:'independent-test-batch-v1',fetchImpl}),/再送しないでください/);
 });
