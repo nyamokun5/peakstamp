@@ -40,8 +40,9 @@ export function installProductionUI({current,read,normalize,onComplete}){
    const fixtures=official.matches.filter(m=>Number.isInteger(m.seq)&&m.seq>0)
     .sort((a,b)=>a.seq-b.seq);
    if(fixtures.length!==x.snapshot.matches.length||fixtures.some((m,i)=>m.seq!==i+1||
+      m.status!=='scheduled'||
       x.snapshot.matches.find(local=>local.seq===m.seq)?.matchId?.toLowerCase()!==
-       String(m.match_id||'').toLowerCase()))throw Error('公式試合ID・件数が一致しません');
+       String(m.match_id||'').toLowerCase()))throw Error('公式試合ID・件数・未開始状態が一致しません');
    if(!independentFormat)throw Error('公式イベント形式を確認できないため、独立試合の登録計画を生成しません');
    const plan=previewIndependentFixtures({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions});
    return {id,independentReadOnly:true,plan,fixtureCount:fixtures.length,
