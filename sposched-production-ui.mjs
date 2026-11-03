@@ -1,3 +1,4 @@
+import {previewIndependentFixtures} from './sposched-independent-preview.mjs';
 // Production-only UI adapter. TEST button paths and storage are untouched.
 import {prepareProductionBatch,validateProductionReleaseEvidence,productionBatchStorageKey}
  from './sposched-production-release.mjs?v=production-bridge1';
@@ -39,7 +40,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
    if(fixtures.length!==x.snapshot.matches.length||fixtures.some((m,i)=>m.seq!==i+1||
       x.snapshot.matches.find(local=>local.seq===m.seq)?.matchId?.toLowerCase()!==
        String(m.match_id||'').toLowerCase()))throw Error('公式試合ID・件数が一致しません');
-   return {id,independentReadOnly:true,fixtureCount:fixtures.length,
+   const plan=previewIndependentFixtures({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions});
+   return {id,independentReadOnly:true,plan,fixtureCount:fixtures.length,
     fixtureIds:fixtures.map(m=>m.match_id||''),format:$('productionStart').dataset.fixtureFormat};
   }
   const [release,official,latestRaw]=await Promise.all([
@@ -88,7 +90,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
     throw Error('既存の本番登録ジョブがあるため、新しい送信はできません');
    const x=await inspect();
    if(x.independentReadOnly){
-    out.textContent='公式試合：'+x.fixtureCount+'件（読み取り照合済み）\n形式：'+x.format+
+    out.textContent='公式試合：'+x.fixtureCount+'件（読み取り照合済み）\n登録予定：ゴール'+x.plan.operations.filter(op=>op.action==='create').length+'件、試合終了'+x.fixtureCount+'件\n形式：'+x.format+
      '\n独立試合形式の本番登録は未有効化です。送信できません。';
     $('productionAuditIds').textContent='イベントID：'+x.id+'\n'+
      x.fixtureIds.map((id,i)=>'第'+(i+1)+'試合：'+id).join('\n');
