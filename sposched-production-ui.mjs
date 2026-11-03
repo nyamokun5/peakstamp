@@ -26,6 +26,22 @@ export function installProductionUI({current,read,normalize,onComplete}){
  async function inspect(){
   const x=active();if(!x)throw Error('本番イベントを選択してください');
   const id=x.snapshot.eventId;
+  const fixtureMode=$('productionStart').dataset.fixtureModeReady;
+  if(fixtureMode==='unsupported'){
+   // The independent-fixture Worker contract is not deployed to production.
+   // Never pass a non-four-fixture event to the legacy four-match write planner.
+   const official=await read('/production/inspect?event_id='+encodeURIComponent(id));
+   if(active()?.snapshot?.eventId!==id)throw Error('確認中に本番イベントが変更されました');
+   if(official?.environment!=='PRODUCTION'||official?.event_id?.toLowerCase()!==id.toLowerCase()||
+      !Array.isArray(official.matches))throw Error('公式試合情報の照合に失敗しました');
+   const fixtures=official.matches.filter(m=>Number.isInteger(m.seq)&&m.seq>0)
+    .sort((a,b)=>a.seq-b.seq);
+   if(fixtures.length!==x.snapshot.matches.length||fixtures.some((m,i)=>m.seq!==i+1||
+      x.snapshot.matches.find(local=>local.seq===m.seq)?.matchId?.toLowerCase()!==
+       String(m.match_id||'').toLowerCase()))throw Error('公式試合ID・件数が一致しません');
+   return {id,independentReadOnly:true,fixtureCount:fixtures.length,
+    fixtureIds:fixtures.map(m=>m.match_id||''),format:$('productionStart').dataset.fixtureFormat};
+  }
   const [release,official,latestRaw]=await Promise.all([
    read('/production/release-state?event_id='+encodeURIComponent(id)),
    read('/production/inspect?event_id='+encodeURIComponent(id)),
@@ -71,6 +87,16 @@ export function installProductionUI({current,read,normalize,onComplete}){
    if(localStorage.getItem(key(active().snapshot.eventId)))
     throw Error('既存の本番登録ジョブがあるため、新しい送信はできません');
    const x=await inspect();
+   if(x.independentReadOnly){
+    out.textContent='公式試合：'+x.fixtureCount+'件（読み取り照合済み）\\n形式：'+x.format+
+     '\\n独立試合形式の本番登録は未有効化です。送信できません。';
+    $('productionAuditIds').textContent='イベントID：'+x.id+'\\n'+
+     x.fixtureIds.map((id,i)=>'第'+(i+1)+'試合：'+id).join('\\n');
+    $('productionAudit').hidden=false;
+    $('productionStart').disabled=true;
+    status('公式試合の読み取り確認完了。登録はWorker連携完成後に有効化します。');
+    return;
+   }
    evidence=x;
    const goals=x.plan.operations.filter(o=>o.action==='create').length;
    out.textContent='開催日：'+x.date+'\n登録予定：ゴール'+goals+'件、4試合の結果';
@@ -83,7 +109,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   finally{busy=false;$('productionCheck').disabled=false;}
  });
  $('productionStart').addEventListener('click',async()=>{
-  if(!active()||busy||!evidence)return;
+  if(!active()||busy||!evidence||evidence.independentReadOnly)return;
   const earlier=evidence,eventId=earlier.id;
   if(localStorage.getItem(key(eventId)))return;
   busy=true;$('productionStart').disabled=true;
