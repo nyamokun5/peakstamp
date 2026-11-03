@@ -1,5 +1,5 @@
 import {verifyCompletedIndependentSnapshot} from './sposched-independent-completion.mjs';
-import {previewIndependentFixtures} from './sposched-independent-preview.mjs';
+import {prepareIndependentWorkerBatch} from './sposched-independent-worker-batch.mjs';
 // Production-only UI adapter. TEST button paths and storage are untouched.
 import {prepareProductionBatch,validateProductionReleaseEvidence,productionBatchStorageKey}
  from './sposched-production-release.mjs?v=production-bridge1';
@@ -45,7 +45,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
       x.snapshot.matches.find(local=>local.seq===m.seq)?.matchId?.toLowerCase()!==
        String(m.match_id||'').toLowerCase()))throw Error('公式試合ID・件数・未開始状態が一致しません');
    if(!independentFormat)throw Error('公式イベント形式を確認できないため、独立試合の登録計画を生成しません');
-   const plan=previewIndependentFixtures({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions});
+   const plan=prepareIndependentWorkerBatch({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions,requestId:crypto.randomUUID()});
    return {id,independentReadOnly:true,plan,fixtureCount:fixtures.length,
     fixtureIds:fixtures.map(m=>m.match_id||''),format};
   }
