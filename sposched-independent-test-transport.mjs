@@ -3,9 +3,13 @@
 import {verifyIndependentWorkerPreflight} from './sposched-independent-preflight.mjs';
 export const INDEPENDENT_TEST_WORKER='https://shoot-sunday-sync-staging.yomax1979.workers.dev';
 export async function startIndependentTestBatch({
- plan,official,bridgeToken,allowTestWrites=false,fetchImpl=fetch
+ plan,official,bridgeToken,allowTestWrites=false,workerContract=null,fetchImpl=fetch
 }){
  if(allowTestWrites!==true)throw Error('TESTへの書き込みが明示的に許可されていません');
+ // Current independent batch implementation is a PRODUCTION-only Durable Object.
+ // A staging hostname alone does not establish a TEST-safe batch route.
+ if(workerContract!=='independent-test-batch-v1')
+  throw Error('TEST Workerの独立試合登録契約が未確認です。送信を停止しました');
  if(typeof bridgeToken!=='string'||!bridgeToken.trim())throw Error('TEST Workerの認証が必要です');
  verifyIndependentWorkerPreflight(plan,official,{environment:'TEST'});
  const response=await fetchImpl(INDEPENDENT_TEST_WORKER+'/production/batch/start',{
