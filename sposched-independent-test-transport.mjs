@@ -7,7 +7,7 @@ export async function startIndependentTestBatch({
 }){
  if(allowTestWrites!==true)throw Error('TESTへの書き込みが明示的に許可されていません');
  if(typeof bridgeToken!=='string'||!bridgeToken.trim())throw Error('TEST Workerの認証が必要です');
- verifyIndependentWorkerPreflight(plan,official);
+ verifyIndependentWorkerPreflight(plan,official,{environment:'TEST'});
  const response=await fetchImpl(INDEPENDENT_TEST_WORKER+'/production/batch/start',{
   method:'POST',mode:'cors',cache:'no-store',
   headers:{'Content-Type':'application/json','X-SS-Bridge-Token':bridgeToken.trim()},
