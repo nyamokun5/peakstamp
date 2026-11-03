@@ -27,7 +27,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
  async function inspect(){
   const x=active();if(!x)throw Error('本番イベントを選択してください');
   const id=x.snapshot.eventId;
-  const format=$('productionStart').dataset.fixtureFormat;
+  const format=$('productionStart').dataset?.fixtureFormat||'';
   const independentFormat=['1team','2teams_1pitch','3teams_1pitch'].includes(format);
   const fixtureMode=independentFormat?'independent':'legacy-four';
   if(fixtureMode==='independent'){
@@ -46,7 +46,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
    if(!independentFormat)throw Error('公式イベント形式を確認できないため、独立試合の登録計画を生成しません');
    const plan=previewIndependentFixtures({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions});
    return {id,independentReadOnly:true,plan,fixtureCount:fixtures.length,
-    fixtureIds:fixtures.map(m=>m.match_id||''),format:$('productionStart').dataset.fixtureFormat};
+    fixtureIds:fixtures.map(m=>m.match_id||''),format};
   }
   const [release,official,latestRaw]=await Promise.all([
    read('/production/release-state?event_id='+encodeURIComponent(id)),
