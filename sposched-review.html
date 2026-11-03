@@ -2633,6 +2633,14 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
    }
   }
   const formatMatchesCount=officialFormat==='4teams_1pitch'&&count===4;
+  // Only official 4-team format can use the existing production batch writer.
+  // Do not allow an unsupported format to inherit an enabled send button.
+  const existingProductionStart=$('productionStart');
+  if(existingProductionStart){
+   existingProductionStart.disabled=true;
+   existingProductionStart.dataset.fixtureFormat=officialFormat||'unverified';
+   existingProductionStart.dataset.fixtureModeReady=formatMatchesCount?'legacy-four':'unsupported';
+  }
   $('ssFixtureModeStatus').textContent='公式試合：'+count+'件｜'+formatLabel+'｜'+
    (formatMatchesCount?'既存の4試合一括登録形式です。':'この形式の一括登録は開発中または未確認です。登録前に公式試合情報を確認してください。');
   loadedFromStagingDirect=$('ssEnvironment').value==='staging';
