@@ -187,6 +187,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   </label>
   <button id="ssLoadSnapshot" type="button" class="primary quick-main" hidden>このイベントを読み込む</button>
   <p id="ssFixtureModeStatus" class="small" role="status" aria-live="polite">イベント読み込み後、取得した公式試合数と試合形式の確認状況を表示します。</p>
+  <div id="ssFixturePreview" class="registered-goals" hidden aria-label="読み込んだ公式試合一覧"></div>
  </div>
  <details><summary>手元に保存したSSのJSONファイルから読み込む（従来方式）</summary>
  <p class="small">SS連携が使えないときは、保存済みのJSONを読み込むこともできます。</p>
@@ -2614,6 +2615,17 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   const knownFormats={'1team':'1チーム形式','2teams_1pitch':'2チーム形式','3teams_1pitch':'3チーム形式','4teams_1pitch':'4チーム形式'};
   const formatLabel=knownFormats[officialFormat]||'形式未確認';
   const count=snapshot.matches.length;
+  const fixturePreview=$('ssFixturePreview');
+  fixturePreview.replaceChildren();
+  fixturePreview.hidden=count===0;
+  if(count){
+   fixturePreview.append(node('strong','読み込んだ公式試合（確認のみ）'));
+   for(const match of [...snapshot.matches].sort((a,b)=>Number(a.seq)-Number(b.seq))){
+    const label='試合 '+match.seq+'｜'+(match.left?.name||match.left||'対戦相手未確認')+' vs '+
+     (match.right?.name||match.right||'対戦相手未確認');
+    fixturePreview.append(node('p',label));
+   }
+  }
   const formatMatchesCount=officialFormat==='4teams_1pitch'&&count===4;
   $('ssFixtureModeStatus').textContent='公式試合：'+count+'件｜'+formatLabel+'｜'+
    (formatMatchesCount?'既存の4試合一括登録形式です。':'この形式の一括登録は開発中または未確認です。登録前に公式試合情報を確認してください。');
