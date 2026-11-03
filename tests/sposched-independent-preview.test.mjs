@@ -38,3 +38,11 @@ test('same scorer can legitimately score multiple goals in one fixture',()=>{
  assert.equal(plan.operations.filter(op=>op.action==='create').length,2);
  assert.equal(plan.operations.filter(op=>op.action==='finish').length,1);
 });
+
+test('team affiliation normalization accepts ASCII and Japanese whitespace',()=>{
+ const x=input(1);
+ x.snapshot.playerTeam.set('A','Red Team');
+ x.snapshot.playerTeam.set('B','Red Team');
+ x.rows[0].team='Red　Team';
+ assert.equal(previewIndependentFixtures(x).operations[0].action,'create');
+});
