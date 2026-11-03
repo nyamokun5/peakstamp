@@ -38,12 +38,6 @@ export function previewIndependentFixtures({snapshot,rows,decisions}){
    expected_match_id:fixture.matchId});
  }
  if(goals.length>20)fail('登録予定のゴールが20件を超えています');
- const signatures=new Set();
- for(const goal of goals){
-  const signature=[goal.seq,goal.team,goal.scorer,goal.assist].map(v=>String(v).normalize('NFKC').toLocaleLowerCase('en').replace(/[\\s\\u3000]/g,'')).join('|');
-  if(signatures.has(signature))fail('同じ試合の得点候補が重複しています');
-  signatures.add(signature);
- }
  const operations=[];
  for(const fixture of ordered){
   operations.push(...goals.filter(g=>g.seq===fixture.seq));
