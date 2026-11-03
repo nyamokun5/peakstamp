@@ -29,8 +29,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
   const id=x.snapshot.eventId;
   const format=$('productionStart').dataset.fixtureFormat;
   const independentFormat=['1team','2teams_1pitch','3teams_1pitch'].includes(format);
-  const fixtureMode=x.snapshot.matches?.length===4&&!independentFormat?'legacy-four':'unsupported';
-  if(fixtureMode==='unsupported'){
+  const fixtureMode=independentFormat?'independent':'legacy-four';
+  if(fixtureMode==='independent'){
    // The independent-fixture Worker contract is not deployed to production.
    // Never pass a non-four-fixture event to the legacy four-match write planner.
    const official=await read('/production/inspect?event_id='+encodeURIComponent(id));
