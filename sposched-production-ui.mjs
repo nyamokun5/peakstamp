@@ -27,7 +27,9 @@ export function installProductionUI({current,read,normalize,onComplete}){
  async function inspect(){
   const x=active();if(!x)throw Error('本番イベントを選択してください');
   const id=x.snapshot.eventId;
-  const fixtureMode=x.snapshot.matches?.length===4?'legacy-four':'unsupported';
+  const format=$('productionStart').dataset.fixtureFormat;
+  const independentFormat=['1team','2teams_1pitch','3teams_1pitch'].includes(format);
+  const fixtureMode=x.snapshot.matches?.length===4&&!independentFormat?'legacy-four':'unsupported';
   if(fixtureMode==='unsupported'){
    // The independent-fixture Worker contract is not deployed to production.
    // Never pass a non-four-fixture event to the legacy four-match write planner.
@@ -40,6 +42,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
    if(fixtures.length!==x.snapshot.matches.length||fixtures.some((m,i)=>m.seq!==i+1||
       x.snapshot.matches.find(local=>local.seq===m.seq)?.matchId?.toLowerCase()!==
        String(m.match_id||'').toLowerCase()))throw Error('公式試合ID・件数が一致しません');
+   if(!independentFormat)throw Error('公式イベント形式を確認できないため、独立試合の登録計画を生成しません');
    const plan=previewIndependentFixtures({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions});
    return {id,independentReadOnly:true,plan,fixtureCount:fixtures.length,
     fixtureIds:fixtures.map(m=>m.match_id||''),format:$('productionStart').dataset.fixtureFormat};
