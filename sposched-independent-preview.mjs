@@ -30,7 +30,7 @@ export function previewIndependentFixtures({snapshot,rows,decisions}){
      r.assistMode==='named'&&!assist||assist&&assist===scorer)
    fail('ゴール'+(i+1)+'：得点者・チーム・アシストが不完全です');
   const playerTeam=snapshot.playerTeam;
-  const normalized=v=>v.normalize('NFKC').toLocaleLowerCase('en').replace(/[\\s\\u3000]/g,'');
+  const normalized=v=>v.normalize('NFKC').toLocaleLowerCase('en').replace(/[\s\u3000]/g,'');
   if(playerTeam?.get(scorer)&&normalized(playerTeam.get(scorer))!==normalized(team)||
      assist&&playerTeam?.get(assist)&&normalized(playerTeam.get(assist))!==normalized(team))
    fail('ゴール'+(i+1)+'：選手の所属チームと得点チームが異なります');
