@@ -46,6 +46,12 @@ export function installProductionUI({current,read,normalize,onComplete}){
        String(m.match_id||'').toLowerCase()))throw Error('公式試合ID・件数・未開始状態が一致しません');
    if(!independentFormat)throw Error('公式イベント形式を確認できないため、独立試合の登録計画を生成しません');
    const plan=prepareIndependentWorkerBatch({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions,requestId:crypto.randomUUID()});
+   // The independent Worker route is not deployed: preserve a strictly read-only UI.
+   if(plan.event_id.toLowerCase()!==id.toLowerCase()||
+      plan.fixture_count!==fixtures.length||
+      plan.operations.some(op=>String(op.expected_match_id||'').toLowerCase()!==
+       String(fixtures.find(f=>f.seq===op.seq)?.match_id||'').toLowerCase()))
+    throw Error('独立試合のWorker登録計画と公式試合IDが一致しません');
    return {id,independentReadOnly:true,plan,fixtureCount:fixtures.length,
     fixtureIds:fixtures.map(m=>m.match_id||''),format};
   }
