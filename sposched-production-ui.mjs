@@ -170,6 +170,10 @@ export function installProductionUI({current,read,normalize,onComplete}){
     $('productionWinner').value='';
    }
    if(result.status==='completed'){
+    if(result.layout_mode==='independent-fixtures-v1'&&
+       (!Number.isInteger(result.fixture_count)||result.fixture_count<1||result.fixture_count>24||
+        result.completed!==result.total||!result.inspection_only))
+     throw Error('独立試合ジョブの完了証跡が不完全です');
     const newest=normalize(await read('/snapshot?event_id='+encodeURIComponent(id)));
     if(result.layout_mode==='independent-fixtures-v1'){
      verifyCompletedIndependentSnapshot(result,newest,x.snapshot);
