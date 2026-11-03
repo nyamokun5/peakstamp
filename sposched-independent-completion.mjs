@@ -9,12 +9,14 @@ export function verifyCompletedIndependentSnapshot(job,fresh,previous){
  if(!Number.isInteger(count)||count<1||count>24||
     fresh.matches?.length!==count||previous.matches?.length!==count)
   throw Error('公式試合件数が登録前後で一致しません');
- const ids=job.fixture_ids||{};
+ const ids=job.fixture_ids;
+ if(!ids||typeof ids!=='object'||Array.isArray(ids)||
+    Object.keys(ids).length!==count)throw Error('独立試合ジョブの公式試合ID証跡が不完全です');
  const seen=new Set();
  for(let seq=1;seq<=count;seq++){
   const before=previous.matches.filter(m=>m.seq===seq);
   const after=fresh.matches.filter(m=>m.seq===seq);
-  const id=String(ids[seq]||before[0]?.matchId||'').toLowerCase();
+  const id=String(ids[seq]||'').toLowerCase();
   if(before.length!==1||after.length!==1||!UUID.test(id)||
      String(before[0].matchId||'').toLowerCase()!==id||
      String(after[0].matchId||'').toLowerCase()!==id||
