@@ -14,7 +14,7 @@ test('independent Worker payload includes UUID, confirmation and official fixtur
  assert.deepEqual(payload.operations.map(x=>x.action),['finish','finish']);
  assert.deepEqual(payload.operations.map(x=>x.expected_match_id),[fixture(1).matchId,fixture(2).matchId]);
 });
-test('independent Worker payload rejects missing request UUID and more than 64 operations',()=>{
+test('independent Worker payload rejects invalid request UUID',()=>{
  const base={snapshot:{eventId:E,matches:[fixture(1)]},rows:[],decisions:[]};
  assert.throws(()=>prepareIndependentWorkerBatch({...base,requestId:'invalid'}),/リクエストID/);
 });
