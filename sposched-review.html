@@ -2615,6 +2615,11 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   const knownFormats={'1team':'1チーム形式','2teams_1pitch':'2チーム形式','3teams_1pitch':'3チーム形式','4teams_1pitch':'4チーム形式'};
   const formatLabel=knownFormats[officialFormat]||'形式未確認';
   const count=snapshot.matches.length;
+  const independentMode=['1team','2teams_1pitch','3teams_1pitch'].includes(officialFormat);
+  // Reuse the four-fixture review UI. Only its format-specific explanation changes.
+  $('quickProductionHelp').textContent=independentMode
+   ?'AI候補と公式試合の対応を確認してください。得点者・アシスト者・対象試合を修正できます。独立試合形式の一括登録は現在開発中で、この画面からはまだ送信できません。'
+   :'AI候補と登録予定を確認してください。修正が必要な場合は「修正する」を押してください。まだSSには送信されません。';
   const fixturePreview=$('ssFixturePreview');
   fixturePreview.replaceChildren();
   fixturePreview.hidden=count===0;
