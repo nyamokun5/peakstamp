@@ -26,7 +26,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
  async function inspect(){
   const x=active();if(!x)throw Error('本番イベントを選択してください');
   const id=x.snapshot.eventId;
-  const fixtureMode=$('productionStart').dataset.fixtureModeReady;
+  const fixtureMode=x.snapshot.matches?.length===4?'legacy-four':'unsupported';
   if(fixtureMode==='unsupported'){
    // The independent-fixture Worker contract is not deployed to production.
    // Never pass a non-four-fixture event to the legacy four-match write planner.
@@ -88,10 +88,10 @@ export function installProductionUI({current,read,normalize,onComplete}){
     throw Error('既存の本番登録ジョブがあるため、新しい送信はできません');
    const x=await inspect();
    if(x.independentReadOnly){
-    out.textContent='公式試合：'+x.fixtureCount+'件（読み取り照合済み）\\n形式：'+x.format+
-     '\\n独立試合形式の本番登録は未有効化です。送信できません。';
-    $('productionAuditIds').textContent='イベントID：'+x.id+'\\n'+
-     x.fixtureIds.map((id,i)=>'第'+(i+1)+'試合：'+id).join('\\n');
+    out.textContent='公式試合：'+x.fixtureCount+'件（読み取り照合済み）\n形式：'+x.format+
+     '\n独立試合形式の本番登録は未有効化です。送信できません。';
+    $('productionAuditIds').textContent='イベントID：'+x.id+'\n'+
+     x.fixtureIds.map((id,i)=>'第'+(i+1)+'試合：'+id).join('\n');
     $('productionAudit').hidden=false;
     $('productionStart').disabled=true;
     status('公式試合の読み取り確認完了。登録はWorker連携完成後に有効化します。');
