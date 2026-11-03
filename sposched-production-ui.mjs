@@ -106,8 +106,9 @@ export function installProductionUI({current,read,normalize,onComplete}){
     $('productionAuditIds').textContent='イベントID：'+x.id+'\n'+
      x.fixtureIds.map((id,i)=>'第'+(i+1)+'試合：'+id).join('\n');
     $('productionAudit').hidden=false;
+    evidence=x;
     $('productionStart').disabled=true;
-    status('公式試合の読み取り確認完了。登録はWorker連携完成後に有効化します。');
+    status('公式試合の読み取り確認完了。Workerの本番対応が確認されるまで送信できません。');
     return;
    }
    evidence=x;
