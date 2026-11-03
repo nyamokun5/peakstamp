@@ -1,3 +1,4 @@
+import {verifyCompletedIndependentSnapshot} from './sposched-independent-completion.mjs';
 import {previewIndependentFixtures} from './sposched-independent-preview.mjs';
 // Production-only UI adapter. TEST button paths and storage are untouched.
 import {prepareProductionBatch,validateProductionReleaseEvidence,productionBatchStorageKey}
@@ -166,9 +167,15 @@ export function installProductionUI({current,read,normalize,onComplete}){
    }
    if(result.status==='completed'){
     const newest=normalize(await read('/snapshot?event_id='+encodeURIComponent(id)));
-    verifyCompletedWorkerSnapshot(result,newest,x.snapshot);
-    onComplete(newest);
-    status('✓ 4試合の登録と終了をSSで確認しました。');
+    if(result.layout_mode==='independent-fixtures-v1'){
+     verifyCompletedIndependentSnapshot(result,newest,x.snapshot);
+     onComplete(newest);
+     status('✓ '+result.fixture_count+'試合の登録と終了をSSで確認しました。');
+    }else{
+     verifyCompletedWorkerSnapshot(result,newest,x.snapshot);
+     onComplete(newest);
+     status('✓ 4試合の登録と終了をSSで確認しました。');
+    }
    }
    if(result.status==='running')window.setTimeout(refresh,1500);
   }catch(e){status('本番ジョブ確認未了：'+e.message+'。新規送信せず進捗を確認してください。');}
