@@ -1,9 +1,10 @@
 // Pure guard: independent fixture plans must exactly match a fresh official inspect.
 // This never authorizes or sends a write.
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
-export function verifyIndependentWorkerPreflight(plan,official){
+export function verifyIndependentWorkerPreflight(plan,official,{environment='PRODUCTION'}={}){
+ if(!['PRODUCTION','TEST'].includes(environment))throw Error('不正な環境指定です');
  if(plan?.layout_mode!=='independent-fixtures-v1'||!UUID.test(plan.event_id||'')||
-    official?.environment!=='PRODUCTION'||
+    official?.environment!==environment||
     String(official.event_id||'').toLowerCase()!==plan.event_id.toLowerCase()||
     !Number.isInteger(plan.fixture_count)||plan.fixture_count<1||plan.fixture_count>24||
     !Array.isArray(official.matches)||!Array.isArray(plan.operations))
