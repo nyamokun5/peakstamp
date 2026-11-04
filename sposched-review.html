@@ -283,7 +283,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
    <button id="autoRecover" class="primary" type="button" hidden>⚠ 前回の送信記録を照合（書き込みなし）</button>
   </div>
   <div id="ssResultPanel" hidden>
-   <strong>✓ 4試合の登録・確認が完了しました</strong>
+   <strong id="ssResultHeading">✓ 試合の登録・確認が完了しました</strong>
    <p id="ssResultTime" role="status"></p>
    <p class="small">最初の登録ボタン押下から全処理完了まで計測。同点時の勝者選択で待った時間も含みます。</p>
    <a id="ssResultLink" target="_blank" rel="noopener noreferrer" hidden>SSアプリで登録結果を確認する（TEST）</a>
@@ -1415,7 +1415,7 @@ function refreshSSResultLink(){
  if(link)$('ssResultLink').href=link;
  else $('ssResultLink').removeAttribute('href');
  $('ssResultLinkNote').textContent=link
-  ?'別タブでSSアプリを開き、登録されたゴールと4試合の結果を確認できます。'
+  ?'別タブでSSアプリを開き、登録されたゴールと'+(snapshot?.matches?.length||'対象')+'試合の結果を確認できます。'
   :'このイベントのSSアプリURLは未登録です。下の欄へ正しいURLを貼り付けて保存してください。';
 }
 function showCompletionPanel(eventId,seconds,runId){
@@ -1425,6 +1425,7 @@ function showCompletionPanel(eventId,seconds,runId){
  panel.dataset.eventId=eventId;
  panel.dataset.runId=runId;
  panel.hidden=false;
+ $('ssResultHeading').textContent='✓ '+(snapshot.matches?.length||'対象')+'試合の登録・確認が完了しました';
  $('ssResultTime').textContent=seconds===null
   ?'開始時刻が保存されていないため、全体の秒数は測定できません（次回から計測）'
   :'ボタン押下 → 全処理完了：'+seconds.toFixed(1)+'秒';
@@ -2459,7 +2460,7 @@ function updateFlowGuide(){
    'ゴールを確認して、下の登録に進んでください。';
   target='quickPanel';
  }else if(test&&hasVerifiedCurrentCompletion()){
-  step='✓ 完了';message='4試合の登録・照合が完了しました。';target='ssResultPanel';
+  step='✓ 完了';message=snapshot.matches.length+'試合の登録・照合が完了しました。';target='ssResultPanel';
  }else if(test&&snapshot.matches.length===0){
   step='試合枠なし';
   message='SSの試合が0件です。イベントを確認してください。';
