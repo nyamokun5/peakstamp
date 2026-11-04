@@ -2657,7 +2657,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   const independentMode=['1team','2teams_1pitch','3teams_1pitch'].includes(officialFormat);
   // Reuse the four-fixture review UI. Only its format-specific explanation changes.
   $('quickProductionHelp').textContent=independentMode
-   ?'AI候補と公式試合の対応を確認してください。得点者・アシスト者・対象試合を修正できます。独立試合形式の一括登録は現在開発中で、この画面からはまだ送信できません。'
+   ?'AI候補と公式試合の対応を確認してください。得点者・アシスト者・対象試合を修正できます。独立試合形式はTEST環境の専用登録機能で扱います。公式試合・得点者・アシスト者を確認し、TEST登録セクションの準備状況を確認してください。本番登録は無効です。'
    :'AI候補と登録予定を確認してください。修正が必要な場合は「修正する」を押してください。まだSSには送信されません。';
   const fixturePreview=$('ssFixturePreview');
   fixturePreview.replaceChildren();
@@ -2681,7 +2681,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
    existingProductionStart.dataset.fixtureModeReady=formatMatchesCount?'legacy-four':'unsupported';
   }
   $('ssFixtureModeStatus').textContent='公式試合：'+count+'件｜'+formatLabel+'｜'+
-   (formatMatchesCount?'既存の4試合一括登録形式です。':'この形式の一括登録は開発中または未確認です。登録前に公式試合情報を確認してください。');
+   (formatMatchesCount?'既存の4試合一括登録形式です。':independentMode&&$('ssEnvironment').value==='staging'?'独立試合のTEST登録対象です。登録可否は下のTEST登録セクションで確認してください。':independentMode?'独立試合の本番登録は無効です。':'正式な試合形式を確認できません。登録しないでください。');
   loadedFromStagingDirect=$('ssEnvironment').value==='staging';
   loadedFromProductionDirect=$('ssEnvironment').value==='production';
   manualGoals=loadedFromStagingDirect?
