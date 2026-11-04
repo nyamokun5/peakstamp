@@ -100,3 +100,25 @@ for(const [format,count] of [['1team',1],['2teams_1pitch',2],['3teams_1pitch',3]
    assert.equal(x.get('productionStart').disabled,true);
   }finally{globalThis.fetch=oldFetch;x.restore();}
  });
+
+test('a rerender during preflight invalidates old evidence even for the same event',async()=>{
+ let releaseRead;
+ const pending=new Promise(resolve=>{releaseRead=resolve;});
+ const x=createUI({readOverride:async path=>{
+  await pending;
+  if(path.startsWith('/production/release-state'))return {environment:'PRODUCTION',event_id:E,
+   target_event_id:E,scope:'current-target',release_ready:true};
+  if(path.startsWith('/snapshot'))return snapshot;
+  return {environment:'PRODUCTION',event_id:E,team_id:T,mode:'read-only',team_pinned:true,
+   write_allowed:false,release_approved:false,matches:snapshot.matches.map(m=>({seq:m.seq,match_id:m.matchId,status:m.status}))};
+ }});
+ try{
+  x.ui.render();
+  const checking=x.get('productionCheck').events.click();
+  x.ui.render();
+  releaseRead();
+  await checking;
+  assert.equal(x.get('productionStart').disabled,true);
+  assert.match(x.get('productionPlan').textContent,/変更されました/);
+ }finally{x.restore();}
+});
