@@ -417,7 +417,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <button id="quickBackFixed" type="button">← ゴール一覧に戻る</button>
 </div>
 <script type="module">
-import {verifyCompletedIndependentSnapshot} from './sposched-independent-completion.mjs';
+import {verifyCompletedIndependentSnapshot,hasRecreatedIndependentFixtures} from './sposched-independent-completion.mjs';
 import {prepareIndependentWorkerBatch} from './sposched-independent-worker-batch.mjs';
 import {startIndependentTestBatch} from './sposched-independent-test-transport.mjs';
 import {jobControlPayload} from './sposched-job-control.mjs?v=pause1';
@@ -1831,15 +1831,15 @@ function showWorkerBatchState(state){
   catch{$(id).hidden=true;}
  }
  const stored=localStorage.getItem(workerBatchStorageKey(state.event_id));
- if(stored===state.request_id&&hasRecreatedBracket(state,snapshot)){
+ if(stored===state.request_id&&(hasRecreatedBracket(state,snapshot)||hasRecreatedIndependentFixtures(state,snapshot))){
   $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
   $('workerTimingDetails').hidden=true;
   hideCompletionPanel();
   $('workerBatchStatus').textContent=
-   '前回Workerジョブは古い試合IDに紐づいています。現在の4試合は別IDです。'+
+   '前回Workerジョブは古い試合IDに紐づいています。現在の試合は別IDです。'+
    (localStorage.getItem(workerBatchRecreatePendingKey(state.event_id))
     ?'新しいジョブの送信結果が不明です。まず「進捗を再取得」で確認し、再送はしないでください。'
-    :'「再作成された新しい4試合を高速登録（TEST）」から正式な試合IDを再照合できます。');
+    :(state.layout_mode==='independent-fixtures-v1'?'独立試合の再作成登録はまだ画面から実行できません。旧ジョブを再送しないでください。':'「再作成された新しい4試合を高速登録（TEST）」から正式な試合IDを再照合できます。'));
   $('workerBatchDecision').hidden=true;
   workerBatchPolling=false;
   setBatchBusy(false);
@@ -1922,7 +1922,7 @@ async function refreshWorkerBatch({passive=false}={}){
   }
   // Completion is shown only after the final official snapshot is available.
   // Status/GET failure must not leave a green success panel behind.
-  if(state.status==='completed'&&!hasRecreatedBracket(state,snapshot)){
+  if(state.status==='completed'&&!hasRecreatedBracket(state,snapshot)&&!hasRecreatedIndependentFixtures(state,snapshot)){
    hideCompletionPanel();
    $('workerBatchStatus').textContent='Workerの登録は完了しました。公式SSの4試合の終了状態を確認中…';
    const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
@@ -1931,7 +1931,7 @@ async function refreshWorkerBatch({passive=false}={}){
    snapshot=fresh;
   }
   showWorkerBatchState(state);
-  if(hasRecreatedBracket(state,snapshot)&&
+  if((hasRecreatedBracket(state,snapshot)||hasRecreatedIndependentFixtures(state,snapshot))&&
     localStorage.getItem(workerBatchStorageKey(eventId))===state.request_id){
    workerBatchPolling=false;
    setBatchBusy(false);
