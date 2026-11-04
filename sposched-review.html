@@ -1499,8 +1499,17 @@ function renderIndependentTestSummary(root){
  try{prepareIndependentWorkerBatch({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId:'11111111-1111-4111-8111-111111111111'});}
  catch(e){issue=e.message;}
  const unresolved=pendingForEvent().length>0;
+ const invalidGoals=quickGoalDecisions(snapshot,rows).filter(d=>d.state!=='ready'&&rows[d.index]?.include);
+ const firstIssue=issue.match(/^ゴール(\\d+)：/);
+ const jump=$('workerBatchJumpToGoal');
+ jump.hidden=!issue||!firstIssue;
+ if(firstIssue){jump.dataset.goalIndex=String(Number(firstIssue[1])-1);jump.textContent='ゴール'+firstIssue[1]+'の確認箇所へ移動（送信なし）';}
  $('workerBatchRun').disabled=!!marker||!!issue||unresolved||batchBusy||autoBusy||workerBatchPolling;
- $('workerBatchReadiness').textContent=marker?'保存済みジョブの進捗を確認してください。':unresolved?'未照合の送信記録を確認してください。':issue||'確認済みの一覧をTESTへ登録できます。';
+ $('workerBatchRecreate').disabled=!!issue||unresolved||batchBusy||autoBusy||workerBatchPolling;
+ $('workerBatchReadiness').textContent=unresolved?'未照合の送信記録があります。再送せず照合してください。':
+  issue?'登録前に修正が必要：'+issue:
+  marker?'保存済みジョブの進捗を確認してください。':
+  '登録可能なゴール '+quickGoalDecisions(snapshot,rows).filter(d=>d.state==='ready').length+'件。TESTへ登録できます。';
  $('autoBeforeRun').textContent='得点と試合終了を順番に登録し、SSから結果を再取得します。';
  if(marker&&workerRestoredEvent!==snapshot.eventId){workerRestoredEvent=snapshot.eventId;Promise.resolve().then(()=>refreshWorkerBatch({passive:true}));}
 }
