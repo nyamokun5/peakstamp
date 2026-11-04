@@ -1481,8 +1481,14 @@ function renderIndependentTestSummary(root){
  const marker=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
  $('workerBatchArea').hidden=false;
  $('autoRun').disabled=true;
- $('workerBatchRecreate').hidden=true;
- $('workerBatchRecreateHint').hidden=true;
+ const prior=workerLatestState?.event_id===snapshot.eventId?workerLatestState:null;
+ const recreated=Boolean(marker&&prior?.request_id===marker&&
+  hasRecreatedIndependentFixtures(prior,snapshot));
+ const pendingRecreation=Boolean(localStorage.getItem(workerBatchRecreatePendingKey(snapshot.eventId)));
+ $('workerBatchRecreate').hidden=!recreated||pendingRecreation||pendingForEvent().length>0;
+ $('workerBatchRecreate').disabled=batchBusy||autoBusy||workerBatchPolling;
+ $('workerBatchRecreate').textContent='再作成された'+snapshot.matches.length+'試合を登録（TEST）';
+ $('workerBatchRecreateHint').hidden=!recreated;
  $('workerGateAudit').hidden=true;
  $('workerBatchRefresh').hidden=!marker;
  $('autoRegisterHeading').textContent='4. 確認済みのゴールと独立試合をTESTへ登録';
