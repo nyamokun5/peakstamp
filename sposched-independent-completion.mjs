@@ -26,3 +26,27 @@ export function verifyCompletedIndependentSnapshot(job,fresh,previous){
  }
  return true;
 }
+
+// Detect a genuinely new independent-fixture generation after an event reset.
+// This is read-only: the Worker must independently prove old fixtures were
+// deleted and the new fixtures are clean before allowing a new batch.
+export function hasRecreatedIndependentFixtures(job,snapshot){
+ if(job?.layout_mode!=='independent-fixtures-v1'||
+    job.event_id!==snapshot?.eventId||job.status!=='completed')return false;
+ const old=job.fixture_ids;
+ const matches=snapshot.matches;
+ if(!old||typeof old!=='object'||Array.isArray(old)||
+    !Array.isArray(matches)||matches.length<1||matches.length>24||
+    Object.keys(old).length!==matches.length)return false;
+ const oldIds=new Set(),newIds=new Set();
+ for(let seq=1;seq<=matches.length;seq++){
+  const previous=String(old[seq]||'').toLowerCase();
+  const current=matches.filter(m=>m.seq===seq);
+  if(!UUID.test(previous)||current.length!==1)return false;
+  const m=current[0],id=String(m.matchId||'').toLowerCase();
+  if(!UUID.test(id)||oldIds.has(previous)||newIds.has(id)||
+     !['scheduled','waiting'].includes(m.status))return false;
+  oldIds.add(previous);newIds.add(id);
+ }
+ return [...oldIds].every(id=>!newIds.has(id));
+}
