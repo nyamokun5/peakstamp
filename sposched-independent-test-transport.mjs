@@ -19,18 +19,20 @@ export async function startIndependentTestBatch({
  }
  if(!capabilityResponse.ok||capability?.environment!=='TEST'||
     capability?.independent_fixture_contract!=='independent-fixtures-v1'||
-    capability?.independent_test_batch_writes!==true)
+    capability?.independent_test_batch_writes!==true||
+    capability?.independent_test_batch_contract!=='independent-test-batch-v1'||
+    capability?.batch_start_path!=='/staging/batch/start')
   throw Error('TEST Workerは独立試合の書き込みに対応していません。登録は送信していません');
 
- const response=await fetchImpl(INDEPENDENT_TEST_WORKER+'/production/batch/start',{
+ const response=await fetchImpl(INDEPENDENT_TEST_WORKER+'/staging/batch/start',{
   method:'POST',mode:'cors',cache:'no-store',
   headers:{'Content-Type':'application/json','X-SS-Bridge-Token':bridgeToken.trim()},
-  body:JSON.stringify(plan)
+  redirect:'error',body:JSON.stringify({...plan,confirm:'TEST-ONLY BATCH WRITE'})
  });
  let result;
  try{result=await response.json();}catch{throw Error('TEST Workerの応答がJSONではありません。再送せずジョブを確認してください');}
  if(!response.ok)throw Error(result?.error?.message||'TEST Worker HTTP '+response.status+'。再送せずジョブを確認してください');
- if(result?.environment!=='TEST'||result?.event_id!==plan.event_id||
+ if(result?.environment!=='STAGING ONLY'||result?.event_id!==plan.event_id||
     result?.request_id!==plan.request_id||
     result?.layout_mode!=='independent-fixtures-v1'||
     result?.fixture_count!==plan.fixture_count)
