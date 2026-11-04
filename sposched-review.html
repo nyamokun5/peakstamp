@@ -180,7 +180,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
     <div class="line"><label class="small"><input id="ssRememberTab" type="checkbox"> このタブで4時間記憶</label><button id="ssForgetToken" type="button">保存を削除</button></div>
     <p id="ssRememberNote" class="small">このタブだけで一時保存します。共有端末では使用しないでください。</p>
    </details>
-  <p class="small" id="ssFixtureModeGuide" role="note"><strong>試合形式について：</strong>4チームの決勝トーナメント形式に加え、1〜3チームの独立試合形式はTEST環境で検証できます。本番環境での独立試合登録は無効です。正式な試合形式を確認できない場合は登録を進めないでください。</p>
+  <p class="small" id="ssFixtureModeGuide" role="note"><strong>試合形式について：</strong>4チームの決勝トーナメント形式に加え、1〜3チームの独立試合形式はTEST環境で検証できます。本番登録には対応済みWorkerと現在のターゲットイベントの確認が必要です。正式な試合形式を確認できない場合は登録を進めないでください。</p>
   <div class="line"><button id="ssLoadEvents" type="button">イベントを探す</button><span id="ssDirectStatus" class="small" role="status" aria-live="polite"></span></div>
   <label class="field" id="ssSelectWrap" hidden>開催日・イベント
     <select id="ssEventSelect" aria-label="SSイベント選択"></select>
@@ -2658,7 +2658,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   const independentMode=['1team','2teams_1pitch','3teams_1pitch'].includes(officialFormat);
   // Reuse the four-fixture review UI. Only its format-specific explanation changes.
   $('quickProductionHelp').textContent=independentMode
-   ?'AI候補と公式試合の対応を確認してください。得点者・アシスト者・対象試合を修正できます。独立試合形式はTEST環境の専用登録機能で扱います。公式試合・得点者・アシスト者を確認し、TEST登録セクションの準備状況を確認してください。本番登録は無効です。'
+   ?'AI候補と公式試合の対応を確認してください。得点者・アシスト者・対象試合を修正できます。登録可否は下の登録セクションで確認してください。本番は対応済みWorkerと現在のターゲットイベントの確認が必要です。'
    :'AI候補と登録予定を確認してください。修正が必要な場合は「修正する」を押してください。まだSSには送信されません。';
   const fixturePreview=$('ssFixturePreview');
   fixturePreview.replaceChildren();
@@ -2673,7 +2673,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
    }
   }
   const formatMatchesCount=officialFormat==='4teams_1pitch'&&count===4;
-  // Only official 4-team format can use the existing production batch writer.
+  // Production inspection must validate the deployed contract before enabling writes.
   // Do not allow an unsupported format to inherit an enabled send button.
   const existingProductionStart=$('productionStart');
   if(existingProductionStart){
@@ -2682,7 +2682,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
    existingProductionStart.dataset.fixtureModeReady=formatMatchesCount?'legacy-four':'unsupported';
   }
   $('ssFixtureModeStatus').textContent='公式試合：'+count+'件｜'+formatLabel+'｜'+
-   (formatMatchesCount?'既存の4試合一括登録形式です。':independentMode&&$('ssEnvironment').value==='staging'?'独立試合のTEST登録対象です。登録可否は下のTEST登録セクションで確認してください。':independentMode?'独立試合の本番登録は無効です。':'正式な試合形式を確認できません。登録しないでください。');
+   (formatMatchesCount?'既存の4試合一括登録形式です。':independentMode&&$('ssEnvironment').value==='staging'?'独立試合のTEST登録対象です。登録可否は下のTEST登録セクションで確認してください。':independentMode?'下の登録内容確認でWorkerの対応状況とターゲットイベントを確認します。':'正式な試合形式を確認できません。登録しないでください。');
   loadedFromStagingDirect=$('ssEnvironment').value==='staging';
   loadedFromProductionDirect=$('ssEnvironment').value==='production';
   manualGoals=loadedFromStagingDirect?

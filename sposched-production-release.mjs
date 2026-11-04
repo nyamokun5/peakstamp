@@ -1,12 +1,14 @@
 // Thin PRODUCTION adapter for the already-tested four-match TEST planner.
 // Zero browser/HTTP writes here. Production execution requires a separate
 // official live-target Worker approval, independent reads and reviewed send.
+import {verifyIndependentWorkerPreflight} from './sposched-independent-preflight.mjs';
+import {prepareIndependentWorkerBatch} from './sposched-independent-worker-batch.mjs';
 import {prepareWorkerTournament} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const fail=message=>{throw Error(message);};
 export const productionBatchStorageKey=eventId=>'peakstamp:production:worker-batch:'+eventId;
 
-export function validateProductionReleaseEvidence(snapshot,inspect,release){
+function validateReleaseIdentity(snapshot,inspect,release){
  if(!snapshot||!UUID.test(snapshot.eventId||'')||inspect?.environment!=='PRODUCTION'||
     inspect.mode!=='read-only'||inspect.team_pinned!==true||
     inspect.write_allowed!==false||inspect.release_approved!==false||
@@ -15,6 +17,9 @@ export function validateProductionReleaseEvidence(snapshot,inspect,release){
     inspect.event_id?.toLowerCase()!==snapshot.eventId.toLowerCase()||
     release.event_id?.toLowerCase()!==snapshot.eventId.toLowerCase())
   fail('本番団体・イベント・書き込み承認の独立照合に失敗しました');
+}
+export function validateProductionReleaseEvidence(snapshot,inspect,release){
+ validateReleaseIdentity(snapshot,inspect,release);
  const ids=new Set(),slots=[];
  if(!Array.isArray(inspect.matches)||inspect.matches.length!==4||snapshot.matches?.length!==4)
   fail('本番の正式な4試合を取得できません');
@@ -40,4 +45,22 @@ export function validateProductionReleaseEvidence(snapshot,inspect,release){
 export function prepareProductionBatch({snapshot,rows,decisions,requestId}){
  const plan=prepareWorkerTournament({snapshot,rows,decisions,requestId});
  return {...plan,confirm:'PRODUCTION EVENT BATCH WRITE'};
+}
+
+// Require the deployed production contract, target approval and a fresh official
+// snapshot together. An older Worker cannot accidentally enable this UI.
+export function validateIndependentProductionReleaseEvidence(snapshot,inspect,release){
+ validateReleaseIdentity(snapshot,inspect,release);
+ if(release.independent_fixture_contract!=='independent-fixtures-v1'||
+    release.independent_batch_writes!==true||
+    release.batch_start_path!=='/production/batch/start'||
+    !['1team','2teams_1pitch','3teams_1pitch'].includes(snapshot.officialFormat)||
+    !UUID.test(inspect.team_id||''))
+  fail('本番Workerの独立試合対応・公式形式を確認できません');
+ const plan=prepareIndependentWorkerBatch({snapshot,rows:[],decisions:[],
+  requestId:snapshot.eventId});
+ verifyIndependentWorkerPreflight(plan,inspect);
+ return {event_id:snapshot.eventId,team_id:inspect.team_id,
+  fixture_ids:[...snapshot.matches].sort((a,b)=>a.seq-b.seq).map(m=>m.matchId.toLowerCase()),
+  date:inspect.event_date};
 }

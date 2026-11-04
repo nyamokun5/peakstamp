@@ -1,8 +1,7 @@
-import {verifyIndependentWorkerPreflight} from './sposched-independent-preflight.mjs';
 import {verifyCompletedIndependentSnapshot} from './sposched-independent-completion.mjs';
 import {prepareIndependentWorkerBatch} from './sposched-independent-worker-batch.mjs';
 // Production-only UI adapter. TEST button paths and storage are untouched.
-import {prepareProductionBatch,validateProductionReleaseEvidence,productionBatchStorageKey}
+import {prepareProductionBatch,validateProductionReleaseEvidence,validateIndependentProductionReleaseEvidence,productionBatchStorageKey}
  from './sposched-production-release.mjs?v=production-bridge1';
 import {verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
 
@@ -19,7 +18,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   const r=await fetch('https://shoot-sunday-sync.yomax1979.workers.dev'+path,{
    method:'POST',mode:'cors',cache:'no-store',
    headers:{'X-SS-Bridge-Token':token,'Content-Type':'application/json'},
-   body:JSON.stringify(body)
+   redirect:'error',body:JSON.stringify(body)
   });
   const result=await r.json();
   if(!r.ok)throw Object.assign(Error(result?.error?.message||'本番Worker HTTP '+r.status),
@@ -29,29 +28,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
  async function inspect(){
   const x=active();if(!x)throw Error('本番イベントを選択してください');
   const id=x.snapshot.eventId;
-  const format=$('productionStart').dataset?.fixtureFormat||'';
-  const independentFormat=['1team','2teams_1pitch','3teams_1pitch'].includes(format);
-  const fixtureMode=independentFormat?'independent':'legacy-four';
-  if(fixtureMode==='independent'){
-   // The independent-fixture Worker contract is not deployed to production.
-   // Never pass a non-four-fixture event to the legacy four-match write planner.
-   const official=await read('/production/inspect?event_id='+encodeURIComponent(id));
-   if(active()?.snapshot?.eventId!==id)throw Error('確認中に本番イベントが変更されました');
-   if(official?.environment!=='PRODUCTION'||official?.event_id?.toLowerCase()!==id.toLowerCase()||
-      !Array.isArray(official.matches))throw Error('公式試合情報の照合に失敗しました');
-   const fixtures=official.matches.filter(m=>Number.isInteger(m.seq)&&m.seq>0)
-    .sort((a,b)=>a.seq-b.seq);
-   if(fixtures.length!==x.snapshot.matches.length||fixtures.some((m,i)=>m.seq!==i+1||
-      m.status!=='scheduled'||
-      x.snapshot.matches.find(local=>local.seq===m.seq)?.matchId?.toLowerCase()!==
-       String(m.match_id||'').toLowerCase()))throw Error('公式試合ID・件数・未開始状態が一致しません');
-   if(!independentFormat)throw Error('公式イベント形式を確認できないため、独立試合の登録計画を生成しません');
-   const plan=prepareIndependentWorkerBatch({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions,requestId:crypto.randomUUID()});
-   // Read-only official preflight; no independent production write is enabled.
-   verifyIndependentWorkerPreflight(plan,official);
-   return {id,independentReadOnly:true,plan,fixtureCount:fixtures.length,
-    fixtureIds:fixtures.map(m=>m.match_id||''),format};
-  }
+  const independentFormat=['1team','2teams_1pitch','3teams_1pitch'].includes(x.snapshot.officialFormat);
   const [release,official,latestRaw]=await Promise.all([
    read('/production/release-state?event_id='+encodeURIComponent(id)),
    read('/production/inspect?event_id='+encodeURIComponent(id)),
@@ -59,11 +36,13 @@ export function installProductionUI({current,read,normalize,onComplete}){
   ]);
   if(active()?.snapshot?.eventId!==id)throw Error('確認中に本番イベントが変更されました');
   const newest=normalize(latestRaw);
-  const baseline=validateProductionReleaseEvidence(x.snapshot,official,release);
-  const updated=validateProductionReleaseEvidence(newest,official,release);
+  const validate=independentFormat?validateIndependentProductionReleaseEvidence:validateProductionReleaseEvidence;
+  const baseline=validate(x.snapshot,official,release);
+  const updated=validate(newest,official,release);
   if(JSON.stringify(baseline.fixture_ids)!==JSON.stringify(updated.fixture_ids))
    throw Error('最新の試合IDが変わりました');
-  const plan=prepareProductionBatch({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions,
+  const prepare=independentFormat?prepareIndependentWorkerBatch:prepareProductionBatch;
+  const plan=prepare({snapshot:x.snapshot,rows:x.rows,decisions:x.decisions,
    requestId:crypto.randomUUID()});
   return {id,date:baseline.date,teamId:baseline.team_id,
    matchIds:baseline.fixture_ids,plan};
@@ -97,30 +76,20 @@ export function installProductionUI({current,read,normalize,onComplete}){
    if(localStorage.getItem(key(active().snapshot.eventId)))
     throw Error('既存の本番登録ジョブがあるため、新しい送信はできません');
    const x=await inspect();
-   if(x.independentReadOnly){
-    out.textContent='公式試合：'+x.fixtureCount+'件（読み取り照合済み）\n登録予定：ゴール'+x.plan.operations.filter(op=>op.action==='create').length+'件、試合終了'+x.fixtureCount+'件\n形式：'+x.format+
-     '\n独立試合形式の本番登録は未有効化です。送信できません。';
-    $('productionAuditIds').textContent='イベントID：'+x.id+'\n'+
-     x.fixtureIds.map((id,i)=>'第'+(i+1)+'試合：'+id).join('\n');
-    $('productionAudit').hidden=false;
-    evidence=x;
-    $('productionStart').disabled=true;
-    status('公式試合の読み取り確認完了。Workerの本番対応が確認されるまで送信できません。');
-    return;
-   }
    evidence=x;
    const goals=x.plan.operations.filter(o=>o.action==='create').length;
-   out.textContent='開催日：'+x.date+'\n登録予定：ゴール'+goals+'件、4試合の結果';
+   out.textContent='開催日：'+x.date+'\n登録予定：ゴール'+goals+'件、'+x.matchIds.length+'試合の結果';
    $('productionAuditIds').textContent='団体ID：'+x.teamId+'\nイベントID：'+x.id+'\n'+
     x.matchIds.map((id,i)=>'第'+(i+1)+'試合：'+(id||'対戦確定後に発行')).join('\n');
    $('productionAudit').hidden=false;
+   $('productionStart').textContent='② '+x.matchIds.length+'試合を本番登録';
    $('productionStart').disabled=false;
    status('確認完了。②で本番登録できます。');
   }catch(e){out.textContent='確認未完了：'+e.message;status('本番への送信は行っていません。');}
   finally{busy=false;$('productionCheck').disabled=false;}
  });
  $('productionStart').addEventListener('click',async()=>{
-  if(!active()||busy||!evidence||evidence.independentReadOnly)return;
+  if(!active()||busy||!evidence)return;
   const earlier=evidence,eventId=earlier.id;
   if(localStorage.getItem(key(eventId)))return;
   busy=true;$('productionStart').disabled=true;
