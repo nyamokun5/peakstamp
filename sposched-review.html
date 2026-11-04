@@ -2023,6 +2023,39 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
   return;
  }
  const clickedAt=Date.now();
+ if(isIndependentTest()){
+  try{
+   if(pendingForEvent().length)throw Error('未照合のゴール送信記録があります');
+   const old=await postStaging('/staging/batch/inspect',{event_id:eventId});
+   const oldRequestId=localStorage.getItem(key);
+   const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+   if(old.request_id!==oldRequestId||!hasRecreatedIndependentFixtures(old,fresh))
+    throw Error('旧ジョブと再作成後の公式試合IDを確認できません');
+   const requestId=crypto.randomUUID();
+   const plan=prepareIndependentWorkerBatch({
+    snapshot:fresh,rows,decisions:quickGoalDecisions(fresh,rows),requestId
+   });
+   if(!window.confirm('TESTの新しい'+fresh.matches.length+'試合へ登録します。旧ジョブは保管し再送しません。続けますか？'))return;
+   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
+   localStorage.setItem(pendingKey,JSON.stringify({requestId,previousRequestId:oldRequestId,clickedAt}));
+   setBatchBusy(true);
+   const started=await postStaging('/staging/batch/recreate',{
+    ...plan,confirm_recreation:'TEST-ONLY RECREATE DELETED FIXTURES',
+    previous_request_id:oldRequestId
+   });
+   if(started.environment!=='STAGING ONLY'||started.request_id!==requestId)
+    throw Error('送信結果が不明です。再送しないでください');
+   localStorage.setItem(key,requestId);
+   localStorage.removeItem(pendingKey);
+   setBatchBusy(false);
+   await refreshWorkerBatch();
+  }catch(error){
+   setBatchBusy(false);
+   $('workerBatchStatus').textContent='再作成登録の確認：'+error.message+
+    '。送信結果が不明なら再送せず進捗を再取得してください。';
+  }
+  return;
+ }
  try{
   if(pendingForEvent().length)
    throw Error('前回の未確認ゴールがあります。先に安全な照合を完了してください');
