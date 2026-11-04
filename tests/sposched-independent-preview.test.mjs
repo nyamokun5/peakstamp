@@ -27,7 +27,7 @@ test('independent preview blocks wrong player team and unreviewed goals',()=>{
  const x=input(2);x.rows[0].team='Blue';
  assert.throws(()=>previewIndependentFixtures(x),/所属チーム/);
  x.rows[0].team='Red';x.decisions[0].state='waiting';
- assert.throws(()=>previewIndependentFixtures(x),/個別確認/);
+ assert.throws(()=>previewIndependentFixtures(x),/候補が未確定/);
 });
 
 test('same scorer can legitimately score multiple goals in one fixture',()=>{
