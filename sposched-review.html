@@ -417,11 +417,14 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <button id="quickBackFixed" type="button">← ゴール一覧に戻る</button>
 </div>
 <script type="module">
+import {verifyCompletedIndependentSnapshot} from './sposched-independent-completion.mjs';
+import {prepareIndependentWorkerBatch} from './sposched-independent-worker-batch.mjs';
+import {startIndependentTestBatch} from './sposched-independent-test-transport.mjs';
 import {jobControlPayload} from './sposched-job-control.mjs?v=pause1';
 import {auditCurrentTestFixtureGates} from './sposched-gate-audit.mjs?v=gate-audit1';
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
-import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=composite-tatsuo1';
+import {normalizeTeam,normalizeSpoSnapshot as normalizeBaseSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=composite-tatsuo1';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
 import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
@@ -1396,7 +1399,7 @@ function hasVerifiedCurrentCompletion(){
  const panel=$('ssResultPanel');
  if(panel.hidden||panel.dataset.eventId!==snapshot?.eventId||
     panel.dataset.runId!=='worker:'+workerLatestState?.request_id)return false;
- try{verifyCompletedWorkerSnapshot(workerLatestState,snapshot,snapshot);return true;}
+ try{(workerLatestState?.layout_mode==='independent-fixtures-v1'?verifyCompletedIndependentSnapshot:verifyCompletedWorkerSnapshot)(workerLatestState,snapshot,snapshot);return true;}
  catch{return false;}
 }
 function selectedSSDate(){
@@ -1466,11 +1469,40 @@ function showAutoConflict(message,seq=null,{tie=false,unsafe=false}={}){
  try{$('autoRecover').hidden=!pendingForEvent().length;}catch{$('autoRecover').hidden=false;}
  $('autoConflict').scrollIntoView({behavior:'smooth',block:'center'});
 }
+function normalizeSpoSnapshot(data){
+ return {...normalizeBaseSnapshot(data),officialFormat:data?.event?.match_format||data?.match_format||''};
+}
+function isIndependentTest(){
+ return $('ssEnvironment').value==='staging'&&loadedFromStagingDirect&&
+ ['1team','2teams_1pitch','3teams_1pitch'].includes(snapshot?.officialFormat);
+}
+function renderIndependentTestSummary(root){
+ const marker=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
+ $('workerBatchArea').hidden=false;
+ $('autoRun').disabled=true;
+ $('workerBatchRecreate').hidden=true;
+ $('workerBatchRecreateHint').hidden=true;
+ $('workerGateAudit').hidden=true;
+ $('workerBatchRefresh').hidden=!marker;
+ $('autoRegisterHeading').textContent='4. 確認済みのゴールと独立試合をTESTへ登録';
+ $('workerBatchRun').textContent='一覧の内容で'+snapshot.matches.length+'試合を登録（TEST）';
+ $('autoRegisterHelp').textContent='独立試合を正式な試合番号順に登録します。同点の場合は結果を選択します。';
+ for(const m of snapshot.matches)root.append(node('div','#'+m.seq+' '+(m.title||'試合')+'：'+m.status,'fixture-status'));
+ let issue='';
+ try{prepareIndependentWorkerBatch({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId:'11111111-1111-4111-8111-111111111111'});}
+ catch(e){issue=e.message;}
+ const unresolved=pendingForEvent().length>0;
+ $('workerBatchRun').disabled=!!marker||!!issue||unresolved||batchBusy||autoBusy||workerBatchPolling;
+ $('workerBatchReadiness').textContent=marker?'保存済みジョブの進捗を確認してください。':unresolved?'未照合の送信記録を確認してください。':issue||'確認済みの一覧をTESTへ登録できます。';
+ $('autoBeforeRun').textContent='得点と試合終了を順番に登録し、SSから結果を再取得します。';
+ if(marker&&workerRestoredEvent!==snapshot.eventId){workerRestoredEvent=snapshot.eventId;Promise.resolve().then(()=>refreshWorkerBatch({passive:true}));}
+}
 function renderAutoSummary(){
  const active=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
  $('autoPanel').hidden=!active;
  if(!active)return;
  const root=$('autoOutline');root.replaceChildren();
+ if(isIndependentTest()){renderIndependentTestSummary(root);return;}
  try{
   if(snapshot.matches.length===0){
    root.textContent='SSから選択できる試合が取得できていません。';
@@ -1894,7 +1926,7 @@ async function refreshWorkerBatch({passive=false}={}){
    $('workerBatchStatus').textContent='Workerの登録は完了しました。公式SSの4試合の終了状態を確認中…';
    const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
    if(snapshot?.eventId!==eventId)return;
-   verifyCompletedWorkerSnapshot(state,fresh,snapshot);
+   (state.layout_mode==='independent-fixtures-v1'?verifyCompletedIndependentSnapshot:verifyCompletedWorkerSnapshot)(state,fresh,snapshot);
    snapshot=fresh;
   }
   showWorkerBatchState(state);
@@ -2056,7 +2088,8 @@ $('workerBatchRun').addEventListener('click',async()=>{
     throw Error('未照合の送信記録があります。下の「送信記録を照合（書き込みなし）」から復旧してください');
    }
   const requestId=crypto.randomUUID();
-  const operations=prepareWorkerTournament({
+  const independent=isIndependentTest();
+  const operations=(independent?prepareIndependentWorkerBatch:prepareWorkerTournament)({
    snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId,
    winnerFor:seq=>autoWinnerFor(seq)
   });
@@ -2074,7 +2107,13 @@ $('workerBatchRun').addEventListener('click',async()=>{
   $('workerBatchRefresh').hidden=false;
   setBatchBusy(true);
   try{
-   await postStaging('/staging/batch/start',operations);
+   if(independent){
+    const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+    if(snapshot?.eventId!==eventId||!isIndependentTest())throw Error('確認中に接続先が変わりました');
+    await startIndependentTestBatch({plan:operations,official:{environment:'TEST',event_id:fresh.eventId,
+     matches:fresh.matches.map(m=>({seq:m.seq,match_id:m.matchId,status:m.status}))},
+     bridgeToken:$('ssBridgeToken').value.trim(),allowTestWrites:true});
+   }else await postStaging('/staging/batch/start',operations);
   }catch(error){
    // Validation failures definitely did not run the job. Transport errors
    // are ambiguous and the stored request ID must be retained.
