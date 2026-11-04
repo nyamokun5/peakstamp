@@ -2051,8 +2051,17 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
    await refreshWorkerBatch();
   }catch(error){
    setBatchBusy(false);
+   // A definitive server rejection means no new generation was created.
+   // Network/unknown failures remain pending to prevent duplicate writes.
+   if(['invalid_plan','recreation_not_verified','recreation_not_authorized',
+       'previous_job_active','previous_job_missing','previous_job_not_completed',
+       'recreation_not_supported','new_generation_id_required','archive_full',
+       'recreation_unavailable'].includes(error.code)){
+    localStorage.removeItem(pendingKey);
+   }
    $('workerBatchStatus').textContent='再作成登録の確認：'+error.message+
     '。送信結果が不明なら再送せず進捗を再取得してください。';
+   renderAutoSummary();
   }
   return;
  }
