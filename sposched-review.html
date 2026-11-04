@@ -1845,7 +1845,7 @@ function showWorkerBatchState(state){
    '前回Workerジョブは古い試合IDに紐づいています。現在の試合は別IDです。'+
    (localStorage.getItem(workerBatchRecreatePendingKey(state.event_id))
     ?'新しいジョブの送信結果が不明です。まず「進捗を再取得」で確認し、再送はしないでください。'
-    :(state.layout_mode==='independent-fixtures-v1'?'独立試合の再作成登録はまだ画面から実行できません。旧ジョブを再送しないでください。':'「再作成された新しい4試合を高速登録（TEST）」から正式な試合IDを再照合できます。'));
+    :(state.layout_mode==='independent-fixtures-v1'?'新しい試合IDを確認しました。「再作成された試合を登録（TEST）」でWorkerが旧試合の削除を再検証します。旧ジョブは再送しません。':'「再作成された新しい4試合を高速登録（TEST）」から正式な試合IDを再照合できます。'));
   $('workerBatchDecision').hidden=true;
   workerBatchPolling=false;
   setBatchBusy(false);
