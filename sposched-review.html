@@ -2014,7 +2014,12 @@ $('workerBatchRefresh').addEventListener('click',()=>{
 });
 $('workerBatchRecreate').addEventListener('click',async()=>{
  if(workerBatchPolling||batchBusy||autoBusy||!snapshot||!loadedFromStagingDirect||
-    $('ssEnvironment').value!=='staging')return;
+    $('ssEnvironment').value!=='staging'){
+  $('workerBatchStatus').textContent='処理中またはTEST接続が未確認です。進捗を確認し、再登録ボタンを連打しないでください。';
+  return;
+ }
+ $('workerBatchStatus').textContent='TESTの旧ジョブと新しい公式試合IDを照合中です。確認画面が出るまでお待ちください…';
+ $('workerBatchRecreate').disabled=true;
  const eventId=snapshot.eventId;
  const key=workerBatchStorageKey(eventId);
  const pendingKey=workerBatchRecreatePendingKey(eventId);
@@ -2064,6 +2069,7 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
     '。送信結果が不明なら再送せず進捗を再取得してください。';
    renderAutoSummary();
   }
+  $('workerBatchRecreate').disabled=false;
   return;
  }
  try{
