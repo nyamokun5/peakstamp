@@ -1499,7 +1499,6 @@ function renderIndependentTestSummary(root){
  try{prepareIndependentWorkerBatch({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId:'11111111-1111-4111-8111-111111111111'});}
  catch(e){issue=e.message;}
  const unresolved=pendingForEvent().length>0;
- const invalidGoals=quickGoalDecisions(snapshot,rows).filter(d=>d.state!=='ready'&&rows[d.index]?.include);
  const firstIssue=issue.match(/^ゴール(\\d+)：/);
  const jump=$('workerBatchJumpToGoal');
  jump.hidden=!issue||!firstIssue;
