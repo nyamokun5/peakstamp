@@ -21,7 +21,8 @@ jobs:
         run: node --test tests/*.test.mjs
 
   finish-browser:
-    runs-on: ubuntu-latest
+    # Playwright 1.51.1 does not support the ubuntu-26.04 runner image.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
