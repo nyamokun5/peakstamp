@@ -2040,7 +2040,7 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
    const plan=prepareIndependentWorkerBatch({
     snapshot:fresh,rows,decisions:quickGoalDecisions(fresh,rows),requestId
    });
-   if(!window.confirm('TESTの新しい'+fresh.matches.length+'試合へ登録します。旧ジョブは保管し再送しません。続けますか？'))return;
+   if(!window.confirm('TESTの新しい'+fresh.matches.length+'試合へ登録します。旧ジョブは保管し再送しません。続けますか？')){renderAutoSummary();return;}
    storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
    localStorage.setItem(pendingKey,JSON.stringify({requestId,previousRequestId:oldRequestId,clickedAt}));
    setBatchBusy(true);
@@ -2069,7 +2069,7 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
     '。送信結果が不明なら再送せず進捗を再取得してください。';
    renderAutoSummary();
   }
-  $('workerBatchRecreate').disabled=false;
+  renderAutoSummary();
   return;
  }
  try{
