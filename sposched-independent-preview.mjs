@@ -20,9 +20,12 @@ export function previewIndependentFixtures({snapshot,rows,decisions}){
   const r=rows[i],d=decisions[i];if(!r?.include)continue;
   const fixture=ordered.find(m=>m.seq===Number(r.seq));
   if(!fixture)fail('ゴール'+(i+1)+'：公式試合番号が未確認です');
-  if(d?.state!=='ready'||r.goal?.manual||r.updateGoalId||r.guest||
-     r.fixtureIdentityChanged||d.helperPlan||d.deferredAssist)
-   fail('ゴール'+(i+1)+'：手動登録・助っ人・未確定候補は個別確認が必要です');
+  if(r.fixtureIdentityChanged)
+   fail('ゴール'+(i+1)+'：試合が再作成されています。ゴール一覧で新しい試合番号・IDを確認し直してください（送信なし）');
+  if(d?.state!=='ready')
+   fail('ゴール'+(i+1)+'：候補が未確定です。ゴール一覧で得点者・チーム・試合を確認してください');
+  if(r.goal?.manual||r.updateGoalId||r.guest||d.helperPlan||d.deferredAssist)
+   fail('ゴール'+(i+1)+'：手動登録・既存ゴール修正・助っ人・未確定アシストは自動登録できません。詳細編集で確認してください');
   const team=clean(r.team||snapshot.playerTeam?.get(clean(r.scorer)));
   const scorer=clean(r.scorer),assist=r.assistMode==='named'?clean(r.assist):'';
   if(!team||!scorer||!['named','none'].includes(r.assistMode)||
