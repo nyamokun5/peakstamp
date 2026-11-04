@@ -2040,7 +2040,8 @@ $('workerBatchRecreate').addEventListener('click',async()=>{
    localStorage.setItem(pendingKey,JSON.stringify({requestId,previousRequestId:oldRequestId,clickedAt}));
    setBatchBusy(true);
    const started=await postStaging('/staging/batch/recreate',{
-    ...plan,confirm_recreation:'TEST-ONLY RECREATE DELETED FIXTURES',
+    ...plan,confirm:'TEST-ONLY BATCH WRITE',
+    confirm_recreation:'TEST-ONLY RECREATE DELETED FIXTURES',
     previous_request_id:oldRequestId
    });
    if(started.environment!=='STAGING ONLY'||started.request_id!==requestId)
