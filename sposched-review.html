@@ -1499,7 +1499,7 @@ function renderIndependentTestSummary(root){
  try{prepareIndependentWorkerBatch({snapshot,rows,decisions:quickGoalDecisions(snapshot,rows),requestId:'11111111-1111-4111-8111-111111111111'});}
  catch(e){issue=e.message;}
  const unresolved=pendingForEvent().length>0;
- const firstIssue=issue.match(/^ゴール(\\d+)：/);
+ const firstIssue=issue.match(/^ゴール(\d+)：/);
  const jump=$('workerBatchJumpToGoal');
  jump.hidden=!issue||!firstIssue;
  if(firstIssue){jump.dataset.goalIndex=String(Number(firstIssue[1])-1);jump.textContent='ゴール'+firstIssue[1]+'の確認箇所へ移動（送信なし）';}
