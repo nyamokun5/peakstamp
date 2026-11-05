@@ -101,7 +101,8 @@ try{
  await page.click('#ssLoadSnapshot');
  await page.locator('#ssFixtureWarning').waitFor({state:'visible'});
  assert.match(await page.locator('#ssFixtureWarning').innerText(),/番号付き試合を0件取得/);
- assert.match(await page.locator('#flowGuide').innerText(),/SSの試合が0件/);
+ assert.match(await page.locator('#flowGuide').innerText(),/SS側で試合が作成されていません/);
+ assert.match(await page.locator('#ssFixtureWarning').innerText(),/「スコア入力」から「試合作成」/);
  assert.equal(await page.locator('[aria-label="#1 試合"]').count(),0);
  assert.equal(await page.locator('#autoRun').isDisabled(),true);
  assert.match(await page.locator('#autoRun').textContent(),/試合枠がない/);
