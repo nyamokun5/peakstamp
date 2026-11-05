@@ -230,7 +230,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
   <div id="autoOutline" aria-label="試合の登録予定"></div>
   <p id="autoBeforeRun" class="small" role="status"></p>
   <div id="workerBatchArea" class="grid-item" hidden>
-   <p class="small"><strong>通常はこちら（Worker方式）</strong>：4試合を順番に登録し、進捗と処理時間の内訳を表示します。通信が切れた場合は進捗を再取得できます。</p>
+   <p class="small"><strong>通常はこちら（Worker方式）</strong>：対象試合を順番に登録し、進捗と処理時間の内訳を表示します。通信が切れた場合は進捗を再取得できます。</p>
    <p id="workerBatchReadiness" class="small" role="status"></p>
    <button id="workerBatchJumpToGoal" type="button" hidden>未確認のゴール候補へ戻る</button>
    <button id="workerBatchRun" class="primary quick-main" type="button">一覧の内容で4試合を登録（TEST）</button>
@@ -1891,7 +1891,10 @@ function showWorkerBatchState(state){
   catch{$(id).hidden=true;}
  }
  const stored=localStorage.getItem(workerBatchStorageKey(state.event_id));
- if(stored===state.request_id&&(hasRecreatedBracket(state,snapshot)||hasRecreatedIndependentFixtures(state,snapshot))){
+ if(hasRecreatedBracket(state,snapshot)||hasRecreatedIndependentFixtures(state,snapshot)){
+  // The server owns the event journal. A rejected new request must not mask
+  // its old fixture generation or display success for current unfinished games.
+  localStorage.setItem(workerBatchStorageKey(state.event_id),state.request_id);
   $('workerBatchPause').hidden=true;$('workerBatchResume').hidden=true;
   $('workerTimingDetails').hidden=true;
   hideCompletionPanel();
@@ -1984,7 +1987,7 @@ async function refreshWorkerBatch({passive=false}={}){
   // Status/GET failure must not leave a green success panel behind.
   if(state.status==='completed'&&!hasRecreatedBracket(state,snapshot)&&!hasRecreatedIndependentFixtures(state,snapshot)){
    hideCompletionPanel();
-   $('workerBatchStatus').textContent='Workerの登録は完了しました。公式SSの4試合の終了状態を確認中…';
+   $('workerBatchStatus').textContent='Workerの登録は完了しました。公式SSの対象試合の終了状態を確認中…';
    const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
    if(snapshot?.eventId!==eventId)return;
    (state.layout_mode==='independent-fixtures-v1'?verifyCompletedIndependentSnapshot:verifyCompletedWorkerSnapshot)(state,fresh,snapshot);
@@ -2212,7 +2215,7 @@ $('workerBatchRun').addEventListener('click',async()=>{
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
    localStorage.setItem(key,requestId);
    hideCompletionPanel();
-  $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋4試合）…';
+  $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋'+snapshot.matches.length+'試合）…';
   $('workerBatchRun').disabled=true;
   $('workerBatchRefresh').hidden=false;
   setBatchBusy(true);
@@ -2618,10 +2621,12 @@ $('finishExecute').addEventListener('click',async()=>{
  try{
   if(pendingForEvent().length)throw Error('前回のゴール送信結果を先に確認してください');
   const shown=finishAction(snapshot,snapshot,seq,winner);
+  if(isIndependentTest())shown.independent_fixture=true;
   let count=unfinishedGoalCount(snapshot,rows,seq,quickGoalDecisions(snapshot,rows));
   if(count)throw Error('未登録・要確認のゴールが'+count+'件あります。先に登録してください');
   const latest=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(shown.event_id)));
   const action=finishAction(snapshot,latest,seq,winner);
+  if(isIndependentTest())action.independent_fixture=true;
   if(JSON.stringify(action)!==JSON.stringify(shown))
    throw Error('SSのスコアか試合情報が変わりました。イベントを再読み込みして確認してください');
   count=unfinishedGoalCount(latest,rows,seq,quickGoalDecisions(latest,rows));
@@ -2634,6 +2639,7 @@ $('finishExecute').addEventListener('click',async()=>{
   // A second, read-only GET fences stale scores and regenerated match UUIDs.
   const again=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(action.event_id)));
   const verifiedAction=finishAction(snapshot,again,seq,winner);
+  if(isIndependentTest())verifiedAction.independent_fixture=true;
   if(JSON.stringify(verifiedAction)!==JSON.stringify(shown))
    throw Error('確認中にスコアか組み合わせが変わりました。送信せず停止しました');
   sent=true;
