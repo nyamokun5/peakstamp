@@ -218,6 +218,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <p id="quickResetBulkStatus" class="small" role="status" aria-live="polite"></p>
  <div id="autoGoalDetails">
   <div id="quickGoals"></div>
+  <div id="registeredManualGoals" class="registered-goals" hidden aria-live="polite"></div>
   <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
   <button id="quickEdit" type="button">詳細編集・手動追加・既存ゴール修正</button>
  </div>
@@ -653,6 +654,26 @@ function chosenGoals(){
   Number(a.goalTimeSeconds||0)-Number(b.goalTimeSeconds||0));
  return [...video,...unsentManualGoals(manualGoals)];
 }
+function renderRegisteredManualGoals(){
+ const panel=$('registeredManualGoals');
+ if(!panel)return;
+ panel.replaceChildren();
+ const sent=loadedFromStagingDirect&&$('ssEnvironment').value==='staging'
+  ?manualGoals.filter(goal=>goal.sent===true):[];
+ panel.hidden=!sent.length;
+ if(!sent.length)return;
+ panel.append(node('strong','保存済みの送信履歴（このブラウザ） '+sent.length+'件'));
+ panel.append(node('p','再送信防止のため編集・登録対象には含めません。SS側の現在の登録状態は、試合・ゴール明細を再取得して確認してください。','small'));
+ for(const goal of sent){
+  const review=goal.review||{};
+  const line=node('div','','registered-goal-line');
+  const match=review.seq?'試合 #'+review.seq:'試合番号未保存';
+  line.textContent='登録済み履歴｜'+match+'｜得点者：'+(review.scorer||'未保存')+
+   '｜得点チーム：'+(review.team||'未保存')+
+   (review.assist?'｜アシスト：'+review.assist:'');
+  panel.append(line);
+ }
+}
 function rebuild({preserveEdits=false,completedKeys=[]}={}){
  const prior=rows;
  const sameEvent=preserveEdits&&snapshot?.eventId===reviewedEventId;
@@ -680,7 +701,7 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
  $('manualAddWrap').hidden=!(loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&snapshot.matches.length);
  $('eventTitle').textContent=(snapshot.eventName||'イベント')+
   ' / イベントID: '+snapshot.eventId+' / 試合 '+snapshot.matches.length+'件 / 対象ゴール '+rows.length+'件';
- renderGoals();renderScores();renderQuick();renderFinish();productionUI.render();updateFlowGuide();
+ renderGoals();renderScores();renderQuick();renderRegisteredManualGoals();renderFinish();productionUI.render();updateFlowGuide();
 }
 function renderGoals(){
  $('goalRows').replaceChildren();
