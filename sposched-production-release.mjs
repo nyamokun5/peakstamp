@@ -60,6 +60,17 @@ export function validateIndependentProductionReleaseEvidence(snapshot,inspect,re
  const plan=prepareIndependentWorkerBatch({snapshot,rows:[],decisions:[],
   requestId:snapshot.eventId});
  verifyIndependentWorkerPreflight(plan,inspect);
+ // The official production inspector returns named sides. Reject stale or
+ // renamed browser pairings before enabling a production batch.
+ const normalized=value=>typeof value==='string'?value.normalize('NFKC').trim():'';
+ for(const local of snapshot.matches){
+  const remote=inspect.matches.find(m=>m.seq===local.seq);
+  if(!remote||!normalized(local.leftTeam)||!normalized(local.rightTeam)||
+     !normalized(remote.left_team)||!normalized(remote.right_team)||
+     normalized(local.leftTeam)!==normalized(remote.left_team)||
+     normalized(local.rightTeam)!==normalized(remote.right_team))
+   fail('本番の公式対戦チームが画面の確認内容から変更されました。再取得してください');
+ }
  return {event_id:snapshot.eventId,team_id:inspect.team_id,
   fixture_ids:[...snapshot.matches].sort((a,b)=>a.seq-b.seq).map(m=>m.matchId.toLowerCase()),
   date:inspect.event_date};
