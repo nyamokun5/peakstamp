@@ -219,7 +219,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <div id="autoGoalDetails">
   <div id="officialRegisteredGoals" class="registered-goals" hidden aria-live="polite"></div>
   <div id="quickGoals"></div>
-  <div id="registeredManualGoals" class="registered-goals" hidden aria-live="polite"></div>
+  <details id="registeredManualHistory" hidden><summary>このブラウザの過去の送信履歴（参考・SS登録件数ではありません）</summary><div id="registeredManualGoals" class="registered-goals" aria-live="polite"></div></details>
   <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
   <button id="quickEdit" type="button">詳細編集・手動追加・既存ゴール修正</button>
  </div>
@@ -656,14 +656,14 @@ function chosenGoals(){
  return [...video,...unsentManualGoals(manualGoals)];
 }
 function renderRegisteredManualGoals(){
- const panel=$('registeredManualGoals');
- if(!panel)return;
+ const panel=$('registeredManualGoals'),history=$('registeredManualHistory');
+ if(!panel||!history)return;
  panel.replaceChildren();
  const sent=loadedFromStagingDirect&&$('ssEnvironment').value==='staging'
   ?manualGoals.filter(goal=>goal.sent===true):[];
- panel.hidden=!sent.length;
+ history.hidden=!sent.length;
  if(!sent.length)return;
- panel.append(node('strong','保存済みの送信履歴（このブラウザ） '+sent.length+'件'));
+ panel.append(node('strong','過去の送信履歴 '+sent.length+'件（SS現在のゴール数ではありません）'));
  panel.append(node('p','再送信防止のため編集・登録対象には含めません。SS側の現在の登録状態は、試合・ゴール明細を再取得して確認してください。','small'));
  for(const goal of sent){
   const review=goal.review||{};
@@ -1122,16 +1122,17 @@ function renderOfficialRegisteredGoals(){
  if(!panel)return;
  panel.replaceChildren();
  if(!snapshot||!Array.isArray(snapshot.matches)){panel.hidden=true;return}
- const matches=snapshot.matches.filter(m=>Array.isArray(m.existingGoals)&&m.existingGoals.length);
+ const matches=snapshot.matches;
  panel.hidden=!matches.length;
  if(!matches.length)return;
- const total=matches.reduce((sum,m)=>sum+m.existingGoals.length,0);
- panel.append(node('strong','Shoot Sundayに登録済みのゴール '+total+'件（SSから取得）'));
+ const total=matches.reduce((sum,m)=>sum+(Array.isArray(m.existingGoals)?m.existingGoals.length:0),0);
+ panel.append(node('strong','Shoot Sundayの現在の登録済みゴール '+total+'件（SSから取得）'));
  panel.append(node('p','これはSSの現在の登録内容です。下の新規ゴールとは別で、再送信しません。','small'));
  for(const match of matches){
   const header=node('div','試合 #'+match.seq+'　'+(match.leftTeam||'')+' vs '+(match.rightTeam||''),'registered-match');
   panel.append(header);
-  for(const [i,goal] of match.existingGoals.entries()){
+  if(!match.existingGoals?.length)panel.append(node('p','登録済みゴールなし','small'));
+  for(const [i,goal] of (match.existingGoals||[]).entries()){
    const line=node('div','','registered-goal-line');
    line.textContent=(i+1)+'. 得点 '+(goal.scorer||'不明')+
     ' / アシスト '+(goal.assist||'なし')+' / チーム '+(goal.team||'不明');
