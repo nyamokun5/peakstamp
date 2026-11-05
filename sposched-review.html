@@ -438,7 +438,7 @@ import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
-import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1';
+import {installProductionUI,SS_NO_FIXTURES_MESSAGE} from './sposched-production-ui.mjs?v=production-ui1';
 import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 import {clearBridgeSession,restoreBridgeSession,rememberBridgeSession} from './sposched-bridge-session.mjs?v=bridge-tab1';
@@ -1029,7 +1029,7 @@ const quickSelect=(row,field,label,options,current,needsReview=false,aiHint='')=
  const wrap=node('label','','quick-field');
  wrap.append(node('span',label));
  if(field==='match'&&!options.length){
-  wrap.append(node('p','SSに試合番号付きの試合がありません。上のイベントを選び直すか、SS側で試合枠を作成してください。','quick-held-note'));
+  wrap.append(node('p',SS_NO_FIXTURES_MESSAGE,'quick-held-note'));
   return wrap;
  }
  const menu=document.createElement('select');
@@ -1181,7 +1181,7 @@ function renderQuick(){
   const selected=$('ssEventSelect').selectedOptions[0]?.textContent||'選択したイベント';
   $('ssFixtureWarningText').textContent='「'+selected+
    '」について、SSから番号付き試合を0件取得しました。'+rows.length+'件の動画ゴールだけでは公式の試合番号・対戦チーム・IDは作れません。'+
-   '正しい'+(production?'本番':'TEST')+'イベントを選び直すか、SS側で4試合のトーナメント枠を作成してから再取得してください。書き込みは停止しています。';
+   SS_NO_FIXTURES_MESSAGE+' 作成後に「試合を再取得（読み取りのみ）」を押してください。書き込みは停止しています。';
  }
  // Fixes are first; already reviewed goals follow. Video counts are reference
  // information only and appear after the actual items, not before them.
@@ -2574,7 +2574,9 @@ function syncFinishWinner(){
 function updateFlowGuide(){
  const test=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
  let step='STEP 1 / 2',message='SSに接続し、イベントを選んでください。',target='ssDirectPanel';
- if(snapshot&&loadedFromProductionDirect&&$('ssEnvironment').value==='production'){
+ if(snapshot&&snapshot.matches.length===0){
+  step='試合枠なし';message=SS_NO_FIXTURES_MESSAGE;target='ssFixtureWarning';
+ }else if(snapshot&&loadedFromProductionDirect&&$('ssEnvironment').value==='production'){
   const items=quickGoalDecisions(snapshot,rows);
   const uncertain=items.filter(x=>['attention','duplicate'].includes(x.state)).length;
   step='STEP 2 / 2';
@@ -2585,7 +2587,7 @@ function updateFlowGuide(){
   step='✓ 完了';message=snapshot.matches.length+'試合の登録・照合が完了しました。';target='ssResultPanel';
  }else if(test&&snapshot.matches.length===0){
   step='試合枠なし';
-  message='SSの試合が0件です。イベントを確認してください。';
+  message=SS_NO_FIXTURES_MESSAGE;
   target='ssFixtureWarning';
  }else if(test){
   const items=quickGoalDecisions(snapshot,rows);
@@ -2774,6 +2776,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   const data=await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId));
   if(requestRevision!==ssConnectionRevision||$('ssEventSelect').value!==eventId)
    throw Object.assign(Error('読み込み中に接続先が変わりました'),{code:'stale_connection'});
+  if(!Array.isArray(data?.matches))throw Error('SSの試合データを確認できません。再取得してください。');
   // Built-in existing duplicate detector receives exactly this normalised shape.
   snapshot=normalizeSpoSnapshot(data);
   const officialFormat=String(data?.event?.match_format||data?.match_format||'');
@@ -2815,7 +2818,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   autoMustReload=false;$('autoConflict').hidden=true;
   rebuild({preserveEdits:true});
   statusSS(snapshot.matches.length===0?
-   '試合0件：このイベントには登録先の番号付き試合がありません。別イベントを選ぶか、SSに試合枠を作成してください。':
+   SS_NO_FIXTURES_MESSAGE:
    '読み込み完了：試合 '+snapshot.matches.length+'件。ゴールを確認してください。');
  }catch(error){if(error.code!=='stale_connection')statusSS('読み込み失敗：'+error.message);}
  finally{$('ssLoadSnapshot').disabled=false;}

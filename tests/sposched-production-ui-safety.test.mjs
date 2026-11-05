@@ -199,3 +199,22 @@ test('unsafe or unidentified production states never authorize resume',async()=>
   {pause_id:null},{cursor:-1},{cursor:1.5},{control_contract:null},{environment:'STAGING ONLY'}])
   assert.throws(()=>productionResumePayload({...j,...change},E,T));
 });
+
+ test('empty official fixtures show SS creation instructions and cannot prepare or submit',async()=>{
+ const state={active:true,snapshot:{...snapshot,matches:[]},rows:[],decisions:[]};
+ const x=createUI({state});
+ try{
+  x.ui.render();
+  assert.match(x.get('productionStatus').textContent,/SS側で試合が作成されていません/);
+  assert.match(x.get('productionStatus').textContent,/「スコア入力」から「試合作成」/);
+  assert.equal(x.get('productionCheck').disabled,true);
+  assert.equal(x.get('productionStart').disabled,true);
+  await x.get('productionCheck').events.click();
+  await x.get('productionStart').events.click();
+  assert.deepEqual(x.events,[]);
+  state.snapshot=snapshot;
+  x.ui.render();
+  assert.equal(x.get('productionCheck').disabled,false);
+  assert.equal(x.get('productionStart').disabled,true);
+ }finally{x.restore();}
+});

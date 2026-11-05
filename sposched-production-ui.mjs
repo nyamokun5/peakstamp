@@ -5,6 +5,8 @@ import {prepareProductionBatch,validateProductionReleaseEvidence,validateIndepen
  from './sposched-production-release.mjs?v=production-bridge1';
 import {verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
 
+export const SS_NO_FIXTURES_MESSAGE="SS側で試合が作成されていません。SS側の「スコア入力」から「試合作成」ボタンを押してください。";
+
 export function productionResumePayload(job,eventId,requestId){
  if(job?.environment!=='PRODUCTION'||job.control_contract!=='event-pause-v1'||
     job.inspection_only!==true||job.execution_active!==false||
@@ -71,6 +73,13 @@ export function installProductionUI({current,read,normalize,onComplete}){
   $('productionStart').disabled=true;
   $('productionDecision').hidden=true;
   if(!x)return;
+  if(x.snapshot.matches?.length===0){
+   $('productionCheck').disabled=true;
+   $('productionRefresh').hidden=true;
+   status(SS_NO_FIXTURES_MESSAGE);
+   return;
+  }
+  $('productionCheck').disabled=false;
   const prior=localStorage.getItem(key(x.snapshot.eventId));
   $('productionRefresh').hidden=!prior;
   status(prior?'前回の登録があります。「登録の進捗を確認」を押してください。':
@@ -81,7 +90,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   }
  }
  $('productionCheck').addEventListener('click',async()=>{
-  if(!active()||busy)return;
+  if(!active()||busy||active().snapshot.matches?.length===0)return;
   busy=true;$('productionCheck').disabled=true;
   evidence=null;$('productionStart').disabled=true;
   const out=$('productionPlan');out.hidden=false;
