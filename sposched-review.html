@@ -217,6 +217,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <button id="quickResetBulkReview" type="button" hidden>試合作り直し後のゴールをまとめて試合番号確認（書き込みなし）</button>
  <p id="quickResetBulkStatus" class="small" role="status" aria-live="polite"></p>
  <div id="autoGoalDetails">
+  <div id="officialRegisteredGoals" class="registered-goals" hidden aria-live="polite"></div>
   <div id="quickGoals"></div>
   <div id="registeredManualGoals" class="registered-goals" hidden aria-live="polite"></div>
   <p id="quickStatus" class="small" role="status" aria-live="polite"></p>
@@ -1116,6 +1117,28 @@ $('quickResetBulkReview').addEventListener('click',async()=>{
    '。試合・得点を再取得するか個別に確認してください。送信はしていません。';
  }finally{button.disabled=false}
 });
+function renderOfficialRegisteredGoals(){
+ const panel=$('officialRegisteredGoals');
+ if(!panel)return;
+ panel.replaceChildren();
+ if(!snapshot||!Array.isArray(snapshot.matches)){panel.hidden=true;return}
+ const matches=snapshot.matches.filter(m=>Array.isArray(m.existingGoals)&&m.existingGoals.length);
+ panel.hidden=!matches.length;
+ if(!matches.length)return;
+ const total=matches.reduce((sum,m)=>sum+m.existingGoals.length,0);
+ panel.append(node('strong','Shoot Sundayに登録済みのゴール '+total+'件（SSから取得）'));
+ panel.append(node('p','これはSSの現在の登録内容です。下の新規ゴールとは別で、再送信しません。','small'));
+ for(const match of matches){
+  const header=node('div','試合 #'+match.seq+'　'+(match.leftTeam||'')+' vs '+(match.rightTeam||''),'registered-match');
+  panel.append(header);
+  for(const [i,goal] of match.existingGoals.entries()){
+   const line=node('div','','registered-goal-line');
+   line.textContent=(i+1)+'. 得点 '+(goal.scorer||'不明')+
+    ' / アシスト '+(goal.assist||'なし')+' / チーム '+(goal.team||'不明');
+   panel.append(line);
+  }
+ }
+}
 function renderQuick(){
  resetFinish();
  const staging=!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
@@ -1148,6 +1171,7 @@ function renderQuick(){
    (manualPending?'　｜　SSで手動登録 '+manualPending+'件':'')+
    (deferredAssists.length?'　｜　アシスト追記 '+deferredAssists.length+'件':'')+
    (other?'　｜　対象外 '+other+'件':'');
+ renderOfficialRegisteredGoals();
  const container=$('quickGoals');container.replaceChildren();
  const noFixtures=snapshot.matches.length===0;
  $('ssFixtureWarning').hidden=!noFixtures;
