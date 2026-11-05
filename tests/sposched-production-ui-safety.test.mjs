@@ -60,7 +60,7 @@ test('production panel cannot enable a send with disabled server release',async(
 
 for(const [format,count] of [['1team',1],['2teams_1pitch',2],['3teams_1pitch',3]])
  test('independent '+format+' uses the shared send journal and never retries a lost response',async()=>{
-  const s={...snapshot,officialFormat:format,matches:snapshot.matches.slice(0,count).map(m=>({...m,status:'scheduled'}))};
+  const s={...snapshot,officialFormat:format,matches:snapshot.matches.slice(0,count).map(m=>({...m,status:'scheduled',leftTeam:'Home '+m.seq,rightTeam:'Away '+m.seq}))};
   let enabled=true;
   const x=createUI({state:{active:true,snapshot:s,rows:[],decisions:[]},readOverride:async path=>{
    if(path.startsWith('/production/release-state'))return {environment:'PRODUCTION',event_id:E,
@@ -69,7 +69,7 @@ for(const [format,count] of [['1team',1],['2teams_1pitch',2],['3teams_1pitch',3]
     batch_start_path:'/production/batch/start'};
    if(path.startsWith('/snapshot'))return s;
    return {environment:'PRODUCTION',event_id:E,team_id:T,mode:'read-only',team_pinned:true,
-    write_allowed:false,release_approved:false,matches:s.matches.map(m=>({seq:m.seq,match_id:m.matchId,status:m.status}))};
+    write_allowed:false,release_approved:false,matches:s.matches.map(m=>({seq:m.seq,match_id:m.matchId,status:m.status,left_team:m.leftTeam,right_team:m.rightTeam}))};
   }});
   const oldFetch=globalThis.fetch;let sends=0;
   try{
