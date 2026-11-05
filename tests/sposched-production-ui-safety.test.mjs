@@ -122,3 +122,31 @@ test('a rerender during preflight invalidates old evidence even for the same eve
   assert.match(x.get('productionPlan').textContent,/変更されました/);
  }finally{x.restore();}
 });
+
+for(const [status,execution_active,expectedTimers,message] of [
+ ['running',false,0,/状態確認では処理を再開しません/],
+ ['running',undefined,0,/実行を確認できません/],
+ ['running',true,1,/登録中/],
+ ['blocked',false,0,/試合の削除・作り直し/],
+ ['paused',false,0,/再開操作に未対応/]
+])test('inspection recovery '+status+' active='+execution_active,async()=>{
+ const x=createUI(),oldFetch=globalThis.fetch,oldWindow=globalThis.window;
+ const requestId='cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa';let calls=0,timers=0;
+ try{
+  x.ui.render();
+  globalThis.localStorage.setItem('peakstamp:production:worker-batch:'+E,requestId);
+  x.get('ssBridgeToken').value='mock';
+  globalThis.window={setTimeout:()=>timers++};
+  globalThis.fetch=async(url,options)=>{
+   calls++;assert.ok(url.endsWith('/production/batch/inspect'));
+   assert.deepEqual(JSON.parse(options.body),{event_id:E,request_id:requestId});
+   return Response.json({environment:'PRODUCTION',event_id:E,request_id:requestId,
+    inspection_only:true,status,execution_active,completed:1,total:4});
+  };
+  await x.ui.refresh();
+  assert.equal(calls,1);assert.equal(timers,expectedTimers);
+  assert.match(x.get('productionStatus').textContent,message);
+  assert.equal(x.get('productionStart').disabled,true);
+  assert.equal(globalThis.localStorage.getItem('peakstamp:production:worker-batch:'+E),requestId);
+ }finally{globalThis.fetch=oldFetch;globalThis.window=oldWindow;x.restore();}
+});

@@ -126,7 +126,11 @@ export function installProductionUI({current,read,normalize,onComplete}){
    const stateLabel={running:'登録中',completed:'登録完了',blocked:'要確認',
     needs_decision:'勝者の指定が必要',paused:'一時停止'}[result.status]||result.status;
    status(stateLabel+'：'+result.completed+'/'+result.total+'件'+
-    (result.status==='blocked'?'。再送せず進捗を確認してください。':''));
+    (result.status==='blocked'?'。送信済みの可能性があります。SSの試合・ゴールを照合してください。試合の削除・作り直しや再登録は行わないでください。':''));
+   if(result.status==='running'&&result.execution_active!==true)
+    status('処理の実行を確認できません：'+result.completed+'/'+result.total+'件。状態確認では処理を再開しません。再登録せず、SSの試合・ゴールと保存済みジョブを照合してください。');
+   if(result.status==='paused')
+    status('一時停止中：'+result.completed+'/'+result.total+'件。この画面は再開操作に未対応です。登録をやり直さず、停止位置を確認してください。');
    $('productionDecision').hidden=result.status!=='needs_decision';
    if(result.status==='needs_decision'){
     const d=result.decision;
@@ -156,7 +160,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
      status('✓ 4試合の登録と終了をSSで確認しました。');
     }
    }
-   if(result.status==='running')window.setTimeout(refresh,1500);
+   if(result.status==='running'&&result.execution_active===true)window.setTimeout(refresh,1500);
   }catch(e){status('本番ジョブ確認未了：'+e.message+'。新規送信せず進捗を確認してください。');}
   finally{polling=false;$('productionRefresh').disabled=false;}
  }
