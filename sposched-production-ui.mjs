@@ -5,6 +5,18 @@ import {prepareProductionBatch,validateProductionReleaseEvidence,validateIndepen
  from './sposched-production-release.mjs?v=production-bridge1';
 import {verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
 
+export function productionResumePayload(job,eventId,requestId){
+ if(job?.environment!=='PRODUCTION'||job.control_contract!=='event-pause-v1'||
+    job.inspection_only!==true||job.execution_active!==false||
+    job.event_id!==eventId||job.request_id!==requestId||!eventId||!requestId||
+    job.status!=='paused'||job.phase!=='preparing'||job.pause_requested!==true||
+    typeof job.pause_id!=='string'||!job.pause_id||
+    !Number.isInteger(job.cursor)||job.cursor<0)
+  throw Error('安全な停止位置を確認できません。結果不明の操作は再送しません');
+ return {event_id:eventId,request_id:requestId,pause_id:job.pause_id,cursor:job.cursor,
+  confirm:'PRODUCTION EVENT BATCH RESUME'};
+}
+
 export function installProductionUI({current,read,normalize,onComplete}){
  const $=id=>document.getElementById(id);
  let evidence=null,busy=false,polling=false,lastJob=null,restoredEvent='',revision=0;
@@ -49,6 +61,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
  }
  function render(){
   revision++;lastJob=null;
+  $('productionResume').hidden=true;
   const x=active();
   $('productionPanel').hidden=!x;
   $('autoRegisterHeading').hidden=Boolean(x);
@@ -116,6 +129,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   const id=x.snapshot.eventId,startedRevision=revision,requestId=localStorage.getItem(key(id));
   if(!requestId)return;
   polling=true;$('productionRefresh').disabled=true;
+  lastJob=null;$('productionResume').hidden=true;
   try{
    const result=await post('/production/batch/inspect',{event_id:id,request_id:requestId});
    if(revision!==startedRevision||!active()||active().snapshot.eventId!==id)return;
@@ -123,6 +137,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
       result.request_id!==requestId||result.inspection_only!==true)
     throw Error('保存済みの本番ジョブの識別情報が不一致');
    lastJob=result;
+   try{productionResumePayload(result,id,requestId);$('productionResume').hidden=false;}
+   catch{$('productionResume').hidden=true;}
    const stateLabel={running:'登録中',completed:'登録完了',blocked:'要確認',
     needs_decision:'勝者の指定が必要',paused:'一時停止'}[result.status]||result.status;
    status(stateLabel+'：'+result.completed+'/'+result.total+'件'+
@@ -130,7 +146,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
    if(result.status==='running'&&result.execution_active!==true)
     status('処理の実行を確認できません：'+result.completed+'/'+result.total+'件。状態確認では処理を再開しません。再登録せず、SSの試合・ゴールと保存済みジョブを照合してください。');
    if(result.status==='paused')
-    status('一時停止中：'+result.completed+'/'+result.total+'件。この画面は再開操作に未対応です。登録をやり直さず、停止位置を確認してください。');
+    status('一時停止中：'+result.completed+'/'+result.total+'件。再開ボタンが表示されている場合、停止位置を再照合して続きから再開できます。表示されない場合は再送せず公式記録を照合してください。');
    $('productionDecision').hidden=result.status!=='needs_decision';
    if(result.status==='needs_decision'){
     const d=result.decision;
@@ -164,6 +180,30 @@ export function installProductionUI({current,read,normalize,onComplete}){
   }catch(e){status('本番ジョブ確認未了：'+e.message+'。新規送信せず進捗を確認してください。');}
   finally{polling=false;$('productionRefresh').disabled=false;}
  }
+ $('productionResume').addEventListener('click',async()=>{
+  const x=active(),job=lastJob;if(!x||busy||polling||!job)return;
+  const eventId=x.snapshot.eventId,requestId=localStorage.getItem(key(eventId));
+  const startedRevision=revision;let approved;
+  try{approved=productionResumePayload(job,eventId,requestId);}catch{return;}
+  busy=true;$('productionResume').disabled=true;
+  lastJob=null;$('productionResume').hidden=true;
+  try{
+   const fresh=await post('/production/batch/inspect',{event_id:eventId,request_id:requestId});
+   const latest=productionResumePayload(fresh,eventId,requestId);
+   if(revision!==startedRevision||active()?.snapshot.eventId!==eventId||
+      localStorage.getItem(key(eventId))!==requestId||JSON.stringify(latest)!==JSON.stringify(approved))
+    throw Error('停止位置が変更されました。進捗を再取得してください');
+   const release=await read('/production/release-state?event_id='+encodeURIComponent(eventId));
+   if(revision!==startedRevision||active()?.snapshot.eventId!==eventId||
+      localStorage.getItem(key(eventId))!==requestId||
+      release.environment!=='PRODUCTION'||release.event_id!==eventId||
+      release.target_event_id!==eventId||release.scope!=='current-target'||release.release_ready!==true)
+    throw Error('現在の本番ターゲットの再開許可を確認できません');
+   await post('/production/batch/resume',approved);
+   await refresh();
+  }catch(e){status('再開を確認できません：'+e.message+'。再送せず登録の進捗を確認してください。');}
+  finally{busy=false;$('productionResume').disabled=false;}
+ });
  $('productionRefresh').addEventListener('click',refresh);
  $('productionDecisionSend').addEventListener('click',async()=>{
   const x=active(),job=lastJob;if(!x||busy||job?.status!=='needs_decision')return;

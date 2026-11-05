@@ -128,7 +128,7 @@ for(const [status,execution_active,expectedTimers,message] of [
  ['running',undefined,0,/実行を確認できません/],
  ['running',true,1,/登録中/],
  ['blocked',false,0,/試合の削除・作り直し/],
- ['paused',false,0,/再開操作に未対応/]
+ ['paused',false,0,/再開ボタン/]
 ])test('inspection recovery '+status+' active='+execution_active,async()=>{
  const x=createUI(),oldFetch=globalThis.fetch,oldWindow=globalThis.window;
  const requestId='cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa';let calls=0,timers=0;
@@ -149,4 +149,53 @@ for(const [status,execution_active,expectedTimers,message] of [
   assert.equal(x.get('productionStart').disabled,true);
   assert.equal(globalThis.localStorage.getItem('peakstamp:production:worker-batch:'+E),requestId);
  }finally{globalThis.fetch=oldFetch;globalThis.window=oldWindow;x.restore();}
+});
+
+for(const scenario of ['success','stale-pause','stale-cursor','wrong-target','lost-response','event-change']){
+ test('production resume '+scenario,async()=>{
+  const state={active:true,snapshot,rows:[],decisions:[]};
+  const x=createUI({state,readOverride:async()=>{
+   if(scenario==='event-change')state.active=false;
+   return {environment:'PRODUCTION',event_id:E,target_event_id:scenario==='wrong-target'?T:E,scope:'current-target',release_ready:true};
+  }});
+  const old=globalThis.fetch,requestId='cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa';
+  let inspected=0,resumed=0;
+  const job={environment:'PRODUCTION',control_contract:'event-pause-v1',inspection_only:true,
+   execution_active:false,event_id:E,request_id:requestId,status:'paused',phase:'preparing',
+   pause_requested:true,pause_id:'pause-one',cursor:1,completed:1,total:4};
+  try{
+   x.ui.render();x.get('ssBridgeToken').value='mock';
+   localStorage.setItem('peakstamp:production:worker-batch:'+E,requestId);
+   globalThis.fetch=async(url,options)=>{
+    if(url.endsWith('/inspect')){
+     inspected++;
+     return Response.json({...job,
+      ...(inspected>1&&scenario==='stale-pause'?{pause_id:'pause-two'}:{}),
+      ...(inspected>1&&scenario==='stale-cursor'?{cursor:2}:{}),
+      ...(resumed?{status:'needs_decision',decision:{seq:2,choices:['left'],left_team:'A',right_team:'B',left_score:0,right_score:0}}:{})});
+    }
+    assert.ok(url.endsWith('/resume'));resumed++;
+    assert.deepEqual(JSON.parse(options.body),{event_id:E,request_id:requestId,
+     pause_id:'pause-one',cursor:1,confirm:'PRODUCTION EVENT BATCH RESUME'});
+    if(scenario==='lost-response')throw Error('lost response');
+    return Response.json({});
+   };
+   await x.ui.refresh();assert.equal(x.get('productionResume').hidden,false);
+   await x.get('productionResume').events.click();
+   await x.get('productionResume').events.click();
+   assert.equal(resumed,['success','lost-response'].includes(scenario)?1:0);
+   assert.equal(localStorage.getItem('peakstamp:production:worker-batch:'+E),requestId);
+   if(scenario==='lost-response')assert.match(x.get('productionStatus').textContent,/再送せず/);
+  }finally{globalThis.fetch=old;x.restore();}
+ });
+}
+test('unsafe or unidentified production states never authorize resume',async()=>{
+ const {productionResumePayload}=await import('../sposched-production-ui.mjs');
+ const j={environment:'PRODUCTION',control_contract:'event-pause-v1',inspection_only:true,
+  execution_active:false,event_id:E,request_id:T,status:'paused',phase:'preparing',
+  pause_requested:true,pause_id:'pause',cursor:1};
+ for(const change of [{status:'blocked'},{phase:'executing'},{execution_active:true},
+  {inspection_only:false},{event_id:T},{request_id:E},{pause_requested:false},
+  {pause_id:null},{cursor:-1},{cursor:1.5},{control_contract:null},{environment:'STAGING ONLY'}])
+  assert.throws(()=>productionResumePayload({...j,...change},E,T));
 });
