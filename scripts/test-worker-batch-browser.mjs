@@ -124,7 +124,7 @@ await page.addInitScript(()=>{
  }));
  localStorage.setItem('peakstamp_confirmed_goals_v1:IMG_0289.MOV::1234::1000',
   JSON.stringify({source:file,items:[{
-   id:'third-place',origin:'manual',status:'confirmed',
+   id:'third-place',origin:'audio',status:'confirmed',
    timeSeconds:238,goalTimeSeconds:238,scorer:'藤井さん',
    assistStatus:'named',assist:'達夫',matchSeq:3
   }]}));
@@ -291,3 +291,4 @@ try{
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  console.log('PASS: mobile TEST Worker batch: one start, progress poll, tied-final choice, no browser mutation replay and idempotent reconnect marker');
 }finally{await browser.close()}
+

@@ -282,7 +282,7 @@ test('all quick goal cards show AI original next to the registered official name
  const quick=html.slice(html.indexOf('function renderQuick(){'),
   html.indexOf("$('quickEdit').addEventListener"));
  assert.doesNotMatch(quick,/\.innerHTML\s*=/);
- assert.match(quick,/node\('span','AI候補'/);
+ assert.match(quick,/node\('span',heard\.label/);
  assert.match(quick,/item\.state==='manual-ss'\?'SSで手動登録':'登録予定'/);
  assert.match(quick,/SSアプリで手動登録してください/);
 });

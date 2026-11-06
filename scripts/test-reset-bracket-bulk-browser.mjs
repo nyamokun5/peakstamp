@@ -44,7 +44,7 @@ await page.addInitScript(()=>{
  }));
  localStorage.setItem('peakstamp_confirmed_goals_v1:IMG_0286.MOV::1234::1000',
   JSON.stringify({source:file,items:[1,2,3].map(n=>({
-   id:'goal-'+n,origin:'manual',status:'confirmed',
+   id:'goal-'+n,origin:'audio',status:'confirmed',
    timeSeconds:n*90,goalTimeSeconds:n*90,
    scorer:'山田',assistStatus:'none',matchSeq:n
   }))}));
@@ -84,3 +84,4 @@ try{
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  console.log('PASS: iPhone 4-fixture reset requires one optional safe approval, two official GET reads, zero writes');
 }finally{await browser.close()}
+

@@ -84,7 +84,7 @@ test('manual goal without video is available in TEST-only review and existing ba
  assert.match(html,/storeManualGoals\(localStorage,'staging'/);
  assert.match(html,/restoreManualGoals\(localStorage,'staging'/);
  assert.match(html,/manualGoals=markManualCompleted\(manualGoals/);
- assert.match(html,/g\.manual\?'SS手動登録（動画なし）'/);
+ assert.match(html,/standaloneManual\?'SS手動登録（動画なし）'/);
  assert.match(html,/loadedFromStagingDirect&&\$\('ssEnvironment'\)\.value==='staging'/);
  assert.match(html,/id="batchPreview"/);
  assert.match(html,/id="batchExecute"/);

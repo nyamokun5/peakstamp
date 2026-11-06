@@ -25,7 +25,7 @@ import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
 import {initWorkflowSteps} from './workflow-steps.mjs?v=workflowui1';
 import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=reviewagain1';
-import {assignMatchNumber,setMatchNumber,sourceDisplayName,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from './match-label.mjs?v=matchsort1';
+import {assignMatchNumber,setMatchNumber,sourcePartLabel,joinPreviousMatch,sourceDisplayName,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from './match-label.mjs?v=multi-part1';
 
 const $ = id => document.getElementById(id);
 // Keep one video decoder across scene cards, independent of Gemini/candidate data.
@@ -267,7 +267,7 @@ function renderSourceList() {
     const card = make('div','source-item');
     const num = make('span','source-order',String(i + 1));
     const info = make('div','source-info');
-    const filename=make('strong','source-match-title',sourceDisplayName(source,i));
+    const filename=make('strong','source-match-title',sourcePartLabel(source,sources));
     const status=source.error?'解析に失敗':source.bins?'解析済み':'解析待ち';
     const label=make('label','source-match-editor','試合番号');
     const input=make('input','source-match-number');
@@ -304,6 +304,18 @@ function renderSourceList() {
       controls.append(button);
     };
     move('↑',-1); move('↓',1);
+    if(i>0){
+      const continuation=make('button','source-control','前の動画と同じ試合');
+      continuation.type='button';
+      continuation.disabled=state.working||state.exporting||state.geminiProcessing;
+      continuation.addEventListener('click',()=>{
+        if(state.working||state.exporting||state.geminiProcessing)return;
+        if(joinPreviousMatch(sources,i,window.localStorage)){
+          rememberGoalProject();syncSources();
+        }
+      });
+      controls.append(continuation);
+    }
     const del = make('button','source-control source-remove','×');
     del.type = 'button';
     del.disabled = state.working || state.exporting || state.geminiProcessing;

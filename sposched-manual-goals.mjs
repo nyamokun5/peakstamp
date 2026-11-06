@@ -1,3 +1,5 @@
+import {buildReviewPayload} from './sposched-review-core.mjs';
+import {selectBatchOperations} from './sposched-staging-batch.mjs';
 /** Standalone SpoSched goal drafts for match reports without a PeakStamp
  * video or Gemini detection. Only goal metadata is stored, never tokens.
  * The test bridge still performs human review, official UUID matching,
@@ -67,4 +69,16 @@ export function applyManualRowEdits(rows,goals,snapshot){
   row.confirmed=false;row.duplicateApproved=false;
   return row;
  });
+}
+
+// A click on the row's register button approves exactly that visible goal.
+// Reuse normal validation and duplicate checks; never include score changes.
+export function prepareManualGoalRegistration(snapshot,row){
+ if(!row?.goal?.manual||row.include===false||row.updateGoalId||row.fixtureIdentityChanged)
+  throw Error('新規の手動ゴールを選択してください。試合ID変更・既存ゴール修正は詳細確認が必要です');
+ const match=snapshot?.matches?.find(m=>m.seq===Number(row.seq));
+ if(!match||!['scheduled','playing','in_progress'].includes(match.status))
+  throw Error('登録できる未終了の試合を選択してください');
+ const payload=buildReviewPayload(snapshot,[{...row,confirmed:true}],[]);
+ return selectBatchOperations(payload,[0]);
 }

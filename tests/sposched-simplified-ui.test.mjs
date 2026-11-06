@@ -11,7 +11,7 @@ test('mobile SpoSched flow uses concise steps and hides optional settings',()=>{
  assert.match(html,/id="quickProductionHelp"[^>]*>AI候補と登録予定/);
  assert.match(html,/id="quickSummary"/);
  assert.match(html,/動画・判定の詳細/);
- assert.match(html,/AI候補','quick-compare-label'/);
+ assert.match(html,/heard\.label,'quick-compare-label'/);
  assert.match(html,/登録予定','quick-compare-label'/);
  assert.doesNotMatch(html,/一昨日のTEST版|本番SSは読み取りのみ|イベント単位の承認後のみ登録可/);
 });

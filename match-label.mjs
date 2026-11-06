@@ -54,3 +54,17 @@ export function resetMatchNumbersToFilenameOrder(sources,storage=null){
  }
  return sources;
 }
+
+// Multiple files can share an official fixture number. Keep each file's own
+// fingerprint, timestamps and order; no media concatenation or renumbering.
+export function joinPreviousMatch(sources,index,storage=null){
+ if(!Number.isInteger(index)||index<1||index>=sources.length)return false;
+ const previous=sources[index-1];
+ return validMatchNumber(previous?.matchNumber)&&
+  setMatchNumber(sources[index],previous.matchNumber,storage);
+}
+export function sourcePartLabel(source,sources){
+ const group=(sources||[]).filter(s=>Number(s.matchNumber)===Number(source.matchNumber));
+ const index=group.indexOf(source);
+ return sourceDisplayName(source)+(group.length>1&&index>=0?' · 動画 '+(index+1)+'/'+group.length:'');
+}

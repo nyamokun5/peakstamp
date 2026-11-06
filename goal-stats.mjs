@@ -277,6 +277,7 @@ export function confirmedGoalExport(sources,storage){
    const problem=validateGoal(x);
    if(problem)continue;
    rows.push({id:x.id,source:goalSourceInfo(source),
+    origin:x.origin||'unknown',manual:x.origin==='manual',
     // v2: timeSeconds is now the estimated or reviewed PLAY time.
     timeSeconds:actualGoalTime(x),
     goalTimeSeconds:actualGoalTime(x),

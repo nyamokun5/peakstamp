@@ -52,7 +52,7 @@
       <div class="source-board" id="sourceBoard" hidden>
         <div class="source-board-header"><strong>試合番号を確認 · <span id="sourceCount">0</span>本</strong><button id="sortFilesByName" class="source-sort-btn" type="button">ファイル名順に並べ直す</button></div>
         <div id="sourceList" class="source-list"></div>
-        <p class="fine-print">ファイルごとに音声解析し、ここに並んだ順番でハイライトを結合します。</p>
+        <p class="fine-print">途中で撮影が途切れた場合は、続きの動画を追加して「前の動画と同じ試合」を押してください。同じ試合のゴールをまとめて扱い、動画ごとの時刻は保持します。</p>
       </div>
       <div id="videoWrapper" hidden>
         <button id="loadPreview" class="preview-load-button" type="button">▶ 先頭動画をプレビュー（必要な場合のみ）</button>
@@ -567,6 +567,6 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=firsttap-replay1"></script>
+  <script type="module" src="app.mjs?v=manual-multipart1"></script>
 </body>
 </html>

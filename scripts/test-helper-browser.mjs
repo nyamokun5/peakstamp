@@ -64,7 +64,7 @@ await page.addInitScript(()=>{
  }));
  localStorage.setItem('peakstamp_confirmed_goals_v1:IMG_0289.MOV::1234::1000',
   JSON.stringify({source:file,items:[{
-   id:'helper-assist-goal',origin:'manual',status:'confirmed',
+   id:'helper-assist-goal',origin:'audio',status:'confirmed',
    timeSeconds:238,goalTimeSeconds:238,scorer:'Hiroyuki Kawata',
    assist:'橋本 泰成',assistStatus:'named',matchSeq:2
   }]}));
@@ -92,3 +92,4 @@ try{
  assert.deepEqual(errors,[]);
  console.log('PASS: mocked iPhone one-click assistant helper enrollment precedes goal; correct score team; no PROD traffic');
 }finally{await browser.close()}
+
