@@ -159,6 +159,9 @@ export function createGoalPlaybackController(video,{
    phase='loading';
    armLoadTimer();
    say('動画を準備しています…');
+   // Retry within this fresh user gesture even when metadata is still pending.
+   if(video.error){video.load();}
+   primeFirstTap();
   }
   return changed;
  }

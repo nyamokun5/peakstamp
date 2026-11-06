@@ -16,10 +16,11 @@ import {proposedMatchHelpers,waitingHelperScoringSideIssue} from './sposched-hel
 export function quickAIObservation(row){
  const goal=row?.goal||{};
  const heard=value=>typeof value==='string'?value.trim():'';
- const scorerRaw=heard(goal.scorer)||'聞き取れず';
+ const manual=goal.manual===true||goal.origin==='manual';
+ const scorerRaw=heard(goal.scorer)||(manual?'未入力':'聞き取れず');
  const spokenAssist=heard(goal.assist);
  const assistRaw=goal.assistStatus==='none'
-  ?spokenAssist?spokenAssist+'（AI判定：アシストなし）':'なし（AI判定）'
+  ?spokenAssist?spokenAssist+(manual?'（入力：アシストなし）':'（AI判定：アシストなし）'):(manual?'なし':'なし（AI判定）')
   :spokenAssist||(
    goal.assistStatus==='named'?'名前を聞き取れず':'不明（AI判定）');
  const names=hints=>{
@@ -32,7 +33,7 @@ export function quickAIObservation(row){
   }
   return result;
  };
- return {scorerRaw,assistRaw,
+ return {label:manual?'手動入力':'AI候補',scorerRaw,assistRaw,
   scorerCandidates:names(row?.scorerHints),
   assistCandidates:goal.assistStatus==='none'?[]:names(row?.assistHints),
   noAssist:goal.assistStatus==='none'};

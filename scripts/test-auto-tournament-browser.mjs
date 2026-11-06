@@ -90,7 +90,7 @@ await page.addInitScript(()=>{
  localStorage.setItem('peakstamp_current_video_project_v1',JSON.stringify({
   version:1,projectId:'test-project',files:[file],updatedAt:1000}));
  localStorage.setItem('peakstamp_confirmed_goals_v1:IMG_0289.MOV::1234::1000',JSON.stringify({
-  source:file,items:[{id:'third-goal',origin:'manual',status:'confirmed',timeSeconds:238,
+  source:file,items:[{id:'third-goal',origin:'audio',status:'confirmed',timeSeconds:238,
    goalTimeSeconds:238,scorer:'西村',assistStatus:'named',assist:'徳永',matchSeq:3}]}));
 });
 try {
@@ -151,3 +151,4 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  console.log('PASS: one approval -> two semifinal results -> third-place goal/result -> drawn final; one signed preview per goal, progress, one pre-write official /match GET and no production traffic');
 }finally{await browser.close()}
+

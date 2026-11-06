@@ -43,7 +43,7 @@ await page.addInitScript(()=>{
  const file={name:'IMG_0289.MOV',size:1234,lastModified:1000};
  localStorage.setItem('peakstamp_current_video_project_v1',JSON.stringify({version:1,projectId:'test-project',files:[file],updatedAt:1000}));
  localStorage.setItem('peakstamp_confirmed_goals_v1:IMG_0289.MOV::1234::1000',JSON.stringify({source:file,items:[{
-  id:'third-goal',origin:'manual',status:'confirmed',timeSeconds:238,goalTimeSeconds:238,
+  id:'third-goal',origin:'audio',status:'confirmed',timeSeconds:238,goalTimeSeconds:238,
   scorer:'西村',assistStatus:'named',assist:'徳永',matchSeq:3
  }]}));
 });
@@ -125,3 +125,4 @@ try{
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  console.log('PASS: mobile one-click finish, score rendered before action, auto-next, stale score blocked, tied winner, held goals, finished-game guard, details return and production hidden');
 }finally{await browser.close()}
+

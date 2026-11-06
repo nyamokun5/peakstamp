@@ -43,7 +43,7 @@ await page.addInitScript(()=>{
   version:1,projectId:'test-project',files:[source],updatedAt:1000}));
  const key='peakstamp_confirmed_goals_v1:IMG_0289.MOV::1234::1000';
  if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({
-  source,items:[{id:'missing-match',origin:'manual',status:'confirmed',timeSeconds:238,
+  source,items:[{id:'missing-match',origin:'audio',status:'confirmed',timeSeconds:238,
    goalTimeSeconds:238,scorer:'西村',assist:'徳永',assistStatus:'named'}]}));
 });
 try{
@@ -119,3 +119,4 @@ try{
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  console.log('PASS: goal review and video match proposals, empty official fixture error instead of unusable iPhone selector, event focus, GET-only recovery, no writes');
 }finally{await browser.close()}
+

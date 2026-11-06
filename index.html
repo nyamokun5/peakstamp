@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=reviewagain1" />
+  <link rel="stylesheet" href="styles.css?v=goalwide2" />
 </head>
 <body>
   <header class="topbar">
@@ -52,7 +52,7 @@
       <div class="source-board" id="sourceBoard" hidden>
         <div class="source-board-header"><strong>試合番号を確認 · <span id="sourceCount">0</span>本</strong><button id="sortFilesByName" class="source-sort-btn" type="button">ファイル名順に並べ直す</button></div>
         <div id="sourceList" class="source-list"></div>
-        <p class="fine-print">ファイルごとに音声解析し、ここに並んだ順番でハイライトを結合します。</p>
+        <p class="fine-print">途中で撮影が途切れた場合は、続きの動画を追加して「前の動画と同じ試合」を押してください。同じ試合のゴールをまとめて扱い、動画ごとの時刻は保持します。</p>
       </div>
       <div id="videoWrapper" hidden>
         <button id="loadPreview" class="preview-load-button" type="button">▶ 先頭動画をプレビュー（必要な場合のみ）</button>
@@ -260,7 +260,8 @@
       <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
 
       <p id="multiWaveNotice" class="fine-print" hidden>波形は全動画をつなげた表示です。オレンジ線は各動画の検出位置を示します。</p>
-      <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
+      <div class="waveform-wrap"><p id="analysisCoverage" role="status"></p>
+      <canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
       <div id="emptyResults" class="empty-results" hidden>指定した感度では見どころを検出できませんでした。「多めに拾う」に切り替えて再解析するか、音声が入っているかご確認ください。</div>
       <p class="list-help">▶ 再生 → 調整 → キープ</p>
       <div class="selected-overview">
@@ -567,6 +568,6 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=firsttap-replay1"></script>
+  <script type="module" src="app.mjs?v=matchfill3"></script>
 </body>
 </html>

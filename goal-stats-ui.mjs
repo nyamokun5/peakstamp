@@ -5,10 +5,10 @@ import {sourceDisplayName} from './match-label.mjs?v=match1';
  * gets reset merely because a card, field or summary rerenders.
  */
 import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
- confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=goalprefill1';
+ confirmedGoalExport,goalSourceKey,actualGoalTime,matchContext} from './goal-stats.mjs?v=matchrecover2';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
-import {createGoalPlaybackController} from './goal-playback.mjs?v=firsttap1';
+import {createGoalPlaybackController} from './goal-playback.mjs?v=retrytap2';
 import {createGoalSceneControls} from './goal-scene-editor.mjs?v=goalnative2';
 
 const $=id=>document.getElementById(id);
@@ -290,6 +290,18 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   if(item.assistStatus==='named')
    inputRow(fields,'アシスト者',item.assist,v=>edit(entry,'assist',v),{placeholder:'例：野田さん'});
   inputRow(fields,'対戦カード',item.matchLabel,v=>edit(entry,'matchLabel',v),{placeholder:'例：3 vs 4'});
+  if(!item.matchLabel){
+   const detected=matchContext(goalData(source).transcript?.data?.utterances||[],item.timeSeconds);
+   if(detected?.label){
+    const apply=make('button','','実況の対戦カードを反映：'+detected.label);
+    apply.type='button';
+    apply.addEventListener('click',()=>edit(entry,'matchLabel',detected.label));
+    fields.append(apply);
+   }else{
+    fields.append(make('p','fine-print','この動画の実況から対戦カードを取得できていません。対戦カードを入力してください。'));
+   }
+  }
+
   inputRow(fields,'SS試合番号（任意）',item.matchSeq||'',v=>edit(entry,'matchSeq',v),{type:'number',placeholder:'例：3'});
   const optional=make('details','goal-optional-fields');
   optional.append(make('summary','','詳細：チーム番号・メモ'));

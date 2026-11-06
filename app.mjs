@@ -3,11 +3,11 @@ import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experime
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=guided1';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=recovery2';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=firsttap1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=matchfill3';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
-import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
+import {createGoalDrafts} from './goal-stats.mjs?v=matchrecover2';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
@@ -25,7 +25,7 @@ import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
 import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
 import {initWorkflowSteps} from './workflow-steps.mjs?v=workflowui1';
 import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=reviewagain1';
-import {assignMatchNumber,setMatchNumber,sourceDisplayName,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from './match-label.mjs?v=matchsort1';
+import {assignMatchNumber,setMatchNumber,sourcePartLabel,joinPreviousMatch,sourceDisplayName,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from './match-label.mjs?v=multi-part1';
 
 const $ = id => document.getElementById(id);
 // Keep one video decoder across scene cards, independent of Gemini/candidate data.
@@ -267,8 +267,8 @@ function renderSourceList() {
     const card = make('div','source-item');
     const num = make('span','source-order',String(i + 1));
     const info = make('div','source-info');
-    const filename=make('strong','source-match-title',sourceDisplayName(source,i));
-    const status=source.error?'解析に失敗':source.bins?'解析済み':'解析待ち';
+    const filename=make('strong','source-match-title',sourcePartLabel(source,sources));
+    const status=source.error?'解析失敗：'+source.error:source.bins?'解析済み · '+formatTime(source.duration)+' · '+source.candidates.length+'件':'未解析（動画時間未確認）';
     const label=make('label','source-match-editor','試合番号');
     const input=make('input','source-match-number');
     input.type='number';input.inputMode='numeric';input.min='1';input.max='999';
@@ -304,6 +304,35 @@ function renderSourceList() {
       controls.append(button);
     };
     move('↑',-1); move('↓',1);
+    if(source.error){
+      const retry=make('button','source-control','この動画を選び直す');
+      retry.type='button';retry.disabled=state.working||state.exporting||state.geminiProcessing;
+      retry.addEventListener('click',()=>{
+        const picker=document.createElement('input');picker.type='file';picker.accept='video/*,.mov,.mp4';
+        picker.addEventListener('change',()=>{
+          const file=picker.files?.[0];if(!file)return;
+          if(file.name!==source.file.name||file.size!==source.file.size||file.lastModified!==source.file.lastModified){
+            error('loadError','編集を保護するため、同じ元動画を選択してください。別ファイルは「動画を追加」から読み込めます。');return;
+          }
+          scenePreviewAudio.dispose();sceneReplayMedia.dispose();
+          URL.revokeObjectURL(source.objectUrl);source.file=file;source.objectUrl=URL.createObjectURL(file);source.error='';
+          error('loadError','動画を再選択しました。「全動画をまとめて解析」で未解析分を再開できます。');syncSources();
+        });picker.click();
+      });controls.append(retry);
+    }
+
+    if(i>0){
+      const continuation=make('button','source-control','前の動画と同じ試合');
+      continuation.type='button';
+      continuation.disabled=state.working||state.exporting||state.geminiProcessing;
+      continuation.addEventListener('click',()=>{
+        if(state.working||state.exporting||state.geminiProcessing)return;
+        if(joinPreviousMatch(sources,i,window.localStorage)){
+          rememberGoalProject();syncSources();
+        }
+      });
+      controls.append(continuation);
+    }
     const del = make('button','source-control source-remove','×');
     del.type = 'button';
     del.disabled = state.working || state.exporting || state.geminiProcessing;
@@ -1401,6 +1430,7 @@ function drawResults() {
   $('resultCount').textContent = String(state.candidates.length);
   $('emptyResults').hidden = state.candidates.length > 0 || state.candidates.some(x=>x.rejected===true);
   $('waveEnd').textContent = formatTime(state.duration);
+  $('analysisCoverage').textContent='解析結果あり '+state.sources.filter(s=>s.bins?.length).length+'/'+state.sources.length+'本 · 時間取得済み '+state.sources.filter(s=>s.duration>0).length+'/'+state.sources.length+'本 · 表示時間 '+formatTime(state.duration)+'（未取得分を除く）';
   refreshComment();
   requestAnimationFrame(drawWave);
 }
@@ -1491,6 +1521,7 @@ $('copyButton').addEventListener('click', async () => {
 });
 
 
+window.addEventListener('gemini-results-updated',()=>{syncSources();});
 window.addEventListener('gemini-processing-state',()=>{
   const locked=state.geminiProcessing||state.working||state.exporting;
   workflow.autoAdvance({busy:locked});

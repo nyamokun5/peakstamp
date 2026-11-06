@@ -163,3 +163,13 @@ test('native fallback can recover previously rejected custom autoplay without re
  assert.equal(calls.loads,1);
  assert.equal(calls.plays.length,1);
 });
+
+test('retry while metadata is unavailable invokes play within every new tap',async()=>{
+ const {video,calls,controller,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:30,autoplay:true});
+ await flush();video.readyState=0;video.paused=true;
+ const count=calls.plays.length;
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:30,autoplay:true});
+ assert.equal(calls.plays.length,count+1);
+ assert.equal(calls.sources,1);
+});

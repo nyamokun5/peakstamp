@@ -152,7 +152,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <p class="step-help">今回登録する動画のゴールです。</p>
  <div id="projectSummary" class="registered-goals" role="status"></div>
  <details id="sourceAdvanced">
-  <summary>対象動画を確認・変更する（通常は不要）</summary>
+  <summary>対象動画を確認・変更する</summary>
   <p class="small">古い保存データは動画のファイル更新日で仮グループ化します。撮影日とは限らないので、同じ開催日の動画か確認し、1回だけプロジェクトとして保存してください。</p>
   <label class="field" id="legacyDayWrap" hidden>過去データの日付グループ（推定）
    <select id="legacyDaySelect"></select>
@@ -364,7 +364,7 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <p>実況の対戦カードと当日の選手名簿から試合・得点者・アシストを初期選択します。<strong>動画にゴールがなくても、手動で新規追加できます。</strong> 選手と試合を確認して登録してください。</p>
  <div id="manualAddWrap" class="grid-item" hidden>
   <strong>動画がない場合の新規ゴール登録</strong>
-  <p>テストSSの試合を選んで、得点者・アシストを手入力できます。追加したゴールは下の一覧に並び、一括登録にも含められます。</p>
+  <p>テストSSの試合を選んで、得点者・アシストを手入力できます。入力後、各ゴールの「このゴールを登録」で送信できます。通常の試合一括登録には含まれません。</p>
   <button id="manualAddGoal" class="primary" type="button">＋ 新規ゴールを手動追加</button>
   <p id="manualAddStatus" class="small" role="status" aria-live="polite"></p>
  </div>
@@ -425,14 +425,15 @@ import {prepareIndependentWorkerBatch} from './sposched-independent-worker-batch
 import {startIndependentTestBatch} from './sposched-independent-test-transport.mjs';
 import {jobControlPayload} from './sposched-job-control.mjs?v=pause1';
 import {auditCurrentTestFixtureGates} from './sposched-gate-audit.mjs?v=gate-audit1';
-import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
+import {matchStorageKey,validMatchNumber} from './match-label.mjs?v=multi-part1';
+import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=matchrecover2';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
 import {normalizeTeam,normalizeSpoSnapshot as normalizeBaseSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=composite-tatsuo1';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
-import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits} from './sposched-manual-goals.mjs?v=ss-manual1';
+import {makeManualGoal,restoreManualGoals,storeManualGoals,markManualCompleted,unsentManualGoals,applyManualRowEdits,prepareManualGoalRegistration} from './sposched-manual-goals.mjs?v=manual-direct1';
 import {pendingAttempts,beginAttempt,clearAttempt,inspectAttempt,recoveryDecisionPolicy,retiredMatchRecoveryPolicy,archiveRetiredAttempt} from './sposched-write-journal.mjs?v=ss-recovery3';
-import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=helper-wait-side1';
+import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObservation,goalCandidatesByMatchNumber} from './sposched-quick-review.mjs?v=manual-origin1';
 import {validateResetGoalRebinding} from './sposched-reset-fixture-review.mjs?v=reset-bulk1';
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
@@ -543,7 +544,12 @@ const checks=()=>{
  for(const key of selected){
   try{
    const data=JSON.parse(localStorage.getItem(key)||'null');
-   if(data?.source?.name)sourceObjects.push({file:{...data.source}});
+   if(data?.source?.name){
+    const source={file:{...data.source}};
+    const savedNumber=localStorage.getItem(matchStorageKey(source));
+    if(validMatchNumber(savedNumber))source.matchNumber=Number(savedNumber);
+    sourceObjects.push(source);
+   }
   }catch{}
  }
  return sourceObjects;
@@ -562,6 +568,8 @@ const updateProjectSummary=()=>{
  $('projectSummary').append(node('p',
   chosen.length+'本の動画から、確定済みゴール '+count+'件をまとめて表示します。',
   'quick-summary'));
+ $('projectSummary').append(node('p','対象動画：'+chosen.map(s=>s.file.name).join('、'),'small'));
+ $('projectSummary').append(node('p','SSイベントを切り替えても、対象動画は自動では切り替わりません。','small'));
  if(project){
   $('projectSummary').append(node('p','このプロジェクトに登録した動画：'+
    project.files.length+'本。動画自体やAPIキーは保存していません。','details'));
@@ -717,10 +725,12 @@ function renderGoals(){
   jump.type='button';
   jump.addEventListener('click',()=>article.scrollIntoView({behavior:'smooth',block:'start'}));
   $('goalJump').append(jump);
-  const h=node('h3','#'+(i+1)+'　'+(g.manual?'SS手動登録（動画なし）':(g.source?.name||'')+' '+String(g.goalTimeSeconds??'')+'秒'));
-  const quote=node('p',g.manual?'動画なしの新規ゴールです。選手名簿から正しい得点者とアシストを指定してください。':
-   '実況「'+(g.quote||'—')+'」　AI: 得点 '+(g.scorer||'不明')+' ／ アシスト '+(g.assist||'不明'),'details');
-  if(g.manual){
+  const standaloneManual=g.manual&&g.source?.name==='SS手動入力';
+  const h=node('h3','#'+(i+1)+'　'+(standaloneManual?'SS手動登録（動画なし）':(g.source?.name||'')+' '+String(g.goalTimeSeconds??'')+'秒'));
+  const quote=node('p',standaloneManual?'動画なしの新規ゴールです。選手名簿から正しい得点者とアシストを指定してください。':
+   (g.manual?'動画で手動追加したゴール：':'実況「'+(g.quote||'—')+'」　AI: ')+
+   '得点 '+(g.scorer||'不明')+' ／ アシスト '+(g.assist||'不明'),'details');
+  if(standaloneManual){
    const remove=node('button','この未送信の手動ゴールを削除','secondary-action');
    remove.type='button';
    remove.addEventListener('click',()=>{
@@ -752,10 +762,10 @@ function renderGoals(){
   const wrap=node('div','','fields');
   const matchSelect=select(snapshot.matches.map(m=>({value:m.seq,label:matchSlotLabel(m)})),row.seq);
   matchSelect.addEventListener('change',()=>{row.seq=Number(matchSelect.value)||null;row.updateGoalId='';invalidate('match')});
-  const scorerSelect=select(options,row.scorer,'得点者を選択（AI: '+(g.scorer||'—')+'）');
+  const scorerSelect=select(options,row.scorer,'得点者を選択（'+(g.manual?'入力: ':'AI: ')+(g.scorer||'—')+'）');
   scorerSelect.addEventListener('change',()=>{row.scorer=scorerSelect.value;invalidate('scorer')});
   const assistMode=select([{value:'named',label:'あり（選手を選択）'},{value:'none',label:'なし'},{value:'unknown',label:'不明（要確認）'}],row.assistMode);
-  const assistSelect=select(options,row.assist,'アシスト者を選択（AI: '+(g.assist||'—')+'）');
+  const assistSelect=select(options,row.assist,'アシスト者を選択（'+(g.manual?'入力: ':'AI: ')+(g.assist||'—')+'）');
   assistSelect.disabled=row.assistMode!=='named';
   assistMode.addEventListener('change',()=>{row.assistMode=assistMode.value;updateGuestFields();invalidate('assist')});
   assistSelect.addEventListener('change',()=>{row.assist=assistSelect.value;invalidate('assist')});
@@ -919,7 +929,16 @@ function renderGoals(){
   }
   const footer=node('label','','line');
   footer.append(confirm,node('strong','このゴールの試合・選手を確認した'));
+  const directManual=g.manual&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging';
+  footer.hidden=directManual;
   article.append(registered,updateFields,footer,warn,duplicateWrap);
+  if(directManual){
+   const send=node('button','このゴールを登録（TEST）','primary quick-main');
+   send.type='button';send.dataset.manualRegister=row.key;
+   send.disabled=!row.include;
+   send.addEventListener('click',()=>registerManualGoal(row));
+   article.append(send,node('p','入力内容で1件登録します。試合は終了しません。','small'));
+  }
   $('goalRows').append(article);updateDuplicate();
  }
 }
@@ -1214,7 +1233,7 @@ function renderQuick(){
   // selection before the single batch-approval click. No silent UI rewrites.
   const compare=node('div','','quick-compare');
   const aiCell=node('div','','quick-compare-cell');
-  aiCell.append(node('span','AI候補','quick-compare-label'),
+  aiCell.append(node('span',heard.label,'quick-compare-label'),
    node('strong',heard.assistRaw+' → '+heard.scorerRaw,'quick-compare-value'));
   const officialCell=node('div','','quick-compare-cell proposed');
   officialCell.append(node('span',item.state==='manual-ss'?'SSで手動登録':'登録予定','quick-compare-label'),
@@ -2341,6 +2360,57 @@ $('autoReload').addEventListener('click',()=>{
  $('ssLoadSnapshot').click(); // authenticated GET only; successful load clears lock
 });
 
+async function registerManualGoal(row){
+ if(batchBusy||!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ const eventId=snapshot.eventId,revision=ssConnectionRevision;
+ const current=()=>{
+  if(snapshot?.eventId!==eventId||ssConnectionRevision!==revision||
+     !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')
+   throw Error('接続先またはイベントが変わりました。送信を中止しました');
+ };
+ let verified=false;
+ setBatchBusy(true);
+ $('manualAddStatus').textContent='試合と選手を照合しています…';
+ try{
+  if(pendingForEvent().length)throw Error('前回の送信結果が未確認です。復旧欄で照合してください');
+  const selected=prepareManualGoalRegistration(snapshot,row);
+  if(localStorage.getItem(workerBatchStorageKey(eventId))){
+   const job=await postStaging('/staging/batch/inspect',{event_id:eventId});
+   current();
+   if(job.status!=='completed')throw Error('一括登録ジョブが未完了です。先に進捗を確認してください');
+  }
+  await executeReviewedBatchOnce({selected,
+   resolveAction:async operation=>{current();const action=await resolveReviewedAction(operation);current();return action;},
+   previewAction:async action=>{
+    current();const signed=await postStaging('/staging/preview',action);current();
+    if(signed.plan?.warning)throw Error('追加確認が必要です。従来の詳細登録でプレビューを確認してください');
+    return signed;
+   },
+   beforeExecute:async(item,action)=>{
+    current();
+    const before=await fetchSS('/match?match_id='+encodeURIComponent(action.match_id));
+    current();beginAttempt(localStorage,eventId,goalKeyOfOperation(item.operation),action,before);
+   },
+   executeAction:payload=>{current();return postStaging('/staging/execute',payload);},
+   afterExecute:async item=>{
+    verified=true;row.include=false;
+    const key=goalKeyOfOperation(item.operation);
+    manualGoals=markManualCompleted(manualGoals,[key]);saveManual();
+    clearAttempt(localStorage,eventId,key);
+   }
+  });
+  current();
+  const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
+  current();if(fresh.eventId!==eventId)throw Error('取得したイベントが一致しません');
+  snapshot=fresh;
+  rebuild({preserveEdits:true,completedKeys:[row.key]});
+  $('manualAddStatus').textContent='✓ 1ゴールを登録・照合しました。試合は終了していません。';
+ }catch(e){
+  $('manualAddStatus').textContent=(verified?'登録・照合は成功しましたが、画面の更新を完了できません：':'登録を停止しました：')+
+   e.message+'。再送せず、SSの最新情報を確認してください。';
+  renderPendingPanel();
+ }finally{setBatchBusy(false);}
+}
 $('manualAddGoal').addEventListener('click',()=>{
  if(batchBusy||!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
  if(unsentManualGoals(manualGoals).length>=20){
@@ -3121,3 +3191,4 @@ updateFlowGuide();
  }
 </script>
 </body></html>
+
