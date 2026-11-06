@@ -47,12 +47,15 @@ try{for(const fromVideo of [false,true]){
  if(!fromVideo){
   await page.click('#manualAddGoal');
   const row=page.locator('#review-goal-1');
-  await row.getByLabel('得点者',{exact:true}).selectOption('Alice');
-  await row.getByLabel('アシスト',{exact:true}).selectOption('none');
-  await row.getByLabel('得点チーム',{exact:true}).selectOption('Team1');
+  const selectField=name=>row.locator('label.field').filter({has:page.locator('span').filter({hasText:new RegExp('^'+name+'$')})}).locator('select');
+  await selectField('試合番号').selectOption('1');
+  await selectField('得点者').selectOption('Alice');
+  await selectField('アシスト').selectOption('none');
+  await selectField('得点チーム').selectOption('Team1');
  }
  await page.locator('[data-manual-register]').click();
- await page.waitForFunction(()=>document.querySelector('#manualAddStatus').textContent.includes('1ゴールを登録・照合'));
+ await page.waitForFunction(()=>/1ゴールを登録・照合|登録を停止|更新を完了できません/.test(document.querySelector('#manualAddStatus').textContent));
+ assert.match(await page.locator('#manualAddStatus').innerText(),/1ゴールを登録・照合/);
  assert.equal(writes,1);assert.equal(previews,1);assert.deepEqual(dialogs,[]);assert.deepEqual(errors,[]);
  console.log('PASS: iPhone manual '+(fromVideo?'video':'standalone')+' goal registers with one click, no finish, no live traffic');
  await page.close();
