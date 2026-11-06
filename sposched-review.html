@@ -1983,6 +1983,7 @@ async function refreshWorkerBatch({passive=false}={}){
  $('workerBatchRun').disabled=true;
  $('workerBatchRefresh').hidden=false;
  const eventId=snapshot.eventId;
+ let completionVerificationFailed=false;
  try{
   const state=await postStaging(passive?'/staging/batch/inspect':'/staging/batch/status',{event_id:eventId});
   if(snapshot?.eventId!==eventId)return;
@@ -2003,7 +2004,9 @@ async function refreshWorkerBatch({passive=false}={}){
    $('workerBatchStatus').textContent='Workerの登録は完了しました。公式SSの対象試合の終了状態を確認中…';
    const fresh=normalizeSpoSnapshot(await fetchSS('/snapshot?event_id='+encodeURIComponent(eventId)));
    if(snapshot?.eventId!==eventId)return;
+   completionVerificationFailed=true;
    (state.layout_mode==='independent-fixtures-v1'?verifyCompletedIndependentSnapshot:verifyCompletedWorkerSnapshot)(state,fresh,snapshot);
+   completionVerificationFailed=false;
    snapshot=fresh;
   }
   showWorkerBatchState(state);
@@ -2030,7 +2033,10 @@ async function refreshWorkerBatch({passive=false}={}){
   }
  }catch(e){
   workerBatchPolling=false;
-  $('workerBatchStatus').textContent=passive&&e.code==='not_found'
+  $('workerBatchStatus').textContent=completionVerificationFailed
+   ?'保存済みジョブとの照合を完了できません：'+e.message+
+    '。再登録・試合の作り直し・送信履歴の削除はせず、SSの現在の記録を確認してください。この照合結果だけでは登録完了と判断できません。'
+   :passive&&e.code==='not_found'
    ?'このWorkerでは安全な状態照会を利用できません。自動再開せず、「進捗を再取得」で明示的に確認してください。'
    :'状態確認を完了できません：'+e.message+
     '。開始を再送せず「進捗を再取得」を押してください。';
