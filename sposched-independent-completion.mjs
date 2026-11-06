@@ -20,8 +20,26 @@ export function verifyCompletedIndependentSnapshot(job,fresh,previous){
   if(before.length!==1||after.length!==1||!UUID.test(id)||
      String(before[0].matchId||'').toLowerCase()!==id||
      String(after[0].matchId||'').toLowerCase()!==id||
-     after[0].status!=='finished'||seen.has(id))
-   throw Error('試合 #'+seq+' の正式IDまたは終了状態が不一致です');
+     after[0].status!=='finished'||seen.has(id)){
+   // Explain the failed comparison using only bounded labels, never raw payloads.
+   // Keep the verification predicate above unchanged: no stale job can verify
+   // a replacement fixture, even if the replacement is already finished.
+   const beforeId=String(before[0]?.matchId||'').toLowerCase();
+   const afterId=String(after[0]?.matchId||'').toLowerCase();
+   const reason=before.length!==1||after.length!==1
+    ?'公式試合番号が重複、または欠落しています'
+    :!UUID.test(id)||!UUID.test(beforeId)||!UUID.test(afterId)
+    ?'正式IDの証跡が不完全です'
+    :beforeId!==afterId
+    ?'読み取り前後で公式試合の正式IDが変わりました'
+    :afterId!==id
+    ?'保存済みジョブと現在の公式試合の正式IDが異なります'+
+      (after[0].status==='finished'?'（現在の公式試合は終了済み）':'')
+    :after[0].status!=='finished'
+    ?'公式試合の終了状態を確認できません'
+    :'複数の試合番号で正式IDが重複しています';
+   throw Error('試合 #'+seq+'：'+reason+'。保存済みジョブとの照合は未完了です');
+  }
   seen.add(id);
  }
  return true;
