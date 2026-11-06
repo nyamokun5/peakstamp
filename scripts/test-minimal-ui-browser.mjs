@@ -91,6 +91,24 @@ try{
   await page.locator('.highlight-entry.preview-active').scrollIntoViewIfNeeded();
   if(process.env.UI_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.UI_SCREENSHOT_DIR,`highlights-${viewport.width}.png`)});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no horizontal overflow');
+  // Reproduce a completed review: Keep must advance, not return to empty pending.
+  await page.evaluate(()=>{
+   const t=window.__uiTest,src=t.state.sources[0];
+   src.candidates=Array.from({length:3},(_,i)=>({id:'revisit-'+i,sourceId:src.id,time:1+i*3,peakSeconds:2+i*3,manualEnd:3+i*3,enabled:true,title:'シュート'}));
+   t.syncSources();
+  });
+  for(const tab of ['#tabKept','#tabReviewed']){
+   await page.click(tab);
+   await page.locator('#highlightList .play-btn').first().click();
+   for(let i=0;i<3;i++){
+    assert.equal(await page.locator('.highlight-entry.preview-active').getAttribute('data-scene-id'),'revisit-'+i);
+    await page.locator('.highlight-entry.preview-active .review-keep').click();
+    if(i<2)assert.equal(await page.locator('#journeyDialog').isVisible(),false);
+   }
+   assert.equal(await page.locator('#journeyDialog').isVisible(),true);
+   await page.click('#journeyDialogSecondary');
+   assert.equal(await page.locator('.highlight-entry.preview-active').getAttribute('data-scene-id'),'revisit-0');
+  }
   assert.deepEqual(errors,[]);
   console.log(`PASS ${viewport.width}x${viewport.height}: goals ${Math.round(goalHeight)}px, highlights ${Math.round(highlightHeight)}px; trim, confirm and review-again`);
   await page.close();

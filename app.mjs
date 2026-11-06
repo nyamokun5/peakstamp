@@ -99,6 +99,7 @@ const coaching=initJourneyCoach({
   reviewAllHighlights:()=>{
    workflow.setStage('edit',{scroll:false});
    reviewTab='reviewed';drawResults();
+   $('highlightList').querySelector('.play-btn')?.click();
    $('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
   },
   goExport:()=>workflow.setStage('export'),
@@ -662,8 +663,16 @@ function showUndoReview(message) {
   undoTimer = setTimeout(clearUndoReview, UNDO_VISIBLE_MS);
 }
 function nextSceneAfter(current,{wasUnjudged=false}={}) {
-  const next=nextUndecided(state.sources,current);
-  if (reviewTab === 'kept') reviewTab='all';
+  // Review navigation follows the currently displayed list, including judged
+  // clips. Snapshot before drawResults removes a newly rejected kept card.
+  const revisiting=reviewTab==='kept'||reviewTab==='reviewed';
+  const visible=[...$('highlightList').querySelectorAll('.highlight-entry')];
+  const at=visible.findIndex(el=>el.dataset.sceneId===current.id && el.dataset.sourceId===current.sourceId);
+  const nextCard=revisiting&&at>=0?visible[at+1]:null;
+  const source=nextCard?state.sources.find(src=>src.id===nextCard.dataset.sourceId):null;
+  const item=source?.candidates.find(c=>c.id===nextCard.dataset.sceneId);
+  const next=revisiting?(item?{source,item}:null):nextUndecided(state.sources,current);
+  wasUnjudged=wasUnjudged||revisiting;
   drawResults();
   if (!next) {
     const kept=state.sources.some(source=>(source.candidates||[]).some(item=>item.enabled===true));
@@ -683,7 +692,7 @@ function nextSceneAfter(current,{wasUnjudged=false}={}) {
     }
     return;
   }
-  $('reviewProgress').textContent='次の未判断シーンへ移動しました。';
+  $('reviewProgress').textContent=revisiting?'次のシーンへ':'次の未判断シーンへ移動しました。';
   // Keep/Reject is a trusted user gesture on iOS. Open the next Replay
   // synchronously BEFORE requestAnimationFrame; async .click() loses Safari's
   // playback permission when the new MOV needs its first source load.
