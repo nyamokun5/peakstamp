@@ -42,6 +42,8 @@ export function initJourneyCoach({
    }else button.onclick=null;
   };
   wire(primary,main);wire(secondary,other);
+  const register=$('journeyDialogRegister');
+  if(register)register.hidden=title!=='ゴール確認完了';
   root.hidden=false;
   primary.focus?.();
   pending={title,body};
@@ -53,16 +55,7 @@ export function initJourneyCoach({
  });
  const reviewGoals=()=>{actions.goGoals?.();showGoalIntro();};
  const goHighlights=()=>actions.goHighlights?.();
- function showGoalIntro(){
-  if(goalIntroSeen)return false;
-  goalIntroSeen=true;
-  show({
-   title:'ゴールを確認しましょう',
-   body:'① 動画を見て画角と切り取り秒数を調整。② AIが読み取った得点者・アシストを映像で確認して「得点情報を確定」。③ 最後に動画をキープ／不採用で次のゴールへ進みます。',
-   main:{label:'ゴール一覧を開く',run:()=>actions.showGoalList?.()}
-  });
-  return true;
- }
+ function showGoalIntro(){return false;}
  function analysisFinished({success=true,error='',failures=0}={}){
   const {goals,highlights}=counts();
   if(!success){
@@ -75,32 +68,25 @@ export function initJourneyCoach({
    return;
   }
   show({
-   title:failures?'解析完了（一部失敗）':'解析が完了しました！',
-   body:'ゴール '+goals+'件 ／ ハイライト '+highlights+'件を検出しました。'+
-    (failures?'\n解析できなかった動画：'+failures+'本。後から再解析できます。':'')+
-    '\n'+(goals?'まず「ゴール一覧」から映像を確認して、得点者・アシストを確定しましょう。':
-     'ゴール候補はありません。ハイライトを確認するか、ゴールを手動追加してください。'),
-   main:{label:goals?'⚽ ゴール一覧で確認':'🎞 ハイライトを確認',
+   title:failures?'解析完了（一部失敗）':'解析完了',
+   body:failures?'解析できない動画があります。動画を選び直してください。':'',
+   main:{label:goals?'ゴールを確認':'ハイライトを確認',
     run:goals?reviewGoals:goHighlights},
    other:failures?{label:'失敗した動画を確認',run:()=>actions.goAnalysis?.()}:null
   });
  }
  function goalReviewFinished({total=0,unconfirmed=0}={}){
   show({
-   title:'ゴール動画の判定が完了しました！',
-   body:total+'件のゴール候補の動画を確認しました。'+
-    (unconfirmed?'\n得点情報の未確定が'+unconfirmed+'件あります。必要なら一覧から確認してください。':'')+
-    '\n次はハイライトを確認しますか？',
-   main:{label:'🎞 ハイライトを確認',run:goHighlights},
-   other:{label:'⚽ ゴールを振り返る',run:()=>{actions.goGoals?.();actions.showGoalList?.();}}
+   title:'ゴール確認完了',
+   body:unconfirmed?'得点情報の未確定が'+unconfirmed+'件あります。':'',
+   main:{label:'ハイライトを確認',run:goHighlights},
+   other:{label:'ゴールを再確認',run:()=>{actions.goGoals?.();actions.showGoalList?.();}}
   });
  }
  function highlightReviewFinished({total=0,kept=0}={}){
   show({
-   title:'ハイライトの確認が完了しました！',
-   body:'候補 '+total+'件を確認し、'+kept+'件をキープしました。'+
-    (kept?'\nもう一度すべて確認するか、動画の書き出しへ進んでください。':
-     '\n動画を書き出すには、まずシーンを1件以上キープしてください。'),
+   title:'ハイライト確認完了',
+   body:kept?'':'動画を1件以上採用してください。',
    main:kept
     ?{label:'動画の書き出しへ',run:()=>actions.goExport?.()}
     :{label:'シーンをもう一度見る',run:()=>actions.reviewAllHighlights?.()},
@@ -110,7 +96,7 @@ export function initJourneyCoach({
  function exportFinished(){
   show({
    title:'MP4の書き出しが完了しました！',
-   body:'MP4が完成しました。① 完成した動画を再生して確認。② iPhoneに保存。③「HS向けJSON」を保存して幹事にLINEなどで共有してください（Instagramリール制作に使用します）。',
+   body:'iPhoneに保存・HS向けJSONを共有',
    main:{label:'▶ 完成動画を確認',run:()=>actions.showExportPreview?.()},
    other:{label:'HS向けJSONを保存',run:()=>actions.saveHSJson?.()}
   });

@@ -5,7 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=recovery2';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=matchfill3';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=minimalmobile1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchrecover2';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
@@ -21,10 +21,10 @@ import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudg
 import { createSceneReplayMedia } from './scene-replay-media.mjs?v=firsttap1';
 import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
 import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=autoplay51';
-import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
+import { initFirstRunGuide } from './first-run-guide.mjs?v=minimalmobile1';
 import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
 import {initWorkflowSteps} from './workflow-steps.mjs?v=workflowui1';
-import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=reviewagain1';
+import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=minimalmobile1';
 import {assignMatchNumber,setMatchNumber,sourcePartLabel,joinPreviousMatch,sourceDisplayName,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from './match-label.mjs?v=multi-part1';
 
 const $ = id => document.getElementById(id);
@@ -89,7 +89,7 @@ const coaching=initJourneyCoach({
  actions:{
   goAnalysis:()=>{workflow.setStage('analysis',{scroll:false});$('geminiPrimaryPanel').scrollIntoView({behavior:'smooth',block:'start'});},
   goGoals:()=>{workflow.setStage('edit',{scroll:false});$('goalStatsPanel').scrollIntoView({behavior:'smooth',block:'start'});},
-  showGoalList:()=>{$('goalQueueAll').click();$('goalStatsList').scrollIntoView({behavior:'smooth',block:'start'});},
+  showGoalList:()=>{goalReview.reviewAll();},
   goHighlights:()=>{
    workflow.setStage('edit',{scroll:false});
    reviewTab='all';drawResults();
@@ -881,7 +881,7 @@ function row(item, index) {
     tip.hidden=isZoomTipSeen()||normalizeSceneZoom(item.zoom)>1;
     viewport.append(tip);
     const zoomRow=make('div','scene-pinch-toolbar');
-    const zoomHint=make('span','scene-pinch-hint','🤏 2本指で画角調整 · 拡大後は1本指で移動');
+    const zoomHint=make('span','scene-pinch-hint','2本指で画角調整');
     const zoomValue=make('output','scene-pinch-value');
     zoomRow.append(zoomHint,zoomValue);
     const playbackRow=make('div','scene-playback-controls');
@@ -1116,7 +1116,9 @@ function row(item, index) {
   startBox.append(time);
   endBox.append(endInput);
   rangeInputs.append(startBox,endBox);
-  rangeEditor.append(rangeHeading,markerLegend,track,rangeHint,rangeInputs);
+  const exactTimes=make('details','exact-times');
+  exactTimes.append(make('summary','','時刻を入力'),rangeInputs);
+  rangeEditor.append(rangeHeading,markerLegend,track,rangeHint,exactTimes);
   let dragging=null;
   let fineTimer=null;
   const clearFineTimer=()=>{

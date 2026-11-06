@@ -75,6 +75,7 @@ export function initFirstRunGuide({storage=window.localStorage,hasPriorAnalysis=
  }));
  // Existing users with saved Gemini results should not be interrupted by a
  // newly introduced tour; the guide stays accessible from the header.
- if(!read()&&!hasPriorAnalysis())open();
+ // Tours remain available on request; never interrupt a new session.
+ root.hidden=true;
  return {update,open};
 }

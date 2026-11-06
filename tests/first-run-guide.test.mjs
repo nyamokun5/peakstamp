@@ -20,9 +20,11 @@ function setup(){
  const storage={getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)};
  return {nodes,storage,saved};
 }
-test('new visitors are guided once and can reopen voluntarily',()=>{
+test('new visitors are uninterrupted and can open help voluntarily',()=>{
  const {nodes,storage,saved}=setup();
  const guide=initFirstRunGuide({storage});
+ assert.equal(nodes.firstRunOverlay.hidden,true);
+ nodes.openGuide.click();
  assert.equal(nodes.firstRunOverlay.hidden,false);
  assert.equal(nodes.guideTitle.textContent,'動画を選ぶ');
  nodes.guideNext.click();nodes.guideNext.click();

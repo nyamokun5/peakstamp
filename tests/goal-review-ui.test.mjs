@@ -167,7 +167,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   await settleMedia();
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
   assert.equal(dom.goalStatsViewer.hidden,false,'after last goal the editor stays available for replay');
-  assert.match(dom.goalStatsStep.textContent,/全件確認済み/);
+  assert.equal(dom.goalStatsStep.textContent,'ゴール 2 / 2');
   assert.match(dom.goalStatsStatus.textContent,/全件判定済み/);
   assert.equal(dom.goalStatsDone.hidden,false);
   assert.match(dom.goalStatsDoneText.textContent,/2件の判定が完了/);
@@ -370,7 +370,7 @@ test('after first video Reject, next candidate starts automatically; final view 
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
   assert.equal(dom.goalStatsViewer.hidden,false);
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'kept');
-  assert.match(dom.goalStatsStep.textContent,/全件確認済み/);
+  assert.equal(dom.goalStatsDone.hidden,false);
  }finally{await restore()}
 });
 
@@ -388,7 +388,7 @@ test('only one detected goal: Keep shows explicit all-done state instead of a si
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
   assert.equal(dom.goalStatsDone.hidden,false);
   assert.match(dom.goalStatsDoneText.textContent,/1件の判定が完了.*残り0件/);
-  assert.match(dom.goalStatsStep.textContent,/全件確認済み/);
+  assert.equal(dom.goalStatsStep.textContent,'ゴール 1 / 1');
   assert.equal(dom.goalStatsViewer.hidden,false,'can still review final saved goal');
   assert.ok(find(dom.goalStatsViewer,'play-btn goal-scene-replay'));
   assert.equal(dom.goalStatsDoneToRegular.hidden,false);
@@ -826,4 +826,36 @@ test('manual goal entry lives only at end of highlight review, not on the goal c
  assert.match(review,/id="goalStatsAdd"/);
  assert.ok(review.indexOf('id="missingGoalFallback"')>review.indexOf('id="highlightList"'));
  assert.ok(review.indexOf('id="missingGoalFallback"')>review.indexOf('id="highlightList"'));
+});
+
+test('review again starts at first goal and traverses saved decisions without resetting data',async()=>{
+ const {dom,storage,one,two,restore}=setup();
+ try{
+  let completed=0;
+  const review=initGoalStatsReview({sources:[one,two]},{
+   onKeepClip:(src,item)=>Boolean(keepGoalClip(src,item)),
+   onRejectClip:rejectGoalClip,
+   onVideoReviewCompleted:()=>completed++
+  });
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  await settleMedia();
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  await settleMedia();
+  assert.equal(completed,1);
+  const before=JSON.stringify([...storage.values]);
+  const planBefore=buildMultiClipPlan([one,two]);
+  review.reviewAll();
+  await settleMedia();
+  assert.match(dom.goalStatsStep.textContent,/ゴール 1 \/ 2/);
+  assert.equal(JSON.stringify([...storage.values]),before,'navigation must not reset saved decisions');
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  await settleMedia();
+  assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
+  assert.equal(completed,1,'do not complete again after the first already-kept goal');
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  await settleMedia();
+  assert.equal(completed,2);
+  assert.deepEqual(buildMultiClipPlan([one,two]),planBefore,'same judgments produce identical export ranges');
+  assert.equal(JSON.stringify([...storage.values]),before);
+ }finally{await restore()}
 });

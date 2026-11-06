@@ -29,7 +29,7 @@ export function createGoalSceneControls({viewer,video,label,status,
  const tip=make('span','pinch-overlay-tip','🤏 2本指で画角調整');
  tip.setAttribute('aria-hidden','true');viewport.append(tip);
  const zoomRow=make('div','scene-pinch-toolbar');
- zoomRow.append(make('span','scene-pinch-hint','🤏 2本指で画角調整 · 拡大後は1本指で移動'));
+ zoomRow.append(make('span','scene-pinch-hint','2本指で画角調整'));
  const zoomValue=make('output','scene-pinch-value','1倍');zoomRow.append(zoomValue);
  const playRow=make('div','scene-playback-controls goal-scene-playback');
  const replay=make('button','play-btn goal-scene-replay','▶ リプレイ');
@@ -38,7 +38,7 @@ export function createGoalSceneControls({viewer,video,label,status,
  const mute=make('button','scene-mute-button','🔊');mute.type='button';
  replay.addEventListener('click',()=>onReplay());
  const native=make('button','goal-native-playback','Safari標準で再生');
- native.type='button';
+ native.type='button';native.hidden=true;
  native.addEventListener('click',()=>onNative());
  pause.addEventListener('click',()=>{
   if(video.paused)onSeek(Number.isFinite(video.currentTime)?video.currentTime:bounds().start);
@@ -79,7 +79,9 @@ export function createGoalSceneControls({viewer,video,label,status,
   wrap.append(input);inputs.append(wrap);return input;
  };
  const inputStart=field('開始');const inputEnd=field('終了');
- range.append(heading,legend,track,hint,inputs);
+ const exact=make('details','exact-times');
+ exact.append(make('summary','','時刻を入力'),inputs);
+ range.append(heading,legend,track,hint,exact);
  viewer.replaceChildren(label,viewport,zoomRow,playRow,native,range,status);
  const duration=()=>{
   const sourceLength=Number(source?.duration);

@@ -9,7 +9,7 @@ import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=retrytap2';
-import {createGoalSceneControls} from './goal-scene-editor.mjs?v=goalnative2';
+import {createGoalSceneControls} from './goal-scene-editor.mjs?v=minimalmobile1';
 
 const $=id=>document.getElementById(id);
 const make=(tag,cls,text)=>{
@@ -56,6 +56,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  const queue=()=>collectGoalQueue(sources(),cache());
  let activeKey='',displayedKey='',hadGoalCandidates=false,liveEntry=null;
  let queueFilter='all',scoreDetailsOpen=false;
+ // UI-only review cursor; saved judgments and export data are unchanged.
+ let reviewAgain=false;
  const say=s=>{status.textContent=s;};
  const player=createGoalPlaybackController(video,{
   notify:s=>{$('goalStatsVideoStatus').textContent=s;},
@@ -189,7 +191,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const wasUnjudged=previous!=='kept'&&previous!=='rejected';
   const rows=queue();
   const lastGoal=rows.filter(row=>row.item.status!=='excluded').at(-1);
-  const next=nextUnreviewedGoalVideo(rows,entry.key);
+  const next=reviewAgain
+   ?rows.slice(rows.findIndex(row=>row.key===entry.key)+1).find(row=>row.item.status!=='excluded')
+   :nextUnreviewedGoalVideo(rows,entry.key);
   if(next){
    // Switching is performed within the original Keep/Reject tap so iOS
    // can authorize playback of the next MOV. The main app no longer
@@ -200,6 +204,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   }else{
    // Distinguish a completed one-goal queue from a broken auto-advance:
    // no new candidate exists until the user adds or detects another goal.
+   reviewAgain=false;
    render();panel.scrollIntoView({behavior:'smooth',block:'start'});
    say('ゴール動画は全件判定済みです。確認が完了しました。');
    // Do not interrupt a user who is changing an earlier reviewed goal.
@@ -240,7 +245,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    (item.assistStatus==='named'?(item.assist||'アシスト者未入力'):
     item.assistStatus==='none'?'アシストなし':'アシスト未確認');
   scoreDetails.append(make('summary','',
-   (item.status==='confirmed'?'✓ 得点情報確定済み':'✎ 得点情報を確認・編集')+'　'+summaryNames));
+   '得点者・アシスト　'+summaryNames));
   const timing=make('details','goal-review-time-adjust');
   timing.append(make('summary','','⏱ ゴール時刻を修正（切り抜きとは別）'));
   const timingTools=make('div','goal-review-time-tools');
@@ -312,7 +317,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   optional.append(optionalBody);
   scoreDetails.append(fields,timing,optional);
   const actions=make('div','goal-review-actions');
-  const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'✓ 得点情報は確定済み':'✓ 得点情報を確定');
+  const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'確定済み':'ゴール確定');
   confirm.type='button';confirm.disabled=item.status==='confirmed'||disabled;
   confirm.addEventListener('click',()=>{
    const error=validateGoal(item);
@@ -355,8 +360,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const videoStatus=make('p','goal-review-video-status');
   const linked=source.candidates?.find(c=>c.goalRecordId===item.id&&c.enabled===true);
   const decision=item.videoDecision||(linked?'kept':null);
-  const videoKeep=make('button','goal-review-video-keep','✓ 動画をキープ（次のゴールへ）');
-  const videoReject=make('button','goal-review-video-reject','✕ 動画は不採用');
+  const videoKeep=make('button','goal-review-video-keep','動画を採用・次へ');
+  const videoReject=make('button','goal-review-video-reject','動画は不採用');
   videoKeep.type=videoReject.type='button';
   videoKeep.disabled=!(Number(source.duration)>0);
   videoKeep.setAttribute('aria-pressed',String(decision==='kept'));
@@ -402,7 +407,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const waiting=entries.filter(row=>goalNeedsVideoReview(row.item)).length;
   const complete=entries.length>0&&waiting===0;
   $('goalStatsStep').textContent=active
-   ?'ゴール '+(index+1)+' / '+entries.length+(waiting?' · 未確認 '+waiting:' · 全件確認済み')
+   ?'ゴール '+(index+1)+' / '+entries.length
    :entries.length?'確認済み':'候補なし';
   done.hidden=!complete;
   if(complete){
@@ -497,6 +502,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   say('ゴール候補を追加しました。映像を見て得点者・アシストを入力し、確定してください。');
   return true;
  }
+ function reviewAll(){
+  queueFilter='all';
+  const first=queue().find(row=>row.item.status!=='excluded');
+  if(!first)return;
+  reviewAgain=true;
+  focusActive(first,{autoplay:true,scroll:true});
+ }
  function openAt(source,time){
   const entries=queue().filter(row=>goalSourceKey(row.source)===goalSourceKey(source));
   const entry=entries.sort((a,b)=>Math.abs(actualGoalTime(a.item)-time)-
@@ -584,5 +596,5 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   });
  }
  refresh();
- return {refresh,nearby,openAt,addFromScene,hasRecords,pausePlayback};
+ return {refresh,nearby,openAt,reviewAll,addFromScene,hasRecords,pausePlayback};
 }
