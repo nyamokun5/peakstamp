@@ -51,3 +51,24 @@ test('official #3 and #4 waiting without UUID are accepted only as non-write pla
   ...pendingInspect,matches:pendingInspect.matches.map((m,i)=>i===2?{...m,status:'scheduled'}:m)
  },release));
 });
+
+const {validateIndependentProductionReleaseEvidence}=await import('../sposched-production-release.mjs');
+for(const [format,count] of [['1team',1],['2teams_1pitch',2],['3teams_1pitch',3]]){
+ test('independent production release requires deployed contract and target: '+format,()=>{
+  const s={...snapshot,officialFormat:format,matches:snapshot.matches.slice(0,count).map(m=>({...m,status:'scheduled'}))};
+  const i={...inspect,matches:inspect.matches.slice(0,count).map((m,j)=>({...m,status:'scheduled',left_team:s.matches[j].leftTeam,right_team:s.matches[j].rightTeam}))};
+  const r={...release,independent_fixture_contract:'independent-fixtures-v1',independent_batch_writes:true,batch_start_path:'/production/batch/start'};
+  assert.deepEqual(validateIndependentProductionReleaseEvidence(s,i,r).fixture_ids,ids.slice(0,count));
+  for(const changed of [release,{...r,release_ready:false},{...r,target_event_id:T},
+   {...r,environment:'TEST'},{...r,independent_batch_writes:false},
+   {...r,batch_start_path:'/staging/batch/start'},{...r,independent_fixture_contract:'old'}])
+   assert.throws(()=>validateIndependentProductionReleaseEvidence(s,i,changed));
+  assert.throws(()=>validateIndependentProductionReleaseEvidence({...s,officialFormat:'4teams_1pitch'},i,r));
+  assert.throws(()=>validateIndependentProductionReleaseEvidence(s,{...i,team_pinned:false},r));
+  assert.throws(()=>validateIndependentProductionReleaseEvidence(s,{...i,matches:i.matches.map((m,j)=>j===0?{...m,left_team:'Wrong team'}:m)},r));
+  assert.throws(()=>validateIndependentProductionReleaseEvidence(s,{...i,matches:i.matches.map((m,j)=>j===0?{...m,right_team:''}:m)},r));
+  assert.throws(()=>validateIndependentProductionReleaseEvidence({...s,matches:s.matches.map((m,j)=>j===0?{...m,leftTeam:'Old team'}:m)},i,r));
+  assert.throws(()=>validateIndependentProductionReleaseEvidence(s,{...i,matches:i.matches.map(m=>({...m,match_id:T}))},r));
+  assert.throws(()=>validateIndependentProductionReleaseEvidence(s,{...i,matches:i.matches.map(m=>({...m,status:'finished'}))},r));
+ });
+}
