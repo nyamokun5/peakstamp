@@ -1548,6 +1548,7 @@ function renderIndependentTestSummary(root){
  catch(e){issue=e.message;}
  const unresolved=pendingForEvent().length>0;
  const completedCurrent=hasVerifiedCurrentCompletion();
+ const officiallyFinished=snapshot.matches.length>0&&snapshot.matches.every(m=>m.status==='finished');
  const firstIssue=issue.match(/^ゴール(\d+)：/);
  const jump=$('workerBatchJumpToGoal');
  jump.hidden=completedCurrent||!issue||!firstIssue;
@@ -1556,6 +1557,7 @@ function renderIndependentTestSummary(root){
  $('workerBatchRecreate').disabled=!!issue||unresolved||batchBusy||autoBusy||workerBatchPolling;
  $('workerBatchReadiness').textContent=unresolved?'未照合の送信記録があります。再送せず照合してください。':
   completedCurrent?'✓ 現在の'+snapshot.matches.length+'試合は登録・照合済みです。再登録は不要です。':
+  officiallyFinished?'SSでは全試合終了済みです。再登録は不要です。保存済みジョブとの照合は未完了です。':
   issue?'登録前に修正が必要：'+issue:
   marker?'保存済みジョブの進捗を確認してください。':
   '登録可能なゴール '+quickGoalDecisions(snapshot,rows).filter(d=>d.state==='ready').length+'件。TESTへ登録できます。';
