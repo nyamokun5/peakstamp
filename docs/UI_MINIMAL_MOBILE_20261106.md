@@ -55,3 +55,14 @@ Not deployed or merged. Real iPhone playback/pinch/MP4 export and an independent
 human check of first-use clarity remain outstanding. Mocked and unit verification
 cannot establish those real-device outcomes. Do not call the full acceptance
 criteria complete until they are checked. No production SpoSched write test.
+
+
+## TEST publication follow-up
+
+Cloudflare automatically published the UI branch through the existing isolated
+STAGING build. Deployment 9366fcfe matched ddbb7596, tree-identical to 9a8b1d9.
+GitHub's new mobile browser test timed out waiting for the generated H.264 MP4
+while local Chromium 138 passed. The fixture now uses VP8/WebM to avoid the
+proprietary decoder dependency in Playwright Chromium; product processing and
+all assertions remain unchanged. This fixture check does not validate iPhone MP4
+export. No production deployment or live SS write is included.

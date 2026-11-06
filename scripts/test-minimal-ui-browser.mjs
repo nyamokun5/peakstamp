@@ -1,4 +1,5 @@
 // Isolated mobile presentation regression. All requests are fulfilled locally;
+// VP8/WebM avoids proprietary H.264 decoder differences in CI Chromium.
 // test hooks are appended to the served module only, never shipped in the app.
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -6,8 +7,8 @@ import {execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
-const fixture=path.join(tmpdir(),'peakstamp-ui-fixture.mp4');
-execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','color=c=0x12374a:s=640x360:d=20','-c:v','libx264','-pix_fmt','yuv420p','-y',fixture]);
+const fixture=path.join(tmpdir(),'peakstamp-ui-fixture.webm');
+execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','color=c=0x12374a:s=640x360:d=20','-c:v','libvpx','-pix_fmt','yuv420p','-y',fixture]);
 const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
 try{
  for(const viewport of [{width:375,height:667},{width:390,height:700},{width:430,height:740}]){
@@ -17,7 +18,7 @@ try{
    const u=new URL(route.request().url());
    assert.equal(u.host,'peakstamp.local','no external service calls permitted');
    const file=u.pathname==='/'?'index.html':u.pathname.slice(1);
-   if(file==='fixture.mp4')return route.fulfill({body:await readFile(fixture),contentType:'video/mp4'});
+   if(file==='fixture.webm')return route.fulfill({body:await readFile(fixture),contentType:'video/webm'});
    try{
     let body=await readFile(new URL('../'+file,import.meta.url),'utf8');
     if(file==='app.mjs')body+='\nwindow.__uiTest={state,syncSources,goalReview,workflow,coaching};';
@@ -29,12 +30,12 @@ try{
   assert.equal(await page.locator('#firstRunOverlay').isVisible(),false);
   await page.evaluate(async()=>{
    const {state,syncSources,workflow}=window.__uiTest;
-   const blob=await(await fetch('/fixture.mp4')).blob();
-   const file=new File([blob],'TEST.mp4',{type:'video/mp4',lastModified:1});
+   const blob=await(await fetch('/fixture.webm')).blob();
+   const file=new File([blob],'TEST.webm',{type:'video/webm',lastModified:1});
    const source={id:'fixture',file,objectUrl:URL.createObjectURL(file),duration:20,matchNumber:1,
     bins:Array.from({length:80},()=>({rms:.1,peak:.2})),
     candidates:[{id:'highlight',sourceId:'fixture',time:4,peakSeconds:8,manualEnd:12,db:-20,title:'シュート'}]};
-   localStorage.setItem('peakstamp_callout_pilot_v2:TEST.mp4::'+file.size+'::1::whole',JSON.stringify({utterances:[
+   localStorage.setItem('peakstamp_callout_pilot_v2:TEST.webm::'+file.size+'::1::whole',JSON.stringify({utterances:[
     {kind:'match_start',time_seconds:0,match_label:'1 vs 2'},
     {kind:'goal_call',time_seconds:15,scorer:'西村',assist:'田中',quote:'西村ゴール'}]}));
    state.sources=[source];syncSources();workflow.setStage('edit',{scroll:false});
