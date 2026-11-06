@@ -29,10 +29,12 @@ export async function runGeminiVideoBatch({
   try{
    await processVideo(video,index);
    if(isCancelled())break;
+   video.error='';
    success++;
    progress('complete',index,video);
   }catch(e){
    if(isCancelled())break;
+   video.error=e?.message||String(e);
    failures.push({
     name:video?.file?.name||'動画 '+(index+1),
     error:e?.message||String(e)

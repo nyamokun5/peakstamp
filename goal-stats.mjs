@@ -221,6 +221,13 @@ export function createGoalDrafts(source,storage){
    status:'draft',confirmedAt:null,note:''
   });
  }
+ for(const item of items){
+  const context=matchContext(events,item.timeSeconds);
+  if(!context||item.status==='confirmed')continue;
+  const edited=new Set(item.userEditedGoalFields||[]);
+  for(const [key,value] of Object.entries({matchLabel:context.label,teamA:context.teamA,teamB:context.teamB}))
+   if(value&&!item[key]&&!edited.has(key))item[key]=value;
+ }
  // The organizer assigns a match number to the VIDEO, once.
  // Match-number edits are reflected across all auto-filled goal drafts.
  if(Number.isInteger(source?.matchNumber)&&source.matchNumber>=1)

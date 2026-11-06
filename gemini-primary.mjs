@@ -5,7 +5,7 @@ import {sourceDisplayName} from './match-label.mjs?v=match1';
  */
 import { openVideoWavSegmenter } from './gemini-wav-stream.mjs?v=unifiedga2';
 import { runGeminiFastPipeline } from './gemini-fast-pipeline.mjs?v=1';
-import { runGeminiVideoBatch } from './gemini-video-batch.mjs?v=1';
+import { runGeminiVideoBatch } from './gemini-video-batch.mjs?v=recovery2';
 import { createGeminiEta, formatGeminiEta } from './gemini-eta.mjs?v=1';
 import { createGeminiFastWaveform } from './gemini-fast-waveform.mjs?v=long30';
 import {usableWaveform,restoreGeminiReviewWaveform,isUnavailableFileError} from './gemini-waveform-recovery.mjs?v=long30';
@@ -582,6 +582,9 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()
      if(progress.phase==='starting')status('解析を開始しています…');
     }
    });
+   window.dispatchEvent(new Event('gemini-results-updated'));
+   if(result.failures.length)progressUI.fail('一部の動画は解析できませんでした。動画一覧で確認してください');
+   $('geminiBatchEta').textContent=(result.success+result.skipped)+'/'+result.total+'本成功・'+result.failures.length+'本失敗';
    outcome={success:result.success+result.skipped>0,
     failures:result.failures.length,
     error:result.failures.map(f=>f.name+'：'+f.error).join(' ／ ')};
