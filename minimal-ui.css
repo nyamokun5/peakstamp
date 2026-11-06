@@ -1,0 +1,63 @@
+/* Presentation only. Existing controls, handlers, range/crop math and persistence
+   remain owned by their original modules. Errors are never globally hidden. */
+.hero,.local-pill,#workflowStageNotice,#goalReviewFirstGuide,
+#goalStatsSummary,.goal-editor-title,#goalStatsPlayingLabel,
+.goal-review-video-status,.goal-native-playback,.range-legend,
+.pinch-overlay-tip,.scene-pinch-value,.inline-caption,.scene-volume-note,
+.highlight-item .score,.list-help,.result-summary,#fileImportHelp,
+.goal-review-external-sync>strong,.goal-review-external-sync>p,
+#goalStatsDone>strong,#goalStatsDone>p,.goal-review-library-head,
+.gemini-brief,#geminiMainFileHelp,.upload>span:not(.upload-icon),.upload>small{
+ display:none!important;
+}
+.topbar{padding-block:12px}
+.brandtext>span{letter-spacing:.16em}
+.goal-review-library{padding:8px 10px}
+.goal-review-library>summary,.exact-times>summary{cursor:pointer;font-size:12px;color:#bed3df}
+.goal-review-library[open]>.goal-review-library-tabs{margin-top:10px}
+.goal-review-step{margin:6px 0;padding:7px 10px}
+.goal-review-editor{padding:8px!important;margin-bottom:8px!important}
+.goal-review-editor .goal-score-details{margin:0;padding:7px 9px}
+.goal-review-editor .goal-score-details>summary{font-size:13px;line-height:1.5}
+.goal-review-editor .goal-review-actions{margin:7px 0;gap:6px}
+.goal-review-editor .goal-review-video-actions{margin:0;gap:6px}
+.goal-review-editor .goal-review-actions button,
+.goal-review-editor .goal-review-video-actions button{min-height:44px;padding:7px;font-size:13px}
+.goal-review-confirm{background:#d7f36a!important;color:#132331!important;border-color:#d7f36a!important}
+.goal-review-video-keep{background:#21566a!important;border-color:#548b9f!important}
+.goal-review-quote-details{display:none}
+.goal-review-viewer .scene-pinch-toolbar,
+.highlight-entry.preview-active .scene-pinch-toolbar{margin:0 8px;padding:4px 0;border:0;background:transparent;min-height:0}
+.scene-pinch-hint{font-size:11px!important;line-height:1.3!important;flex-basis:auto!important}
+.goal-review-viewer .goal-scene-range,
+.highlight-entry.preview-active .range-editor{padding:6px 8px;margin-block:4px;border-radius:8px}
+.range-editor .range-heading{margin:0}
+.range-editor .range-track{height:40px!important;margin-block:5px!important}
+.range-editor .range-hint{font-size:10px;margin:0 0 4px}
+.exact-times{margin-top:4px}
+.exact-times[open] .range-inputs{margin-top:6px}
+.goal-review-external-sync{margin:8px 0!important;padding:0!important;border:0!important}
+.goal-review-external-sync>a{font-size:13px;min-height:44px;box-sizing:border-box}
+#journeyDialogBody:empty{display:none}
+#journeyDialogRegister{display:block;text-align:center;box-sizing:border-box;text-decoration:none;padding:13px;font-weight:800}
+#journeyDialogRegister[hidden]{display:none}
+.highlight-entry.preview-active{display:flex;flex-direction:column;gap:0}
+.highlight-entry.preview-active .inline-preview{order:0}
+.highlight-entry.preview-active .range-editor{order:1}
+.highlight-entry.preview-active .highlight-item{order:2;padding:7px}
+.highlight-entry.preview-active .item-fields{display:none}
+.highlight-entry.preview-active .missed-goal-add{margin:3px 0;font-size:12px;padding:6px}
+.highlight-entry.preview-active .scene-playback-controls{padding:4px 0}
+.highlight-entry.preview-active .review-decision-actions{margin:3px 0}
+.highlight-entry.preview-active .zoom-video-viewport{aspect-ratio:16/9;max-height:none}
+#goalStatsVideoStatus:empty,#goalStatsStatus:empty{display:none}
+@media(max-width:640px){
+ .goal-scene-viewport{aspect-ratio:16/9}
+ #goalStatsViewer:not([hidden]){margin-top:4px}
+ .goal-scene-playback{margin-inline:8px;padding:3px 0}
+ .goal-scene-playback button{min-height:44px}
+ .highlight-entry.preview-active .inline-preview,
+ .highlight-entry.preview-active .range-editor{width:100vw;max-width:100vw}
+ .highlight-entry.preview-active .inline-preview{padding-bottom:0;margin-bottom:0}
+ .highlight-entry.preview-active .zoom-video-viewport{border-radius:0}
+}

@@ -5,7 +5,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=recovery2';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=matchfill3';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=decoder-recovery3';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchrecover2';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
@@ -21,10 +21,10 @@ import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudg
 import { createSceneReplayMedia } from './scene-replay-media.mjs?v=firsttap1';
 import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
 import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=autoplay51';
-import { initFirstRunGuide } from './first-run-guide.mjs?v=1';
+import { initFirstRunGuide } from './first-run-guide.mjs?v=minimalmobile1';
 import {initSettingsNavigation} from './settings-navigation.mjs?v=settingskeep1';
 import {initWorkflowSteps} from './workflow-steps.mjs?v=workflowui1';
-import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=reviewagain1';
+import {initJourneyCoach,analysisCounts} from './journey-coach.mjs?v=minimalmobile1';
 import {assignMatchNumber,setMatchNumber,sourcePartLabel,joinPreviousMatch,sourceDisplayName,sortFilesByFilename,sortSourcesByFilename,resetMatchNumbersToFilenameOrder} from './match-label.mjs?v=multi-part1';
 
 const $ = id => document.getElementById(id);
@@ -89,7 +89,7 @@ const coaching=initJourneyCoach({
  actions:{
   goAnalysis:()=>{workflow.setStage('analysis',{scroll:false});$('geminiPrimaryPanel').scrollIntoView({behavior:'smooth',block:'start'});},
   goGoals:()=>{workflow.setStage('edit',{scroll:false});$('goalStatsPanel').scrollIntoView({behavior:'smooth',block:'start'});},
-  showGoalList:()=>{$('goalQueueAll').click();$('goalStatsList').scrollIntoView({behavior:'smooth',block:'start'});},
+  showGoalList:()=>{goalReview.reviewAll();},
   goHighlights:()=>{
    workflow.setStage('edit',{scroll:false});
    reviewTab='all';drawResults();
@@ -99,6 +99,7 @@ const coaching=initJourneyCoach({
   reviewAllHighlights:()=>{
    workflow.setStage('edit',{scroll:false});
    reviewTab='reviewed';drawResults();
+   $('highlightList').querySelector('.play-btn')?.click();
    $('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
   },
   goExport:()=>workflow.setStage('export'),
@@ -662,8 +663,16 @@ function showUndoReview(message) {
   undoTimer = setTimeout(clearUndoReview, UNDO_VISIBLE_MS);
 }
 function nextSceneAfter(current,{wasUnjudged=false}={}) {
-  const next=nextUndecided(state.sources,current);
-  if (reviewTab === 'kept') reviewTab='all';
+  // Review navigation follows the currently displayed list, including judged
+  // clips. Snapshot before drawResults removes a newly rejected kept card.
+  const revisiting=reviewTab==='kept'||reviewTab==='reviewed';
+  const visible=[...$('highlightList').querySelectorAll('.highlight-entry')];
+  const at=visible.findIndex(el=>el.dataset.sceneId===current.id && el.dataset.sourceId===current.sourceId);
+  const nextCard=revisiting&&at>=0?visible[at+1]:null;
+  const source=nextCard?state.sources.find(src=>src.id===nextCard.dataset.sourceId):null;
+  const item=source?.candidates.find(c=>c.id===nextCard.dataset.sceneId);
+  const next=revisiting?(item?{source,item}:null):nextUndecided(state.sources,current);
+  wasUnjudged=wasUnjudged||revisiting;
   drawResults();
   if (!next) {
     const kept=state.sources.some(source=>(source.candidates||[]).some(item=>item.enabled===true));
@@ -683,7 +692,7 @@ function nextSceneAfter(current,{wasUnjudged=false}={}) {
     }
     return;
   }
-  $('reviewProgress').textContent='次の未判断シーンへ移動しました。';
+  $('reviewProgress').textContent=revisiting?'次のシーンへ':'次の未判断シーンへ移動しました。';
   // Keep/Reject is a trusted user gesture on iOS. Open the next Replay
   // synchronously BEFORE requestAnimationFrame; async .click() loses Safari's
   // playback permission when the new MOV needs its first source load.
@@ -881,7 +890,7 @@ function row(item, index) {
     tip.hidden=isZoomTipSeen()||normalizeSceneZoom(item.zoom)>1;
     viewport.append(tip);
     const zoomRow=make('div','scene-pinch-toolbar');
-    const zoomHint=make('span','scene-pinch-hint','🤏 2本指で画角調整 · 拡大後は1本指で移動');
+    const zoomHint=make('span','scene-pinch-hint','2本指で画角調整');
     const zoomValue=make('output','scene-pinch-value');
     zoomRow.append(zoomHint,zoomValue);
     const playbackRow=make('div','scene-playback-controls');
@@ -1116,7 +1125,9 @@ function row(item, index) {
   startBox.append(time);
   endBox.append(endInput);
   rangeInputs.append(startBox,endBox);
-  rangeEditor.append(rangeHeading,markerLegend,track,rangeHint,rangeInputs);
+  const exactTimes=make('details','exact-times');
+  exactTimes.append(make('summary','','時刻を入力'),rangeInputs);
+  rangeEditor.append(rangeHeading,markerLegend,track,rangeHint,exactTimes);
   let dragging=null;
   let fineTimer=null;
   const clearFineTimer=()=>{

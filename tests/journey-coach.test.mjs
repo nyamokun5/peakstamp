@@ -13,7 +13,7 @@ function setup(values={goals:3,highlights:5}){
  });
  const ids=Object.fromEntries(['journeyDialog','journeyDialogTitle',
  'journeyDialogBody','journeyDialogPrimary','journeyDialogSecondary',
- 'journeyDialogDismiss'].map(id=>[id,el(id)]));
+ 'journeyDialogDismiss','journeyDialogRegister'].map(id=>[id,el(id)]));
  const doc={
   activeElement:{focus(){}},getElementById:id=>ids[id],
   addEventListener(name,fn){events[name]=fn}
@@ -26,21 +26,16 @@ function setup(values={goals:3,highlights:5}){
  const coach=initJourneyCoach({document:doc,counts:()=>values,actions:callbacks});
  return {coach,ids,called,doc};
 }
-test('analysis success tells actual goal/highlight counts and goes through first goal guide',()=>{
+test('analysis success opens goals directly without a tutorial',()=>{
  const x=setup();
  x.coach.analysisFinished({success:true});
  assert.equal(x.ids.journeyDialog.hidden,false);
- assert.match(x.ids.journeyDialogBody.textContent,/ゴール 3件 ／ ハイライト 5件/);
- assert.match(x.ids.journeyDialogPrimary.textContent,/ゴール一覧/);
+ assert.equal(x.ids.journeyDialogBody.textContent,'');
+ assert.equal(x.ids.journeyDialogPrimary.textContent,'ゴールを確認');
  x.ids.journeyDialogPrimary.click();
  assert.deepEqual(x.called,['goGoals']);
- assert.match(x.ids.journeyDialogTitle.textContent,/ゴールを確認/);
- assert.match(x.ids.journeyDialogBody.textContent,/画角と切り取り秒数/);
- assert.match(x.ids.journeyDialogBody.textContent,/得点者・アシスト/);
- assert.match(x.ids.journeyDialogBody.textContent,/得点情報を確定/);
- x.ids.journeyDialogPrimary.click();
- assert.deepEqual(x.called,['goGoals','showGoalList']);
- assert.equal(x.coach.showGoalIntro(),false,'only the first goal visit shows instructions');
+ assert.equal(x.ids.journeyDialog.hidden,true);
+ assert.equal(x.coach.showGoalIntro(),false);
 });
 test('failed and partial Gemini scans show actionable alternatives',()=>{
  const x=setup({goals:2,highlights:1});
@@ -51,7 +46,7 @@ test('failed and partial Gemini scans show actionable alternatives',()=>{
  assert.deepEqual(x.called,['goAnalysis']);
  x.coach.analysisFinished({success:true,failures:1});
  assert.match(x.ids.journeyDialogTitle.textContent,/一部失敗/);
- assert.match(x.ids.journeyDialogBody.textContent,/ゴール 2件/);
+ assert.match(x.ids.journeyDialogBody.textContent,/動画を選び直し/);
  x.ids.journeyDialogSecondary.click();
  assert.equal(x.called.at(-1),'goAnalysis');
 });
@@ -75,7 +70,7 @@ test('last goal decision opens branching next action and does not silently navig
 test('completed highlights offer review-all or export while keeping undo/rejected view',()=>{
  const x=setup();
  x.coach.highlightReviewFinished({total:8,kept:5});
- assert.match(x.ids.journeyDialogBody.textContent,/8件を確認/);
+ assert.equal(x.ids.journeyDialogBody.textContent,'');
  x.ids.journeyDialogSecondary.click();
  assert.equal(x.called.at(-1),'reviewAllHighlights');
  x.coach.highlightReviewFinished({total:8,kept:5});
@@ -92,7 +87,7 @@ test('zero kept highlights are not offered an impossible export',()=>{
 test('after MP4 export tell user to preview, save and share HS JSON to organizers',()=>{
  const x=setup();
  x.coach.exportFinished();
- assert.match(x.ids.journeyDialogBody.textContent,/MP4/);
+ assert.match(x.ids.journeyDialogTitle.textContent,/MP4/);
  assert.match(x.ids.journeyDialogBody.textContent,/iPhoneに保存/);
  assert.match(x.ids.journeyDialogBody.textContent,/HS向けJSON/);
  x.ids.journeyDialogSecondary.click();
@@ -123,7 +118,7 @@ test('actual app wires analysis callbacks, missed-goal registration and final sa
 test('goal review places scoring confirmation ahead of clip Keep and keeps automatic next',()=>{
  const goal=readFileSync(new URL('../goal-stats-ui.mjs',import.meta.url),'utf8');
  assert.match(goal,/editor\.append\(scoreDetails,actions,videoStatus,videoActions\)/);
- assert.match(goal,/動画をキープ（次のゴールへ）/);
+ assert.match(goal,/動画を採用・次へ/);
  assert.match(goal,/nextUnreviewedGoalVideo\(queue\(\),entry\.key\)/);
 });
 
@@ -146,7 +141,17 @@ test('review completion and visible interface consistently say ハイライト�
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.doesNotMatch(dialog,/通常ハイライトを確認/);
  assert.doesNotMatch(html,/通常の見どころを確認/);
- assert.match(dialog,/ハイライトを確認しますか/);
+ assert.match(dialog,/label:'ハイライトを確認'/);
  assert.match(html,/id="goalStatsDoneToRegular"[^>]+>ハイライトを確認/);
  assert.match(html,/data-editor-jump="resultsPanel">🎞 ハイライト/);
+});
+
+test('goal completion has exactly three actions and hides registration elsewhere',()=>{
+ const x=setup();
+ x.coach.goalReviewFinished({total:2});
+ assert.equal(x.ids.journeyDialogPrimary.textContent,'ハイライトを確認');
+ assert.equal(x.ids.journeyDialogSecondary.textContent,'ゴールを再確認');
+ assert.equal(x.ids.journeyDialogRegister.hidden,false);
+ x.coach.highlightReviewFinished({total:1,kept:1});
+ assert.equal(x.ids.journeyDialogRegister.hidden,true);
 });
