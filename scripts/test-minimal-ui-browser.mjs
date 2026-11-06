@@ -8,7 +8,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const fixture=path.join(tmpdir(),'peakstamp-ui-fixture.webm');
-execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','color=c=0x12374a:s=640x360:d=20','-c:v','libvpx','-pix_fmt','yuv420p','-y',fixture]);
+execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','testsrc2=s=640x360:d=20','-c:v','libvpx','-pix_fmt','yuv420p','-y',fixture]);
 const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
 try{
  for(const viewport of [{width:375,height:667},{width:390,height:700},{width:430,height:740}]){
@@ -40,8 +40,19 @@ try{
     {kind:'goal_call',time_seconds:15,scorer:'西村',assist:'田中',quote:'西村ゴール'}]}));
    state.sources=[source];syncSources();workflow.setStage('edit',{scroll:false});
   });
+  await page.evaluate(()=>{
+   window.__goalFrames=0;
+   const v=document.querySelector('#goalStatsPreview');
+   const tick=()=>{window.__goalFrames++;v.requestVideoFrameCallback(tick)};
+   v.requestVideoFrameCallback(tick);
+  });
   await page.click('.goal-scene-replay');
-  await page.waitForFunction(()=>document.querySelector('#goalStatsPreview').readyState>=2);
+  await page.waitForFunction(()=>{const v=document.querySelector('#goalStatsPreview');return !v.paused && v.currentTime>10.5 && v.readyState>=2 && window.__goalFrames>=2;});
+  await page.click('#goalStatsViewer .scene-pause-button');
+  assert.equal(await page.locator('#goalStatsPreview').evaluate(v=>v.paused),true);
+  await page.evaluate(()=>{window.__goalFrames=0});
+  await page.click('.goal-scene-replay');
+  await page.waitForFunction(()=>{const v=document.querySelector('#goalStatsPreview');return !v.paused && v.currentTime>10.5 && window.__goalFrames>=2;});
   const goalHeight=await page.evaluate(()=>{
    const a=document.querySelector('#goalStatsViewer').getBoundingClientRect();
    const b=document.querySelector('.goal-review-video-actions').getBoundingClientRect();

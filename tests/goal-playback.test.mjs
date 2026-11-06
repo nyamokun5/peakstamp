@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import {createGoalPlaybackController} from '../goal-playback.mjs';
 
 function fixture(){
- const calls={plays:[],pauses:0,sources:0,loads:0,before:0,messages:[]};
+ const calls={plays:[],pauses:0,sources:0,loads:0,before:0,order:[],messages:[]};
  const events=new Map();
  const video={
   readyState:0,paused:true,seeking:false,duration:450,currentTime:0,
   hidden:true,_src:'',
   setAttribute(){},
   removeAttribute(name){if(name==='src')this._src=''},
-  load(){calls.loads++;this.readyState=0},
+  load(){calls.order.push("load");calls.loads++;this.readyState=0},
   pause(){this.paused=true;calls.pauses++},
   addEventListener(type,handler){
    if(!events.has(type))events.set(type,[]);
@@ -33,7 +33,7 @@ function fixture(){
  });
  const controller=createGoalPlaybackController(video,{
   notify:x=>calls.messages.push(x),
-  beforePlay:()=>calls.before++
+  beforePlay:()=>{calls.order.push("release");calls.before++}
  });
  const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve()};
  return {video,calls,controller,emit,flush};
@@ -100,7 +100,7 @@ test('play failures report a repeatable button action, not an endless seek wait'
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
  await flush();
  assert.equal(calls.plays.length,1);
- assert.match(calls.messages.at(-1),/リプレイを再度押す/);
+ assert.match(calls.messages.at(-1),/リプレイを再度押して/);
  assert.equal(controller.diagnostic().gestureNeeded,true);
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
  await flush();
@@ -172,4 +172,41 @@ test('retry while metadata is unavailable invokes play within every new tap',asy
  controller.open({sourceKey:'A',sourceUrl:'blob:a',at:30,autoplay:true});
  assert.equal(calls.plays.length,count+1);
  assert.equal(calls.sources,1);
+});
+
+test('release the competing decoder before assigning/loading a new MOV',()=>{
+ const {calls,controller}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
+ assert.equal(calls.order[0],'release');
+});
+test('replay recovers a failed same-source decoder by loading again inside the tap',async()=>{
+ const {video,calls,controller,emit,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
+ await flush();video.error={code:3};emit('error');
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
+ assert.equal(calls.loads,2);
+ assert.equal(calls.plays.length,2);
+});
+test('a stalled unpaused decoder is detected and reloads on the next tap',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const {video,calls,controller,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
+ await flush();video.paused=false;
+ t.mock.timers.tick(8501);
+ assert.equal(controller.diagnostic().phase,'stalled');
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
+ assert.equal(calls.loads,2);
+ controller.dispose();
+});
+
+test('advancing playable video clears the stall timer; healthy replay keeps its decoder',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const {video,calls,controller,emit,flush}=fixture();
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
+ await flush();video.readyState=2;video.currentTime=200.3;emit('timeupdate');
+ t.mock.timers.tick(9000);
+ assert.equal(controller.diagnostic().phase,'playing');
+ controller.open({sourceKey:'A',sourceUrl:'blob:a',at:200,autoplay:true});
+ assert.equal(calls.loads,1);
+ controller.dispose();
 });
