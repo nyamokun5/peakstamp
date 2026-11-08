@@ -14,19 +14,33 @@ export function applyCard(item, card) {
     matchLabel:card.a+' 対 '+card.b, sourceMatchSeqAutofill:false,
     userEditedGoalFields:[...new Set([...(item.userEditedGoalFields || []),'teamA','teamB','matchSeq','matchLabel'])]};
 }
+function cleanTeam(value) {
+  const text=String(value ?? '').normalize('NFKC').trim();
+  return /^(?:(?:チーム|team)\s*)?[1-9]\d?$|^(?:赤|青|白|黄|緑|黒|橙|オレンジ|ピンク|紫)(?:チーム)?$/i.test(text) ? text : '';
+}
+export function spokenPair(value) {
+  const text=String(value ?? '').normalize('NFKC').trim()
+    .replace(/^(?:第\s*)?[0-9一二三四五六七八九十]+\s*試合(?:目)?[\s、,。:：]*/, '')
+    .replace(/(?:です|で(?:す|開始|スタート))?[。.!！\s]*$/, '');
+  const parts=text.split(/\s*(?:対|vs\.?)\s*/i);
+  if(parts.length!==2) return null;
+  const pair=parts.map(cleanTeam);
+  return pair.every(Boolean) && pair[0]!==pair[1] ? pair : null;
+}
 function candidateTeams(source, storage) {
   const saved = confirmedCard(source, storage);
   if (saved) return [[saved.a,saved.b]];
   const {items, transcript} = createGoalDrafts(source, storage);
   const events = (transcript?.data?.utterances || []).filter(e=>e.kind==='match_start');
-  const team = /^(?:チーム\s*|team\s*)?[1-9]\d?$|^(?:赤|青|白|黄|緑|黒|橙|オレンジ|ピンク|紫)(?:チーム)?$/i;
   return [...events,...items].flatMap(row=>{
-    let a = row.team_a || row.teamA, b = row.team_b || row.teamB;
-    const pair = String(row.match_label || row.matchLabel || '').normalize('NFKC').split(/\s*(?:対|vs\.?)\s*/i);
-    if (pair.length===2) { a ||= pair[0]; b ||= pair[1]; }
-    a = String(a||'').normalize('NFKC').trim();
-    b = String(b||'').normalize('NFKC').trim();
-    return team.test(a) || team.test(b) ? [[team.test(a)?a:'',team.test(b)?b:'']] : [];
+    const a = cleanTeam(row.team_a || row.teamA);
+    const b = cleanTeam(row.team_b || row.teamB);
+    if (a && b) return [[a,b]];
+    const label = spokenPair(row.match_label || row.matchLabel);
+    const quote = row.kind==='match_start' ? spokenPair(row.quote) : null;
+    const pair = label || quote || [];
+    if ((a && pair[0] && a!==pair[0]) || (b && pair[1] && b!==pair[1])) return [[a,b]];
+    return [[a || pair[0] || '', b || pair[1] || '']];
   });
 }
 export function showMatchReview(sources, storage, done) {
