@@ -1,3 +1,5 @@
+import { holdExportScreen } from './export-screen.mjs';
+import { createEditTransfer } from './edit-transfer.mjs';
 import { montageSeconds, exportMontage, estimateMontageMB, formatExportFailure } from './exporter.mjs?v=exportstage1';
 import { buildMultiClipPlan } from './multi-plan.mjs?v=goal54';
 import { formatTime } from './detector.mjs';
@@ -12,13 +14,27 @@ function updateTitlePreview() {
 }
 
 function settingChanged() {
-  if (!working) revokeOutput();
+
   updateMontageEditor(activeState);
   window.dispatchEvent(new Event('montage-settings-changed'));
 }
 
 let lastFile = null;
-let lastEditSignature = null;
+let completedSignature = null;
+let retry = false;
+let backgrounded = false;
+const interruptionKey = 'peakstamp-active-mp4-v1';
+function markActive(active) {
+  try {
+    if (active) sessionStorage.setItem(interruptionKey, '1');
+    else sessionStorage.removeItem(interruptionKey);
+  } catch {}
+}
+function interruptedMessage() {
+  retry = true;
+  displayError('書き出しが中断されました');
+}
+
 function editSignature(state, plan) {
   return JSON.stringify({
     sources:(state?.sources||[]).map(s=>[s.id,s.file?.name,s.file?.size,s.file?.lastModified]),
@@ -33,6 +49,7 @@ function editSignature(state, plan) {
 let lastUrl = null;
 let lastBlob = null;
 let lastName = '';
+let canShareOutput = false;
 let working = false;
 let cancelRequested = false;
 let activeState = null;
@@ -49,6 +66,7 @@ function revokeOutput() {
   if (lastUrl) URL.revokeObjectURL(lastUrl);
   lastUrl = null;
   lastBlob = null;
+  $('hsJsonReminder').hidden = true;
   lastName = '';
   $('montageShare').hidden = true;
   $('montageDownload').hidden = true;
@@ -86,14 +104,26 @@ export function updateMontageEditor(state) {
     state.sources?.some(source=>Number(source.duration)>0 &&
       (source.candidates||[]).some(c=>c.enabled===true&&c.goalRecordId))));
   $('montagePanel').hidden = !visible;
-  if (lastFile && state.file !== lastFile) revokeOutput();
+  if (!state?.sources?.length && lastFile) { revokeOutput(); completedSignature = null; }
   lastFile = state?.file || null;
   if (!visible) return;
   const plan = buildMultiClipPlan(state.sources, clipOptions());
   refreshIntroAspect(state,plan);
   const signature = editSignature(state,plan);
-  if (!working && lastEditSignature !== null && lastEditSignature !== signature) revokeOutput();
-  lastEditSignature = signature;
+  if (!working) {
+    const ready = lastBlob && completedSignature === signature;
+    if (lastBlob) {
+      const preview=$('montagePreview');
+      if (!ready && !preview.hidden) preview.pause();
+      preview.hidden=!ready;
+      for (const id of ['montageDownload','montageOpen','montageSaveHelp','hsJsonReminder']) $(id).hidden=!ready;
+      $('montageShare').hidden=!ready || !canShareOutput;
+      $('montageProgress').hidden=!ready;
+    }
+    $('montageExport').textContent = ready ? '完成した動画を保存・共有' :
+      retry ? 'もう一度書き出す' : completedSignature ? '変更を反映して再書き出し' : 'ハイライト動画を作成する';
+    if (!ready) $('montageProgress').hidden = true;
+  }
   $('montageSelected').textContent = plan.length + 'シーンを結合';
   const seconds = montageSeconds(plan,getIntroConfiguration());
   $('montageLength').textContent = '完成：約' + formatTime(Math.ceil(seconds));
@@ -106,8 +136,13 @@ function makeShareFile() {
   if (!lastBlob || !lastName || typeof File !== 'function') return null;
   return new File([lastBlob], lastName, { type: 'video/mp4', lastModified: Date.now() });
 }
-export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{}}={}) {
+export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{},onTransfer=()=>{}}={}) {
   activeState = state;
+  try { if (sessionStorage.getItem(interruptionKey)) interruptedMessage(); } catch {}
+  markActive(false);
+  document.addEventListener('visibilitychange', () => {
+    if (working && document.hidden) backgrounded = true;
+  });
   $('titleSize').addEventListener('input', () => {
     $('titleSizeValue').textContent = $('titleSize').value + '%';
     updateTitlePreview(); settingChanged();
@@ -122,7 +157,6 @@ export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{}}={})
   for (const radio of document.querySelectorAll('input[name="exportQuality"]')) {
     radio.addEventListener('change', () => {
       if (!working) {
-        revokeOutput();
         updateMontageEditor(activeState);
       }
     });
@@ -152,7 +186,7 @@ export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{}}={})
       if (err?.name === 'AbortError') {
         $('montageSaveStatus').textContent = '共有を閉じました。もう一度「iPhoneに保存・共有」を押せます。';
       } else {
-        $('montageSaveStatus').textContent = '共有できませんでした：' + (err?.message || String(err)) + '。下のダウンロードリンクをお試しください。';
+        $('montageDownload').click();
       }
     }
   });
@@ -162,6 +196,11 @@ export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{}}={})
   $('montageExport').addEventListener('click', async () => {
     if (working || activeState?.geminiProcessing || !activeState?.file) return;
     const plan = buildMultiClipPlan(activeState.sources, clipOptions());
+    const signature = editSignature(activeState, plan);
+    if (lastBlob && signature === completedSignature) {
+      ($('montageShare').hidden ? $('montageDownload') : $('montageShare')).click();
+      return;
+    }
     if (!plan.length) {
       displayError('まずシーンにチェックを入れてください。');
       return;
@@ -177,6 +216,16 @@ export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{}}={})
     displayError('');
     setWorking(true);
     notify('動画の準備中…', 0);
+    retry = false;
+    backgrounded = false;
+    markActive(true);
+    const warning = $('montageWakeHelp');
+    warning.hidden = true;
+    const release = holdExportScreen(() => { warning.hidden = false; });
+    let transfer;
+    let transferError='';
+    try { transfer = createEditTransfer(activeState.sources, plan); }
+    catch (error) { transferError=error.message; }
     try {
       const blob = await exportMontage({
         file, sources: activeState.sources, plan, quality,
@@ -188,6 +237,8 @@ export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{}}={})
       });
       if (cancelRequested) throw new Error('書き出しを中止しました。');
       if (!blob || blob.size < 1024) throw new Error('MP4の生成結果が空です。');
+      completedSignature = signature;
+      onTransfer(transfer,transferError);
       lastBlob = blob;
       lastName = 'PeakStamp_' + new Date().toISOString().slice(0, 10) + '.mp4';
       lastUrl = URL.createObjectURL(blob);
@@ -200,21 +251,26 @@ export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{}}={})
       $('montageOpen').hidden = false;
       $('montageSaveHelp').hidden = false;
       const fileForShare = makeShareFile();
-      $('montageShare').hidden = !(fileForShare && navigator.share
-        && (!navigator.canShare || navigator.canShare({ files: [fileForShare] })));
-      $('montageStatus').textContent = 'MP4作成完了（' + (blob.size / 1048576).toFixed(1) + ' MB）';
+      canShareOutput=Boolean(fileForShare && navigator.share && (!navigator.canShare || navigator.canShare({files:[fileForShare]})));
+      $('montageShare').hidden=!canShareOutput;
+      $('montageStatus').textContent = '書き出し完了（' + (blob.size / 1048576).toFixed(1) + ' MB）';
       $('montageSaveStatus').textContent = $('montageShare').hidden
         ? '下の「MP4をダウンロード」で保存してください。'
         : '「iPhoneに保存・共有」をタップして保存先を選んでください。';
       $('hsJsonReminder').hidden=false;
-      onComplete();
+      if (signature === editSignature(activeState,buildMultiClipPlan(activeState.sources,clipOptions()))) onComplete();
     } catch (err) {
       $('montageProgress').hidden = true;
       const message=formatExportFailure(err);
       displayError(message);
-      if(!cancelRequested)onFailure(message);
+      if (backgrounded && !cancelRequested) { interruptedMessage(); $('montageError').title=message; }
+      else if(!cancelRequested)onFailure(message);
     } finally {
+      release();
+      warning.hidden = true;
+      markActive(false);
       setWorking(false);
+      updateMontageEditor(activeState);
       const planAfter = buildMultiClipPlan(activeState?.sources || [], clipOptions());
       $('montageExport').disabled = !planAfter.length;
     }

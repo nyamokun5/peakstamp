@@ -21,7 +21,11 @@ try{
    if(file==='fixture.webm')return route.fulfill({body:await readFile(fixture),contentType:'video/webm'});
    try{
     let body=await readFile(new URL('../'+file,import.meta.url),'utf8');
-    if(file==='app.mjs')body+='\nwindow.__uiTest={state,syncSources,goalReview,workflow,coaching};';
+    if(file==='app.mjs')body+='\nwindow.__uiTest={state,syncSources,goalReview,workflow,coaching,analysisCompleted};';
+    // Replace only the encoder in this UI test. Capture the actual arguments
+    // and settle each attempt explicitly, including after a visibility change.
+    if(file==='exporter.mjs')body=body.replace('export async function exportMontage(', 'async function realExportMontage(')+
+      '\nexport async function exportMontage(options){window.attempts.push(options);return new Promise((resolve,reject)=>{window.finishExport=()=>resolve(new Blob([new Uint8Array(2048)],{type:"video/mp4"}));window.failExport=()=>reject(Error("encoder stopped"));});}';
     await route.fulfill({body,contentType:file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'text/javascript'});
    }catch{return route.fulfill({status:404,body:'Not found'})}
   });
@@ -40,6 +44,12 @@ try{
     {kind:'goal_call',time_seconds:15,scorer:'西村',assist:'田中',quote:'西村ゴール'}]}));
    state.sources=[source];syncSources();workflow.setStage('edit',{scroll:false});
   });
+  await page.evaluate(()=>window.__uiTest.analysisCompleted({success:true}));
+  await page.locator('#matchReview input').first().fill('赤');
+  await page.locator('#matchReview input').nth(1).fill('青');
+  await page.click('#matchReview button');
+  await page.click('#journeyDialogPrimary');
+  assert.match(await page.locator('.goal-match-card').first().textContent(),/赤 対 青/);
   await page.evaluate(()=>{
    window.__goalFrames=0;
    const v=document.querySelector('#goalStatsPreview');
@@ -72,19 +82,11 @@ try{
   assert.equal(await page.locator('#goalStatsViewer .range-time').first().inputValue(),'00:03.0');
   await page.locator('#goalStatsViewer .exact-times summary').click();
   await page.click('.goal-review-confirm');
-  await page.click('.goal-review-video-keep');
-  await page.locator('#journeyDialogRegister').waitFor({state:'visible'});
-  assert.equal(await page.locator('#journeyDialog .journey-dialog-actions :is(button,a):visible').count(),3);
-  const before=await page.evaluate(()=>JSON.stringify(localStorage));
-  await page.click('#journeyDialogSecondary');
-  assert.equal(await page.evaluate(()=>JSON.stringify(localStorage)),before);
   await page.evaluate(()=>{
-   const t=window.__uiTest;
-   t.state.sources[0].candidates.push({id:'ordinary-test',sourceId:'fixture',time:1,peakSeconds:2,manualEnd:4,db:-20,title:'シュート'});
-   t.syncSources();
+   const source=window.__uiTest.state.sources[0];
+   source.candidates.push({id:'next-highlight',sourceId:source.id,time:1,peakSeconds:2,manualEnd:4,title:'シュート'});
   });
-  await page.click('[data-editor-jump="resultsPanel"]');
-  await page.locator('#highlightList .play-btn').first().click();
+  await page.click('.goal-review-video-keep');
   await page.waitForFunction(()=>document.querySelector('.highlight-entry.preview-active video')?.readyState>=2);
   const highlightHeight=await page.locator('.highlight-entry.preview-active').evaluate(e=>e.getBoundingClientRect().height);
   assert.ok(highlightHeight<=viewport.height-24,`highlight controls ${highlightHeight}px must fit ${viewport.height}px`);
@@ -108,6 +110,41 @@ try{
    assert.equal(await page.locator('#journeyDialog').isVisible(),true);
    await page.click('#journeyDialogSecondary');
    assert.equal(await page.locator('.highlight-entry.preview-active').getAttribute('data-scene-id'),'revisit-0');
+  }
+  if(viewport.width===375){
+   await page.evaluate(()=>{
+    window.__uiTest.workflow.setStage('export',{scroll:false});
+    window.attempts=[];window.shared=[];window.releases=0;
+    Object.defineProperty(navigator,'wakeLock',{configurable:true,value:{request:async()=>Object.assign(new EventTarget(),{release:async()=>{window.releases++}})}});
+    Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+    Object.defineProperty(navigator,'share',{configurable:true,value:async({files})=>{window.shared.push(files[0])}});
+   });
+   const start=page.locator('#montageExport');
+   await start.click();
+   assert.equal(await start.isDisabled(),true);
+   await page.evaluate(()=>window.finishExport());
+   await page.click('#journeyDialogDismiss');
+   await start.click();await start.click();
+   assert.deepEqual(await page.evaluate(()=>[attempts.length,shared.length,releases]),[1,2,1]);
+   await page.click('#hsJsonShareFinal');
+   assert.equal(await page.evaluate(async()=>JSON.parse(await shared.at(-1).text()).kind),'peakstamp-edit-transfer');
+   await page.locator('#montageTitle').fill('SECOND');
+   assert.match(await start.textContent(),/変更を反映/);
+   await start.click();
+   await page.evaluate(()=>{
+    Object.defineProperty(document,'hidden',{configurable:true,value:true});
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document,'hidden',{configurable:true,value:false});
+    document.dispatchEvent(new Event('visibilitychange'));
+    attempts.at(-1).onProgress('処理中',40);
+   });
+   assert.equal(await page.locator('#montagePercent').textContent(),'40%');
+   await page.evaluate(()=>window.failExport());
+   assert.match(await start.textContent(),/もう一度/);
+   assert.match(await page.locator('#montageError').textContent(),/中断/);
+   await start.click();
+   assert.deepEqual(await page.evaluate(()=>attempts.map(x=>x.title)),['GOALS!','SECOND','SECOND']);
+   await page.evaluate(()=>window.finishExport());
   }
   assert.deepEqual(errors,[]);
   console.log(`PASS ${viewport.width}x${viewport.height}: goals ${Math.round(goalHeight)}px, highlights ${Math.round(highlightHeight)}px; trim, confirm and review-again`);

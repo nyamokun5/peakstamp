@@ -1,3 +1,4 @@
+import { confirmedCard, showMatchReview } from './match-review.mjs';
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=peak52';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
@@ -5,13 +6,13 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=recovery2';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=decoder-recovery3';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=matchexport1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchrecover2';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=guided1';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=matchexport1';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=matchui1';
 import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
@@ -83,6 +84,26 @@ const workflow=initWorkflowSteps({
   sceneReplayMedia.dispose();
  }
 });
+function reviewMatches(done) {
+  showMatchReview(state.sources, window.localStorage, () => { syncSources(); done(); });
+}
+function analysisCompleted(result) {
+  if (!result.success || !state.sources.length) return coaching.analysisFinished(result);
+  reviewMatches(()=>coaching.analysisFinished(result));
+}
+function openPendingHighlights() {
+  workflow.setStage('edit',{scroll:false});
+  reviewTab='all';drawResults();
+  const first=$('highlightList').querySelector('.play-btn');
+  if (first) {
+    first.click();
+    first.closest('.highlight-entry')?.scrollIntoView({block:'start'});
+  } else if(state.sources.some(src=>src.candidates?.some(c=>c.enabled))) {
+    workflow.setStage('export');
+  } else {
+    coaching.highlightReviewFinished({kept:0});
+  }
+}
 const coaching=initJourneyCoach({
  counts:()=>analysisCounts(state.sources,state.sources.flatMap(src=>
   createGoalDrafts(src,window.localStorage).items.map(item=>({item})))),
@@ -594,7 +615,7 @@ $('analyzeButton').addEventListener('click', async () => {
     $('progressArea').hidden = true;
     renderSourceList();
     if(!state.cancelled){
-     coaching.analysisFinished({
+     analysisCompleted({
       success:Boolean(state.bins),
       failures:failures.length,
       error:$('analysisError').textContent
@@ -1399,7 +1420,11 @@ function drawResults() {
     if (!source.bins) continue;
     const heading = make('div','source-scenes-header');
     const headTitle=make('div','source-scenes-name');
-    headTitle.append(make('strong','',sourceDisplayName(source)),
+    const matchCard=confirmedCard(source,window.localStorage);
+    const cardButton=make('button','goal-match-card',sourceDisplayName(source)+(matchCard?'｜'+matchCard.a+' 対 '+matchCard.b:' · 試合を確認'));
+    cardButton.type='button';
+    cardButton.addEventListener('click',()=>reviewMatches(()=>{}));
+    headTitle.append(cardButton,
       make('small','',source.candidates.length+'件の候補'));
     const copy=make('button','source-copy','この動画の時刻をコピー');
     copy.type='button';
@@ -1571,15 +1596,18 @@ $('lineShareCopy').addEventListener('click',async()=>{
   }
 });
 
+let completedTransfer = null;
+let transferError='';
 async function saveHSJson(){
  const status=$('hsJsonReminderStatus')||$('exportEditStatus');
+ if(transferError){status.textContent=transferError;return false;}
  try{
   const plan=buildMultiClipPlan(state.sources,currentClipOptions());
   if(!plan.length){
    status.textContent='保存するキープ済みシーンがありません。';
    return false;
   }
-  const payload=createEditTransfer(state.sources,plan);
+  const payload=completedTransfer || createEditTransfer(state.sources,plan);
   const name='PeakStamp_HS_'+new Date().toISOString().slice(0,10)+'.json';
   const file=new File([JSON.stringify(payload,null,2)],name,{type:'application/json'});
   if(typeof navigator!=='undefined'&&navigator.share&&
@@ -1621,6 +1649,7 @@ $('exportEditData').addEventListener('click',()=>{
 });
 
 initMontageEditor(state,{
+ onTransfer:(payload,error)=>{completedTransfer=payload;transferError=error;},
  onComplete:()=>coaching.exportFinished(),
  onFailure:message=>coaching.exportFailed(message)
 });
@@ -1629,14 +1658,15 @@ initAIReview(state);
 initVideoExplore(state);
 initCloudAudioPilot(state);
 initGeminiPrimary(state,{decodeAudio:decodeStreaming,commitResults:commitGeminiResults,
- onComplete:result=>coaching.analysisFinished(result)
+ onComplete:analysisCompleted
 });
 const goalReview=initGoalStatsReview(state,{
   // Avoid rebuilding every regular scene (and interrupting its video decoder)
   // when the organizer edits a name or verifies a goal.
   onUpdate:()=>{},
   onSourceReady:()=>syncSources(),
-  onVideoReviewCompleted:details=>coaching.goalReviewFinished(details),
+  onEditMatch:()=>reviewMatches(()=>{}),
+  onVideoReviewCompleted:openPendingHighlights,
   onBeforePlay:()=>{
     closeInlinePreview();
     // Free the competing decoder before playing large local iPhone MOV files.

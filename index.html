@@ -498,6 +498,7 @@
       </details>
       <button class="main-button montage-export" type="button" id="montageExport" disabled>▶ ハイライト動画を作成する</button>
       <button class="cancel-button" type="button" id="montageCancel" hidden>書き出しを中止</button>
+      <p id="montageWakeHelp" hidden>書き出しが終わるまで、この画面を開いたままにしてください</p>
       <div class="progress-area" id="montageProgress" hidden aria-live="polite">
         <div class="progress-label"><span id="montageStatus"></span><span id="montagePercent">0%</span></div>
         <div class="progress-track"><div id="montageBar"></div></div>
@@ -512,7 +513,7 @@
       <section id="hsJsonReminder" class="hs-json-reminder" hidden>
         <strong>最後に：HS用JSONを幹事へ</strong>
         <p>Instagramリール制作に必要な、キープ済みシーンの開始・終了時刻と編集情報です。完成動画とあわせて共有してください。</p>
-        <button id="hsJsonShareFinal" class="main-button" type="button">HS向けJSONを保存・共有</button>
+        <button id="hsJsonShareFinal" class="main-button" type="button">HS用データを送る</button>
         <p id="hsJsonReminderStatus" role="status" aria-live="polite"></p>
       </section>
       <p class="fine-print">動画・音声は端末内で処理し、PeakStampのサーバーには送信しません。最初は30秒ほどの素材で試してください。iPhoneのOS・動画形式によってはMP4の書き出しに対応しない場合があります。長時間の処理中はSafariを閉じないでください。</p>
@@ -572,6 +573,7 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=reviewsequence2"></script>
-</body>
+  <script type="module" src="app.mjs?v=matchexport1"></script>
+<dialog id="matchReview" aria-labelledby="matchReviewTitle" style="max-width:94vw;color:inherit;background:#112c3b;border:1px solid #59828a;border-radius:14px"><form><h2 id="matchReviewTitle">試合を確認</h2><fieldset style="border:0;padding:0"></fieldset><output role="status"></output><button class="main-button" type="submit">確定して次へ</button></form></dialog>
+<style>#matchReview strong{display:block;margin-top:.8em}#matchReview input{width:40%;padding:.65em}#matchReview button{margin-top:1em}#matchReview::backdrop{background:#071321cc}</style></body>
 </html>

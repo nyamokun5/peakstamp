@@ -772,7 +772,7 @@ function renderGoals(){
   const teamSelect=select([...new Set(snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]).filter(Boolean))]
    .map(t=>({value:t,label:t})),row.team,'得点チームを選択');
   teamSelect.addEventListener('change',()=>{row.team=teamSelect.value;invalidate('team')});
-  wrap.append(field('試合番号',matchSelect),field('得点者',scorerSelect),field('アシスト',assistMode),
+  wrap.append(confirmedFixtureLabel(row)||field('試合番号',matchSelect),field('得点者',scorerSelect),field('アシスト',assistMode),
    field('アシスト者',assistSelect),field('得点チーム',teamSelect));
   article.append(wrap);
   const guestBar=node('label','','line'),guestSwitch=mkInput('checkbox');
@@ -1094,6 +1094,13 @@ const quickSelect=(row,field,label,options,current,needsReview=false,aiHint='')=
  }
  return wrap;
 };
+function confirmedFixtureLabel(row){
+ const guess=row.matchGuess;
+ const official=snapshot.matches.find(m=>m.seq===row.seq);
+ if(row.goal?.manual || !official || row.fixtureIdentityChanged || guess?.confidence!=='high' ||
+    guess.conflict || guess.ambiguous || guess.candidates?.length!==1 || guess.candidates[0]!==row.seq)return null;
+ return node('strong','第'+official.seq+'試合｜'+official.leftTeam+' 対 '+official.rightTeam);
+}
 const quickPlayers=(team='')=>{
  const all=snapshot.players.map(name=>({
   value:name,label:name+'　'+(snapshot.playerTeam.get(name)||'')
@@ -1292,7 +1299,9 @@ function renderQuick(){
    const matchUncertain=!row.quickReviewedFields?.match&&!row.quickReviewedAll&&
     (row.matchGuess?.ambiguous||row.matchGuess?.conflict||
      (row.matchGuess?.confidence!=='high'&&snapshot.matches.length>1));
-   if(snapshot.matches.length>1||!m)fields.append(quickSelect(row,'match','試合',
+   const confirmedFixture=confirmedFixtureLabel(row);
+   if(confirmedFixture)fields.append(confirmedFixture);
+   else if(snapshot.matches.length>1||!m)fields.append(quickSelect(row,'match','試合',
     snapshot.matches.map(v=>({value:v.seq,label:matchSlotLabel(v)})),
     row.seq,Boolean(matchUncertain||!m)));
    const scorerUncertain=(!row.quickReviewedAll&&!row.quickReviewedFields?.scorer&&

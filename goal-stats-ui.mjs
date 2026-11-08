@@ -1,3 +1,4 @@
+import { confirmedCard, applyCard } from './match-review.mjs';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
 /**
  * Unified, goal-first video review. All source files appear in one ordered
@@ -35,7 +36,7 @@ function inputRow(parent,label,value,commit,{type='text',placeholder='',maxLengt
  return input;
 }
 
-export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},onKeepClip=()=>false,onRejectClip=()=>false,onClipEdit=()=>{},onBeforePlay=()=>{},onVideoReviewCompleted=()=>{}}={}){
+export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},onKeepClip=()=>false,onRejectClip=()=>false,onClipEdit=()=>{},onBeforePlay=()=>{},onEditMatch=()=>{},onVideoReviewCompleted=()=>{}}={}){
  const panel=$('goalStatsPanel');
  if(!panel)return {refresh:()=>{},nearby:()=>[],openAt:()=>{},hasRecords:()=>false,pausePlayback:()=>{}};
  const list=$('goalStatsList'),editor=$('goalStatsEditor'),video=$('goalStatsPreview');
@@ -294,6 +295,11 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   assistBox.append(assistChoice);fields.append(assistBox);
   if(item.assistStatus==='named')
    inputRow(fields,'アシスト者',item.assist,v=>edit(entry,'assist',v),{placeholder:'例：野田さん'});
+  const card=confirmedCard(source,cache());
+  if(card){
+   const match=make('button','goal-match-card','第'+card.seq+'試合｜'+card.a+' 対 '+card.b);
+   match.type='button';match.addEventListener('click',onEditMatch);editor.prepend(match);
+  } else {
   inputRow(fields,'対戦カード',item.matchLabel,v=>edit(entry,'matchLabel',v),{placeholder:'例：3 vs 4'});
   if(!item.matchLabel){
    const detected=matchContext(goalData(source).transcript?.data?.utterances||[],item.timeSeconds);
@@ -308,11 +314,12 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   }
 
   inputRow(fields,'SS試合番号（任意）',item.matchSeq||'',v=>edit(entry,'matchSeq',v),{type:'number',placeholder:'例：3'});
+  }
   const optional=make('details','goal-optional-fields');
   optional.append(make('summary','','詳細：チーム番号・メモ'));
   const optionalBody=make('div','goal-review-fields');
-  inputRow(optionalBody,'チームA',item.teamA||'',v=>edit(entry,'teamA',v),{placeholder:'例：3'});
-  inputRow(optionalBody,'チームB',item.teamB||'',v=>edit(entry,'teamB',v),{placeholder:'例：4'});
+  if(!card)inputRow(optionalBody,'チームA',item.teamA||'',v=>edit(entry,'teamA',v),{placeholder:'例：3'});
+  if(!card)inputRow(optionalBody,'チームB',item.teamB||'',v=>edit(entry,'teamB',v),{placeholder:'例：4'});
   inputRow(optionalBody,'メモ（任意）',item.note||'',v=>edit(entry,'note',v),{maxLength:400});
   optional.append(optionalBody);
   scoreDetails.append(fields,timing,optional);
@@ -494,7 +501,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   }
   const record=makeManualGoal(Math.round(at*10)/10,source,cache());
   const data=goalData(source);
-  data.items.push(record);write(source,data.items);
+  data.items.push(applyCard(record,confirmedCard(source,cache())));write(source,data.items);
   activeKey=goalSourceKey(source)+'::'+record.id;
   refresh();
   const row=queue().find(x=>x.key===activeKey);
@@ -536,7 +543,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    say('ゴール時刻が不正です。例：06:14.2、374.2');return;
   }
   const data=goalData(src),record=makeManualGoal(Math.round(seconds*10)/10,src,cache());
-  data.items.push(record);write(src,data.items);
+  data.items.push(applyCard(record,confirmedCard(source,cache())));write(src,data.items);
   activeKey=goalSourceKey(src)+'::'+record.id;
   const mounted=render();if(mounted)seekTo(mounted,{autoplay:false});
   viewer.scrollIntoView({behavior:'auto',block:'start'});
