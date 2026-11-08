@@ -172,12 +172,12 @@ export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{},onTr
     }
     const file = makeShareFile();
     if (!file || !navigator.share) {
-      $('montageSaveStatus').textContent = '共有に非対応です。下の「MP4をダウンロード」をお試しください。';
+      $('montageDownload').click();
       return;
     }
     try {
       if (navigator.canShare && !navigator.canShare({ files: [file] })) {
-        $('montageSaveStatus').textContent = 'このサイズの動画は共有できないようです。「MP4をダウンロード」または別タブから保存をお試しください。';
+        $('montageDownload').click();
         return;
       }
       await navigator.share({ files: [file], title: lastName });

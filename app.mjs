@@ -972,6 +972,13 @@ function row(item, index) {
     replayStatus.setAttribute('role','status');
     replayStatus.setAttribute('aria-live','polite');
     inline.replaceChildren(viewport,zoomRow,playbackRow,replayStatus);
+    const match=confirmedCard(source,window.localStorage);
+    if(match){
+      const label=make('button','goal-match-card',sourceDisplayName(source)+'｜'+match.a+' 対 '+match.b);
+      label.type='button';
+      label.addEventListener('click',()=>reviewMatches(()=>{}));
+      inline.prepend(label);
+    }
     teardownZoom=attachScenePinchEditor({
       viewport,video,read:()=>({
         zoom:normalizeSceneZoom(item.zoom),

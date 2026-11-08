@@ -128,6 +128,11 @@ try{
    assert.deepEqual(await page.evaluate(()=>[attempts.length,shared.length,releases]),[1,2,1]);
    await page.click('#hsJsonShareFinal');
    assert.equal(await page.evaluate(async()=>JSON.parse(await shared.at(-1).text()).kind),'peakstamp-edit-transfer');
+   await page.evaluate(()=>Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>false}));
+   const downloadEvent=page.waitForEvent('download');
+   await start.click();
+   assert.match((await downloadEvent).suggestedFilename(),/\.mp4$/);
+   assert.equal(await page.evaluate(()=>attempts.length),1);
    await page.locator('#montageTitle').fill('SECOND');
    assert.match(await start.textContent(),/変更を反映/);
    await start.click();

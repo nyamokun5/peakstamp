@@ -296,9 +296,10 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   if(item.assistStatus==='named')
    inputRow(fields,'アシスト者',item.assist,v=>edit(entry,'assist',v),{placeholder:'例：野田さん'});
   const card=confirmedCard(source,cache());
+  viewer.querySelector?.('.goal-match-card')?.remove();
   if(card){
    const match=make('button','goal-match-card','第'+card.seq+'試合｜'+card.a+' 対 '+card.b);
-   match.type='button';match.addEventListener('click',onEditMatch);editor.prepend(match);
+   match.type='button';match.addEventListener('click',onEditMatch);viewer.prepend(match);
   } else {
   inputRow(fields,'対戦カード',item.matchLabel,v=>edit(entry,'matchLabel',v),{placeholder:'例：3 vs 4'});
   if(!item.matchLabel){
