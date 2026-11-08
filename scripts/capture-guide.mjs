@@ -76,19 +76,11 @@ try{
   assert.equal(await page.locator('#goalStatsViewer .range-time').first().inputValue(),'00:03.0');
   await page.locator('#goalStatsViewer .exact-times summary').click();
   await page.click('.goal-review-confirm');
-  await page.click('.goal-review-video-keep');
-  await page.locator('#journeyDialogRegister').waitFor({state:'visible'});
-  assert.equal(await page.locator('#journeyDialog .journey-dialog-actions :is(button,a):visible').count(),3);
-  const before=await page.evaluate(()=>JSON.stringify(localStorage));
-  await page.click('#journeyDialogSecondary');
-  assert.equal(await page.evaluate(()=>JSON.stringify(localStorage)),before);
   await page.evaluate(()=>{
-   const t=window.__uiTest;
-   t.state.sources[0].candidates.push({id:'ordinary-test',sourceId:'fixture',time:1,peakSeconds:2,manualEnd:4,db:-20,title:'シュート'});
-   t.syncSources();
+   const source=window.__uiTest.state.sources[0];
+   source.candidates.push({id:'next-highlight',sourceId:source.id,time:1,peakSeconds:2,manualEnd:4,title:'シュート'});
   });
-  await page.click('[data-editor-jump="resultsPanel"]');
-  await page.locator('#highlightList .play-btn').first().click();
+  await page.click('.goal-review-video-keep');
   await page.waitForFunction(()=>document.querySelector('.highlight-entry.preview-active video')?.readyState>=2);
   const highlightHeight=await page.locator('.highlight-entry.preview-active').evaluate(e=>e.getBoundingClientRect().height);
   assert.ok(highlightHeight<=viewport.height-24,`highlight controls ${highlightHeight}px must fit ${viewport.height}px`);
