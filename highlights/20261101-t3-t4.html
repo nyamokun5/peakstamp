@@ -19,7 +19,22 @@ body.viewing{overflow:hidden}
 #viewer.expanded .screen{flex:1;min-height:0;width:100%;margin:0;aspect-ratio:auto}
 #viewer.expanded .controls{margin:0;padding:4px max(8px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));gap:6px;justify-content:center}
 @media (orientation:landscape) and (max-height:600px){#viewer:not(.expanded) .screen{height:calc(100dvh - 60px)}}
-</style><main><header>SHOOT SUNDAY</header><h1>11月1日　チーム3 vs チーム4</h1><section id="viewer"><div class="screen"><div id="player"></div></div><div class="controls"><button id="play" disabled>▶ 9場面を連続再生</button><button id="pause" hidden>一時停止</button><button id="expand" aria-pressed="false">⛶ 全画面</button><span id="status" role="status">読み込み中…</span></div></section><ol id="list"></ol><a href="https://youtu.be/rhnm1ZzCVMU">YouTubeでフル試合を見る ↗</a></main>
+.viewer-layout { display: contents; }
+@media (orientation: portrait) and (pointer: coarse) {
+ #viewer.expanded .viewer-layout {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: 100vh;
+  width: 100dvh;
+  height: 100vw;
+  display: flex;
+  flex-direction: column;
+  transform-origin: top left;
+  transform: rotate(90deg);
+ }
+}
+</style><main><header>SHOOT SUNDAY</header><h1>11月1日　チーム3 vs チーム4</h1><section id="viewer"><div class="viewer-layout"><div class="screen"><div id="player"></div></div><div class="controls"><button id="play" disabled>▶ 9場面を連続再生</button><button id="pause" hidden>一時停止</button><button id="expand" aria-pressed="false">⛶ 全画面</button><span id="status" role="status">読み込み中…</span></div></div></section><ol id="list"></ol><a href="https://youtu.be/rhnm1ZzCVMU">YouTubeでフル試合を見る ↗</a></main>
 <script>
 const viewer=document.querySelector('#viewer');
 const expand=document.querySelector('#expand');
