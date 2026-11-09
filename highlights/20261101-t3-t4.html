@@ -34,6 +34,35 @@ body.viewing{overflow:hidden}
   transform: rotate(90deg);
  }
 }
+#viewer.expanded .viewer-layout {
+ display:grid;
+ grid-template-columns:minmax(0,1fr) clamp(96px,14%,132px);
+ grid-template-rows:minmax(0,1fr);
+ width:100%;
+ height:100%;
+}
+@container highlight-view (orientation:portrait) {
+ #viewer.expanded .viewer-layout {width:100cqh;height:100cqw}
+}
+#viewer.expanded .screen {
+ height:100%;
+ container-type:size;
+ display:grid;
+ place-items:center;
+}
+#viewer.expanded .screen iframe {
+ display:block;
+ width:min(100cqw,177.7778cqh);
+ height:min(100cqh,56.25cqw);
+}
+#viewer.expanded .controls {
+ flex-direction:column;
+ flex-wrap:nowrap;
+ align-items:stretch;
+ overflow:auto;
+ padding:4px;
+}
+#viewer.expanded .controls button {font-size:14px;padding:7px 3px}
 </style><main><header>SHOOT SUNDAY</header><h1>11月1日　チーム3 vs チーム4</h1><section id="viewer"><div class="viewer-layout"><div class="screen"><div id="player"></div></div><div class="controls"><button id="play" disabled>▶ 9場面を連続再生</button><button id="pause" hidden>一時停止</button><button id="expand" aria-pressed="false">⛶ 全画面</button><span id="status" role="status">読み込み中…</span></div></div></section><ol id="list"></ol><a href="https://youtu.be/rhnm1ZzCVMU">YouTubeでフル試合を見る ↗</a></main>
 <script>
 const viewer=document.querySelector('#viewer');
@@ -92,7 +121,7 @@ pause.onclick=()=>{
  else player.pauseVideo();
 };
 window.onYouTubeIframeAPIReady=()=>{
- player=new YT.Player('player',{videoId,playerVars:{controls:0,playsinline:1,start:scenes[0][0],origin:location.origin},
+ player=new YT.Player('player',{videoId,playerVars:{controls:new URLSearchParams(location.search).has("youtubeControls")?1:0,fs:1,playsinline:1,start:scenes[0][0],origin:location.origin},
  events:{onReady:()=>{play.disabled=false;buttons.forEach(b=>b.disabled=false);statusText.textContent='全9場面';},
  onStateChange:e=>{
   if(e.data===1&&!started)jump(0);
