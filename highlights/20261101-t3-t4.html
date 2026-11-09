@@ -96,6 +96,7 @@ const scenes=[
  [165,179,'トラップからシュート'],[212,222,'中央からシュート'],[225,240,'チャンスからシュート'],
  [280,295,'ゴール際の攻防'],[320,338,'⚽ ゴール'],[363,377,'⚽ ゴール']
 ];
+const play=document.querySelector('#play'),statusText=document.querySelector('#status');
 const options=new URLSearchParams(location.search);
 const nativeFullscreen=options.has('nativeFullscreen');
 if(nativeFullscreen){
@@ -103,7 +104,6 @@ if(nativeFullscreen){
  play.textContent='▶ 全画面で9場面を連続再生';
 }
 const videoId='rhnm1ZzCVMU';
-const play=document.querySelector('#play'),statusText=document.querySelector('#status');
 let player,index=0,active=false,seeking=false,started=false;
 function clock(seconds){return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0')}
 const buttons=scenes.map(([start,end,title],i)=>{
