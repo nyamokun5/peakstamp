@@ -20,14 +20,14 @@ body.viewing{overflow:hidden}
 #viewer.expanded .controls{margin:0;padding:4px max(8px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));gap:6px;justify-content:center}
 @media (orientation:landscape) and (max-height:600px){#viewer:not(.expanded) .screen{height:calc(100dvh - 60px)}}
 .viewer-layout { display: contents; }
-@media (orientation: portrait) and (pointer: coarse) {
+#viewer.expanded { container: highlight-view / size; overflow: hidden; }
+@container highlight-view (orientation: portrait) {
  #viewer.expanded .viewer-layout {
   position: absolute;
   top: 0;
   left: 100%;
-  width: 100vh;
-  width: 100dvh;
-  height: 100vw;
+  width: 100cqh;
+  height: 100cqw;
   display: flex;
   flex-direction: column;
   transform-origin: top left;
@@ -38,6 +38,7 @@ body.viewing{overflow:hidden}
 <script>
 const viewer=document.querySelector('#viewer');
 const expand=document.querySelector('#expand');
+const usePageFullscreen=navigator.maxTouchPoints>0;
 function showExpanded(enabled){
  viewer.classList.toggle('expanded',enabled);
  document.body.classList.toggle('viewing',enabled);
@@ -51,11 +52,13 @@ expand.onclick=async()=>{
   return;
  }
  showExpanded(true);
- if(viewer.requestFullscreen){
+ if(!usePageFullscreen && viewer.requestFullscreen){
   try{await viewer.requestFullscreen()}catch{/* Keep the viewport-sized layout. */}
  }
 };
-document.addEventListener('fullscreenchange',()=>showExpanded(document.fullscreenElement===viewer));
+document.addEventListener('fullscreenchange',()=>{
+ if(!usePageFullscreen)showExpanded(document.fullscreenElement===viewer);
+});
 document.addEventListener('keydown',event=>{
  if(event.key==='Escape'&&!document.fullscreenElement)showExpanded(false);
 });
