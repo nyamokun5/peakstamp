@@ -96,6 +96,12 @@ const scenes=[
  [165,179,'トラップからシュート'],[212,222,'中央からシュート'],[225,240,'チャンスからシュート'],
  [280,295,'ゴール際の攻防'],[320,338,'⚽ ゴール'],[363,377,'⚽ ゴール']
 ];
+const options=new URLSearchParams(location.search);
+const nativeFullscreen=options.has('nativeFullscreen');
+if(nativeFullscreen){
+ expand.hidden=true;
+ play.textContent='▶ 全画面で9場面を連続再生';
+}
 const videoId='rhnm1ZzCVMU';
 const play=document.querySelector('#play'),statusText=document.querySelector('#status');
 let player,index=0,active=false,seeking=false,started=false;
@@ -121,7 +127,7 @@ pause.onclick=()=>{
  else player.pauseVideo();
 };
 window.onYouTubeIframeAPIReady=()=>{
- player=new YT.Player('player',{videoId,playerVars:{controls:new URLSearchParams(location.search).has("youtubeControls")?1:0,fs:1,playsinline:1,start:scenes[0][0],origin:location.origin},
+ player=new YT.Player('player',{videoId,playerVars:{controls:nativeFullscreen||options.has("youtubeControls")?1:0,fs:1,playsinline:nativeFullscreen?0:1,start:scenes[0][0],origin:location.origin},
  events:{onReady:()=>{play.disabled=false;buttons.forEach(b=>b.disabled=false);statusText.textContent='全9場面';},
  onStateChange:e=>{
   if(e.data===1&&!started)jump(0);
