@@ -24,7 +24,9 @@ function jump(i){
  index=i;active=true;started=true;seeking=true;
  buttons.forEach((b,n)=>b.setAttribute('aria-current',String(i===n)));
  play.textContent='最初から再生';statusText.textContent=(i+1)+' / 9　'+scenes[i][2];
- player.seekTo(scenes[i][0],true);player.playVideo();
+ const alreadyPlaying=player.getPlayerState()===YT.PlayerState.PLAYING;
+ player.seekTo(scenes[i][0],true);
+ if(!alreadyPlaying)player.playVideo();
 }
 play.onclick=()=>jump(0);
 const pause=document.querySelector('#pause');
