@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>11/1 チーム3 vs チーム4｜Shoot Sunday</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b1729;color:#f8fafc;font:16px/1.5 system-ui,sans-serif}main{max-width:720px;margin:auto;padding:18px 12px 48px}header{color:#82e2d6;font-weight:700;letter-spacing:.08em}h1{font-size:clamp(23px,5vw,34px);margin:6px 0 12px}.screen{aspect-ratio:16/9;background:#000}.screen iframe{width:100%;height:100%;border:0}.controls{display:flex;align-items:center;gap:12px;margin:14px 0}button{font:inherit;cursor:pointer;border:0}#play{padding:10px 15px;border-radius:8px;background:#8be7d9;font-weight:700}#status{color:#c8d7e8;font-size:14px}ol{padding:0;list-style:none}li button{width:100%;display:flex;gap:14px;align-items:center;text-align:left;padding:13px 12px;background:#14243a;color:white;border-bottom:1px solid #304057}li button[aria-current=true]{background:#224957}time{color:#bdd0df;font:14px monospace}a{color:#a8d9ff}.goal{color:#93f0c0}
+</style><main><header>SHOOT SUNDAY</header><h1>11月1日　チーム3 vs チーム4</h1><div class="screen"><div id="player"></div></div><div class="controls"><button id="play" disabled>▶ 9場面を連続再生</button><span id="status" role="status">読み込み中…</span></div><ol id="list"></ol><a href="https://youtu.be/rhnm1ZzCVMU">YouTubeでフル試合を見る ↗</a></main>
+<script>
+const scenes=[
+ [94,105,'ナイスキー'],[110,118,'惜しいシュート'],[137,147,'抜け出しからシュート'],
+ [165,179,'トラップからシュート'],[212,222,'中央からシュート'],[225,240,'チャンスからシュート'],
+ [280,295,'ゴール際の攻防'],[320,338,'⚽ ゴール'],[363,377,'⚽ ゴール']
+];
+const videoId='rhnm1ZzCVMU';
+const play=document.querySelector('#play'),statusText=document.querySelector('#status');
+let player,index=0,active=false,seeking=false,started=false;
+function clock(seconds){return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0')}
+const buttons=scenes.map(([start,end,title],i)=>{
+ const li=document.createElement('li'),b=document.createElement('button');
+ b.disabled=true;b.innerHTML='<time>'+clock(start)+'–'+clock(end)+'</time><span>'+title+'</span>';
+ if(i>=7)b.className='goal';
+ b.onclick=()=>jump(i);li.append(b);document.querySelector('#list').append(li);return b;
+});
+function jump(i){
+ index=i;active=true;started=true;seeking=true;
+ buttons.forEach((b,n)=>b.setAttribute('aria-current',String(i===n)));
+ play.textContent='最初から再生';statusText.textContent=(i+1)+' / 9　'+scenes[i][2];
+ player.seekTo(scenes[i][0],true);player.playVideo();
+}
+play.onclick=()=>jump(0);
+window.onYouTubeIframeAPIReady=()=>{
+ player=new YT.Player('player',{videoId,playerVars:{playsinline:1,start:scenes[0][0],origin:location.origin},
+ events:{onReady:()=>{play.disabled=false;buttons.forEach(b=>b.disabled=false);statusText.textContent='全9場面';},
+ onStateChange:e=>{if(e.data===1&&!started)jump(0)},
+ onAutoplayBlocked:()=>{statusText.textContent='動画内の ▶ をタップしてください'},
+ onError:()=>{active=false;statusText.textContent='埋め込み再生エラー。下のリンクからフル試合を開けます。'}}});
+};
+setInterval(()=>{
+ if(!active||player.getPlayerState()!==1)return;
+ const now=player.getCurrentTime(),[start,end]=scenes[index];
+ if(seeking){if(now>=start-1&&now<end)seeking=false;return}
+ if(now<end)return;
+ if(index+1<scenes.length)jump(index+1);
+ else{active=false;player.pauseVideo();statusText.textContent='全9場面の再生が終了しました';}
+},150);
+</script><script src="https://www.youtube.com/iframe_api"></script></html>
