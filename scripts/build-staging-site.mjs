@@ -4,6 +4,7 @@
 import {readFile,readdir,mkdir,writeFile,rm,copyFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {prompt as peakStampPrompt} from '../api/gemini-audio.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const prodHost='https://shoot-sunday-sync.yomax1979.workers.dev';
@@ -54,6 +55,7 @@ export async function buildStagingSite(destination=path.join(root,'dist')){
  await writeFile(path.join(destination,'staging-production-disabled.mjs'),
   "// TEST-only replacement: it has no production URL, API calls or write handler.\n"+
   "export function installProductionUI(){return {render(){const p=document.getElementById('productionPanel');if(p)p.hidden=true;},refresh(){}};}\n");
+ await writeFile(path.join(destination,'youtube-ps-prompt.mjs'),'export default '+peakStampPrompt.toString()+'\n');
  await writeFile(path.join(destination,'_headers'),
   '/*\n  X-Robots-Tag: noindex, nofollow\n  X-Content-Type-Options: nosniff\n');
  // Public build identity: proves which exact STAGING commit Cloudflare Pages
