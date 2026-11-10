@@ -29,7 +29,7 @@ function goalSource(s,i){return {file:{name:'YouTube-'+s.id,size:0,lastModified:
 async function analyze(s,key,instruction=prompt){
  if(!key)throw Error('Gemini APIキーを入力してください。');
  const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',{
-  method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
+  signal:AbortSignal.timeout(300000),method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
   body:JSON.stringify({contents:[{parts:[{fileData:{fileUri:'https://www.youtube.com/watch?v='+s.id}},{text:instruction+'\n動画タイトル '+JSON.stringify(s.title)}]}],generationConfig:{responseMimeType:'application/json'}})});
  if(!response.ok)throw Error('Gemini HTTP '+response.status+'。キー、割当量、公開設定を確認してください。');
  const body=await response.json();
@@ -39,6 +39,7 @@ async function analyze(s,key,instruction=prompt){
 export function mountOrganizer({row,closePreview}){
  let project=JSON.parse(localStorage.getItem(storageKey)||'null')||initialProject();
  const originals=new Map(),opened=new Set();
+ const goalNotices=new Map();
  const main=el('main',undefined,'page');
  for(const child of document.body.children)if(child.tagName!=='SCRIPT')child.hidden=true;
  document.body.append(main);
@@ -110,7 +111,7 @@ export function mountOrganizer({row,closePreview}){
    c.id=crypto.randomUUID();s.candidates.push(c);added++;
   }
   s.candidates.sort((a,b)=>a.peakSeconds-b.peakSeconds);opened.add(s.id);save();
-  status('ゴール再検索：新しい候補 '+added+'件');
+  return added;
  }
  function syncGoals(){
   const matches=project.sources.filter(s=>!s.info.drone);
@@ -145,7 +146,26 @@ export function mountOrganizer({row,closePreview}){
    if(s.info.drone){card.append(el('p','Drone · 解析対象外'));return}
    if(!s.analyzed&&s.metadataReady)card.append(button('この試合を解析',()=>run(()=>scan(s))));
    if(!s.analyzed)return;
-   card.append(button("ゴールを再検索",()=>run(()=>findGoals(s))));
+   const notice=el('p',goalNotices.get(s.id)||'');
+   notice.setAttribute('role','status');
+   notice.hidden=!notice.textContent;
+   const say=message=>{goalNotices.set(s.id,message);notice.textContent=message;notice.hidden=false};
+   const rescan=button('ゴールを再検索',()=>{
+    if(busy){say('別の解析が進行中です。終了後に押してください。');return}
+    if(!$('key').value.trim()){
+     say('画面上部にGemini APIキーを入力してから、もう一度押してください。');
+     $('key').focus();status('ゴール再検索にはGemini APIキーを入力してください。');return;
+    }
+    rescan.disabled=true;rescan.textContent='ゴールを再検索中…';
+    say('Geminiがこの試合のゴールを探しています…');
+    void run(async()=>{
+     try{
+      const added=await findGoals(s);
+      say(added?'新しいゴール候補を'+added+'件追加しました。':'新しく追加できるゴール候補は0件でした。');
+     }catch(e){say(e.name==='TimeoutError'?'接続がタイムアウトしました。もう一度お試しください。':'再検索できませんでした。'+e.message)}
+    });
+   });
+   card.append(rescan,notice);
    const details=el('details');details.open=opened.has(s.id);
    details.append(el('summary','候補 '+s.candidates.length+'件 ／ キープ '+s.candidates.filter(c=>c.enabled).length+'件'));
    details.ontoggle=()=>{if(details.isConnected){if(details.open)opened.add(s.id);else opened.delete(s.id)}};
