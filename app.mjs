@@ -704,8 +704,8 @@ $('undoReviewButton').addEventListener('click',()=>{
   });
 });
 
-function row(item, index) {
-  const source = state.sources.find(s => s.id === item.sourceId);
+function row(item, index, youtube=null) {
+  const source = youtube?.source || state.sources.find(s => s.id === item.sourceId);
   if (!source) return make('div','', '動画が見つかりません');
   const entry = make('div', 'highlight-entry');
   entry.dataset.sourceId=source.id;
@@ -725,6 +725,7 @@ function row(item, index) {
   const play = make('button','play-btn','▶ リプレイ');
   play.type = 'button';
   play.title = '切り取り範囲をもう一度再生';
+  const changed=youtube?.save || refreshComment;
   let replayVideo=null;
   let frameWatchId=null;
   let teardownZoom=null;
@@ -821,6 +822,20 @@ function row(item, index) {
     }
   };
   play.addEventListener('click',()=>{
+    if(youtube){
+      closeInlinePreview();
+      inline.hidden=false;
+      const frame=document.createElement('iframe');
+      const params=new URLSearchParams({start:Math.floor(item.time),end:Math.ceil(item.manualEnd),autoplay:1,playsinline:1});
+      frame.title=item.title;
+      frame.src='https://www.youtube.com/embed/'+source.id+'?'+params;
+      frame.allow='autoplay; fullscreen';
+      frame.allowFullscreen=true;
+      frame.style.cssText='width:100%;aspect-ratio:16/9;border:0';
+      inline.replaceChildren(frame);
+      activeInlineClose=close;
+      return;
+    }
     if(activeInlineClose===close && replayVideo){
       restartReplay();
       return;
@@ -992,7 +1007,7 @@ function row(item, index) {
     } else {
       item.time = seconds;
       renderRange();
-      refreshComment();
+      changed();
     }
   });
   timeRow.append(number, badge);
@@ -1029,17 +1044,17 @@ function row(item, index) {
       title.hidden=true;
       item.title=titleSelect.value;
       title.value=item.title;
-      refreshComment();
+      changed();
     }
   });
   title.addEventListener('input',()=>{
     item.title=title.value;
-    refreshComment();
+    changed();
   });
   titleGroup.append(titleLabel,titleSelect,title);
   // Keep metadata/editor logic for compatibility; play classification is unused
   // in the current highlight-video workflow and intentionally hidden.
-  titleGroup.hidden = true;
+  titleGroup.hidden = !youtube;
 
   const rangeEditor=make('div','range-editor');
   const rangeHeading=make('div','range-heading');
@@ -1155,7 +1170,7 @@ function row(item, index) {
     track.classList.remove('is-fine');
     rangeHint.textContent='緑・紫＝切り抜き ／ 白＝再生位置（左右にドラッグ）';
     renderRange();
-    refreshComment();
+    changed();
   };
   for(const [edge,handle] of [['start',startDot],['end',endDot]]){
     handle.addEventListener('pointerdown',event=>startDrag(edge,handle,event));
@@ -1168,7 +1183,7 @@ function row(item, index) {
       const diff=(event.key==='ArrowRight'?1:-1)*(event.shiftKey?0.1:0.25);
       const current=edge==='start'?item.time:getCandidateEnd(source,item,currentClipOptions());
       applyBoundary(edge,Math.round((current+diff)*100)/100);
-      refreshComment();
+      changed();
     });
   }
   // One timeline: green/purple change export boundaries, white/playhead or
@@ -1285,7 +1300,7 @@ function row(item, index) {
     }
     item.manualEnd=seconds;
     renderRange();
-    refreshComment();
+    changed();
   });
   renderRange();
 
@@ -1304,18 +1319,18 @@ function row(item, index) {
    workflow.setStage('edit',{scroll:false});
    goalReview.addFromScene(source,Number.isFinite(item.peakSeconds)?item.peakSeconds:item.time);
   });
-  wrap.append(missedGoal);
+  if(!youtube)wrap.append(missedGoal);
   const actions=make('div','review-decision-actions');
   const keep=make('button','review-keep','✓ キープ');
   keep.type='button';
   const reject=make('button','review-reject','✕ 不採用');
   reject.type='button';
-  keep.addEventListener('click',()=>decideReview(source,item,'kept'));
-  reject.addEventListener('click',()=>decideReview(source,item,'rejected'));
+  keep.addEventListener('click',()=>youtube?youtube.decide(item,'kept'):decideReview(source,item,'kept'));
+  reject.addEventListener('click',()=>youtube?youtube.decide(item,'rejected'):decideReview(source,item,'rejected'));
   actions.append(play,keep,reject);
-  timeRow.append(remove);
+  if(!youtube)timeRow.append(remove);
   wrap.append(fields,actions);
-  const nearbyGoals=goalReview?.nearby(source,item.peakSeconds,item.time,
+  const nearbyGoals=youtube?[]:goalReview?.nearby(source,item.peakSeconds,item.time,
     getCandidateEnd(source,item,currentClipOptions()))||[];
   if(nearbyGoals.length){
     const annotated=nearbyGoals.filter(goal=>goal.origin==='audio'||goal.origin==='manual');
@@ -1328,6 +1343,11 @@ function row(item, index) {
   }
   // Three review actions share one row immediately above the inline video.
   entry.append(wrap,inline,rangeEditor);
+  if(youtube){
+    rangeEditor.hidden=false;
+    rangeHint.textContent='緑と紫のハンドルで開始・終了を調整';
+    currentReadout.hidden=true;
+  }
   applySelection();
   return entry;
 }
@@ -1646,3 +1666,12 @@ const settingsNavigation=initSettingsNavigation({
   if(page==='reset-goals.html')goalReview.refresh();
  }
 });
+
+
+if(new URLSearchParams(location.search).has('youtube')){
+ import('./youtube-organizer.mjs').then(({mountOrganizer})=>mountOrganizer({row,closePreview:closeInlinePreview})).catch(error=>{
+  const notice=document.createElement('p');
+  notice.textContent='YouTubeテスト画面を開けませんでした。'+error.message;
+  document.body.prepend(notice);
+ });
+}
