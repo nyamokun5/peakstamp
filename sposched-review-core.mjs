@@ -413,6 +413,8 @@ export function validateGoalRow(row,snapshot){
  if(!row.confirmed)return '選手・試合の確認が必要です';
  const match=snapshot.matches.find(m=>m.seq===number(row.seq));
  if(!match)return '試合番号を選択してください';
+ if(!match.leftTeam||!match.rightTeam)
+  return '試合 #'+match.seq+' はSS側の対戦チームが未確定です。ゴール一覧へ戻り、一括登録で先の試合から確定してください';
  if(!row.scorer||(!row.guest&&!snapshot.players.includes(row.scorer)))
   return row.guest?'外部選手の得点者名を入力してください':'得点者を選択してください';
  if(row.guest&&snapshot.players.includes(row.scorer))
@@ -424,7 +426,7 @@ export function validateGoalRow(row,snapshot){
  if(!row.team&&!actualTeam)return '得点チームを選択してください';
  const team=row.team||actualTeam;
  if(![normalizeTeam(match.leftTeam),normalizeTeam(match.rightTeam)].includes(normalizeTeam(team)))
-  return '得点チームがこの試合の対戦チームと異なります';
+  return '得点チーム「'+team+'」は試合 #'+match.seq+'（'+match.leftTeam+' vs '+match.rightTeam+'）と異なります。試合と得点チームを確認してください';
  if(row.assistMode==='named'&&row.scorer===row.assist)
   return '得点者とアシストが同一です';
  if(row.goal?.manual&&snapshot.rosterSource==='official-current-event-teams'){
@@ -469,7 +471,10 @@ export function buildReviewPayload(snapshot,rows,scoreRows=[]){
   throw Error('追加するゴールはありません。既にShoot Sundayに登録済みなら、再登録は不要です。');
  const missing=items.map((row,i)=>({i,problem:validateGoalRow(row,snapshot)}))
   .filter(x=>x.problem);
- if(missing.length)throw Error((missing[0].i+1)+'件目：'+missing[0].problem);
+ if(missing.length){
+  const invalid=items[missing[0].i],rowNumber=rows.indexOf(invalid)+1;
+  throw Object.assign(Error(rowNumber+'件目：'+missing[0].problem),{rowNumber});
+ }
  const duplicates=items.filter(row=>!row.updateGoalId&&findPotentialDuplicate(row,snapshot)&&row.duplicateApproved!==true);
  if(duplicates.length)throw Error('Shoot Sundayに同じ得点者・アシストの登録済みゴールが'+duplicates.length+'件あります。「登録済みなので送らない」か「別ゴールとして追加」を選んでください。');
  const operationGoals=items.map(row=>{
@@ -538,3 +543,4 @@ export function buildReviewPayload(snapshot,rows,scoreRows=[]){
   source:'PeakStamp local goal confirmations and imported SpoSched event snapshot',
   operations:[...operationMatches,...operationGoals]};
 }
+
