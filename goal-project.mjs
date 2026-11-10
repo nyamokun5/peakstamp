@@ -26,7 +26,8 @@ export function projectFiles(sources){
   const f=projectFileInfo(source),key=projectFileKey(f);
   if(!f||seen.has(key))continue;
   result.push(f);seen.add(key);
-  if(result.length>=MAX_SOURCES)break;
+  // Local imports have a decoder cap. URL-only projects allocate no decoders here.
+  if(result.length>=MAX_SOURCES && !/^YouTube-[\w-]{11}$/.test(f.name))break;
  }
  return result;
 }
@@ -97,3 +98,4 @@ export function defaultGoalCollection(saved,project){
   matchingSourceCount:groups[0]?.items.length||0,
   confirmedGoals:groups[0]?.confirmedGoals||0};
 }
+
