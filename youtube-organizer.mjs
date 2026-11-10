@@ -176,7 +176,12 @@ export function mountOrganizer({row,closePreview}){
   return matches.map(goalSource);
  }
  function goalEditor(s,c){
-  const caption=()=>c.goal?.status==='confirmed'?'⚽ '+c.goal.scorer+' · 編集':c.goalHint||c.goal?'ゴール候補を確認':'ゴールとして記録';
+  const caption=()=>{
+   const goal=c.goal;
+   if(goal?.status!=='confirmed')return c.goalHint||goal?'ゴール候補を確認':'ゴールとして記録';
+   const assist=goal.assistStatus==='none'?'なし':goal.assist?.trim()||'未確認';
+   return '⚽ ゴール '+goal.scorer+' ／ アシスト '+assist;
+  };
   const trigger=button(caption(),()=>{
    const dialog=el('dialog',undefined,'yt-goal-dialog');
    dialog.setAttribute('aria-label','ゴール記録');
