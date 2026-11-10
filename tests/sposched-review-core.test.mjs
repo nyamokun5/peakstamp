@@ -749,3 +749,16 @@ test('same-event reload clears stale manual scorer/assist and team after SS reas
  assert.equal(row.team,'');
  assert.equal(row.confirmed,false);
 });
+
+
+test('pending fixture gives an actionable message and keeps original row number after excluded goals',()=>{
+ const snapshot=normalizeSpoSnapshot({event_id:'test-event',matches:[
+  {seq:3,match_id:'third-place',left_team:null,right_team:null}
+ ],roster:{Team1:['Scorer']}});
+ const row={include:true,confirmed:true,seq:3,scorer:'Scorer',assistMode:'none',team:'Team1'};
+ assert.match(validateGoalRow(row,snapshot),/対戦チームが未確定/);
+ assert.throws(()=>buildReviewPayload(snapshot,[{include:false},row]),error=>
+  error.rowNumber===2 && error.message.startsWith('2件目：'));
+ snapshot.matches[0].leftTeam='Team2';snapshot.matches[0].rightTeam='Team4';
+ assert.match(validateGoalRow(row,snapshot),/Team1.*#3.*Team2 vs Team4/);
+});
