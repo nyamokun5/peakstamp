@@ -704,6 +704,36 @@ $('undoReviewButton').addEventListener('click',()=>{
   });
 });
 
+let youtubeEditorApi;
+function loadYoutubeEditorApi(){
+  if(window.YT?.Player)return Promise.resolve(window.YT);
+  if(youtubeEditorApi)return youtubeEditorApi;
+  youtubeEditorApi=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    const previous=window.onYouTubeIframeAPIReady;
+    const finish=()=>{
+      clearTimeout(timeout);
+      window.onYouTubeIframeAPIReady=previous;
+    };
+    const fail=()=>{
+      finish();
+      script.remove();
+      youtubeEditorApi=null;
+      reject(new Error('YouTubeを読み込めません。リプレイで再試行してください。'));
+    };
+    const timeout=setTimeout(fail,20000);
+    window.onYouTubeIframeAPIReady=()=>{
+      finish();
+      resolve(window.YT);
+      previous?.();
+    };
+    script.onerror=fail;
+    script.src='https://www.youtube.com/iframe_api';
+    document.head.append(script);
+  });
+  return youtubeEditorApi;
+}
+
 function row(item, index, youtube=null) {
   const source = youtube?.source || state.sources.find(s => s.id === item.sourceId);
   if (!source) return make('div','', '動画が見つかりません');
@@ -727,6 +757,9 @@ function row(item, index, youtube=null) {
   play.title = '切り取り範囲をもう一度再生';
   const changed=youtube?.save || refreshComment;
   let replayVideo=null;
+  let youtubeFrame=null;
+  let youtubePlayer=null;
+  let youtubeTimer=null;
   let frameWatchId=null;
   let teardownZoom=null;
   let replayStatus=null;
@@ -742,6 +775,14 @@ function row(item, index, youtube=null) {
     replayStatus.hidden=!message;
   };
   const close=()=>{
+    if(youtube){
+      clearInterval(youtubeTimer);
+      youtubeFrame=null;
+      youtubePlayer?.destroy();
+      youtubePlayer=null;
+      replayVideo=null;
+      playhead.hidden=true;
+    }
     teardownZoom?.();
     teardownZoom=null;
     if(replayVideo){
@@ -823,17 +864,78 @@ function row(item, index, youtube=null) {
   };
   play.addEventListener('click',()=>{
     if(youtube){
+      if(replayVideo){
+        replayVideo.currentTime=item.time;
+        replayVideo.play();
+        return;
+      }
       closeInlinePreview();
-      inline.hidden=false;
       const frame=document.createElement('iframe');
-      const params=new URLSearchParams({start:Math.floor(item.time),end:Math.ceil(item.manualEnd),autoplay:1,playsinline:1});
-      frame.title=item.title;
-      frame.src='https://www.youtube.com/embed/'+source.id+'?'+params;
+      youtubeFrame=frame;
+      const params=new URLSearchParams({start:Math.floor(item.time),autoplay:1,
+        playsinline:1,enablejsapi:1,origin:location.origin});
+      frame.title=item.title || 'シーンを再生';
       frame.allow='autoplay; fullscreen';
       frame.allowFullscreen=true;
-      frame.style.cssText='width:100%;aspect-ratio:16/9;border:0';
-      inline.replaceChildren(frame);
+      frame.style.cssText='display:block;width:100%;height:auto;aspect-ratio:16/9;border:0';
+      frame.src='https://www.youtube.com/embed/'+source.id+'?'+params;
+      replayStatus=make('p','inline-caption','');
+      replayStatus.setAttribute('role','status');
+      const controls=make('div','scene-playback-controls');
+      pauseResumeButton=make('button','scene-pause-button','▶ 再生');
+      const mute=make('button','scene-mute-button','🔊');
+      for(const button of [pauseResumeButton,mute]){
+        button.type='button';
+        button.disabled=true;
+        controls.append(button);
+      }
+      mute.setAttribute('aria-label','音声のミュート切替');
+      pauseResumeButton.onclick=()=>{
+        if(!replayVideo)return;
+        if(!replayVideo.paused){replayVideo.pause();return;}
+        const end=getCandidateEnd(source,item,currentClipOptions());
+        if(replayVideo.currentTime>=end-.1 || replayVideo.currentTime<item.time)replayVideo.currentTime=item.time;
+        replayVideo.play();
+      };
+      mute.onclick=()=>{
+        if(youtubePlayer.isMuted())youtubePlayer.unMute();
+        else youtubePlayer.mute();
+        mute.textContent=youtubePlayer.isMuted()?'🔇':'🔊';
+      };
+      inline.replaceChildren(frame,controls,replayStatus);
+      inline.hidden=false;
+      entry.classList.add('preview-active');
       activeInlineClose=close;
+      loadYoutubeEditorApi().then(YT=>{
+        if(youtubeFrame!==frame || !frame.isConnected)return;
+        youtubePlayer=new YT.Player(frame,{events:{
+          onReady:({target})=>{
+            if(youtubeFrame!==frame)return;
+            replayVideo={
+              get duration(){return target.getDuration() || source.duration;},
+              get paused(){return target.getPlayerState()!==1;},
+              get currentTime(){return target.getCurrentTime();},
+              set currentTime(time){target.seekTo(time,true);},
+              readyState:1,
+              play(){target.playVideo();},
+              pause(){target.pauseVideo();}
+            };
+            replayVideo.currentTime=item.time;
+            replayVideo.play();
+            updatePlayhead();
+            pauseResumeButton.disabled=mute.disabled=false;
+            youtubeTimer=setInterval(()=>{
+              if(!frame.isConnected){close();return;}
+              if(!seekDrag && !replayVideo.paused && replayVideo.currentTime>=getCandidateEnd(source,item,currentClipOptions())){
+                replayVideo.pause();
+              }
+              updatePauseResume();
+              updatePlayhead();
+            },100);
+          },
+          onError:()=>{if(youtubeFrame===frame)setReplayStatus('YouTube動画を再生できません。公開設定と埋め込み設定を確認してください。');}
+        }});
+      }).catch(error=>{if(youtubeFrame===frame)setReplayStatus(error.message);});
       return;
     }
     if(activeInlineClose===close && replayVideo){
@@ -1102,7 +1204,8 @@ function row(item, index, youtube=null) {
   startBox.append(time);
   endBox.append(endInput);
   rangeInputs.append(startBox,endBox);
-  rangeEditor.append(rangeHeading,markerLegend,track,rangeHint,rangeInputs);
+  if(youtube)rangeEditor.append(rangeHeading,track,rangeHint);
+  else rangeEditor.append(rangeHeading,markerLegend,track,rangeHint,rangeInputs);
   let dragging=null;
   let fineTimer=null;
   const clearFineTimer=()=>{
@@ -1199,6 +1302,12 @@ function row(item, index, youtube=null) {
     if(!replayVideo || replayVideo.readyState<1)return;
     const bounds=replayBounds(source,item,(src,c)=>getCandidateEnd(src,c,currentClipOptions()));
     const player=replayVideo;
+    if(youtube){
+      player.currentTime=Math.max(bounds.start,Math.min(bounds.end,seconds));
+      player.play();
+      updatePlayhead();
+      return;
+    }
     const at=seekScenePreview(player,seconds,bounds,{
       autoPlay:true,
       onBeforePlay:()=>{void scenePreviewAudio.wake();},
@@ -1345,8 +1454,7 @@ function row(item, index, youtube=null) {
   entry.append(wrap,inline,rangeEditor);
   if(youtube){
     rangeEditor.hidden=false;
-    rangeHint.textContent='緑と紫のハンドルで開始・終了を調整';
-    currentReadout.hidden=true;
+    rangeHint.textContent='緑と紫で切り取り範囲を調整。リプレイ中は白で再生位置を移動';
   }
   applySelection();
   return entry;
