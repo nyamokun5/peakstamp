@@ -292,12 +292,46 @@ export function mountOrganizer({row,closePreview}){
    const a=el('a','共有ページを開く');a.href=project.published;a.target='_blank';result.append(a,button('URLをコピー',async()=>{try{await navigator.clipboard.writeText(a.href);status('コピーしました。')}catch{window.prompt('共有URL',a.href)}}));
   }
  }
- $('actions').append(button('全試合の共有リンクを発行・更新',()=>run(async()=>{
-  const clips=selected(project.sources);if(!clips.length)throw Error('まず場面をキープしてください。');
+ async function publishHighlights(){
+  const clips=selected(project.sources);
+  if(!clips.length)throw Error('まず場面をキープしてください。');
   const r=await fetch('./api/yt-share',{method:'POST',headers:{'Content-Type':'application/json','X-Edit-Key':project.editKey,'X-PeakStamp-Access':$('access').value},body:JSON.stringify({clips})});
-  const body=await r.json();if(!r.ok)throw Error(body.error||'発行失敗');
-  project.published=new URL('./youtube-watch.html?id='+body.id,location.href).href;save();status('共有リンクを発行しました。');
- })),button('HS用JSON',()=>run(async()=>{
+  const body=await r.json();
+  if(!r.ok)throw Error(body.error||'発行失敗');
+  project.published=new URL('./youtube-watch.html?id='+body.id,location.href).href;
+  save();status('共有リンクを発行しました。');
+  return project.published;
+ }
+ function showRegistrationPreview(){
+  const sources=project.sources.filter(s=>!s.info.drone);
+  if(!sources.length)throw Error('登録する試合がありません。');
+  if(sources.some(s=>!s.info.date||!s.info.teamA||!s.info.teamB))
+   throw Error('各試合の開催日・対戦カードを入力してください。');
+  if(new Set(sources.map(s=>s.info.date)).size!==1)
+   throw Error('開催日が混在しています。別の開催として登録してください。');
+  if(!project.published)throw Error('まず共有リンクを発行してください。');
+  const dialog=el('dialog');dialog.className='yt-registration-preview';
+  dialog.style.cssText='width:min(94vw,36rem);max-height:85vh;overflow:auto;margin:auto;border:1px solid #466577;border-radius:16px;background:#12273a;color:white;padding:1.2rem';
+  dialog.append(el('h2','スポスケ登録内容の確認（TEST）'));
+  dialog.append(el('p','この画面は登録前の確認です。スポスケへの書き込みはまだ行いません。'));
+  const list=el('ol');
+  for(const source of sources){
+   const item=el('li');
+   const name=el('strong',matchName(source)+'　地上：');
+   const link=el('a','YouTube動画を開く');
+   link.href='https://www.youtube.com/watch?v='+source.id;link.target='_blank';link.rel='noopener noreferrer';
+   item.append(name,link);list.append(item);
+  }
+  const goal=el('li');goal.append(el('strong','ゴール集：'));
+  const shared=el('a','PeakStamp共有ページを開く');shared.href=project.published;shared.target='_blank';shared.rel='noopener noreferrer';
+  goal.append(shared);list.append(goal);dialog.append(list);
+  dialog.append(el('p','既存URLが異なる場合は、確認なしに上書きしません。ドローン枠には触れません。'));
+  dialog.append(button('閉じる',()=>dialog.close()));
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});main.append(dialog);dialog.showModal();
+ }
+ $('actions').append(button('全試合の共有リンクを発行・更新',()=>run(publishHighlights)),
+  button('スポスケ登録内容を確認（TEST）',()=>run(async()=>{await publishHighlights();showRegistrationPreview()})),
+  button('HS用JSON',()=>run(async()=>{
   const clips=selected(project.sources),sources=[];
   for(const s of project.sources.filter(s=>clips.some(c=>c.video===s.id))){
    const file=originals.get(s.id);if(!file)throw Error(matchName(s)+' の携帯原本を選んでください。端末内で照合します。');
