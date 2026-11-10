@@ -37,7 +37,8 @@ async function init(){
  if(!/^[0-9a-f]{64}$/.test(id||''))throw Error('共有リンクが正しくありません。');
  const r=await fetch('./api/yt-share?id='+id);const result=await r.json();
  if(!r.ok)throw Error(result.error);
- clips=result.clips;queue=clips;
+ clips=params.get('goals')==='1'?result.clips.filter(c=>c.label==='⚽ ゴール'&&c.scorer):result.clips;
+ queue=clips;
  if(!queue?.length)throw Error('公開された場面がありません。');
  renderList();
  if(showMemberFilter){
