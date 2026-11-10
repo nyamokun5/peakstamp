@@ -1,4 +1,4 @@
-import {sampleIds,videoId,matchInfo,matchName,analysisResult,selected} from './youtube-session.mjs';
+import {sampleIds,videoId,matchInfo,matchName,analysisResult,seconds,selected} from './youtube-session.mjs';
 import {judgeScene} from './review-flow.mjs';
 import {makeManualGoal,validateGoal,saveGoalDrafts} from './goal-stats.mjs';
 import {saveCurrentGoalProject} from './goal-project.mjs';
@@ -85,11 +85,12 @@ export function mountOrganizer({row,closePreview}){
   status(matchName(s)+' を解析中…');
   try{
    const result=await analyze(s,$('key').value.trim());
-   const duration=Number(result.duration);
+   const duration=seconds(result.duration);
    if(!(duration>0&&Number.isFinite(duration)))throw Error('動画長を取得できませんでした。');
-   const candidates=analysisResult(result,{...s,duration});
+   const report={};
+   const candidates=analysisResult(result,{...s,duration},report);
    for(const k of ['teamA','teamB'])if(!s.info[k]&&typeof result[k]==='string')s.info[k]=result[k];
-   Object.assign(s,{duration,candidates,analyzed:true,error:''});
+   Object.assign(s,{duration,candidates,analyzed:true,error:report.invalid?'時刻が不正な'+report.invalid+'件を除き、有効な候補を保存しました。':''});
   }catch(e){s.error=e.message}
   save();render();
  }
