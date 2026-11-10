@@ -1,5 +1,5 @@
 import {sampleIds,videoId,matchInfo,matchName,analysisResult,seconds,shortRange,selected} from './youtube-session.mjs';
-import {judgeScene} from './review-flow.mjs';
+import {judgeScene,undecided} from './review-flow.mjs';
 import {makeManualGoal,validateGoal,saveGoalDrafts} from './goal-stats.mjs';
 import {saveCurrentGoalProject} from './goal-project.mjs';
 import {createEditTransfer} from './edit-transfer.mjs';
@@ -57,7 +57,41 @@ async function analyzeMatch(s,key){
 }
 export function mountOrganizer({row,closePreview}){
  let project=JSON.parse(localStorage.getItem(storageKey)||'null')||initialProject();
- const originals=new Map(),opened=new Set();
+ const originals=new Map(),settingsOpen=new Set(),activeScenes=new Map();
+ let reviewingAll=false;
+ const scenes=()=>project.sources.filter(s=>s.analyzed&&!s.info.drone)
+  .flatMap(source=>source.candidates.map(item=>({source,item})));
+ function showScene(source,item){
+  activeScenes.set(source.id,item.id);
+  render();
+  const entry=[...$('matches').querySelectorAll('.highlight-entry')].find(e=>e.dataset.sourceId===source.id&&e.dataset.sceneId===String(item.id));
+  entry?.querySelector('.play-btn')?.click();
+  entry?.scrollIntoView({block:'start'});
+ }
+ function decide(item,decision){
+  judgeScene(item,decision);
+  save();
+  const list=scenes(),at=list.findIndex(x=>x.item===item);
+  const next=reviewingAll?list[at+1]:[...list.slice(at+1),...list.slice(0,at)].find(x=>undecided(x.item));
+  if(next){showScene(next.source,next.item);return;}
+  reviewingAll=false;
+  render();
+  const kept=list.filter(x=>x.item.enabled).length;
+  const dialog=el('dialog');
+  dialog.style.cssText='width:min(90vw,24rem);margin:auto;border:1px solid #466577;border-radius:16px;background:#12273a;color:white;padding:1.2rem';
+  dialog.setAttribute('aria-label','候補の確認完了');
+  const dismiss=()=>dialog.close();
+  const review=button('最初から見直す',()=>{
+   dismiss();reviewingAll=true;showScene(list[0].source,list[0].item);
+  });
+  dialog.append(el('h2','候補の確認が終わりました'),el('p',list.length+'件中 '+kept+'件をキープ'));
+  if(kept)dialog.append(button('共有・出力へ',()=>{
+   dismiss();$('access').closest('section').scrollIntoView({block:'start'});$('access').focus({preventScroll:true});
+  }));
+  dialog.append(review,button('閉じる',dismiss));
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+  main.append(dialog);dialog.showModal();
+ }
  const goalNotices=new Map();
  const main=el('main',undefined,'page');
  for(const child of document.body.children)if(child.tagName!=='SCRIPT')child.hidden=true;
@@ -130,7 +164,7 @@ export function mountOrganizer({row,closePreview}){
    if(s.candidates.some(old=>old.rejected&&Math.abs(old.peakSeconds-c.peakSeconds)<=3))continue;
    c.id=crypto.randomUUID();s.candidates.push(c);added++;save();
   }
-  s.candidates.sort((a,b)=>a.peakSeconds-b.peakSeconds);opened.add(s.id);save();
+  s.candidates.sort((a,b)=>a.peakSeconds-b.peakSeconds);save();
   return added;
  }
  function syncGoals(){
@@ -157,12 +191,22 @@ export function mountOrganizer({row,closePreview}){
   const root=$('matches');root.replaceChildren();
   project.sources.forEach((s,i)=>{
    const card=el('section',undefined,'panel');root.append(card);
-   card.append(el('h2',matchName(s)),el('small',s.title||s.id));
+   const heading=el('h2',matchName(s));
+   heading.style.cssText='margin:0 0 .35em;font-size:1.1rem';
+   card.append(heading);
+   const settings=el('details');
+   settings.open=settingsOpen.has(s.id);
+   settings.ontoggle=()=>{if(settings.isConnected){if(settings.open)settingsOpen.add(s.id);else settingsOpen.delete(s.id)}};
+   settings.append(el('summary','試合設定'),el('small',s.title||s.id));
+   card.append(settings);
    if(s.error)card.append(el('p',s.error));
    if(!s.metadataReady)card.append(button('タイトルを再取得',()=>run(async()=>{await metadata(s);save()})));
-   for(const [k,name] of Object.entries({date:'開催日',round:'区分',teamA:'対戦カードの左側',teamB:'対戦カードの右側'}))card.append(input(name,s.info[k],v=>{s.info[k]=v;save();render()}));
+   for(const [k,name] of Object.entries({date:'開催日',round:'区分',teamA:'対戦カードの左側',teamB:'対戦カードの右側'}))settings.append(input(name,s.info[k],v=>{s.info[k]=v;save();render()}));
    const move=delta=>{if(busy)return;const next=i+delta;if(next<0||next>=project.sources.length)return;project.sources.splice(next,0,project.sources.splice(i,1)[0]);save();render()};
-   card.append(button('↑',()=>move(-1)),button('↓',()=>move(1)));
+   const order=el('div');order.style.cssText='display:flex;gap:.5rem';
+   const up=button('順番を上へ',()=>move(-1)),down=button('順番を下へ',()=>move(1));
+   up.disabled=i===0;down.disabled=i===project.sources.length-1;
+   order.append(up,down);settings.append(order);
    if(s.info.drone){card.append(el('p','Drone · 解析対象外'));return}
    if(!s.analyzed&&s.metadataReady)card.append(button('この試合を解析',()=>run(()=>scan(s))));
    if(!s.analyzed)return;
@@ -185,19 +229,30 @@ export function mountOrganizer({row,closePreview}){
      }catch(e){say(e.name==='TimeoutError'?'接続がタイムアウトしました。もう一度お試しください。':'再検索できませんでした。'+e.message)}
     });
    });
-   card.append(rescan,notice);
-   const details=el('details');details.open=opened.has(s.id);
-   details.append(el('summary','候補 '+s.candidates.length+'件 ／ キープ '+s.candidates.filter(c=>c.enabled).length+'件'));
-   details.ontoggle=()=>{if(details.isConnected){if(details.open)opened.add(s.id);else opened.delete(s.id)}};
-   card.append(details);
-   s.candidates.forEach((c,n)=>{
-    const entry=row(c,n,{source:s,save,decide:(item,d)=>{judgeScene(item,d);save();render()}});
+   settings.append(rescan);card.append(notice);
+   const count=s.candidates.length;
+   if(!count){card.append(el('p','候補はありません'));return;}
+   const current=s.candidates.find(c=>c.id===activeScenes.get(s.id))||s.candidates.find(undecided)||s.candidates[0];
+   const n=s.candidates.indexOf(current);
+   const nav=el('div');nav.style.cssText='display:flex;align-items:center;gap:.4rem;margin:.65rem 0';
+   const jump=offset=>{reviewingAll=false;showScene(s,s.candidates[n+offset])};
+   const prev=button('‹',()=>jump(-1)),next=button('›',()=>jump(1));
+   prev.setAttribute('aria-label','前の候補');next.setAttribute('aria-label','次の候補');
+   prev.disabled=n===0;next.disabled=n===count-1;
+   for(const b of [prev,next])b.style.cssText='width:44px;min-height:44px;margin:0';
+   const position=el('strong','動画編集　'+(n+1)+' / '+count);
+   position.style.marginRight='auto';
+   nav.append(position,prev,next);card.append(nav);
+   {
+    const c=current;
+    const entry=row(c,n,{source:s,save,decide});
     const score=entry.querySelector('.score');
     if(score){
      score.textContent='プレー推定 '+Math.floor(c.peakSeconds/60)+':'+String(Math.floor(c.peakSeconds%60)).padStart(2,'0');
      score.title='';
     }
-    if(c.geminiQuote)entry.append(el('small','試合全体からの発話候補（時刻未確認）「'+c.geminiQuote+'」'));
+    const audio=el('details');audio.append(el('summary','音声を確認'));
+    if(c.geminiQuote)audio.append(el('small','試合全体からの発話候補（時刻未確認）「'+c.geminiQuote+'」'));
     const note=el('p');
     const currentCheck=()=>c.audioCheck?.start===c.time&&c.audioCheck?.end===c.manualEnd;
     if(currentCheck())note.textContent=c.audioCheck.text;
@@ -214,15 +269,15 @@ export function mountOrganizer({row,closePreview}){
       c.audioCheck={start,end,text};save();note.textContent=currentCheck()?text:'範囲が変更されました。再確認してください。';
      }catch(e){note.textContent='確認できませんでした。'+e.message}finally{check.disabled=false}
     });
-    entry.append(check,note);
+    audio.append(check,note);entry.append(audio);
     if(c.manualEnd-c.time>12)entry.append(button('ピーク前後に短縮',()=>{
      const range=shortRange(c.time,c.manualEnd,c.peakSeconds);
      c.time=range.start;c.manualEnd=range.end;save();render();
     }));
-    entry.append(goalEditor(s,c));details.append(entry);
-   });
+    entry.append(goalEditor(s,c));card.append(entry);
+   }
    const label=el('label','HS用の携帯原本（任意） '),file=el('input');file.type='file';file.accept='video/*,.mov,.mp4';
-   file.onchange=()=>{if(file.files[0])originals.set(s.id,file.files[0])};label.append(file);card.append(label);
+   file.onchange=()=>{if(file.files[0])originals.set(s.id,file.files[0])};label.append(file);settings.append(label);
   });
   const result=$('result');result.replaceChildren();
   if(project.published){
@@ -258,7 +313,7 @@ export function mountOrganizer({row,closePreview}){
   location.href='./sposched-review.html?returnTab=1';
  }),button('新しい開催を開始',()=>{
   if(busy||!confirm('新しい開催に切り替えます。現在の下書きと共有リンクの更新権限はこの端末から消去されます。'))return;
-  project=initialProject();originals.clear();opened.clear();save();render();
+  project=initialProject();originals.clear();settingsOpen.clear();activeScenes.clear();reviewingAll=false;save();render();
  }));
  render();
 }
