@@ -176,15 +176,29 @@ export function mountOrganizer({row,closePreview}){
   return matches.map(goalSource);
  }
  function goalEditor(s,c){
-  const box=el('details');box.append(el('summary',c.goal?.status==='confirmed'?'⚽ 確定 '+c.goal.scorer:c.goalHint?'ゴール候補を確認':'ゴールとして記録'));
-  const g=c.goal||{...makeManualGoal(c.peakSeconds,goalSource(s,0),localStorage),id:'yt-'+c.id,scorer:c.scorerHint,assist:c.assistHint,assistStatus:c.assistHint?'named':'unknown'};
-  function edit(k,v){g[k]=v;g.status='draft';g.confirmedAt=null;c.goal=g;save();syncGoals();box.firstChild.textContent='ゴール候補を確認'}
-  box.append(input('得点者',g.scorer,v=>edit('scorer',v)),input('アシスト',g.assist,v=>{edit('assist',v);edit('assistStatus',v?'named':'unknown')}));
-  box.append(button('アシストなし',()=>{edit('assist','');edit('assistStatus','none');render()}),button('ゴール確定',()=>{
-   const error=validateGoal(g);if(error){status(error);return}
-   Object.assign(g,{status:'confirmed',confirmedAt:new Date().toISOString(),goalTimeVerified:true});c.goal=g;save();syncGoals();render();
-  }),button('ゴール記録を外す',()=>{delete c.goal;c.goalHint=false;save();syncGoals();render()}));
-  return box;
+  const caption=()=>c.goal?.status==='confirmed'?'⚽ '+c.goal.scorer+' · 編集':c.goalHint||c.goal?'ゴール候補を確認':'ゴールとして記録';
+  const trigger=button(caption(),()=>{
+   const dialog=el('dialog',undefined,'yt-goal-dialog');
+   dialog.setAttribute('aria-label','ゴール記録');
+   const heading=el('h2','ゴール記録');
+   const g=c.goal||{...makeManualGoal(c.peakSeconds,goalSource(s,0),localStorage),id:'yt-'+c.id,scorer:c.scorerHint,assist:c.assistHint,assistStatus:c.assistHint?'named':'unknown'};
+   function edit(k,v){g[k]=v;g.status='draft';g.confirmedAt=null;c.goal=g;save();syncGoals()}
+   const assist=input('アシスト',g.assist,v=>{edit('assist',v);edit('assistStatus',v?'named':'unknown')});
+   const errorNote=el('p');errorNote.setAttribute('role','alert');
+   const confirmGoal=button('ゴール確定',()=>{
+    const error=validateGoal(g);if(error){errorNote.textContent=error;return}
+    Object.assign(g,{status:'confirmed',confirmedAt:new Date().toISOString(),goalTimeVerified:true});c.goal=g;save();syncGoals();dialog.close();
+   });
+   dialog.append(heading,input('得点者',g.scorer,v=>edit('scorer',v)),assist,button('アシストなし',()=>{
+    edit('assist','');edit('assistStatus','none');assist.querySelector('input').value='';errorNote.textContent='アシストなし';
+   }),errorNote,confirmGoal);
+   if(c.goal||c.goalHint)dialog.append(button('ゴール記録を外す',()=>{delete c.goal;c.goalHint=false;save();syncGoals();dialog.close()}));
+   dialog.append(button('閉じる',()=>dialog.close()));
+   dialog.addEventListener('close',()=>{dialog.remove();trigger.textContent=caption();trigger.focus({preventScroll:true})},{once:true});
+   main.append(dialog);dialog.showModal();
+  });
+  trigger.classList.add('yt-goal-action');
+  return trigger;
  }
  function render(){
   closePreview();
@@ -245,31 +259,20 @@ export function mountOrganizer({row,closePreview}){
    nav.append(position,prev,next);card.append(nav);
    {
     const c=current;
-    const entry=row(c,n,{source:s,save,decide});
+    const transcript=el('p',undefined,'yt-transcript');
+    function showTranscript(){
+     const checked=c.audioCheck;
+     transcript.textContent=checked?.text&&checked.start===c.time&&checked.end===c.manualEnd
+      ?checked.text:c.geminiQuote?'AI聞き取り（推定）「'+c.geminiQuote+'」':'聞き取りなし';
+    }
+    showTranscript();
+    const entry=row(c,n,{source:s,save:()=>{save();showTranscript()},decide});
+    entry.querySelector('.item-fields').append(transcript);
     const score=entry.querySelector('.score');
     if(score){
      score.textContent='プレー推定 '+Math.floor(c.peakSeconds/60)+':'+String(Math.floor(c.peakSeconds%60)).padStart(2,'0');
      score.title='';
     }
-    const audio=el('details');audio.append(el('summary','音声を確認'));
-    if(c.geminiQuote)audio.append(el('small','試合全体からの発話候補（時刻未確認）「'+c.geminiQuote+'」'));
-    const note=el('p');
-    const currentCheck=()=>c.audioCheck?.start===c.time&&c.audioCheck?.end===c.manualEnd;
-    if(currentCheck())note.textContent=c.audioCheck.text;
-    const check=button('この区間の音声を確認',async()=>{
-     if(busy){note.textContent='別の解析が進行中です。';return}
-     const key=$('key').value.trim();
-     if(!key){note.textContent='画面上部にGemini APIキーを入力してください。';return}
-     const start=c.time,end=c.manualEnd;
-     check.disabled=true;note.textContent='この区間だけを聞き直しています…';
-     try{
-      const result=await analyze(s,key,'この短い区間の音声だけを聞いて、明瞭に聞き取れる日本語だけをそのまま書き起こす。映像や試合タイトルから言葉・選手名を推測しない。無音・不明瞭なら空文字。JSON {transcript:""}。',{startOffset:start+'s',endOffset:end+'s'});
-      if(typeof result.transcript!=='string')throw Error('書き起こしの形式が不正です。');
-      const text=result.transcript.trim()?'区間のAI聞き取り「'+result.transcript.trim()+'」':'区間内に明瞭な発話を聞き取れませんでした。';
-      c.audioCheck={start,end,text};save();note.textContent=currentCheck()?text:'範囲が変更されました。再確認してください。';
-     }catch(e){note.textContent='確認できませんでした。'+e.message}finally{check.disabled=false}
-    });
-    audio.append(check,note);entry.append(audio);
     if(c.manualEnd-c.time>12)entry.append(button('ピーク前後に短縮',()=>{
      const range=shortRange(c.time,c.manualEnd,c.peakSeconds);
      c.time=range.start;c.manualEnd=range.end;save();render();
