@@ -1054,7 +1054,7 @@ function row(item, index, youtube=null) {
   titleGroup.append(titleLabel,titleSelect,title);
   // Keep metadata/editor logic for compatibility; play classification is unused
   // in the current highlight-video workflow and intentionally hidden.
-  titleGroup.hidden = !youtube;
+  titleGroup.hidden = true;
 
   const rangeEditor=make('div','range-editor');
   const rangeHeading=make('div','range-heading');
