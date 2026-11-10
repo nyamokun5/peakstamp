@@ -19,7 +19,7 @@ function button(text,action){
 }
 function input(label,value,change){
  const box=el('label',label+' '),field=el('input');
- field.value=value||'';field.onchange=()=>change(field.value.trim());box.append(field);return box;
+ box.style.cssText='display:grid;gap:4px;margin:10px 0';field.style.cssText='width:100%;box-sizing:border-box';field.value=value||'';field.onchange=()=>change(field.value.trim());box.append(field);return box;
 }
 function initialProject(){
  return {sources:[],editKey:Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join(''),published:''};
@@ -43,6 +43,15 @@ export function mountOrganizer({row,closePreview}){
  document.body.append(main);
  main.innerHTML='<h1>YouTubeハイライト TEST</h1><p><a href="./">ローカル動画モード</a></p><section class="panel"><h2>試合を追加</h2><textarea id="yt-urls" rows="4" placeholder="公開YouTube URL（複数行可）"></textarea><div id="yt-add"></div></section><section class="panel"><label>Gemini APIキー <input type="password" autocomplete="off" id="yt-key"></label><div id="yt-run"></div><p role="status" id="yt-status"></p></section><div id="yt-matches"></div><section class="panel"><h2>共有・出力</h2><label>PSアクセスコード（リンク発行用） <input type="password" autocomplete="off" id="yt-access"></label><div id="yt-actions"></div><p id="yt-result"></p></section>';
  const $=id=>main.querySelector('#yt-'+id);
+ const keyField=$('key');
+ const keyLabel=keyField.closest('label');
+ keyLabel.style.display='grid';
+ const rememberBox=el('label',' この端末にAPIキーを保存（個人端末用）');
+ const remember=el('input');remember.type='checkbox';rememberBox.prepend(remember);keyLabel.after(rememberBox);
+ const keyStore='peakstamp-yt-personal-key';
+ try{keyField.value=localStorage.getItem(keyStore)||'';remember.checked=Boolean(keyField.value)}catch{}
+ function rememberKey(){try{if(remember.checked&&keyField.value.trim())localStorage.setItem(keyStore,keyField.value.trim());else localStorage.removeItem(keyStore)}catch{remember.checked=false}}
+ remember.onchange=rememberKey;keyField.onchange=rememberKey;
  const status=m=>{$('status').textContent=m;};
  if(new URLSearchParams(location.search).has('sample'))$('urls').value=sampleIds.map(id=>'https://youtu.be/'+id).join('\n');
  function save(){localStorage.setItem(storageKey,JSON.stringify(project));}
@@ -116,7 +125,7 @@ export function mountOrganizer({row,closePreview}){
    card.append(el('h2',matchName(s)),el('small',s.title||s.id));
    if(s.error)card.append(el('p',s.error));
    if(!s.metadataReady)card.append(button('タイトルを再取得',()=>run(async()=>{await metadata(s);save()})));
-   for(const [k,name] of Object.entries({date:'開催日',round:'区分',teamA:'チームA',teamB:'チームB'}))card.append(input(name,s.info[k],v=>{s.info[k]=v;save();render()}));
+   for(const [k,name] of Object.entries({date:'開催日',round:'区分',teamA:'対戦カードの左側',teamB:'対戦カードの右側'}))card.append(input(name,s.info[k],v=>{s.info[k]=v;save();render()}));
    const move=delta=>{if(busy)return;const next=i+delta;if(next<0||next>=project.sources.length)return;project.sources.splice(next,0,project.sources.splice(i,1)[0]);save();render()};
    card.append(button('↑',()=>move(-1)),button('↓',()=>move(1)));
    if(s.info.drone){card.append(el('p','Drone · 解析対象外'));return}
