@@ -1,3 +1,4 @@
+import {restoreBridgeSession} from './sposched-bridge-session.mjs';
 import {sampleIds,videoId,matchInfo,matchName,analysisResult,seconds,shortRange,selected} from './youtube-session.mjs';
 import {judgeScene,undecided} from './review-flow.mjs';
 import {makeManualGoal,validateGoal,saveGoalDrafts} from './goal-stats.mjs';
@@ -85,6 +86,7 @@ export function mountOrganizer({row,closePreview}){
    dismiss();reviewingAll=true;showScene(list[0].source,list[0].item);
   });
   dialog.append(el('h2','候補の確認が終わりました'),el('p',list.length+'件中 '+kept+'件をキープ'));
+  if(kept&&selected(project.sources).some(c=>c.scorer))dialog.append(button('スポスケに登録（TEST）',()=>{dismiss();$('actions').closest('section').scrollIntoView({block:'start'});void run(registerVideos)}));
   if(kept)dialog.append(button('共有・出力へ',()=>{
    dismiss();$('access').closest('section').scrollIntoView({block:'start'});$('access').focus({preventScroll:true});
   }));
@@ -302,35 +304,56 @@ export function mountOrganizer({row,closePreview}){
   save();status('共有リンクを発行しました。');
   return project.published;
  }
- function showRegistrationPreview(){
+ async function registerVideos(){
   const sources=project.sources.filter(s=>!s.info.drone);
-  if(!sources.length)throw Error('登録する試合がありません。');
-  if(sources.some(s=>!s.info.date||!s.info.teamA||!s.info.teamB))
-   throw Error('各試合の開催日・対戦カードを入力してください。');
-  if(new Set(sources.map(s=>s.info.date)).size!==1)
-   throw Error('開催日が混在しています。別の開催として登録してください。');
-  if(!project.published)throw Error('まず共有リンクを発行してください。');
-  const dialog=el('dialog');dialog.className='yt-registration-preview';
-  dialog.style.cssText='width:min(94vw,36rem);max-height:85vh;overflow:auto;margin:auto;border:1px solid #466577;border-radius:16px;background:#12273a;color:white;padding:1.2rem';
-  dialog.append(el('h2','スポスケ登録内容の確認（TEST）'));
-  dialog.append(el('p','この画面は登録前の確認です。スポスケへの書き込みはまだ行いません。'));
-  const list=el('ol');
-  for(const source of sources){
-   const item=el('li');
-   const name=el('strong',matchName(source)+'　地上：');
-   const link=el('a','YouTube動画を開く');
-   link.href='https://www.youtube.com/watch?v='+source.id;link.target='_blank';link.rel='noopener noreferrer';
-   item.append(name,link);list.append(item);
+  const dates=new Set(sources.map(s=>s.info.date));
+  if(!sources.length||dates.size!==1||!sources[0].info.date)throw Error('同じ開催日の試合を選んでください。');
+  if(!selected(sources).some(c=>c.scorer&&c.label==='⚽ ゴール'))throw Error('採用するゴールを確定してください。');
+  const token=$('bridge').value.trim()||restoreBridgeSession(sessionStorage,'staging');
+  if(!token){$('bridge').focus();throw Error('スポスケTEST接続コードを入力してください。')}
+  const api=async(path,body)=>{
+   const headers={'X-SS-Bridge-Token':token};
+   if(body)headers['Content-Type']='application/json';
+   const res=await fetch('https://shoot-sunday-sync-staging.yomax1979.workers.dev'+path,{method:body?'POST':'GET',headers,body:body?JSON.stringify(body):undefined});
+   const data=await res.json();
+   if(!res.ok)throw Error(data.error?.message||data.error||'TEST HTTP '+res.status);
+   return data;
+  };
+  const fixtureVideos=['-sEOeqqTyuw','ey1_5PaMvBo','Ngp_ilKW91E','9zA4YCs8Ass'];
+  const demo=sources[0].info.date==='2026-11-08'&&sources.length===4&&fixtureVideos.every(id=>sources.some(s=>s.id===id));
+  const date=demo?'2026-11-10':sources[0].info.date;
+  const events=(await api('/events?from='+date+'&to='+date)).events.filter(e=>e.date===date&&(!demo||e.name.replace(/\s/g,'')==='日曜定期(10Nov)'));
+  if(events.length!==1)throw Error('登録先イベントを特定できません。');
+  const event=events[0],data=await api('/video-registration/inspect?event_id='+encodeURIComponent(event.event_id));
+  if(data.environment!=='TEST'||data.event.event_id!==event.event_id||data.videos.event_id!==event.event_id)throw Error('TESTイベントが一致しません。');
+  const reelUrl=new URL(await publishHighlights());reelUrl.searchParams.set('goals','1');
+  const results=el('ul');$('registration-results').replaceChildren(el('strong',event.name),results);
+  const team=value=>Number(String(value).normalize('NFKC').match(/^(?:チーム|Team|T)?\s*(\d+)$/i)?.[1]);
+  const targets=sources.map(s=>{
+   const left=team(s.info.teamA),right=team(s.info.teamB);
+   const matches=data.matches.matches.filter(m=>m.event_id===event.event_id&&m.left?.team===left&&m.right?.team===right&&(!demo||m.number===fixtureVideos.indexOf(s.id)+1));
+   return {name:matchName(s),kind:'match',match:matches.length===1?matches[0]:null,url:'https://youtu.be/'+s.id};
+  });
+  targets.push({name:'ゴール集',kind:'goal_reel',match:null,url:reelUrl.href});
+  const states={registered:'登録・照合済み',already_registered:'登録済み',conflict:'別URLあり',pending:'結果未確定'};
+  for(const t of targets){
+   const line=el('li',t.name+'　照合中');results.append(line);
+   try{
+    const slots=data.videos.videos.filter(v=>v.event_id===event.event_id&&v.kind===t.kind&&(t.kind==='goal_reel'?v.match_id===null:t.match&&v.match_id===t.match.match_id&&v.number===t.match.number));
+    if(slots.length!==1)throw Error('枠を特定できません');
+    const payload={event_id:event.event_id,event_date:event.date,event_name:event.name,kind:t.kind,video_id:slots[0].video_id,match_id:t.match?.match_id,number:t.match?.number,left:t.match?.left.team,right:t.match?.right.team,video_url:t.url};
+    let answer=await api('/staging/video-slot',payload);
+    if(answer.status==='ready')answer=await api('/staging/video-slot',{...payload,confirm:'TEST VIDEO REGISTER'});
+    line.textContent=t.name+'　'+(states[answer.status]||'要確認')+(answer.existing_url?'　'+answer.existing_url:'');
+   }catch(e){line.textContent=t.name+'　'+e.message}
   }
-  const goal=el('li');goal.append(el('strong','ゴール集：'));
-  const shared=el('a','PeakStamp共有ページを開く');shared.href=project.published;shared.target='_blank';shared.rel='noopener noreferrer';
-  goal.append(shared);list.append(goal);dialog.append(list);
-  dialog.append(el('p','既存URLが異なる場合は、確認なしに上書きしません。ドローン枠には触れません。'));
-  dialog.append(button('閉じる',()=>dialog.close()));
-  dialog.addEventListener('close',()=>dialog.remove(),{once:true});main.append(dialog);dialog.showModal();
  }
+ const bridgeLabel=el('label','スポスケTEST接続コード');
+ const bridge=el('input');bridge.type='password';bridge.id='yt-bridge';bridge.autocomplete='off';bridgeLabel.append(bridge);
+ const summary=el('div');summary.id='yt-registration-results';summary.setAttribute('role','status');
+ $('actions').before(bridgeLabel);$('actions').after(summary);
  $('actions').append(button('全試合の共有リンクを発行・更新',()=>run(publishHighlights)),
-  button('スポスケ登録内容を確認（TEST）',()=>run(async()=>{await publishHighlights();showRegistrationPreview()})),
+  button('スポスケに登録（TEST）',()=>run(registerVideos)),
   button('HS用JSON',()=>run(async()=>{
   const clips=selected(project.sources),sources=[];
   for(const s of project.sources.filter(s=>clips.some(c=>c.video===s.id))){
