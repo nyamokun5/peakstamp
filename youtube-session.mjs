@@ -42,6 +42,10 @@ export function seconds(value){
  }
  return NaN;
 }
+export function shortRange(start,end,peak){
+ if(end-start<=12)return {start,end};
+ return {start:Math.max(start,peak-8),end:Math.min(end,peak+4)};
+}
 export function analysisResult(result,source,report={}){
  if(result?.status!=='ok'||!Array.isArray(result.scenes))throw Error('動画の解析結果を確認できませんでした。');
  const seen=new Set();
@@ -52,7 +56,8 @@ export function analysisResult(result,source,report={}){
   if(x.end<=source.duration+2)x.end=Math.min(source.duration,x.end);
   if(![x.start,x.end,x.peak].every(Number.isFinite)||x.start<0||x.end-x.start<0.3||x.peak<x.start||x.peak>x.end||x.end>source.duration+0.1)
    {report.invalid++;return []}
-  return {id:source.id+'-'+i,sourceId:source.id,time:x.start,manualEnd:Math.min(source.duration,x.end),peakSeconds:x.peak,
+  const range=shortRange(x.start,x.end,x.peak);
+  return {id:source.id+'-'+i,sourceId:source.id,time:range.start,manualEnd:range.end,peakSeconds:x.peak,
    origin:'gemini',enabled:false,rejected:false,title:String(x.label||'好プレー'),geminiQuote:String(x.quote||''),
    goalHint:x.goal===true,scorerHint:String(x.scorer||''),assistHint:String(x.assist||'')};
  }).filter(c=>{const key=[c.time,c.manualEnd,c.peakSeconds].join('/');if(seen.has(key))return false;seen.add(key);return true;});
