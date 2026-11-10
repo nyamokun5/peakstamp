@@ -1,4 +1,4 @@
-import {sampleIds,videoId,matchInfo,matchName,analysisResult,seconds,selected} from './youtube-session.mjs';
+import {sampleIds,videoId,matchInfo,matchName,analysisResult,seconds,shortRange,selected} from './youtube-session.mjs';
 import {judgeScene} from './review-flow.mjs';
 import {makeManualGoal,validateGoal,saveGoalDrafts} from './goal-stats.mjs';
 import {saveCurrentGoalProject} from './goal-project.mjs';
@@ -26,11 +26,11 @@ function initialProject(){
  return {sources:[],editKey:Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join(''),published:''};
 }
 function goalSource(s,i){return {file:{name:'YouTube-'+s.id,size:0,lastModified:0},matchNumber:i+1};}
-async function analyze(s,key,instruction=prompt){
+async function analyze(s,key,instruction=prompt,windowRange=null){
  if(!key)throw Error('Gemini APIキーを入力してください。');
  const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',{
   signal:AbortSignal.timeout(300000),method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
-  body:JSON.stringify({contents:[{parts:[{fileData:{fileUri:'https://www.youtube.com/watch?v='+s.id}},{text:instruction+'\n動画タイトル '+JSON.stringify(s.title)}]}],generationConfig:{responseMimeType:'application/json'}})});
+  body:JSON.stringify({contents:[{parts:[{fileData:{fileUri:'https://www.youtube.com/watch?v='+s.id},...(windowRange?{videoMetadata:windowRange}:{})},{text:instruction+'\n動画タイトル '+JSON.stringify(s.title)}]}],generationConfig:{responseMimeType:'application/json'}})});
  if(!response.ok)throw Error('Gemini HTTP '+response.status+'。キー、割当量、公開設定を確認してください。');
  const body=await response.json();
  const parts=body.candidates?.[0]?.content?.parts||[];
@@ -108,7 +108,12 @@ export function mountOrganizer({row,closePreview}){
   let added=0;
   for(const c of found){
    if(s.candidates.some(old=>Math.abs(old.peakSeconds-c.peakSeconds)<=3&&(old.goalHint||old.goal||old.enabled)))continue;
-   c.id=crypto.randomUUID();s.candidates.push(c);added++;
+   if(s.candidates.some(old=>old.rejected&&Math.abs(old.peakSeconds-c.peakSeconds)<=3))continue;
+   const verdict=await analyze(s,$('key').value.trim(),
+    'サッカーの短い映像を独立に検証する。この区間の中心となるシュートでボールがゴールラインを越えてゴール内に入るのが実際に見える場合のみ verdict="visible_goal"。枠外・セーブは"miss"、遮蔽・ボールが追えない・得点者コールや歓声だけなら"unclear"。推測禁止。JSON {verdict,observation:映像で見たボールの経路} を返す。',
+    {startOffset:Math.floor(c.time)+'s',endOffset:Math.ceil(c.manualEnd)+'s'});
+   if(verdict?.verdict!=='visible_goal'||!verdict.observation?.trim())continue;
+   c.id=crypto.randomUUID();s.candidates.push(c);added++;save();
   }
   s.candidates.sort((a,b)=>a.peakSeconds-b.peakSeconds);opened.add(s.id);save();
   return added;
@@ -172,6 +177,10 @@ export function mountOrganizer({row,closePreview}){
    card.append(details);
    s.candidates.forEach((c,n)=>{
     const entry=row(c,n,{source:s,save,decide:(item,d)=>{judgeScene(item,d);save();render()}});
+    if(c.manualEnd-c.time>12)entry.append(button('ピーク前後に短縮',()=>{
+     const range=shortRange(c.time,c.manualEnd,c.peakSeconds);
+     c.time=range.start;c.manualEnd=range.end;save();render();
+    }));
     entry.append(goalEditor(s,c));details.append(entry);
    });
    const label=el('label','HS用の携帯原本（任意） '),file=el('input');file.type='file';file.accept='video/*,.mov,.mp4';
