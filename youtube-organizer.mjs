@@ -324,8 +324,23 @@ export function mountOrganizer({row,closePreview}){
   const demo=sources[0].info.date==='2026-11-08'&&sources.length===4&&fixtureVideos.every(id=>sources.some(s=>s.id===id));
   const date=demo?'2026-11-10':sources[0].info.date;
   progress.textContent=date+' のイベントを照合中…';
-  const events=(await api('/events?from='+date+'&to='+date)).events.filter(e=>e.date===date&&(!demo||e.name.replace(/\s/g,'')==='日曜定期(10Nov)'));
-  if(events.length!==1)throw Error('登録先イベントを特定できません。');
+  const normalizeEventName=value=>String(value||'').normalize('NFKC').replace(/\s/g,'').toLowerCase();
+  const expectedName='日曜定期(10nov)';
+  let available=(await api('/events?from='+date+'&to='+date+'&limit=100')).events;
+  if(!Array.isArray(available))throw Error('イベント一覧の応答形式を確認できません。');
+  let events=available.filter(e=>e.date===date&&(!demo||normalizeEventName(e.name)===expectedName));
+  if(demo&&events.length===0){
+   // This recording set is explicitly assigned to the named TEST event.
+   // TEST fixture dates can differ from the recording date/year.
+   progress.textContent='TESTの「日曜定期 (10 Nov)」をイベント名で検索中…';
+   available=(await api('/events?limit=100')).events;
+   if(!Array.isArray(available))throw Error('イベント一覧の応答形式を確認できません。');
+   events=available.filter(e=>normalizeEventName(e.name)===expectedName);
+  }
+  if(events.length!==1){
+   const names=available.map(e=>String(e.date||'')+' '+String(e.name||'')).join(' ／ ');
+   throw Error((events.length>1?'同名の登録先が複数あります。':'登録先 '+(demo?'日曜定期 (10 Nov)':date)+' が見つかりません。')+'取得したTESTイベント：'+(names||'0件'));
+  }
   const event=events[0],data=await api('/video-registration/inspect?event_id='+encodeURIComponent(event.event_id));
   if(data.environment!=='TEST'||data.event.event_id!==event.event_id||data.videos.event_id!==event.event_id)throw Error('TESTイベントが一致しません。');
   progress.textContent='ゴール集の共有リンクを準備中…';
