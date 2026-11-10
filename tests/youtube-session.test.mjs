@@ -22,3 +22,10 @@ test('one invalid scene does not discard valid siblings or timestamp strings',()
  const items=analysisResult({status:'ok',scenes:[null,{start:'0:51',end:'61',peak:56}]},{id:'test',duration:60},report);
  assert.equal(report.invalid,1);assert.deepEqual(items.map(c=>[c.time,c.manualEnd,c.peakSeconds]),[[51,60,56]]);
 });
+
+test('long suggestions keep the peak and fit inside the original interval',()=>{
+ const candidate=(start,end,peak)=>analysisResult({status:'ok',scenes:[{start,end,peak}]},{id:'v',duration:480})[0];
+ for(const [a,b,p,x,y] of [[136,176.8,154,146,158],[0,30,1,0,5],[451,480,479,471,480],[4,11,9,4,11]]){
+  const c=candidate(a,b,p);assert.deepEqual([c.time,c.manualEnd],[x,y]);
+ }
+});
