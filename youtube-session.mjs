@@ -32,14 +32,30 @@ export function selected(sources){
 export function forMember(clips,name){
  return name?clips.filter(c=>c.scorer===name||c.assist===name):clips;
 }
-export function analysisResult(result,source){
+export function seconds(value){
+ if(typeof value==='number')return value;
+ if(typeof value!=='string')return NaN;
+ const t=value.trim();
+ if(/^\d+(?:\.\d+)?$/.test(t))return Number(t);
+ if(/^\d+:[0-5]\d(?:\.\d+)?$/.test(t)){
+  const [minutes,secs]=t.split(':');return Number(minutes)*60+Number(secs);
+ }
+ return NaN;
+}
+export function analysisResult(result,source,report={}){
  if(result?.status!=='ok'||!Array.isArray(result.scenes))throw Error('動画の解析結果を確認できませんでした。');
  const seen=new Set();
- return result.scenes.map((x,i)=>{
+ report.invalid=0;
+ const candidates=result.scenes.flatMap((raw,i)=>{
+  const x={...raw,start:seconds(raw?.start),end:seconds(raw?.end),peak:seconds(raw?.peak)};
+  if(x.start>=-1)x.start=Math.max(0,x.start);
+  if(x.end<=source.duration+2)x.end=Math.min(source.duration,x.end);
   if(![x.start,x.end,x.peak].every(Number.isFinite)||x.start<0||x.end-x.start<0.3||x.peak<x.start||x.peak>x.end||x.end>source.duration+0.1)
-   throw Error('候補の秒数が動画の範囲と一致しません。再解析してください。');
+   {report.invalid++;return []}
   return {id:source.id+'-'+i,sourceId:source.id,time:x.start,manualEnd:Math.min(source.duration,x.end),peakSeconds:x.peak,
    origin:'gemini',enabled:false,rejected:false,title:String(x.label||'好プレー'),geminiQuote:String(x.quote||''),
    goalHint:x.goal===true,scorerHint:String(x.scorer||''),assistHint:String(x.assist||'')};
  }).filter(c=>{const key=[c.time,c.manualEnd,c.peakSeconds].join('/');if(seen.has(key))return false;seen.add(key);return true;});
+ if(report.invalid&&!candidates.length)throw Error('候補'+report.invalid+'件すべての時刻が不正でした。この試合を再解析してください。');
+ return candidates;
 }
