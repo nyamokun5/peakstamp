@@ -16,3 +16,9 @@ test('analysis rejects bad ranges and inaccessible responses',()=>{
  assert.throws(()=>analysisResult({status:'inaccessible',scenes:[]},{duration:60}));
  assert.throws(()=>analysisResult({status:'ok',scenes:[{start:2,end:65,peak:3}]},{duration:60}));
 });
+
+test('one invalid scene does not discard valid siblings or timestamp strings',()=>{
+ const report={};
+ const items=analysisResult({status:'ok',scenes:[null,{start:'0:51',end:'61',peak:56}]},{id:'test',duration:60},report);
+ assert.equal(report.invalid,1);assert.deepEqual(items.map(c=>[c.time,c.manualEnd,c.peakSeconds]),[[51,60,56]]);
+});
