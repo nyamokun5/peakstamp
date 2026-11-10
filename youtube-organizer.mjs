@@ -86,7 +86,7 @@ export function mountOrganizer({row,closePreview}){
    dismiss();reviewingAll=true;showScene(list[0].source,list[0].item);
   });
   dialog.append(el('h2','候補の確認が終わりました'),el('p',list.length+'件中 '+kept+'件をキープ'));
-  if(kept&&selected(project.sources).some(c=>c.scorer))dialog.append(button('スポスケに登録（TEST）',()=>{dismiss();$('actions').closest('section').scrollIntoView({block:'start'});void run(registerVideos)}));
+  if(kept&&selected(project.sources).some(c=>c.scorer))dialog.append(button('スポスケに登録（TEST）',()=>{dismiss();$('actions').closest('section').scrollIntoView({block:'start'});void startRegistration()}));
   if(kept)dialog.append(button('共有・出力へ',()=>{
    dismiss();$('access').closest('section').scrollIntoView({block:'start'});$('access').focus({preventScroll:true});
   }));
@@ -314,7 +314,8 @@ export function mountOrganizer({row,closePreview}){
   const api=async(path,body)=>{
    const headers={'X-SS-Bridge-Token':token};
    if(body)headers['Content-Type']='application/json';
-   const res=await fetch('https://shoot-sunday-sync-staging.yomax1979.workers.dev'+path,{method:body?'POST':'GET',headers,body:body?JSON.stringify(body):undefined});
+   const res=await fetch('https://shoot-sunday-sync-staging.yomax1979.workers.dev'+path,{signal:AbortSignal.timeout(45000),method:body?'POST':'GET',headers,body:body?JSON.stringify(body):undefined});
+   if(res.status===401)throw Error('スポスケTEST接続コードを確認してください。');
    const data=await res.json();
    if(!res.ok)throw Error(data.error?.message||data.error||'TEST HTTP '+res.status);
    return data;
@@ -322,12 +323,14 @@ export function mountOrganizer({row,closePreview}){
   const fixtureVideos=['-sEOeqqTyuw','ey1_5PaMvBo','Ngp_ilKW91E','9zA4YCs8Ass'];
   const demo=sources[0].info.date==='2026-11-08'&&sources.length===4&&fixtureVideos.every(id=>sources.some(s=>s.id===id));
   const date=demo?'2026-11-10':sources[0].info.date;
+  progress.textContent=date+' のイベントを照合中…';
   const events=(await api('/events?from='+date+'&to='+date)).events.filter(e=>e.date===date&&(!demo||e.name.replace(/\s/g,'')==='日曜定期(10Nov)'));
   if(events.length!==1)throw Error('登録先イベントを特定できません。');
   const event=events[0],data=await api('/video-registration/inspect?event_id='+encodeURIComponent(event.event_id));
   if(data.environment!=='TEST'||data.event.event_id!==event.event_id||data.videos.event_id!==event.event_id)throw Error('TESTイベントが一致しません。');
+  progress.textContent='ゴール集の共有リンクを準備中…';
   const reelUrl=new URL(await publishHighlights());reelUrl.searchParams.set('goals','1');
-  const results=el('ul');$('registration-results').replaceChildren(el('strong',event.name),results);
+  const results=el('ul');summary.append(el('strong',event.name),results);
   const team=value=>Number(String(value).normalize('NFKC').match(/^(?:チーム|Team|T)?\s*(\d+)$/i)?.[1]);
   const targets=sources.map(s=>{
    const left=team(s.info.teamA),right=team(s.info.teamB);
@@ -336,7 +339,9 @@ export function mountOrganizer({row,closePreview}){
   });
   targets.push({name:'ゴール集',kind:'goal_reel',match:null,url:reelUrl.href});
   const states={registered:'登録・照合済み',already_registered:'登録済み',conflict:'別URLあり',pending:'結果未確定'};
-  for(const t of targets){
+  let completed=0;
+  for(const [i,t] of targets.entries()){
+   progress.textContent=(i+1)+' / '+targets.length+' 件目を照合中…';
    const line=el('li',t.name+'　照合中');results.append(line);
    try{
     const slots=data.videos.videos.filter(v=>v.event_id===event.event_id&&v.kind===t.kind&&(t.kind==='goal_reel'?v.match_id===null:t.match&&v.match_id===t.match.match_id&&v.number===t.match.number));
@@ -344,16 +349,30 @@ export function mountOrganizer({row,closePreview}){
     const payload={event_id:event.event_id,event_date:event.date,event_name:event.name,kind:t.kind,video_id:slots[0].video_id,match_id:t.match?.match_id,number:t.match?.number,left:t.match?.left.team,right:t.match?.right.team,video_url:t.url};
     let answer=await api('/staging/video-slot',payload);
     if(answer.status==='ready')answer=await api('/staging/video-slot',{...payload,confirm:'TEST VIDEO REGISTER'});
+    if(['registered','already_registered'].includes(answer.status))completed++;
     line.textContent=t.name+'　'+(states[answer.status]||'要確認')+(answer.existing_url?'　'+answer.existing_url:'');
    }catch(e){line.textContent=t.name+'　'+e.message}
   }
+  progress.textContent='登録済み '+completed+' / '+targets.length+'件'+(completed===targets.length?'':'（要確認 '+(targets.length-completed)+'件）');
  }
  const bridgeLabel=el('label','スポスケTEST接続コード');
  const bridge=el('input');bridge.type='password';bridge.id='yt-bridge';bridge.autocomplete='off';bridgeLabel.append(bridge);
  const summary=el('div');summary.id='yt-registration-results';summary.setAttribute('role','status');
- $('actions').before(bridgeLabel);$('actions').after(summary);
+ const progress=el('p');
+ const registerButton=button('スポスケに登録（TEST）',startRegistration);
+ async function startRegistration(){
+  if(registerButton.disabled)return;
+  summary.replaceChildren(progress);
+  if(busy){progress.textContent='別の処理が進行中です。終了後にもう一度押してください。';return;}
+  progress.textContent='登録内容を確認中…';
+  registerButton.disabled=true;registerButton.textContent='登録処理中…';
+  try{await run(async()=>{
+   try{await registerVideos()}catch(e){progress.textContent=e.message||'登録できませんでした。';}
+  })}finally{registerButton.disabled=false;registerButton.textContent='スポスケに登録（TEST）';}
+ }
+ $('actions').before(bridgeLabel);
  $('actions').append(button('全試合の共有リンクを発行・更新',()=>run(publishHighlights)),
-  button('スポスケに登録（TEST）',()=>run(registerVideos)),
+  registerButton,summary,
   button('HS用JSON',()=>run(async()=>{
   const clips=selected(project.sources),sources=[];
   for(const s of project.sources.filter(s=>clips.some(c=>c.video===s.id))){
