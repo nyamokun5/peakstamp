@@ -51,6 +51,11 @@ export async function onConfirmedGoalPlayerSelection({
  if(!Array.isArray(resolution?.candidates))
   return {saved:false,reason:'SS別名の照合に失敗しました'};
  const existing=resolution.candidates;
+ // Never treat malformed / unidentified upstream people as a clean match
+ // list. A child has child_id; a registered member has stable user_id.
+ if(existing.some(candidate=>!uuid.test(candidate?.user_id||'')&&
+   !(candidate?.type==='child'&&uuid.test(candidate?.child_id||''))))
+  return {saved:false,reason:'SS既存別名のメンバーIDが確認できません'};
  // SS OpenAPI 1.7.0 supports multiple people sharing a nickname. The
  // backend uses selected member_id; no global alias->person overwrite occurs.
  // A child identity may also share the alias. The SS API returns all of them.
