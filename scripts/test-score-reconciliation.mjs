@@ -20,3 +20,18 @@ test('goal details cannot exceed final score', () => {
 test('invalid score is not silently replaced with zero', () => {
  assert.throws(()=>reconcileFinalScore({official:{left:0,right:0},draft:{left:null,right:1}}),/整数/);
 });
+
+test('missing official score is not interpreted as zero', () => {
+ assert.throws(()=>reconcileFinalScore({official:{left:null,right:0},draft:{left:1,right:0}}),/SSの現在/);
+});
+test('unchanged score remains unchanged', () => {
+ const r=reconcileFinalScore({official:{left:2,right:1},draft:{left:2,right:1}});
+ assert.equal(r.scoreChanged,false);
+});
+test('two distinct goal IDs remain valid with identical scorer and assist', () => {
+ const r=reconcileFinalScore({official:{left:0,right:0},draft:{left:2,right:0},goals:[
+  {id:'clip-100',side:'left',scorer:'A',assist:'B'},
+  {id:'clip-200',side:'left',scorer:'A',assist:'B'}
+ ]});
+ assert.equal(r.attributedGoals.left,2);
+});
