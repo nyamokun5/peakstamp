@@ -34,10 +34,12 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
   fail('すでに終了した試合があります。従来の個別確認を使ってください');
  if(!Array.isArray(rows)||!Array.isArray(decisions)||decisions.length!==rows.length)
   fail('全ゴールの確認結果を取得できません');
- const selected=[],signatures=new Set();
+ const selected=[],goalIds=new Set(),seenRows=new Set();
  for(let i=0;i<rows.length;i++){
   const row=rows[i],decision=decisions[i];
   if(!row?.include)continue;
+  if(seenRows.has(row))fail('同じ動画ゴールが複数含まれています');
+  seenRows.add(row);
   if(decision?.state==='manual-ss'){
    // Only automatically exclude a verified cross-team scenario from the
    // batch. Do not silently finalize a match while a manual goal is missing:
@@ -87,10 +89,16 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
   if(assist&&snapshot.playerTeam?.get(assist)&&normalized(snapshot.playerTeam.get(assist))!==normalized(team)&&
     !helperPlan?.helpers.some(h=>h.name===assist&&normalized(h.team)===normalized(team)))
    fail('ゴール'+(i+1)+'：アシスト者の所属と得点チームが異なります');
-  const signature=[seq,normalized(team),normalized(scorer),normalized(assist)].join('|');
-  if(signatures.has(signature))
-   fail('同じ試合・得点者・アシストのゴールが複数あります。高速登録を中止します');
-  signatures.add(signature);
+  // Multiple distinct goals may have the same scorer and assist.
+  // Reject only the same source goal repeated in this submission.
+  // Existing video rows do not always expose a stable goal ID.
+  // Only enforce ID-based duplicate detection when the source supplies one.
+  // Repeated scorer/assist combinations are valid separate goals.
+  const goalId=name(row.goal?.id);
+  if(goalId){
+   if(goalIds.has(goalId))fail('同じ動画ゴールが二重に含まれています');
+   goalIds.add(goalId);
+  }
   selected.push({seq,action:'create',team,scorer,assist,helpers:helperPlan?.helpers||[]});
  }
  if(selected.length>20)fail('高速登録は最大20ゴールです');

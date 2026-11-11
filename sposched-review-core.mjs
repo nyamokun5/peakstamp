@@ -78,7 +78,35 @@ export function normalizeSpoSnapshot(raw){
    throw Error('現在のSS名簿で同名選手の所属チームが重複しています。登録を停止してください');
   playerTeam.set(player,teamName);
  }
- return {eventId,eventName,matches,players,roster,playerTeam,rosterSource};
+ // External SS v1.6 provides BOTH an event-scoped player_id and a stable
+ // registered-member user_id. Only consume IDs from the verified CURRENT
+ // event roster; stale/historical rosters must not establish identity.
+ const officialUuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+ const verifiedIds=new Map(),conflictingNames=new Set();
+ if(authoritative&&Array.isArray(obj.roster_players)){
+  for(const p of obj.roster_players){
+   const name=string(p?.name),team=string(p?.team);
+   if(!name||!playerTeam.has(name)||
+      normalizeTeam(playerTeam.get(name))!==normalizeTeam(team))continue;
+   const playerId=officialUuid.test(string(p?.player_id))?string(p.player_id):'';
+   const userId=officialUuid.test(string(p?.user_id))?string(p.user_id):'';
+   const previous=verifiedIds.get(name);
+   // Two different SS identities sharing a display name cannot be safely
+   // reduced to one name-keyed identity. Require manual SS resolution.
+   if(previous&&(previous.player_id!==playerId||previous.user_id!==userId))
+    conflictingNames.add(name);
+   else if(!previous)verifiedIds.set(name,{player_id:playerId,user_id:userId});
+  }
+ }
+ for(const name of conflictingNames)verifiedIds.delete(name);
+ const playerIds=new Map(),memberIds=new Map();
+ for(const [name,ref] of verifiedIds){
+  if(ref.player_id)playerIds.set(name,ref.player_id);
+  if(ref.user_id)memberIds.set(name,ref.user_id);
+ }
+ return {eventId,eventName,matches,players,roster,playerTeam,rosterSource,
+  ...(playerIds.size?{playerIds}:{}),
+  ...(memberIds.size?{memberIds}:{})};
 }
 /** Select ONLY players assigned to the official numbered fixture's sides.
  * Never leak historical, unassigned, or unrelated third-team players into the
