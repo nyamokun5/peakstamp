@@ -7,7 +7,7 @@ const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH
 const E='11111111-1111-4111-8111-111111111111';
 const fixtures=()=>[1,2,3,4].map(seq=>({seq,match_id:'22222222-2222-4222-8222-22222222222'+seq,
  title:seq<3?'準決勝':seq===3?'3位決定戦':'決勝',status:'scheduled',
- left_team:seq===2?'チーム3':seq===3?'チーム2':'チーム1',right_team:seq===1?'チーム2':seq===3?'チーム4':'チーム3',
+ left_team:seq===2?'チーム3':seq===3?'チーム2':'チーム1',right_team:seq===1?'チーム2':seq===2||seq===3?'チーム4':'チーム3',
  left_score:0,right_score:0,goals:[]}));
 try{
  for(const scenario of ['new','partial','uncertain','waiting','missing-score']){
