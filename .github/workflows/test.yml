@@ -18,7 +18,9 @@ jobs:
           node --check exporter.mjs
           node --check montage-ui.mjs
       - name: Unit tests
-        run: node --test tests/*.test.mjs
+        run: |
+          node --test tests/*.test.mjs
+          node --test scripts/test-name-resolution.mjs scripts/test-goal-identity-gate.mjs scripts/test-score-reconciliation.mjs
 
   finish-browser:
     runs-on: ubuntu-24.04
