@@ -450,7 +450,8 @@ import {jobControlPayload} from './sposched-job-control.mjs?v=pause1';
 import {auditCurrentTestFixtureGates} from './sposched-gate-audit.mjs?v=gate-audit1';
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
-import {installSimpleResults} from './sposched-simple-results.mjs?v=1';
+import {installSimpleResults} from './sposched-simple-results.mjs?v=2';
+import {installMinimalGoalFix,makeMinimalGoalOperation} from './sposched-simple-goal-fix.mjs?v=1';
 import {onConfirmedGoalPlayerSelection} from './sposched-goal-alias-learning.mjs';
 import {saveConfirmedGoalSelection,restoreConfirmedGoalSelections} from './sposched-goal-selection-draft.mjs';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=review-validation2';
@@ -1706,6 +1707,73 @@ function learnSelectedAlias(row,role,officialName){
   row,snapshot,field:role,officialName,source:'local-video'
  }).catch(error=>console.warn('SS alias sync unavailable',error));
 }
+const minimalGoalFix=installMinimalGoalFix({
+ document,
+ getState:()=>({snapshot,rows,
+  testMode:loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&
+   !batchBusy&&!autoBusy&&!workerBatchPolling}),
+ onPreview:async operation=>{
+  if(pendingForEvent().length)
+   throw Error('未確認のSS送信があります。SS最新データとの照合を先に行ってください');
+  if($('ssEnvironment').value!=='staging'||!loadedFromStagingDirect||!snapshot)
+   throw Error('SS TESTイベントを読み込み直してください');
+  const current=snapshot,seq=operation.args.seq;
+  const fresh=normalizeSpoSnapshot(await fetchSS(
+   '/snapshot?event_id='+encodeURIComponent(current.eventId)));
+  assertCurrentNumberedFixture(current,fresh,seq);
+  const oldMatch=current.matches.find(m=>m.seq===seq);
+  const newMatch=fresh.matches.find(m=>m.seq===seq);
+  if(!newMatch||oldMatch.status!=='finished'||newMatch.status!=='finished'||
+    oldMatch.leftScore!==newMatch.leftScore||oldMatch.rightScore!==newMatch.rightScore||
+    oldMatch.winner!==newMatch.winner)
+   throw Error('SS試合の結果が更新されています。イベントを再取得してください');
+  const matching=current.matches.find(m=>m.seq===seq);
+  const targetId=operation.args.goal_id||'';
+  const oldGoal=targetId?matching.existingGoals.find(g=>g.id===targetId):null;
+  if(targetId&&!oldGoal)throw Error('修正対象のゴールが変わりました');
+  // A replacement official goal ledger must NOT get an old approved PATCH.
+  if(targetId){
+   const latest=newMatch.existingGoals.find(g=>g.id===targetId);
+   if(!latest||JSON.stringify(latest)!==JSON.stringify(oldGoal))
+    throw Error('SSゴール明細が更新されました。最新データを再取得してください');
+  }
+  const official=await fetchSS('/match?match_id='+encodeURIComponent(newMatch.matchId));
+  const action=toStagingAction(fresh,operation,official);
+  const signed=await postStaging('/staging/preview',action);
+  if(signed.environment!=='STAGING ONLY'||signed.plan?.match_id!==action.match_id||
+     !signed.preview_token||!signed.plan)
+   throw Error('TESTの安全な登録プレビューを確認できません');
+  return {action,operation,preview_token:signed.preview_token,plan:signed.plan,
+   expectedEventId:fresh.eventId};
+ },
+ onExecute:async approved=>{
+  if($('ssEnvironment').value!=='staging'||!loadedFromStagingDirect||
+     !snapshot||snapshot.eventId!==approved.expectedEventId)
+   throw Error('TESTイベントが変更されました');
+  if(pendingForEvent().length)
+   throw Error('未確認の送信記録があります。新しい書き込みはできません');
+  const op=approved.operation,action=approved.action;
+  // The Worker signed this specific operation & match state at preview.
+  const goalKey=goalKeyOfOperation(op),before=await fetchSS(
+   '/match?match_id='+encodeURIComponent(action.match_id));
+  beginAttempt(localStorage,snapshot.eventId,goalKey,action,before);
+  const result=await postStaging('/staging/execute',{
+   ...action,preview_token:approved.preview_token,confirm:'TEST-ONLY WRITE'
+  });
+  if(result?.write_sent!==true||result?.readback?.verified!==true)
+   throw Error('書き込み結果を照合できません。自動再送しません');
+  clearAttempt(localStorage,snapshot.eventId,goalKey);
+  const reloaded=normalizeSpoSnapshot(await fetchSS(
+   '/snapshot?event_id='+encodeURIComponent(snapshot.eventId)));
+  const item=reloaded.matches.find(m=>m.seq===Number(op.args.seq));
+  if(!item||item.status!=='finished')
+   throw Error('得点登録後の試合終了状態を確認できません');
+  snapshot=reloaded;
+  rebuild({preserveEdits:true,completedKeys:op.action==='record_goal'?[goalKey]:[]});
+  $('simpleSaveHelp').textContent='✓ ゴールを保存しました（SS公式データ照合済み）';
+  statusSS('✓ 1ゴールの登録・照合が完了しました');
+ }
+});
 function simpleSaveTarget(){
  if(!snapshot||localStorage.getItem(workerBatchStorageKey(snapshot.eventId)))return null;
  return snapshot.matches.some(m=>m.status==='finished')?$('autoRun'):$('workerBatchRun');
@@ -1742,6 +1810,7 @@ const simpleResults=installSimpleResults({document,
   autoWinnerChoices.set(m.seq,{winner,eventId:snapshot.eventId,matchId:m.matchId,left:p.left,right:p.right});renderQuick();
  },
  onDetail:openDetail,
+ onFix:args=>{if(!batchBusy&&!autoBusy&&!workerBatchPolling)minimalGoalFix.open(args);},
  onSave:()=>{if(batchBusy||autoBusy||workerBatchPolling)return;const target=simpleSaveTarget();if(target&&!target.disabled)target.click();}
 });
 const autoWinnerChoices=new Map();
