@@ -1,4 +1,5 @@
 import {analyzeAutoFixture} from './sposched-auto-tournament.mjs';
+import {fixturePlayerOptions} from './sposched-review-core.mjs';
 
 // Presentation only. All writes still pass through the existing signed TEST
 // actions, durable journals and official readback. No network calls here.
@@ -91,7 +92,8 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
     const fields=el('div','','quick-fields'),reviewed=row.quickReviewedAll,rf=row.quickReviewedFields||{};
     if(!row.seq||row.fixtureIdentityChanged||(!reviewed&&!rf.match&&(row.matchGuess?.confidence!=='high'||row.matchGuess?.ambiguous||row.matchGuess?.conflict)))
      fields.append(select(r,'match','試合',s.snapshot.matches.map(m=>[String(m.seq),'第'+m.seq+'試合 '+(m.title||'')]),''));
-    const players=s.snapshot.players.map(name=>[name,name+'　'+(s.snapshot.playerTeam.get(name)||'')]);
+    // Restrict selectable identities to the actual fixture; never offer unrelated teams.
+    const players=fixturePlayerOptions(s.snapshot,row.seq,row.team).map(name=>[name,name+'　'+(s.snapshot.playerTeam.get(name)||'')]);
     fields.append(select(r,'scorer','得点者',players,row.scorer&&(reviewed||rf.scorer||row.scorerGuess?.confidence==='high')?row.scorer:''));
     fields.append(select(r,'simpleAssist','アシスト',[['__none__','なし'],...players],row.assistMode==='none'?'__none__':row.assistMode==='named'&&(reviewed||rf.assist||row.assistGuess?.confidence==='high')?row.assist:''));
     const m=s.snapshot.matches.find(m=>m.seq===Number(row.seq));
