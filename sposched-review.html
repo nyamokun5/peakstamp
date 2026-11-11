@@ -452,6 +452,7 @@ import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
 import {installSimpleResults} from './sposched-simple-results.mjs?v=1';
 import {onConfirmedGoalPlayerSelection} from './sposched-goal-alias-learning.mjs';
+import {saveConfirmedGoalSelection,restoreConfirmedGoalSelections} from './sposched-goal-selection-draft.mjs';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=review-validation2';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
@@ -699,7 +700,9 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
  if(!completion.hidden&&completion.dataset.runId.startsWith('worker:')&&
     !workerCompletionVerified(workerLatestState,snapshot))hideCompletionPanel();
  const prepared=prepareGoalRows({goals:source},snapshot);
- rows=preserveReviewRows(applyManualRowEdits(prepared,manualGoals,snapshot),prior,{
+ const restored=loadedFromStagingDirect&&$('ssEnvironment').value==='staging'
+  ?restoreConfirmedGoalSelections(localStorage,snapshot,prepared):prepared;
+ rows=preserveReviewRows(applyManualRowEdits(restored,manualGoals,snapshot),prior,{
   sameEvent,completedKeys,snapshot
  });
  reviewedEventId=snapshot.eventId;
@@ -950,7 +953,10 @@ function renderGoals(){
    // Keep the explicitly chosen existing goal when scorer/assist is edited.
    // Selecting a different match is the only change that clears its goal ID.
    row.duplicateApproved=false;row.confirmed=false;confirm.checked=false;
-   decision.textContent='';touch();persistManualRow(row);updateDuplicate();renderQuick();
+   decision.textContent='';touch();persistManualRow(row);
+   if(loadedFromStagingDirect&&$('ssEnvironment').value==='staging')
+    saveConfirmedGoalSelection(localStorage,snapshot,row);
+   updateDuplicate();renderQuick();
    const selectedMatch=snapshot.matches.find(m=>m.seq===Number(row.seq));
    const who=row.scorer||'未選択',to=row.assist||'未選択';
    guess.replaceChildren();
@@ -1717,11 +1723,20 @@ const simpleResults=installSimpleResults({document,
   const aliasRow=rows[index];
   try{
    if(field==='simpleAssist'){field=value==='__none__'?'assistMode':'assist';if(value==='__none__')value='none';}
-   editQuickGoalField(snapshot,rows[index],field,value);touch();renderGoals();renderQuick();
+   editQuickGoalField(snapshot,rows[index],field,value);
+   if(loadedFromStagingDirect&&$('ssEnvironment').value==='staging')
+    saveConfirmedGoalSelection(localStorage,snapshot,rows[index]);
+   touch();renderGoals();renderQuick();
    if(aliasField)learnSelectedAlias(aliasRow,aliasRole,value);
   }catch(e){$('simpleSaveHelp').textContent=e.message;}
  },
- onInclude:(index,include)=>{if(batchBusy||autoBusy||workerBatchPolling)return;rows[index].include=include;touch();renderGoals();renderQuick();},
+ onInclude:(index,include)=>{
+  if(batchBusy||autoBusy||workerBatchPolling)return;
+  rows[index].include=include;
+  if(loadedFromStagingDirect&&$('ssEnvironment').value==='staging')
+   saveConfirmedGoalSelection(localStorage,snapshot,rows[index]);
+  touch();renderGoals();renderQuick();
+ },
  onWinner:(m,p,winner)=>{
   if(batchBusy||autoBusy||workerBatchPolling)return;
   autoWinnerChoices.set(m.seq,{winner,eventId:snapshot.eventId,matchId:m.matchId,left:p.left,right:p.right});renderQuick();

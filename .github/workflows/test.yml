@@ -21,7 +21,7 @@ jobs:
         run: |
           node --test tests/*.test.mjs
           node --test scripts/test-name-resolution.mjs scripts/test-goal-identity-gate.mjs scripts/test-alias-proposal.mjs scripts/test-alias-submission.mjs scripts/test-goal-alias-learning.mjs scripts/test-score-reconciliation.mjs
-          node --test scripts/test-snapshot-member-resolver.mjs scripts/test-simple-name-choice.mjs
+          node --test scripts/test-snapshot-member-resolver.mjs scripts/test-simple-name-choice.mjs scripts/test-goal-selection-draft.mjs
 
   finish-browser:
     runs-on: ubuntu-24.04

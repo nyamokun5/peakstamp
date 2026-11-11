@@ -102,6 +102,23 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
    let card=groups.get(Number(row.seq));
    if(!card){card=groups.get(0);if(!card){card=el('section','','simple-match');card.append(el('h3','試合を選んでください'));groups.set(0,card);root.append(card)}}
    const goal=el('div','','quick-goal');goal.id='quick-goal-'+r.displayNumber;goal.append(el('strong','ゴール '+r.displayNumber));
+   // Display the original saved PeakStamp video observation, which is not
+   // the same as a previously selected SS roster identity. Both remain
+   // visible after an SS TEST score/fixture reset.
+   const observed=row.goal||{};
+   const heard=String(observed.scorer||'').trim()||'不明';
+   const assistHeard=observed.assistStatus==='none'?'なし':
+    observed.assistStatus==='named'?String(observed.assist||'').trim()||'不明':'未確認';
+   if(!observed.manual)
+    goal.append(el('p','動画保存：'+heard+' / アシスト '+assistHeard,'small'));
+   if(row.previousGoalSelection){
+    const prev=row.previousGoalSelection;
+    goal.append(el('p','前回の選択：'+(prev.scorer||'不明')+
+     (prev.assistMode==='named'?' / '+(prev.assist||'不明'):'')+
+     '（試合・名簿を再確認）','small'));
+   }else if(row.draftRestored){
+    goal.append(el('p','前回の選択を復元しました','small'));
+   }
    const uncertain=['attention','duplicate','manual-ss','patch','manual'].includes(item.state);
    if(!row.include){goal.append(el('p','今回の保存に含めません','small'),button('戻す',()=>onInclude(item.index,true)))}
    else if(row.goal?.manual||row.updateGoalId||row.guest||item.state==='duplicate'||item.state==='patch'){
