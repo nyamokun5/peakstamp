@@ -38,6 +38,7 @@ jobs:
         run: |
           node scripts/test-simple-results-browser.mjs
           node scripts/test-alias-learning-browser.mjs
+          node scripts/test-one-tap-alias-browser.mjs
           node scripts/test-minimal-goal-fix-browser.mjs
           node scripts/test-finish-browser.mjs
           node scripts/test-auto-tournament-browser.mjs
