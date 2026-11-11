@@ -10,7 +10,7 @@ const fixtures=()=>[1,2,3,4].map(seq=>({seq,match_id:'22222222-2222-4222-8222-22
  left_team:seq===2?'チーム3':seq===3?'チーム2':'チーム1',right_team:seq===1?'チーム2':seq===2||seq===3?'チーム4':'チーム3',
  left_score:0,right_score:0,goals:[]}));
 try{
- for(const scenario of ['new','partial','uncertain','shared-nickname','waiting','missing-score']){
+ for(const scenario of ['new','partial','uncertain','shared-nickname','draft-reload','waiting','missing-score']){
   const matches=fixtures();
   if(scenario==='partial')matches.slice(0,2).forEach(m=>{m.status='finished';m.left_score=1});
   if(scenario==='waiting')matches.slice(2).forEach(m=>{m.status='waiting';m.left_team='';m.right_team=''});
@@ -33,12 +33,12 @@ try{
     return route.fulfill({status:400,json:{error:{code:'invalid_plan',message:'テスト用の停止'}},headers:{'Access-Control-Allow-Origin':'*'}});
    }
    const data=u.pathname==='/events'?{events:[{event_id:E,name:'日曜定期',date:'2026-11-08'}]}:
-    {event_id:E,matches,roster:scenario==='shared-nickname'?
+    {event_id:E,matches,roster_source:scenario==='draft-reload'?'official-current-event-teams':undefined,roster:scenario==='shared-nickname'?
      {チーム1:['たいせい'],チーム2:['たいせいA'],チーム3:['田中'],チーム4:['橋本']}:
      {チーム1:['山田'],チーム2:['西村'],チーム3:['田中'],チーム4:['橋本']}};
    return route.fulfill({json:data,headers:{'Access-Control-Allow-Origin':'*'}});
   });
-  if(scenario==='uncertain'||scenario==='shared-nickname')
+  if(scenario==='uncertain'||scenario==='shared-nickname'||scenario==='draft-reload')
    await page.addInitScript(({spoken,seq})=>{
     const file={name:'test.mov',size:1234,lastModified:1000};
     localStorage.setItem('peakstamp_current_video_project_v1',JSON.stringify({version:1,projectId:'simple-test',files:[file],updatedAt:1000}));
@@ -92,6 +92,29 @@ try{
    const first=page.locator('.simple-match').first();
    assert.match(await first.locator('.simple-score').innerText(),/0 − 1/,
     'selecting other-side scorer must update the scoring team');
+  }
+  if(scenario==='draft-reload'){
+   const scorer=page.getByLabel('ゴール 1 得点者');
+   assert.match(await page.locator('.simple-match').nth(2).innerText(),/動画保存：Unknown/);
+   await scorer.selectOption('西村');
+   await page.reload();
+   await page.fill('#ssBridgeToken','mock-token');
+   await page.click('#ssLoadEvents');
+   await page.click('#ssLoadSnapshot');
+   await page.locator('#simpleSaveArea').waitFor({state:'visible'});
+   assert.equal(await page.getByLabel('ゴール 1 得点者').inputValue(),'西村',
+    'same official event and fixture restores the user-selected scorer');
+   assert.match(await page.locator('.simple-match').nth(2).innerText(),/前回の選択を復元しました/);
+   // Recreate the bracket: previous name may be displayed for the operator,
+   // but must NOT be approved against a new official SS match ID.
+   matches[2].match_id='33333333-3333-4333-8333-333333333333';
+   await page.reload();
+   await page.fill('#ssBridgeToken','mock-token');
+   await page.click('#ssLoadEvents');
+   await page.click('#ssLoadSnapshot');
+   await page.locator('#simpleSaveArea').waitFor({state:'visible'});
+   assert.equal(await page.getByLabel('ゴール 1 得点者').inputValue(),'');
+   assert.match(await page.locator('.simple-match').nth(2).innerText(),/前回の選択：西村/);
   }
   if(scenario==='waiting'){
    assert.match(await page.locator('.simple-match').nth(2).innerText(),/準決勝の結果/);
