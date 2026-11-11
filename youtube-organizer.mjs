@@ -1,4 +1,4 @@
-import {registrationEvents} from './youtube-video-registration.mjs?v=event-date2';
+import {registrationEvents,resolveRegistrationMatch} from './youtube-video-registration.mjs?v=event-match3';
 import {restoreBridgeSession} from './sposched-bridge-session.mjs';
 import {sampleIds,videoId,matchInfo,matchName,analysisResult,seconds,shortRange,selected} from './youtube-session.mjs';
 import {judgeScene,undecided} from './review-flow.mjs';
@@ -340,8 +340,8 @@ export function mountOrganizer({row,closePreview}){
   const team=value=>Number(String(value).normalize('NFKC').match(/^(?:チーム|Team|T)?\s*(\d+)$/i)?.[1]);
   const targets=sources.map(s=>{
    const left=team(s.info.teamA),right=team(s.info.teamB);
-   const matches=data.matches.matches.filter(m=>m.event_id===event.event_id&&m.left?.team===left&&m.right?.team===right&&(!demo||m.number===fixtureVideos.indexOf(s.id)+1));
-   return {name:matchName(s),kind:'match',match:matches.length===1?matches[0]:null,url:'https://youtu.be/'+s.id};
+   const resolved=resolveRegistrationMatch(data.matches.matches,event.event_id,left,right,demo?fixtureVideos.indexOf(s.id)+1:null);
+   return {name:matchName(s),kind:'match',match:resolved.match||null,error:resolved.error,url:'https://youtu.be/'+s.id};
   });
   targets.push({name:'ゴール集',kind:'goal_reel',match:null,url:reelUrl.href});
   const states={registered:'登録・照合済み',already_registered:'登録済み',conflict:'別URLあり',pending:'結果未確定'};
@@ -350,6 +350,7 @@ export function mountOrganizer({row,closePreview}){
    progress.textContent=(i+1)+' / '+targets.length+' 件目を照合中…';
    const line=el('li',t.name+'　照合中');results.append(line);
    try{
+    if(t.error)throw Error(t.error);
     const slots=data.videos.videos.filter(v=>v.event_id===event.event_id&&v.kind===t.kind&&(t.kind==='goal_reel'?v.match_id===null:t.match&&v.match_id===t.match.match_id&&v.number===t.match.number));
     if(slots.length!==1)throw Error('枠を特定できません');
     const payload={event_id:event.event_id,event_date:event.date,event_name:event.name,kind:t.kind,video_id:slots[0].video_id,match_id:t.match?.match_id,number:t.match?.number,left:t.match?.left.team,right:t.match?.right.team,video_url:t.url};
