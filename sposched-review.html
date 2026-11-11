@@ -814,6 +814,7 @@ function renderGoals(){
      row.assist='';
    }
    invalidate('scorer');
+   if(!g.manual)learnSelectedAlias(row,'scorer',row.scorer);
    if(g.manual)renderGoals();
   });
   const assistMode=select([{value:'named',label:'あり（選手を選択）'},{value:'none',label:'なし'},{value:'unknown',label:'不明（要確認）'}],row.assistMode);
@@ -824,7 +825,10 @@ function renderGoals(){
    row.assistMode=assistMode.value;updateGuestFields();invalidate('assist');
    if(g.manual)renderGoals();
   });
-  assistSelect.addEventListener('change',()=>{row.assist=assistSelect.value;invalidate('assist')});
+  assistSelect.addEventListener('change',()=>{
+   row.assist=assistSelect.value;invalidate('assist');
+   if(!g.manual)learnSelectedAlias(row,'assist',row.assist);
+  });
   const teamChoices=g.manual?(matched?[matched.leftTeam,matched.rightTeam].filter(Boolean):[])
    :snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]).filter(Boolean);
   const teamSelect=select([...new Set(teamChoices)]
@@ -1687,6 +1691,15 @@ $('quickExecute').addEventListener('click',()=>{
 });
 
 
+function learnSelectedAlias(row,role,officialName){
+ // Human selection is the ONLY alias-learning trigger. This is deliberately
+ // fail-closed until SS publishes an authenticated alias HTTP API adapter.
+ // Historical/guest/manual records cannot establish a spoken nickname.
+ if(!snapshot||!row||row.guest||row.goal?.manual||!officialName)return;
+ void onConfirmedGoalPlayerSelection({
+  row,snapshot,field:role,officialName,source:'local-video'
+ }).catch(error=>console.warn('SS alias sync unavailable',error));
+}
 function simpleSaveTarget(){
  if(!snapshot||localStorage.getItem(workerBatchStorageKey(snapshot.eventId)))return null;
  return snapshot.matches.some(m=>m.status==='finished')?$('autoRun'):$('workerBatchRun');
@@ -1705,17 +1718,7 @@ const simpleResults=installSimpleResults({document,
   try{
    if(field==='simpleAssist'){field=value==='__none__'?'assistMode':'assist';if(value==='__none__')value='none';}
    editQuickGoalField(snapshot,rows[index],field,value);touch();renderGoals();renderQuick();
-   if(aliasField&&aliasRow?.goal?.[aliasRole]){
-    // Human selection is the sole learning trigger. Until the SS backend
-    // publishes a documented authenticated alias-write route, fail closed.
-    void onConfirmedGoalPlayerSelection({
-     row:aliasRow,snapshot,field:aliasRole,officialName:value,
-     source:'local-video'
-    }).then(result=>{
-     if(result.reason==='SS別名登録APIが未接続です')
-      console.info('SS alias sync pending: no authenticated write endpoint');
-    }).catch(error=>console.warn('SS alias sync unavailable',error));
-   }
+   if(aliasField)learnSelectedAlias(aliasRow,aliasRole,value);
   }catch(e){$('simpleSaveHelp').textContent=e.message;}
  },
  onInclude:(index,include)=>{if(batchBusy||autoBusy||workerBatchPolling)return;rows[index].include=include;touch();renderGoals();renderQuick();},
