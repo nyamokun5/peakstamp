@@ -5,7 +5,7 @@
  * Pure validation only: never sends requests or authorizes writes.
  */
 export function reconcileFinalScore({official, draft, goals = []}) {
-  const valid = value => Number.isSafeInteger(value) && value >= 0;
+  const valid = value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
   const pair = value => value && valid(value.left) && valid(value.right);
   if (!pair(official)) throw new Error('SSの現在のスコアを確認できません');
   if (!pair(draft)) throw new Error('スコアは0以上の整数で入力してください');
