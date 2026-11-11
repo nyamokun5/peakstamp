@@ -33,3 +33,20 @@ export function reconcileFinalScore({official, draft, goals = []}) {
     }
   };
 }
+
+/**
+ * Refuse stale writes: the official fixture identity and score must match
+ * the snapshot against which the edit was prepared. This is a client-side
+ * preflight only; the Worker must enforce the same check at write time.
+ */
+export function assertFreshScoreBaseline(baseline, current) {
+  if (!baseline || !current ||
+      typeof baseline.matchId !== 'string' || !baseline.matchId ||
+      baseline.matchId !== current.matchId ||
+      ![baseline.left, baseline.right, current.left, current.right]
+        .every(v => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) ||
+      baseline.left !== current.left || baseline.right !== current.right ||
+      baseline.status !== current.status)
+    throw new Error('SSの試合情報が更新されています。再取得してから保存してください');
+  return true;
+}
