@@ -1698,31 +1698,36 @@ $('quickExecute').addEventListener('click',()=>{
 });
 
 
-function learnSelectedAlias(row,role,officialName){
- // Explicit human selection only; never learn on AI prefill or render.
- // Alias registration is separate from scoring and may fail independently.
+async function learnSelectedAlias(row,role,officialName){
+ // Human selection only; never on AI prefill or render. The TEST server
+ // validates official event roster/team and reads back exact member ID.
  if(!snapshot||!row||row.guest||row.goal?.manual||!officialName||
-    !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+    !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')
+  return {saved:false,reason:'SS TESTの公式イベントを読み込んでください'};
  const selectedSnapshot=snapshot,eventId=snapshot.eventId;
  const stillSameEvent=()=>loadedFromStagingDirect&&
   $('ssEnvironment').value==='staging'&&snapshot?.eventId===eventId;
- void onConfirmedGoalPlayerSelection({
-  row,snapshot:selectedSnapshot,field:role,officialName,source:'local-video',
-  resolveAlias:async({query})=>{
-   if(!stillSameEvent())throw Error('SSイベントが切り替わりました');
-   return fetchSS('/staging/alias/resolve?query='+encodeURIComponent(query));
-  },
-  writeAlias:async({alias,person,user_id})=>{
-   if(!stillSameEvent())throw Error('SSイベントが切り替わりました');
-   return postStaging('/staging/alias/confirm',{
-    event_id:eventId,member_id:user_id,
-    name:person,team:row.team,alias,source:'local-video',confirmed:true
-   });
-  }
- }).then(result=>{
+ try{
+  const result=await onConfirmedGoalPlayerSelection({
+   row,snapshot:selectedSnapshot,field:role,officialName,source:'local-video',
+   resolveAlias:async({query})=>{
+    if(!stillSameEvent())throw Error('SSイベントが切り替わりました');
+    return fetchSS('/staging/alias/resolve?query='+encodeURIComponent(query));
+   },
+   writeAlias:async({alias,person,user_id})=>{
+    if(!stillSameEvent())throw Error('SSイベントが切り替わりました');
+    return postStaging('/staging/alias/confirm',{
+     event_id:eventId,member_id:user_id,
+     name:person,team:row.team,alias,source:'local-video',confirmed:true
+    });
+   }
+  });
   if(result.saved)console.info('SS nickname saved for explicitly selected member');
   else if(result.uncertain)console.warn('SS nickname confirmation requires manual readback');
- }).catch(()=>console.warn('SS nickname sync unavailable'));
+  return result;
+ }catch{
+  return {saved:false,reason:'SS別名の保存を確認できません。再送せずSSで確認してください'};
+ }
 }
 const minimalGoalFix=installMinimalGoalFix({
  document,
@@ -1812,7 +1817,7 @@ const simpleResults=installSimpleResults({document,
    if(loadedFromStagingDirect&&$('ssEnvironment').value==='staging')
     saveConfirmedGoalSelection(localStorage,snapshot,rows[index]);
    touch();renderGoals();renderQuick();
-   if(aliasField)learnSelectedAlias(aliasRow,aliasRole,value);
+   if(aliasField)void learnSelectedAlias(aliasRow,aliasRole,value);
   }catch(e){$('simpleSaveHelp').textContent=e.message;}
  },
  onInclude:(index,include)=>{
@@ -1828,6 +1833,17 @@ const simpleResults=installSimpleResults({document,
  },
  onDetail:openDetail,
  onFix:args=>{if(!batchBusy&&!autoBusy&&!workerBatchPolling)minimalGoalFix.open(args);},
+ onAlias:async({index,role,officialName})=>{
+  if(batchBusy||autoBusy||workerBatchPolling)
+   return {saved:false,reason:'別の登録処理中です'};
+  const row=rows[index],team=snapshot?.playerTeam?.get(officialName);
+  if(!row||!team||!snapshot.memberIds?.has(officialName)||
+     row.goal?.manual||row.guest)
+   return {saved:false,reason:'SS当日の正式名簿から選び直してください'};
+  // Alias-only human confirmation. Never alter scorer/team or submit a
+  // goal operation, even if the match was already marked finished.
+  return learnSelectedAlias({...row,team},role,officialName);
+ },
  onSave:()=>{if(batchBusy||autoBusy||workerBatchPolling)return;const target=simpleSaveTarget();if(target&&!target.disabled)target.click();}
 });
 const autoWinnerChoices=new Map();
