@@ -10,10 +10,10 @@ const fixtures=()=>[1,2,3,4].map(seq=>({seq,match_id:'22222222-2222-4222-8222-22
  left_team:seq===2?'チーム3':seq===3?'チーム2':'チーム1',right_team:seq===1?'チーム2':seq===2||seq===3?'チーム4':'チーム3',
  left_score:0,right_score:0,goals:[]}));
 try{
- for(const scenario of ['new','partial','uncertain','shared-nickname','draft-reload','waiting','missing-score']){
+ for(const scenario of ['new','partial','uncertain','shared-nickname','draft-reload','waiting','waiting-goals','missing-score']){
   const matches=fixtures();
   if(scenario==='partial')matches.slice(0,2).forEach(m=>{m.status='finished';m.left_score=1});
-  if(scenario==='waiting')matches.slice(2).forEach(m=>{m.status='waiting';m.left_team='';m.right_team=''});
+  if(scenario==='waiting'||scenario==='waiting-goals')matches.slice(2).forEach(m=>{m.status='waiting';m.left_team='';m.right_team=''});
   if(scenario==='missing-score')matches[0].left_score=null;
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   const errors=[],posts=[];page.on('pageerror',e=>errors.push(e.message));
@@ -33,18 +33,23 @@ try{
     return route.fulfill({status:400,json:{error:{code:'invalid_plan',message:'テスト用の停止'}},headers:{'Access-Control-Allow-Origin':'*'}});
    }
    const data=u.pathname==='/events'?{events:[{event_id:E,name:'日曜定期',date:'2026-11-08'}]}:
-    {event_id:E,matches,roster_source:scenario==='draft-reload'?'official-current-event-teams':undefined,roster:scenario==='shared-nickname'?
+    {event_id:E,matches,roster_source:['draft-reload','waiting-goals'].includes(scenario)?'official-current-event-teams':undefined,roster:scenario==='waiting-goals'?
+     {チーム1:['山田'],チーム2:['西村'],チーム3:['鈴木'],チーム4:['橋本']}:
+     scenario==='shared-nickname'?
      {チーム1:['たいせい'],チーム2:['たいせいA'],チーム3:['田中'],チーム4:['橋本']}:
      {チーム1:['山田'],チーム2:['西村'],チーム3:['田中'],チーム4:['橋本']}};
    return route.fulfill({json:data,headers:{'Access-Control-Allow-Origin':'*'}});
   });
-  if(scenario==='uncertain'||scenario==='shared-nickname'||scenario==='draft-reload')
+  if(scenario==='uncertain'||scenario==='shared-nickname'||scenario==='draft-reload'||scenario==='waiting-goals')
    await page.addInitScript(({spoken,seq})=>{
     const file={name:'test.mov',size:1234,lastModified:1000};
     localStorage.setItem('peakstamp_current_video_project_v1',JSON.stringify({version:1,projectId:'simple-test',files:[file],updatedAt:1000}));
     localStorage.setItem('peakstamp_confirmed_goals_v1:test.mov::1234::1000',
-     JSON.stringify({source:file,items:[{id:'goal',origin:'manual',status:'confirmed',timeSeconds:20,scorer:spoken,assistStatus:'none',matchSeq:seq}]}));
-   },scenario==='shared-nickname'?{spoken:'たいせい',seq:1}:{spoken:'Unknown',seq:3});
+     JSON.stringify({source:file,items:[{id:'goal',origin:'manual',status:'confirmed',timeSeconds:20,scorer:spoken,
+     assist:spoken==='鈴木'?'橋本':null,
+     assistStatus:spoken==='鈴木'?'named':'none',matchSeq:seq}]}));
+   },scenario==='shared-nickname'?{spoken:'たいせい',seq:1}:
+    scenario==='waiting-goals'?{spoken:'鈴木',seq:3}:{spoken:'Unknown',seq:3});
   await page.goto('https://peakstamp.local/');
   await page.fill('#ssBridgeToken','mock-token');await page.click('#ssLoadEvents');await page.click('#ssLoadSnapshot');
   await page.locator('#simpleSaveArea').waitFor({state:'visible'});
@@ -119,6 +124,33 @@ try{
   if(scenario==='waiting'){
    assert.match(await page.locator('.simple-match').nth(2).innerText(),/準決勝の結果/);
    assert.equal(await page.locator('.simple-match').nth(2).getByRole('button').count(),0);
+  }
+  if(scenario==='waiting-goals'){
+   const third=page.locator('.simple-match').nth(2);
+   assert.match(await third.innerText(),/動画保存：鈴木 \/ アシスト 橋本/);
+   const team=page.getByLabel('ゴール 1 得点チーム（仮）');
+   const scorer=page.getByLabel('ゴール 1 得点者');
+   const assist=page.getByLabel('ゴール 1 アシスト');
+   assert.equal(await team.count(),1);
+   assert.equal(await scorer.count(),1);
+   assert.equal(await assist.count(),1);
+   const options=await scorer.locator('option').allTextContents();
+   assert.ok(options.includes('鈴木　チーム3'));
+   assert.ok(options.includes('橋本　チーム4'));
+   assert.ok(options.includes('山田　チーム1'));
+   const assistOptions=await assist.locator('option').allTextContents();
+   assert.ok(assistOptions.includes('橋本　チーム4'));
+   const fields=await third.locator('.quick-fields label span').allTextContents();
+   assert.ok(fields.indexOf('得点チーム（仮）')<fields.indexOf('得点者'),
+    'waiting fixture lets the organizer see scoring team first');
+   await team.selectOption('チーム3');
+   await scorer.selectOption('鈴木');
+   await assist.selectOption('橋本');
+   assert.equal(await page.getByLabel('ゴール 1 得点チーム（仮）').inputValue(),'チーム3');
+   assert.equal(await page.getByLabel('ゴール 1 得点者').inputValue(),'鈴木');
+   assert.equal(await page.getByLabel('ゴール 1 アシスト').inputValue(),'橋本');
+   assert.match(await third.locator('.simple-score').innerText(),/—/);
+   assert.equal(posts.length,0,'waiting roster choices are drafts, never live writes');
   }
   assert.deepEqual(errors,[],scenario+' has no JS errors');
   console.log('PASS simple results: '+scenario);
