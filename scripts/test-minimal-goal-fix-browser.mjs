@@ -12,7 +12,7 @@ const T='55555555-5555-4555-8555-555555555555';
 const X='66666666-6666-4666-8666-666666666666';
 const fixtures=[1,2,3,4].map(seq=>({
  seq,match_id:seq===2?M:'77777777-7777-4777-8777-77777777777'+seq,
- title:'第'+seq+'試合',status:'finished',winner:seq===2?'left':'draw',
+ title:seq<3?'準決勝':seq===3?'3位決定戦':'決勝',status:'finished',winner:seq===2?'left':'draw',
  left_team:seq===2?'チーム3':seq===3?'チーム2':'チーム1',
  right_team:seq===2||seq===3?'チーム4':'チーム3',
  left_score:0,right_score:0,goals:[]
