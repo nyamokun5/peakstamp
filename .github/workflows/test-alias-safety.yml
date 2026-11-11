@@ -1,0 +1,22 @@
+name: TEST alias safety
+on:
+  push:
+    branches:
+      - feat/test-alias-on-goal-commit-admin-20261112
+  pull_request:
+    paths:
+      - 'sposched-goal-commit-alias*'
+      - 'sposched-alias-admin*'
+      - '.github/workflows/test-alias-safety.yml'
+jobs:
+  alias-safety:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run alias safety tests
+        run: node --test sposched-goal-commit-alias.test.mjs sposched-alias-admin.test.mjs
