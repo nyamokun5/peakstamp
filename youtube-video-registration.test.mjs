@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {canonicalVideoUrl,planVideoRegistration} from './youtube-video-registration.mjs';
+import {canonicalVideoUrl,planVideoRegistration,registrationEvents} from './youtube-video-registration.mjs';
 const eventId='test-event';
 const slots=[
  {id:'a',eventId,kind:'ground',matchId:'m1',url:''},
@@ -30,4 +30,15 @@ test('does not match a different event or an ambiguous slot',()=>{
 test('does not assign same slot to two requests',()=>{
  const req={eventId,matchId:'m1',kind:'ground',url:'https://youtu.be/-sEOeqqTyuw'};
  assert.deepEqual(planVideoRegistration([req,req],slots).map(x=>x.status),['ready','ambiguous']);
+});
+
+
+test('approved Nov 10 TEST event matches separate API date/name without selecting Nov 8',()=>{
+ const events=[{event_id:'target',date:'2026-11-10',name:'日曜定期'},
+  {event_id:'recording-day',date:'2026-11-08',name:'日曜定期'},
+  {event_id:'other',date:'2026-11-10',name:'別イベント'}];
+ assert.deepEqual(registrationEvents(events,'2026-11-10',true).map(e=>e.event_id),['target']);
+ assert.equal(registrationEvents([{date:'2026-11-10',name:'日曜定期 （10 Nov）'}],'2026-11-10',true).length,1);
+ assert.equal(registrationEvents([{date:'2025-11-10',name:'日曜定期 (10 Nov)'}],'2026-11-10',true).length,0);
+ assert.equal(registrationEvents([events[0],{...events[0],event_id:'duplicate'}],'2026-11-10',true).length,2);
 });
