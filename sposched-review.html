@@ -1796,7 +1796,11 @@ const minimalGoalFix=installMinimalGoalFix({
   const aliasCandidates=op.action==='record_goal'&&sourceGoalId&&sourceName
    ?rows.filter(row=>!row.goal?.manual&&!row.guest&&
      String(row.goal?.id||'')===sourceGoalId&&
-     String(row.goal?.source?.name||'')===sourceName):[];
+     String(row.goal?.source?.name||'')===sourceName&&
+     Number(row.seq)===Number(op.args.seq)&&
+     row.scorer===op.args.scorer&&
+     row.team===op.args.team&&
+     String(row.assistMode==='named'?row.assist:'')===String(op.args.assist||'')):[];
   const aliasSource=aliasCandidates.length===1?aliasCandidates[0]:null;
   const aliasIntents=aliasSource?aliasIntentsForCommittedGoal({
    row:aliasSource,snapshot,goalVerified:true}):[];
