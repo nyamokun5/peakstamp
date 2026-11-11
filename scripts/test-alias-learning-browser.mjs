@@ -83,16 +83,9 @@ try{
   await page.getByLabel(/ゴール 1 得点者/).selectOption('大成B');
  }
  await page.waitForTimeout(race?900:500);
- assert.deepEqual(reads,race?['resolve','resolve']:['resolve']);
- assert.equal(writes.length,1,'only the final human choice may persist a nickname');
- assert.deepEqual(writes[0],race?{
-  event_id:EVENT,member_id:B,name:'大成B',team:'チーム1',
-  alias:'たいせい',source:'local-video',confirmed:true
- }:{
-  event_id:EVENT,member_id:A,name:'大成A',team:'チーム1',
-  alias:'たいせい',source:'local-video',confirmed:true
- });
+ assert.deepEqual(reads,[],'selecting a player must not resolve aliases before goal commit');
+ assert.deepEqual(writes,[],'selecting a player must not write aliases before goal commit');
  assert.deepEqual(errors,[]);
- console.log('PASS human alias learning: 1 explicit choice, 1 member-id verified write, 0 score writes');
+ console.log('PASS deferred alias learning: player selection causes 0 alias reads/writes and 0 score writes');
  await page.close();
 }finally{await browser.close();}
