@@ -36,8 +36,15 @@ export function saveConfirmedGoalSelection(storage,snapshot,row){
  const assistMode=rf.assist===true?row.assistMode:'unknown';
  const assist=rf.assist===true&&assistMode==='named'?text(row.assist):'';
  const team=text(row.team);
- if(scorer&&!validPlayer(snapshot,match,scorer,team))return false;
- if(assist&&!validPlayer(snapshot,match,assist,team))return false;
+ // Semi-final derived slots can temporarily have no opposing teams.
+ // Preserve the operator's candidate as a NOTE, not an approved choice.
+ // On reload a WAITING match never restores any confirmed scorer/team.
+ const eligible=name=>match.status==='waiting'
+  ?Boolean(snapshot.playerTeam.has(name)&&
+    (!team||equalTeam(snapshot.playerTeam.get(name),team)))
+  :validPlayer(snapshot,match,name,team);
+ if(scorer&&!eligible(scorer))return false;
+ if(assist&&!eligible(assist))return false;
  if(team&&match.status!=='waiting'&&![match.leftTeam,match.rightTeam].some(t=>equalTeam(team,t)))return false;
  const data={version:1,seq:match.seq,matchId:text(match.matchId),
   leftTeam:text(match.leftTeam),rightTeam:text(match.rightTeam),
