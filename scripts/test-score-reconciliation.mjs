@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {reconcileFinalScore} from '../sposched-score-reconciliation.mjs';
+import {reconcileFinalScore, assertFreshScoreBaseline} from '../sposched-score-reconciliation.mjs';
 
 test('manual score supports unattributed goals', () => {
  const r=reconcileFinalScore({official:{left:0,right:0},draft:{left:3,right:1},goals:[{id:'video-1',side:'left'}]});
@@ -34,4 +34,21 @@ test('two distinct goal IDs remain valid with identical scorer and assist', () =
   {id:'clip-200',side:'left',scorer:'A',assist:'B'}
  ]});
  assert.equal(r.attributedGoals.left,2);
+});
+
+test('unchanged official baseline permits score edit preflight', () => {
+ const m={matchId:'fixture-1',left:1,right:0,status:'scheduled'};
+ assert.equal(assertFreshScoreBaseline(m,{...m}),true);
+});
+test('changed official score refuses stale edit', () => {
+ const m={matchId:'fixture-1',left:1,right:0,status:'scheduled'};
+ assert.throws(()=>assertFreshScoreBaseline(m,{...m,left:2}),/再取得/);
+});
+test('recreated fixture refuses stale edit', () => {
+ const m={matchId:'fixture-1',left:1,right:0,status:'scheduled'};
+ assert.throws(()=>assertFreshScoreBaseline(m,{...m,matchId:'fixture-2'}),/再取得/);
+});
+test('finished fixture refuses scheduled baseline', () => {
+ const m={matchId:'fixture-1',left:1,right:0,status:'scheduled'};
+ assert.throws(()=>assertFreshScoreBaseline(m,{...m,status:'finished'}),/再取得/);
 });
