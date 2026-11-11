@@ -70,6 +70,7 @@ test('official v1.6 snapshot exposes real player_id and member user_id, never gu
  const candidate=await resolveMember({query:'たいせいA',team:'チーム1'});
  assert.equal(candidate.confirmed,false,'official ID does not imply user confirmation');
  assert.ok(candidate.candidates.some(c=>c.player_id===playerA));
+ assert.equal(candidate.candidates.find(c=>c.player_id===playerA)?.user_id,userA);
  const reviewed=await prepareGoalIdentityForRegistration({
   source:'local-video',scorer:'たいせいA',team:'チーム1',resolveMember,
   selected:{scorer:playerA}
