@@ -2872,6 +2872,15 @@ $('workerBatchRun').addEventListener('click',async()=>{
   // explicitly labeled TEST button. One intentional click is approval;
   // an extra browser confirmation dialog would only duplicate that approval.
   const goalCount=operations.operations.filter(x=>x.action==='create').length;
+  // Capture human-reviewed original nicknames before the Worker mutates
+  // official fixture state. Local-only metadata; never sent to the Worker.
+  const aliasReviewIntents=rows.filter(row=>row.include&&row.goal?.id&&
+   !row.goal?.manual&&!row.guest).flatMap(row=>
+    aliasIntentsForCommittedGoal({row,snapshot,goalVerified:true}).map(intent=>({
+     ...intent,sourceGoalId:String(row.goal.id),
+     sourceName:String(row.goal.source?.name||''),seq:row.seq,
+     scorer:row.scorer,assist:row.assist,team:row.team
+    })));
   const manualIds=isIndependent?rows.filter(r=>r.include&&r.goal?.manual===true)
    .map(r=>r.goal.id):[];
   if(isIndependent) await assertIndependentStagingWorkerReady();
@@ -2881,6 +2890,9 @@ $('workerBatchRun').addEventListener('click',async()=>{
    if(manualIds.length)localStorage.setItem(
     workerManualGoalPendingKey(eventId,requestId),JSON.stringify(manualIds));
    localStorage.setItem(key,requestId);
+   // An unverified batch must not trigger alias learning. Keep the reviewed
+   // intents in memory until official goal-by-goal reconciliation is built.
+   void aliasReviewIntents;
    hideCompletionPanel();
   $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋'+(operations.fixture_count||4)+'試合）…';
   $('workerBatchRun').disabled=true;
