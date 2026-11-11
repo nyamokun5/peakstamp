@@ -1,3 +1,4 @@
+import {registrationEvents} from './youtube-video-registration.mjs?v=event-date2';
 import {restoreBridgeSession} from './sposched-bridge-session.mjs';
 import {sampleIds,videoId,matchInfo,matchName,analysisResult,seconds,shortRange,selected} from './youtube-session.mjs';
 import {judgeScene,undecided} from './review-flow.mjs';
@@ -324,19 +325,9 @@ export function mountOrganizer({row,closePreview}){
   const demo=sources[0].info.date==='2026-11-08'&&sources.length===4&&fixtureVideos.every(id=>sources.some(s=>s.id===id));
   const date=demo?'2026-11-10':sources[0].info.date;
   progress.textContent=date+' のイベントを照合中…';
-  const normalizeEventName=value=>String(value||'').normalize('NFKC').replace(/\s/g,'').toLowerCase();
-  const expectedName='日曜定期(10nov)';
-  let available=(await api('/events?from='+date+'&to='+date+'&limit=100')).events;
+  const available=(await api('/events?from='+date+'&to='+date+'&limit=100')).events;
   if(!Array.isArray(available))throw Error('イベント一覧の応答形式を確認できません。');
-  let events=available.filter(e=>e.date===date&&(!demo||normalizeEventName(e.name)===expectedName));
-  if(demo&&events.length===0){
-   // This recording set is explicitly assigned to the named TEST event.
-   // TEST fixture dates can differ from the recording date/year.
-   progress.textContent='TESTの「日曜定期 (10 Nov)」をイベント名で検索中…';
-   available=(await api('/events?limit=100')).events;
-   if(!Array.isArray(available))throw Error('イベント一覧の応答形式を確認できません。');
-   events=available.filter(e=>normalizeEventName(e.name)===expectedName);
-  }
+  const events=registrationEvents(available,date,demo);
   if(events.length!==1){
    const names=available.map(e=>String(e.date||'')+' '+String(e.name||'')).join(' ／ ');
    throw Error((events.length>1?'同名の登録先が複数あります。':'登録先 '+(demo?'日曜定期 (10 Nov)':date)+' が見つかりません。')+'取得したTESTイベント：'+(names||'0件'));
