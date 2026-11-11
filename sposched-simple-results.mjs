@@ -47,7 +47,7 @@ export function assistRosterForReview(snapshot,row){
   return waitingKnockoutRoster(snapshot,row);
  return fixturePlayerOptions(snapshot,row?.seq,row?.team);
 }
-export function installSimpleResults({document:d,getState,onEdit,onInclude,onWinner,onDetail,onSave,onFix}){
+export function installSimpleResults({document:d,getState,onEdit,onInclude,onWinner,onDetail,onSave,onFix,onAlias}){
  const el=(tag,text='',cls='')=>{const n=d.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n};
  const $=id=>d.getElementById(id);
  const style=el('style');style.textContent=`
@@ -74,6 +74,15 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
  .simple-registered{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0}
  .simple-registered .small{flex:1}
  .simple-registered button{min-height:40px;padding:8px 13px}
+ .simple-alias{margin:8px 0 0;border:1px solid #55788a;border-radius:10px;padding:12px}
+ .simple-alias[hidden]{display:none!important}
+ .simple-alias label{display:flex;flex-direction:column;gap:6px}
+ .simple-alias select{font-size:16px;min-height:48px;width:100%}
+ .simple-alias button{min-height:44px;margin-top:8px}
+ .simple-alias p{white-space:pre-wrap}
+ .simple-alias-entry{margin:3px 0}
+ .simple-alias-entry>button{min-height:40px}
+
  .simple-match .quick-field{font-size:13px}
  .simple-match .quick-field select{min-height:48px;font-size:16px}
  #simpleSaveArea[hidden]{display:none!important}
@@ -93,6 +102,50 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
   for(const [v,text] of [['','選択してください'],...options]){const option=el('option',text);option.value=v;menu.append(option)}
   menu.value=String(value??'');menu.addEventListener('change',()=>{if(menu.value)onEdit(row.index,field,menu.value)});
   wrap.append(menu);return wrap;
+ }
+ // One explicit human action, independent from scoring. No stored keys or
+ // guessed names: the alias comes only from saved video observation and the
+ // official member identity comes only from current SS event teams.
+ function aliasEntry(s,row,index,role,spoken){
+  if(!spoken||!spoken.trim()||row?.goal?.manual||row?.guest||
+     s.snapshot?.rosterSource!=='official-current-event-teams'||
+     typeof onAlias!=='function')return null;
+  const eligible=isWaitingKnockoutReview(s.snapshot,row)?
+   waitingKnockoutRoster(s.snapshot,row):
+   fixturePlayerOptions(s.snapshot,row.seq,'');
+  const people=eligible.filter(name=>s.snapshot.memberIds?.has(name)).map(name=>
+   [name,name+'　'+(s.snapshot.playerTeam?.get(name)||'')]);
+  if(!people.length)return null;
+  const entry=el('div','','simple-alias-entry');
+  const open=button('「'+spoken+'」を名寄せ登録',()=>{
+   editor.hidden=!editor.hidden;
+   if(!editor.hidden)menu.focus();
+  });
+  entry.append(open);
+  const editor=el('div','','simple-alias');editor.hidden=true;
+  const label=el('label','');
+  label.append(el('span','誰の呼び名ですか？'));
+  const menu=el('select');menu.setAttribute('aria-label','ゴール '+(index+1)+' '+role+' 別名の選手');
+  for(const [value,name] of [['','選択してください'],...people]){
+   const option=el('option',name);option.value=value;menu.append(option);
+  }
+  label.append(menu);editor.append(label);
+  const save=button('登録',async()=>{
+   if(!menu.value)return;
+   save.disabled=true;menu.disabled=true;
+   message.textContent='SSの別名を照合中…';
+   try{
+    const result=await onAlias({index,role,officialName:menu.value});
+    if(result?.saved)message.textContent='✓ SSに登録しました'+
+      (result.shared?'（同じ呼び名の選手がほかにもいます）':'');
+    else if(result?.reason?.includes('登録済み'))message.textContent='✓ SSに登録済みです';
+    else message.textContent=result?.reason||'SSへの保存を確認できません';
+   }catch{message.textContent='SS別名の保存を確認できません。再送せず照合してください'}
+   finally{save.disabled=false;menu.disabled=false}
+  },'primary');
+  const message=el('p','','small');message.setAttribute('role','status');
+  editor.append(save,message);entry.append(editor);
+  return entry;
  }
  function planFor(s,m){try{return analyzeAutoFixture(s.snapshot,s.rows,s.decisions,m.seq,s.winnerFor(m.seq))}catch(e){return {state:'blocked',reason:e.message}}}
  function render(){
@@ -143,8 +196,15 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
    const heard=String(observed.scorer||'').trim()||'不明';
    const assistHeard=observed.assistStatus==='none'?'なし':
     observed.assistStatus==='named'?String(observed.assist||'').trim()||'不明':'未確認';
-   if(!observed.manual)
+   if(!observed.manual){
     goal.append(el('p','動画保存：'+heard+' / アシスト '+assistHeard,'small'));
+    const scorerAlias=aliasEntry(s,row,item.index,'scorer',String(observed.scorer||''));
+    if(scorerAlias)goal.append(scorerAlias);
+    if(observed.assistStatus==='named'){
+     const assistAlias=aliasEntry(s,row,item.index,'assist',String(observed.assist||''));
+     if(assistAlias)goal.append(assistAlias);
+    }
+   }
    if(row.previousGoalSelection){
     const prev=row.previousGoalSelection;
     goal.append(el('p','前回の選択：'+(prev.scorer||'不明')+
