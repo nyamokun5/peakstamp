@@ -13,7 +13,7 @@ const resolveAlias=async()=>({candidates:[]});
 test('human scorer choice invokes the writer with the stable registered member ID',async()=>{
  const writes=[];
  const r=await learn({row,snapshot,field:'scorer',officialName:'西村',resolveAlias,
-  writeAlias:async x=>{writes.push(x);return {ok:true}}});
+  writeAlias:async x=>{writes.push(x);return {ok:true,saved:true,user_id:x.user_id,alias:x.alias}}});
  assert.equal(r.saved,true);
  assert.deepEqual(writes,[{alias:'よーさん',person:'西村',user_id:A}]);
 });
@@ -29,12 +29,14 @@ test('missing spoken name and unsupported field never write',async()=>{
  assert.equal((await learn({row,snapshot,field:'team',officialName:'西村',writeAlias})).saved,false);
  assert.equal(called,false);
 });
-test('shared nickname on another member preserves current goal choice without alias write',async()=>{
- let called=false;
+test('shared nickname may attach to another explicitly selected member without overwriting',async()=>{
+ const writes=[];
  const r=await learn({row,snapshot,field:'scorer',officialName:'西村',
   resolveAlias:async()=>({candidates:[{name:'山口',user_id:B}]}),
-  writeAlias:async()=>{called=true;return {ok:true}}});
- assert.equal(r.saved,false);assert.equal(r.ambiguous,true);assert.equal(called,false);
+  writeAlias:async input=>{writes.push(input);return {
+   ok:true,saved:true,alias:input.alias,user_id:input.user_id,shared:true}}});
+ assert.equal(r.saved,true);assert.equal(r.shared,true);
+ assert.deepEqual(writes,[{alias:'よーさん',person:'西村',user_id:A}]);
 });
 test('SS alias lookup must be connected before any write',async()=>{
  let called=false;
