@@ -51,7 +51,10 @@ assert.equal(simpleTest.winner(3),'');assert.equal($('simpleSave').disabled,true
 console.log('PASS: winner choices do not leak across events');
 const uncertain={key:'video:1',include:true,seq:3,goal:{id:'g1',scorer:'Unknown',assistStatus:'none'},team:'チーム2',scorer:'',assist:'',assistMode:'none',matchGuess:{confidence:'high',seq:3},scorerGuess:{confidence:'none'},scorerHints:[],assistHints:[]};
 simpleTest.load(raw(),[uncertain]);
-let scorer=document.querySelector('select[aria-label="ゴール 1 得点者"]');assert.ok(scorer);scorer.value='西村';scorer.dispatchEvent(new Event('change'));
+let scorer=document.querySelector('select[aria-label="ゴール 1 得点者"]');assert.ok(scorer);
+assert.deepEqual([...scorer.options].map(o=>o.value).filter(Boolean),['西村'],'scorer must belong to selected scoring team');
+const assist=document.querySelector('select[aria-label="ゴール 1 アシスト"]');
+assert.deepEqual([...assist.options].map(o=>o.value).filter(v=>v&&v!=='__none__'),['西村'],'assist must belong to selected scoring team');scorer.value='西村';scorer.dispatchEvent(new Event('change'));
 assert.match(card(3).querySelector('.simple-score').textContent,/1 − 0/);
 click(3,'このゴールを除く');assert.match(card(3).querySelector('.simple-score').textContent,/0 − 0/);
 click(3,'戻す');assert.match(card(3).querySelector('.simple-score').textContent,/1 − 0/);
