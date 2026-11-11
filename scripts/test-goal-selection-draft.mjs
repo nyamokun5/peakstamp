@@ -97,3 +97,14 @@ test('storage corruption does not crash review and names remain independently vi
  assert.equal(loaded.goal.scorer,'よーさん');
  assert.equal(loaded.scorer,'');
 });
+
+test('waiting third-place fixture retains previous scorer as note, never auto-approves',()=>{
+ const mem=store(),s=snapshot();
+ s.matches[0]={...s.matches[0],status:'waiting',leftTeam:'',rightTeam:''};
+ const row=edited();
+ assert.equal(saveConfirmedGoalSelection(mem,s,row),true);
+ const again=restoreConfirmedGoalSelections(mem,s,[original()])[0];
+ assert.equal(again.scorer,'');
+ assert.equal(again.quickReviewedFields,undefined);
+ assert.equal(again.previousGoalSelection.scorer,'西村');
+});
