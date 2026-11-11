@@ -19,7 +19,9 @@ export async function submitConfirmedSsAlias({
   const result=await writeAlias({alias,person,user_id});
   // The Worker must have verified the exact alias + member_id through
   // the official SS GET /v1/aliases readback. A generic HTTP 200 is not proof.
-  if(result?.ok!==true||result?.saved!==true||
+  if(result?.ok!==true)
+   return {saved:false,reason:result?.error||'SS側の登録完了を確認できません',proposal:checked.proposal};
+  if(result?.saved!==true||
      result?.user_id!==user_id||
      typeof result?.alias!=='string'||
      result.alias.normalize('NFKC').toLocaleLowerCase('ja-JP')!==
