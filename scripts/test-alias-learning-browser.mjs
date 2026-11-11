@@ -54,9 +54,11 @@ try{
   const data=u.pathname==='/events'?{events:[{event_id:EVENT,name:'日曜SS',date:'2026-11-08'}]}:
    {event_id:EVENT,matches,
     roster_source:'official-current-event-teams',
-    roster:{チーム1:['大成A'],チーム2:['大成B'],チーム3:['田中'],チーム4:['鈴木']},
+    roster:race?
+     {チーム1:['大成A','大成B'],チーム2:[],チーム3:['田中'],チーム4:['鈴木']}:
+     {チーム1:['大成A'],チーム2:['大成B'],チーム3:['田中'],チーム4:['鈴木']},
     roster_players:[{name:'大成A',team:'チーム1',user_id:A,player_id:PLAYER_A,type:'member'},
-     {name:'大成B',team:'チーム2',user_id:B,player_id:PLAYER_B,type:'member'}]};
+     {name:'大成B',team:race?'チーム1':'チーム2',user_id:B,player_id:PLAYER_B,type:'member'}]};
   return route.fulfill({json:data,headers:{'Access-Control-Allow-Origin':'*'}});
  });
  await page.addInitScript(()=>{
@@ -84,7 +86,7 @@ try{
  assert.deepEqual(reads,race?['resolve','resolve']:['resolve']);
  assert.equal(writes.length,1,'only the final human choice may persist a nickname');
  assert.deepEqual(writes[0],race?{
-  event_id:EVENT,member_id:B,name:'大成B',team:'チーム2',
+  event_id:EVENT,member_id:B,name:'大成B',team:'チーム1',
   alias:'たいせい',source:'local-video',confirmed:true
  }:{
   event_id:EVENT,member_id:A,name:'大成A',team:'チーム1',
