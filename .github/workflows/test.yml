@@ -21,7 +21,7 @@ jobs:
         run: |
           node --test tests/*.test.mjs
           node --test scripts/test-name-resolution.mjs scripts/test-goal-identity-gate.mjs scripts/test-alias-proposal.mjs scripts/test-alias-submission.mjs scripts/test-goal-alias-learning.mjs scripts/test-score-reconciliation.mjs
-          node --test scripts/test-snapshot-member-resolver.mjs scripts/test-simple-name-choice.mjs scripts/test-goal-selection-draft.mjs
+          node --test scripts/test-snapshot-member-resolver.mjs scripts/test-simple-name-choice.mjs scripts/test-goal-selection-draft.mjs scripts/test-minimal-goal-fix.mjs
 
   finish-browser:
     runs-on: ubuntu-24.04
@@ -37,6 +37,7 @@ jobs:
       - name: Exercise final-score confirmation and bracket refresh
         run: |
           node scripts/test-simple-results-browser.mjs
+          node scripts/test-minimal-goal-fix-browser.mjs
           node scripts/test-finish-browser.mjs
           node scripts/test-auto-tournament-browser.mjs
           node scripts/test-goal-review-browser.mjs
