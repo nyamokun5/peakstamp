@@ -15,7 +15,9 @@ export async function resolveGoalIdentities({scorer,assist='',team='',resolveMem
   const confirmed=clean(response?.player_id) &&
     unique.find(c=>c.player_id===response.player_id);
   // Explicit API confirmation, not fuzzy top-result ranking.
-  if(response?.confirmed===true&&confirmed)
+  // A resolver may have a preferred or previously confirmed match, but
+  // two eligible identities sharing a nickname must NEVER be auto-selected.
+  if(response?.confirmed===true&&confirmed&&unique.length===1)
    return {status:'resolved',role,spoken,name:confirmed.name,player_id:confirmed.player_id};
   return {status:'unresolved',role,spoken,candidates:unique};
  };
