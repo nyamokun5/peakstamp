@@ -323,20 +323,20 @@ export function mountOrganizer({row,closePreview}){
   };
   const fixtureVideos=['-sEOeqqTyuw','ey1_5PaMvBo','Ngp_ilKW91E','9zA4YCs8Ass'];
   const demo=sources[0].info.date==='2026-11-08'&&sources.length===4&&fixtureVideos.every(id=>sources.some(s=>s.id===id));
-  const date=demo?'2026-11-10':sources[0].info.date;
+  const date=sources[0].info.date;
   progress.textContent=date+' のイベントを照合中…';
   const available=(await api('/events?from='+date+'&to='+date+'&limit=100')).events;
   if(!Array.isArray(available))throw Error('イベント一覧の応答形式を確認できません。');
   const events=registrationEvents(available,date,demo);
   if(events.length!==1){
    const names=available.map(e=>String(e.date||'')+' '+String(e.name||'')).join(' ／ ');
-   throw Error((events.length>1?'同名の登録先が複数あります。':'登録先 '+(demo?'日曜定期 (10 Nov)':date)+' が見つかりません。')+'取得したTESTイベント：'+(names||'0件'));
+   throw Error((events.length>1?'同名の登録先が複数あります。':'登録先 '+date+' が見つかりません。')+'取得したTESTイベント：'+(names||'0件'));
   }
   const event=events[0],data=await api('/video-registration/inspect?event_id='+encodeURIComponent(event.event_id));
   if(data.environment!=='TEST'||data.event.event_id!==event.event_id||data.videos.event_id!==event.event_id)throw Error('TESTイベントが一致しません。');
   progress.textContent='ゴール集の共有リンクを準備中…';
   const reelUrl=new URL(await publishHighlights());reelUrl.searchParams.set('goals','1');
-  const results=el('ul');summary.append(el('strong',event.name),results);
+  const results=el('ul');summary.append(el('strong',event.date+' '+event.name+'（TEST）'),results);
   const team=value=>Number(String(value).normalize('NFKC').match(/^(?:チーム|Team|T)?\s*(\d+)$/i)?.[1]);
   const targets=sources.map(s=>{
    const left=team(s.info.teamA),right=team(s.info.teamB);
