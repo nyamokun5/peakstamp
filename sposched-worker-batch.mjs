@@ -89,10 +89,14 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
    fail('ゴール'+(i+1)+'：アシスト者の所属と得点チームが異なります');
   // Multiple distinct goals may have the same scorer and assist.
   // Reject only the same source goal repeated in this submission.
+  // Existing video rows do not always expose a stable goal ID.
+  // Only enforce ID-based duplicate detection when the source supplies one.
+  // Repeated scorer/assist combinations are valid separate goals.
   const goalId=name(row.goal?.id);
-  if(!goalId)fail('ゴール'+(i+1)+'：動画ゴールの識別子がありません');
-  if(goalIds.has(goalId))fail('同じ動画ゴールが二重に含まれています');
-  goalIds.add(goalId);
+  if(goalId){
+   if(goalIds.has(goalId))fail('同じ動画ゴールが二重に含まれています');
+   goalIds.add(goalId);
+  }
   selected.push({seq,action:'create',team,scorer,assist,helpers:helperPlan?.helpers||[]});
  }
  if(selected.length>20)fail('高速登録は最大20ゴールです');
