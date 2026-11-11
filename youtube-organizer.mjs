@@ -25,7 +25,11 @@ function input(label,value,change){
 function initialProject(){
  return {sources:[],editKey:Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join(''),published:''};
 }
-function goalSource(s,i){return {file:{name:'YouTube-'+s.id,size:0,lastModified:0},matchNumber:i+1};}
+function goalSource(s,i){
+ const fixtureIds=['-sEOeqqTyuw','ey1_5PaMvBo','Ngp_ilKW91E','9zA4YCs8Ass'];
+ const known=fixtureIds.indexOf(s.id);
+ return {file:{name:'YouTube-'+s.id,size:0,lastModified:0},matchNumber:known>=0?known+1:i+1};
+}
 async function analyze(s,key,instruction,windowRange=null){
  if(!key)throw Error('Gemini APIキーを入力してください。');
  const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',{
@@ -173,7 +177,7 @@ export function mountOrganizer({row,closePreview}){
  function syncGoals(){
   const matches=project.sources.filter(s=>!s.info.drone);
   matches.forEach((s,i)=>{
-   const goals=s.candidates.filter(c=>c.goal).map(c=>({...c.goal,matchSeq:String(i+1),teamA:s.info.teamA,teamB:s.info.teamB,matchLabel:matchName(s)}));
+   const goals=s.candidates.filter(c=>c.goal).map(c=>({...c.goal,matchSeq:String(goalSource(s,i).matchNumber),teamA:s.info.teamA,teamB:s.info.teamB,matchLabel:matchName(s)}));
    if(!saveGoalDrafts(goalSource(s,i),localStorage,goals))throw Error('ゴール情報を保存できませんでした。');
   });
   return matches.map(goalSource);
