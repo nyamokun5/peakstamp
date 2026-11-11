@@ -10,6 +10,7 @@ const A='22222222-2222-4222-8222-222222222222';
 const B='33333333-3333-4333-8333-333333333333';
 const PLAYER_A='44444444-4444-4444-8444-444444444444';
 const PLAYER_B='55555555-5555-4555-8555-555555555555';
+const race=process.env.TEST_ALIAS_RACE==='1';
 const matches=[1,2,3,4].map(seq=>({
  seq,match_id:'66666666-6666-4666-8666-66666666666'+seq,
  title:seq<3?'準決勝':seq===3?'3位決定戦':'決勝',
@@ -36,7 +37,9 @@ try{
    assert.equal(route.request().method(),'GET');
    assert.equal(u.searchParams.get('query'),'たいせい');
    reads.push('resolve');
-   return route.fulfill({json:{status:'matched',candidates:[{type:'member',name:'大成B',user_id:B}]},
+   if(race&&reads.length===1)await new Promise(resolve=>setTimeout(resolve,500));
+   return route.fulfill({json:race?{status:'unknown',candidates:[]}:
+    {status:'matched',candidates:[{type:'member',name:'大成B',user_id:B}]},
     headers:{'Access-Control-Allow-Origin':'*'}});
   }
   if(u.pathname==='/staging/alias/confirm'){
@@ -72,11 +75,18 @@ try{
  const scorer=page.getByLabel(/ゴール 1 得点者/);
  assert.equal(await scorer.count(),1);
  await scorer.selectOption('大成A');
- await page.waitForFunction(()=>document.querySelector('select[aria-label^="ゴール 1 得点者"]')?.value==='大成A');
- await page.waitForTimeout(500);
- assert.deepEqual(reads,['resolve']);
- assert.equal(writes.length,1);
- assert.deepEqual(writes[0],{
+ if(race){
+  // Select the second member before the first slow alias lookup returns.
+  // Never save the earlier name after the user chooses someone else.
+  await page.getByLabel(/ゴール 1 得点者/).selectOption('大成B');
+ }
+ await page.waitForTimeout(race?900:500);
+ assert.deepEqual(reads,race?['resolve','resolve']:['resolve']);
+ assert.equal(writes.length,1,'only the final human choice may persist a nickname');
+ assert.deepEqual(writes[0],race?{
+  event_id:EVENT,member_id:B,name:'大成B',team:'チーム2',
+  alias:'たいせい',source:'local-video',confirmed:true
+ }:{
   event_id:EVENT,member_id:A,name:'大成A',team:'チーム1',
   alias:'たいせい',source:'local-video',confirmed:true
  });
