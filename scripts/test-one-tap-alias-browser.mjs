@@ -82,7 +82,7 @@ try{
  assert.equal(writes.length,0,'opening and choosing cannot write');
  await menu.selectOption('大成A');
  assert.equal(writes.length,0,'must press 登録 explicitly');
- await page.locator('.simple-alias button').getByText('登録',{exact:true}).click();
+ await page.locator('.simple-alias').getByRole('button',{name:'登録',exact:true}).click();
  await page.locator('.simple-alias [role="status"]').getByText(/SSに登録しました/).waitFor();
  assert.deepEqual(reads,['resolve']);
  assert.equal(writes.length,1);
