@@ -1,5 +1,5 @@
 import {analyzeAutoFixture} from './sposched-auto-tournament.mjs';
-import {fixturePlayerOptions} from './sposched-review-core.mjs';
+import {fixturePlayerOptions,normalizeTeam} from './sposched-review-core.mjs';
 
 // Presentation only. All writes still pass through the existing signed TEST
 // actions, durable journals and official readback. No network calls here.
@@ -16,12 +16,36 @@ export function requiresSpokenNameChoice(hints,players,fieldReviewed=false,allRe
 // if the AI guessed a scoring team. Selecting the scorer then updates row.team
 // to the chosen official team via editQuickGoalField(). Other matches' players
 // remain excluded; assists remain restricted to the selected scoring side.
+// The SS knows which event players are assigned to teams before it knows
+// the winners/losers of two semifinals. For waiting #3/#4 use ONLY the
+// verified current event roster, not blank future fixture sides or history.
+// This controls presentation, not API write permissions; the Worker still
+// checks that the finished semifinals resolve to the official matchup.
+export function isWaitingKnockoutReview(snapshot,row){
+ const match=snapshot?.matches?.find(m=>m.seq===Number(row?.seq));
+ return snapshot?.rosterSource==='official-current-event-teams'&&
+  snapshot.matches?.length===4&&
+  [3,4].includes(Number(match?.seq))&&match?.status==='waiting';
+}
+export function waitingKnockoutRoster(snapshot,row){
+ if(!isWaitingKnockoutReview(snapshot,row))return [];
+ const assigned=new Set(Object.keys(snapshot.roster||{}).map(normalizeTeam));
+ return (snapshot.players||[]).filter(name=>
+  assigned.has(normalizeTeam(snapshot.playerTeam?.get(name)||'')));
+}
 export function scorerRosterForReview(snapshot,row){
+ if(isWaitingKnockoutReview(snapshot,row))
+  return waitingKnockoutRoster(snapshot,row);
  const assigned=fixturePlayerOptions(snapshot,row?.seq,row?.team);
  const fixture=fixturePlayerOptions(snapshot,row?.seq,'');
  const rf=row?.quickReviewedFields||{};
  return requiresSpokenNameChoice(row?.scorerHints,fixture,rf.scorer,row?.quickReviewedAll)
   ?fixture:assigned;
+}
+export function assistRosterForReview(snapshot,row){
+ if(isWaitingKnockoutReview(snapshot,row))
+  return waitingKnockoutRoster(snapshot,row);
+ return fixturePlayerOptions(snapshot,row?.seq,row?.team);
 }
 export function installSimpleResults({document:d,getState,onEdit,onInclude,onWinner,onDetail,onSave}){
  const el=(tag,text='',cls='')=>{const n=d.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n};
@@ -129,11 +153,20 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
     const fields=el('div','','quick-fields'),reviewed=row.quickReviewedAll,rf=row.quickReviewedFields||{};
     if(!row.seq||row.fixtureIdentityChanged||(!reviewed&&!rf.match&&(row.matchGuess?.confidence!=='high'||row.matchGuess?.ambiguous||row.matchGuess?.conflict)))
      fields.append(select(r,'match','試合',s.snapshot.matches.map(m=>[String(m.seq),'第'+m.seq+'試合 '+(m.title||'')]),''));
+    const m=s.snapshot.matches.find(m=>m.seq===Number(row.seq));
+    const waitingReview=isWaitingKnockoutReview(s.snapshot,row);
+    if(waitingReview){
+     // The home team is an optional draft. If the speaker says a different
+     // scoring side, the human can explicitly choose it. This never decides
+     // the future 3rd-place/final opponents or authorizes a write.
+     fields.append(select(r,'team','得点チーム（仮）',
+      Object.keys(s.snapshot.roster||{}).map(t=>[t,t]),row.team));
+    }
     // Show both sides ONLY when the same spoken nickname has multiple possible
     // people across the current fixture, including an AI-guessed wrong team.
     const players=scorerRosterForReview(s.snapshot,row).map(name=>
      [name,name+'　'+(s.snapshot.playerTeam.get(name)||'')]);
-    const assistPlayers=fixturePlayerOptions(s.snapshot,row.seq,row.team).map(name=>
+    const assistPlayers=assistRosterForReview(s.snapshot,row).map(name=>
      [name,name+'　'+(s.snapshot.playerTeam.get(name)||'')]);
     // Multiple plausible spoken-name matches must be explicitly chosen.
     // Prioritize the matching official roster candidates without hiding others.
@@ -148,9 +181,8 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
     if(assistAmbiguous)fields.append(el('p','アシストの候補が複数います。本人を選んでください。','small'));
     fields.append(select(r,'simpleAssist',assistAmbiguous?'アシスト（本人を選択）':'アシスト',
      [['__none__','なし'],...choices(row.assistHints,assistPlayers)],assistAmbiguous?'':row.assistMode==='none'?'__none__':row.assistMode==='named'&&(reviewed||rf.assist||row.assistGuess?.confidence==='high')?row.assist:''));
-    const m=s.snapshot.matches.find(m=>m.seq===Number(row.seq));
-    if(!row.team||item.helperPlan||item.state==='manual-ss'){
-     const teams=m?.status==='waiting'?Object.keys(s.snapshot.roster||{}):[m?.leftTeam,m?.rightTeam].filter(Boolean);
+    if(!waitingReview&&(!row.team||item.helperPlan||item.state==='manual-ss')){
+     const teams=[m?.leftTeam,m?.rightTeam].filter(Boolean);
      fields.append(select(r,'team','得点チーム',teams.map(t=>[t,t]),row.team));
     }
     goal.append(fields);if(uncertain)goal.append(el('p',item.reason,'quick-held-note'));
