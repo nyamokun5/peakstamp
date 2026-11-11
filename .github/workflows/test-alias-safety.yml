@@ -7,6 +7,7 @@ on:
     paths:
       - 'sposched-goal-commit-alias*'
       - 'sposched-alias-admin*'
+      - 'sposched-batch-alias-proof*'
       - '.github/workflows/test-alias-safety.yml'
 jobs:
   alias-safety:
@@ -19,4 +20,4 @@ jobs:
         with:
           node-version: '22'
       - name: Run alias safety tests
-        run: node --test sposched-goal-commit-alias.test.mjs sposched-alias-admin.test.mjs
+        run: node --test sposched-goal-commit-alias.test.mjs sposched-alias-admin.test.mjs sposched-batch-alias-proof.test.mjs
