@@ -1703,26 +1703,38 @@ function learnSelectedAlias(row,role,officialName){
  // Alias registration is separate from scoring and may fail independently.
  if(!snapshot||!row||row.guest||row.goal?.manual||!officialName||
     !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
- const selectedSnapshot=snapshot,eventId=snapshot.eventId;
- const stillSameEvent=()=>loadedFromStagingDirect&&
-  $('ssEnvironment').value==='staging'&&snapshot?.eventId===eventId;
+ const selectedSnapshot=snapshot,eventId=snapshot.eventId,selectedTeam=row.team;
+ const stillSameChoice=()=>loadedFromStagingDirect&&
+  $('ssEnvironment').value==='staging'&&snapshot?.eventId===eventId&&
+  row[role]===officialName&&row.team===selectedTeam&&
+  !row.guest&&!row.goal?.manual;
+ const notice=message=>{
+  if(!stillSameChoice())return;
+  const index=rows.indexOf(row),card=index<0?null:$('quick-goal-'+(index+1));
+  if(!card)return;
+  let status=card.querySelector('.alias-learn-status');
+  if(!status){status=node('p','','small alias-learn-status');card.append(status)}
+  status.textContent=message;
+ };
  void onConfirmedGoalPlayerSelection({
   row,snapshot:selectedSnapshot,field:role,officialName,source:'local-video',
   resolveAlias:async({query})=>{
-   if(!stillSameEvent())throw Error('SSイベントが切り替わりました');
+   if(!stillSameChoice())throw Error('選手選択が変更されました');
    return fetchSS('/staging/alias/resolve?query='+encodeURIComponent(query));
   },
   writeAlias:async({alias,person,user_id})=>{
-   if(!stillSameEvent())throw Error('SSイベントが切り替わりました');
+   // The user may change a guessed scorer while the SS resolve request is
+   // in flight. Never persist the OLD choice after a later human selection.
+   if(!stillSameChoice())return {ok:false,error:'選手選択が変更されました'};
    return postStaging('/staging/alias/confirm',{
     event_id:eventId,member_id:user_id,
-    name:person,team:row.team,alias,source:'local-video',confirmed:true
+    name:person,team:selectedTeam,alias,source:'local-video',confirmed:true
    });
   }
  }).then(result=>{
-  if(result.saved)console.info('SS nickname saved for explicitly selected member');
-  else if(result.uncertain)console.warn('SS nickname confirmation requires manual readback');
- }).catch(()=>console.warn('SS nickname sync unavailable'));
+  if(result.saved)notice('✓ 呼び名を覚えました');
+  else if(result.uncertain)notice('別名の保存を確認できません（得点登録には影響しません）');
+ }).catch(()=>{if(stillSameChoice())console.warn('SS nickname sync unavailable')});
 }
 const minimalGoalFix=installMinimalGoalFix({
  document,
