@@ -818,7 +818,7 @@ function renderGoals(){
      row.assist='';
    }
    invalidate('scorer');
-   if(!g.manual)learnSelectedAlias(row,'scorer',row.scorer);
+   // Nickname persistence is deferred until verified goal registration.
    if(g.manual)renderGoals();
   });
   const assistMode=select([{value:'named',label:'あり（選手を選択）'},{value:'none',label:'なし'},{value:'unknown',label:'不明（要確認）'}],row.assistMode);
@@ -831,7 +831,7 @@ function renderGoals(){
   });
   assistSelect.addEventListener('change',()=>{
    row.assist=assistSelect.value;invalidate('assist');
-   if(!g.manual)learnSelectedAlias(row,'assist',row.assist);
+   // Nickname persistence is deferred until verified goal registration.
   });
   const teamChoices=g.manual?(matched?[matched.leftTeam,matched.rightTeam].filter(Boolean):[])
    :snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]).filter(Boolean);
@@ -1822,16 +1822,14 @@ const simpleResults=installSimpleResults({document,
    blockReason:target===$('autoRun')?$('autoBeforeRun').textContent:$('workerBatchReadiness').textContent};},
  onEdit:(index,field,value)=>{
   if(batchBusy||autoBusy||workerBatchPolling)return;
-  const aliasField=field==='scorer'||field==='simpleAssist'&&value!=='__none__';
-  const aliasRole=field==='scorer'?'scorer':'assist';
-  const aliasRow=rows[index];
+
   try{
    if(field==='simpleAssist'){field=value==='__none__'?'assistMode':'assist';if(value==='__none__')value='none';}
    editQuickGoalField(snapshot,rows[index],field,value);
    if(loadedFromStagingDirect&&$('ssEnvironment').value==='staging')
     saveConfirmedGoalSelection(localStorage,snapshot,rows[index]);
    touch();renderGoals();renderQuick();
-   if(aliasField)learnSelectedAlias(aliasRow,aliasRole,value);
+
   }catch(e){$('simpleSaveHelp').textContent=e.message;}
  },
  onInclude:(index,include)=>{
