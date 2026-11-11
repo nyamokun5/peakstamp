@@ -94,8 +94,20 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
      fields.append(select(r,'match','試合',s.snapshot.matches.map(m=>[String(m.seq),'第'+m.seq+'試合 '+(m.title||'')]),''));
     // Restrict selectable identities to the actual fixture; never offer unrelated teams.
     const players=fixturePlayerOptions(s.snapshot,row.seq,row.team).map(name=>[name,name+'　'+(s.snapshot.playerTeam.get(name)||'')]);
-    fields.append(select(r,'scorer','得点者',players,row.scorer&&(reviewed||rf.scorer||row.scorerGuess?.confidence==='high')?row.scorer:''));
-    fields.append(select(r,'simpleAssist','アシスト',[['__none__','なし'],...players],row.assistMode==='none'?'__none__':row.assistMode==='named'&&(reviewed||rf.assist||row.assistGuess?.confidence==='high')?row.assist:''));
+    // Multiple plausible spoken-name matches must be explicitly chosen.
+    // Prioritize the matching official roster candidates without hiding others.
+    const choices=(hints)=>{const rank=new Map((hints||[]).map((x,i)=>[x.name,i]));
+     return [...players].sort((a,b)=>(rank.get(a[0])??999)-(rank.get(b[0])??999));};
+    const scorerAmbiguous=row.scorerGuess?.confidence==='none'&&
+     (row.scorerHints||[]).filter(x=>players.some(p=>p[0]===x.name)).length>1&&!rf.scorer&&!reviewed;
+    if(scorerAmbiguous)fields.append(el('p','同じ呼び名の候補がいます。得点者を選んでください。','small'));
+    fields.append(select(r,'scorer',scorerAmbiguous?'得点者（本人を選択）':'得点者',
+     choices(row.scorerHints),scorerAmbiguous?'':row.scorer&&(reviewed||rf.scorer||row.scorerGuess?.confidence==='high')?row.scorer:''));
+    const assistAmbiguous=row.assistGuess?.confidence==='none'&&row.assistMode==='named'&&
+     (row.assistHints||[]).filter(x=>players.some(p=>p[0]===x.name)).length>1&&!rf.assist&&!reviewed;
+    if(assistAmbiguous)fields.append(el('p','アシストの候補が複数います。本人を選んでください。','small'));
+    fields.append(select(r,'simpleAssist',assistAmbiguous?'アシスト（本人を選択）':'アシスト',
+     [['__none__','なし'],...choices(row.assistHints)],assistAmbiguous?'':row.assistMode==='none'?'__none__':row.assistMode==='named'&&(reviewed||rf.assist||row.assistGuess?.confidence==='high')?row.assist:''));
     const m=s.snapshot.matches.find(m=>m.seq===Number(row.seq));
     if(!row.team||item.helperPlan||item.state==='manual-ss'){
      const teams=m?.status==='waiting'?Object.keys(s.snapshot.roster||{}):[m?.leftTeam,m?.rightTeam].filter(Boolean);
