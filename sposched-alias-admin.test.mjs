@@ -33,3 +33,10 @@ test('network failure does not retry',async()=>{
   read:async()=>entries});
  assert.equal(calls,1);assert.equal(result.uncertain,true);
 });
+
+test('read-only listing works without a mutation-specific alias ID',()=>{
+ const list=normalizeAliasList([{alias:'タケ',user_id:a,name:'選手A'}]);
+ assert.equal(list.length,1);
+ assert.equal(list[0].id,'');
+ assert.equal(aliasListView(list,'たけ').length,1);
+});
