@@ -450,6 +450,7 @@ import {jobControlPayload} from './sposched-job-control.mjs?v=pause1';
 import {auditCurrentTestFixtureGates} from './sposched-gate-audit.mjs?v=gate-audit1';
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
+import {installSimpleResults} from './sposched-simple-results.mjs?v=1';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=review-validation2';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
@@ -526,6 +527,7 @@ const setBatchBusy=busy=>{
  syncFinishWinner();
  $('sources').inert=busy;$('reviewArea').inert=busy;
  $('quickGoals').inert=busy;
+ simpleResults.setBusy(busy);
  $('batchGoals').inert=busy;
 };
 const saveManual=()=>{
@@ -1359,7 +1361,7 @@ function renderQuick(){
  const production=!!snapshot&&loadedFromProductionDirect&&$('ssEnvironment').value==='production';
  const active=staging||production;
  $('quickPanel').hidden=!active;
- if(!active)return;
+ if(!active){simpleResults.render();return;}
  const officialLayout=describeOfficialFixtures(snapshot);
  const officialRoot=$('ssFixtureOverview');officialRoot.replaceChildren();
  officialRoot.append(node('strong',fixtureSummaryLabel(officialLayout)));
@@ -1684,6 +1686,31 @@ $('quickExecute').addEventListener('click',()=>{
 });
 
 
+function simpleSaveTarget(){
+ if(!snapshot||localStorage.getItem(workerBatchStorageKey(snapshot.eventId)))return null;
+ return snapshot.matches.some(m=>m.status==='finished')?$('autoRun'):$('workerBatchRun');
+}
+const simpleResults=installSimpleResults({document,
+ getState:()=>{const active=document.body.dataset.simpleResults==='true'&&!!snapshot&&loadedFromStagingDirect&&$('ssEnvironment').value==='staging'&&describeOfficialFixtures(snapshot).automaticFourMatch;
+  const target=active?simpleSaveTarget():null;
+  return {active,snapshot,rows,decisions:active?quickGoalDecisions(snapshot,rows):[],winnerFor:autoWinnerFor,
+   busy:batchBusy||autoBusy||workerBatchPolling,canSave:!!target&&!target.disabled,
+   blockReason:target===$('autoRun')?$('autoBeforeRun').textContent:$('workerBatchReadiness').textContent};},
+ onEdit:(index,field,value)=>{
+  if(batchBusy||autoBusy||workerBatchPolling)return;
+  try{
+   if(field==='simpleAssist'){field=value==='__none__'?'assistMode':'assist';if(value==='__none__')value='none';}
+   editQuickGoalField(snapshot,rows[index],field,value);touch();renderGoals();renderQuick();
+  }catch(e){$('simpleSaveHelp').textContent=e.message;}
+ },
+ onInclude:(index,include)=>{if(batchBusy||autoBusy||workerBatchPolling)return;rows[index].include=include;touch();renderGoals();renderQuick();},
+ onWinner:(m,p,winner)=>{
+  if(batchBusy||autoBusy||workerBatchPolling)return;
+  autoWinnerChoices.set(m.seq,{winner,eventId:snapshot.eventId,matchId:m.matchId,left:p.left,right:p.right});renderQuick();
+ },
+ onDetail:openDetail,
+ onSave:()=>{if(batchBusy||autoBusy||workerBatchPolling)return;const target=simpleSaveTarget();if(target&&!target.disabled)target.click();}
+});
 const autoWinnerChoices=new Map();
 function autoWinnerFor(seq){
  const saved=autoWinnerChoices.get(seq);
@@ -1827,6 +1854,7 @@ function renderAutoSummary(){
  // The legacy four-knockout writer remains a separate mode.
  const official=describeOfficialFixtures(snapshot);
  if(!official.automaticFourMatch){
+  simpleResults.render();
   const hasFixtures=official.count>0;
   $('autoPanel').hidden=!hasFixtures;
   $('legacyBatchDetails').hidden=true;
@@ -2029,6 +2057,7 @@ function renderAutoSummary(){
   $('workerBatchRun').disabled=true;
   $('workerBatchReadiness').textContent='⚠ '+e.message;
  }
+ simpleResults.render();
 }
 // The before-image belongs to the exact reviewed goal; no extra /match GET
 // is needed just to fill the crash-recovery journal before its single POST.
@@ -2654,6 +2683,7 @@ $('workerBatchRun').addEventListener('click',async()=>{
   $('workerBatchStatus').textContent='高速一括登録：'+error.message+
    '。通信が不明な場合は再送せず「進捗を再取得」を使ってください。';
   if(!localStorage.getItem(key))$('workerBatchRun').disabled=false;
+  simpleResults.render();
  }
 });
 let workerControlBusy=false;
