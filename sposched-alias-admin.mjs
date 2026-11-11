@@ -5,7 +5,9 @@
  */
 const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const txt=x=>typeof x==='string'?x.trim():'';
-const norm=x=>txt(x).normalize('NFKC').toLocaleLowerCase('ja-JP');
+// NFKC first handles half-width kana; fold katakana to hiragana for search.
+const norm=x=>txt(x).normalize('NFKC').toLocaleLowerCase('ja-JP')
+ .replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
 
 export function normalizeAliasList(payload) {
  const source=Array.isArray(payload)?payload:
