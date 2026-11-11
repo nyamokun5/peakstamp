@@ -1698,43 +1698,50 @@ $('quickExecute').addEventListener('click',()=>{
 });
 
 
-function learnSelectedAlias(row,role,officialName){
- // Explicit human selection only; never learn on AI prefill or render.
- // Alias registration is separate from scoring and may fail independently.
+async function learnSelectedAlias(row,role,officialName,{aliasOnly=false,team=''}={}){
+ // Scoring selection and nickname-only confirmation both require a human.
+ // Alias-only actions never mutate a reviewed score or guessed match pairing.
  if(!snapshot||!row||row.guest||row.goal?.manual||!officialName||
-    !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
- const selectedSnapshot=snapshot,eventId=snapshot.eventId,selectedTeam=row.team;
+    !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')
+  return {saved:false,reason:'SS TESTイベントを読み込んでください'};
+ const selectedSnapshot=snapshot,eventId=snapshot.eventId;
+ const selectedTeam=aliasOnly?team:row.team;
+ const confirmedRow=aliasOnly?{...row,team:selectedTeam,[role]:officialName}:row;
  const stillSameChoice=()=>loadedFromStagingDirect&&
-  $('ssEnvironment').value==='staging'&&snapshot?.eventId===eventId&&
-  row[role]===officialName&&row.team===selectedTeam&&
+  $('ssEnvironment').value==='staging'&&snapshot===selectedSnapshot&&
+  snapshot?.eventId===eventId&&rows.includes(row)&&
+  (aliasOnly?Boolean(selectedTeam&&snapshot.playerTeam?.get(officialName)===selectedTeam):
+    row[role]===officialName&&row.team===selectedTeam)&&
   !row.guest&&!row.goal?.manual;
  const notice=message=>{
-  if(!stillSameChoice())return;
+  if(aliasOnly||!stillSameChoice())return;
   const index=rows.indexOf(row),card=index<0?null:$('quick-goal-'+(index+1));
   if(!card)return;
   let status=card.querySelector('.alias-learn-status');
   if(!status){status=node('p','','small alias-learn-status');card.append(status)}
   status.textContent=message;
  };
- void onConfirmedGoalPlayerSelection({
-  row,snapshot:selectedSnapshot,field:role,officialName,source:'local-video',
-  resolveAlias:async({query})=>{
-   if(!stillSameChoice())throw Error('選手選択が変更されました');
-   return fetchSS('/staging/alias/resolve?query='+encodeURIComponent(query));
-  },
-  writeAlias:async({alias,person,user_id})=>{
-   // The user may change a guessed scorer while the SS resolve request is
-   // in flight. Never persist the OLD choice after a later human selection.
-   if(!stillSameChoice())return {ok:false,error:'選手選択が変更されました'};
-   return postStaging('/staging/alias/confirm',{
-    event_id:eventId,member_id:user_id,
-    name:person,team:selectedTeam,alias,source:'local-video',confirmed:true
-   });
-  }
- }).then(result=>{
+ try{
+  const result=await onConfirmedGoalPlayerSelection({
+   row:confirmedRow,snapshot:selectedSnapshot,field:role,officialName,source:'local-video',
+   resolveAlias:async({query})=>{
+    if(!stillSameChoice())throw Error('選手選択が変更されました');
+    return fetchSS('/staging/alias/resolve?query='+encodeURIComponent(query));
+   },
+   writeAlias:async({alias,person,user_id})=>{
+    if(!stillSameChoice())return {ok:false,error:'選手選択が変更されました'};
+    return postStaging('/staging/alias/confirm',{
+     event_id:eventId,member_id:user_id,
+     name:person,team:selectedTeam,alias,source:'local-video',confirmed:true
+    });
+   }
+  });
   if(result.saved)notice('✓ 呼び名を覚えました');
   else if(result.uncertain)notice('別名の保存を確認できません（得点登録には影響しません）');
- }).catch(()=>{if(stillSameChoice())console.warn('SS nickname sync unavailable')});
+  return result;
+ }catch{
+  return {saved:false,reason:'SS別名の保存結果を確認できません。再送せずSSで確認してください'};
+ }
 }
 const minimalGoalFix=installMinimalGoalFix({
  document,
@@ -1840,6 +1847,16 @@ const simpleResults=installSimpleResults({document,
  },
  onDetail:openDetail,
  onFix:args=>{if(!batchBusy&&!autoBusy&&!workerBatchPolling)minimalGoalFix.open(args);},
+ onAlias:async({index,role,officialName})=>{
+  if(batchBusy||autoBusy||workerBatchPolling)
+   return {saved:false,reason:'別の登録処理中です'};
+  const row=rows[index],team=snapshot?.playerTeam?.get(officialName);
+  if(!row||!team||!snapshot.memberIds?.has(officialName)||
+     row.goal?.manual||row.guest)
+   return {saved:false,reason:'SS当日の正式名簿から選び直してください'};
+  // Explicit alias-only confirmation: no score or fixture mutation.
+  return learnSelectedAlias(row,role,officialName,{aliasOnly:true,team});
+ },
  onSave:()=>{if(batchBusy||autoBusy||workerBatchPolling)return;const target=simpleSaveTarget();if(target&&!target.disabled)target.click();}
 });
 const autoWinnerChoices=new Map();
