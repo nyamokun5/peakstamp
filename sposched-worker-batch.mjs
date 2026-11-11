@@ -34,10 +34,12 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
   fail('すでに終了した試合があります。従来の個別確認を使ってください');
  if(!Array.isArray(rows)||!Array.isArray(decisions)||decisions.length!==rows.length)
   fail('全ゴールの確認結果を取得できません');
- const selected=[],goalIds=new Set();
+ const selected=[],goalIds=new Set(),seenRows=new Set();
  for(let i=0;i<rows.length;i++){
   const row=rows[i],decision=decisions[i];
   if(!row?.include)continue;
+  if(seenRows.has(row))fail('同じ動画ゴールが複数含まれています');
+  seenRows.add(row);
   if(decision?.state==='manual-ss'){
    // Only automatically exclude a verified cross-team scenario from the
    // batch. Do not silently finalize a match while a manual goal is missing:
