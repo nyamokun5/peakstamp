@@ -37,6 +37,9 @@ export function normalizeSpoSnapshot(raw){
   // seq is the organizer-assigned video/fixture number; matchId is the
   // official backend UUID, independent from the current team's pairing.
   status:string(m.status||''),
+  // Official winner must be retained for safe corrections to finished games.
+  // An explicit 0-0 penalty/shootout winner is NOT inferred from the score.
+  ...( ['left','right','draw'].includes(m.winner)?{winner:m.winner}:{} ),
   leftTeam:string(m.left_team||''),
   rightTeam:string(m.right_team||opponentFromTitle||''),
   inferredRightTeam:!string(m.right_team)&&Boolean(opponentFromTitle),
