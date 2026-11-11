@@ -48,3 +48,16 @@ export function registrationEvents(events,date,demo=false){
  return events.filter(event=>event.date===date && (!demo ||
   ['日曜定期','日曜定期(10nov)'].includes(normalize(event.name))));
 }
+
+export function resolveRegistrationMatch(matches,eventId,left,right,number=null){
+ const candidates=matches.filter(m=>m.event_id===eventId&&(number===null||m.number===number));
+ const found=candidates.filter(m=>m.left?.team!=null&&m.right?.team!=null&&
+ ((Number(m.left.team)===left&&Number(m.right.team)===right)||(Number(m.left.team)===right&&Number(m.right.team)===left)));
+ if(found.length===1)return {match:found[0]};
+ if(candidates.length===1){
+  const m=candidates[0];
+  if(m.left?.team==null||m.right?.team==null)return {error:'SSの試合 #'+m.number+' は対戦未確定です。先に試合結果を登録してください'};
+  return {error:'SSの試合 #'+m.number+' はチーム'+m.left.team+' vs チーム'+m.right.team+'です。動画の対戦カードと一致しません'};
+ }
+ return {error:'試合枠を一意に特定できません。SSの試合一覧を確認してください'};
+}
