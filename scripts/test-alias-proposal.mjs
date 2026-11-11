@@ -14,9 +14,11 @@ test('youtube confirmations use the same safe alias contract',()=>{
 test('AI-only inference never proposes a write',()=>{
  assert.equal(propose({...base,confirmed:false}).ready,false);
 });
-test('existing aliases and collisions are rejected without overriding other member',()=>{
+test('own alias is idempotently skipped; shared aliases are allowed for a different person',()=>{
  assert.equal(propose({...base,spoken:'yo'}).ready,false);
- assert.equal(propose({...base,spoken:'TOMO'}).ready,false);
+ const proposed=propose({...base,spoken:'TOMO'});
+ assert.equal(proposed.ready,true);
+ assert.deepEqual(proposed.proposal,{alias:'TOMO',person:'西村',user_id:A,source:'local-video'});
 });
 test('missing, malformed, wrong or guest member IDs cannot be written',()=>{
  for(const id of [undefined,'', 'not-an-ss-uuid',B]){

@@ -9,7 +9,7 @@ test('never writes when no authenticated writer is connected',async()=>{
  assert.equal(result.saved,false);assert.match(result.reason,/未接続/);
 });
 test('human selection submits exact alias, official name and stable user ID once',async()=>{
- const calls=[];const result=await submit({...base,writeAlias:async input=>{calls.push(input);return {ok:true}}});
+ const calls=[];const result=await submit({...base,writeAlias:async input=>{calls.push(input);return {ok:true,saved:true,user_id:input.user_id,alias:input.alias}}});
  assert.equal(result.saved,true);
  assert.deepEqual(calls,[{alias:'よーさん',person:'西村',user_id:A}]);
 });
@@ -29,4 +29,17 @@ test('lost reply is uncertain and must never trigger blind retry',async()=>{
  const result=await submit({...base,writeAlias:async()=>{count++;throw new Error('network outage');}});
  assert.equal(result.saved,false);assert.equal(result.uncertain,true);
  assert.equal(count,1);assert.doesNotMatch(JSON.stringify(result),/network outage/);
+});
+
+
+test('plain HTTP 200 is not proof of persisted nickname readback',async()=>{
+ const result=await submit({...base,writeAlias:async()=>({ok:true})});
+ assert.equal(result.saved,false);
+ assert.match(result.reason,/確認できません/);
+});
+test('backend must confirm exact member_id and alias; wrong identity is rejected',async()=>{
+ const result=await submit({...base,writeAlias:async()=>({
+  ok:true,saved:true,user_id:'22222222-2222-4222-8222-222222222222',alias:'よーさん'
+ })});
+ assert.equal(result.saved,false);
 });

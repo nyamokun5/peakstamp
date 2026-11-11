@@ -18,12 +18,9 @@ export function prepareSsAliasProposal({
  const selected=candidates.filter(c=>normalized(c?.name)===normalized(person)&&
   clean(c?.user_id).toLowerCase()===userId.toLowerCase());
  if(selected.length!==1)return {ready:false,reason:'SSの正式名簿とメンバーIDが一致しません'};
- // Until the upstream API explicitly allows shared aliases, never overwrite
- // an alias of a second member. A manual goal selection still remains valid.
- const collision=candidates.some(c=>clean(c?.user_id).toLowerCase()!==userId.toLowerCase()&&
-  (normalized(c?.name)===normalized(alias)||
-   (Array.isArray(c?.aliases)&&c.aliases.some(a=>normalized(a)===normalized(alias)))));
- if(collision)return {ready:false,reason:'別のメンバーが使用している呼び名です'};
+ // SS OpenAPI 1.7.0 explicitly permits one alias on multiple identities.
+ // Another member using the same nickname must NOT block a human-confirmed
+ // alias for this stable member_id. SS will return ambiguous candidates later.
  if(Array.isArray(selected[0].aliases)&&selected[0].aliases.some(a=>normalized(a)===normalized(alias)))
   return {ready:false,reason:'登録済みの別名です'};
  return {ready:true,proposal:{alias,person,user_id:userId,source}};

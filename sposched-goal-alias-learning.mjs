@@ -23,7 +23,17 @@ export async function onConfirmedGoalPlayerSelection({
  const spoken=row?.goal?.[field];
  if(typeof spoken!=='string'||!spoken.trim())
   return {saved:false,reason:'元動画に呼び名がありません'};
- const members=fixturePlayerOptions(snapshot,row.seq,row.team).map(name=>({
+ // For waiting knockout fixtures #3/#4, the next opponents are not yet
+ // resolved, but the verified official event roster is already available.
+ // In that case accept only a human-picked person from their real team.
+ const match=snapshot?.matches?.find(m=>m.seq===Number(row?.seq));
+ const waiting=match?.status==='waiting'&&[3,4].includes(Number(row?.seq))&&
+  snapshot?.rosterSource==='official-current-event-teams';
+ const eligible=waiting?
+  (snapshot?.players||[]).filter(name=>
+   snapshot.playerTeam?.get(name)===row.team):
+  fixturePlayerOptions(snapshot,row.seq,row.team);
+ const members=eligible.map(name=>({
   name,user_id:snapshot?.memberIds?.get(name)||null
  }));
  const person=members.find(member=>member.name===officialName);
@@ -41,17 +51,18 @@ export async function onConfirmedGoalPlayerSelection({
  if(!Array.isArray(resolution?.candidates))
   return {saved:false,reason:'SS別名の照合に失敗しました'};
  const existing=resolution.candidates;
- // An unverified candidate cannot be assumed to belong to the current
- // selected member. Never create or overwrite a nickname in that case.
- if(existing.some(candidate=>!uuid.test(candidate?.user_id||'')))
+ // Never treat malformed / unidentified upstream people as a clean match
+ // list. A child has child_id; a registered member has stable user_id.
+ if(existing.some(candidate=>!uuid.test(candidate?.user_id||'')&&
+   !(candidate?.type==='child'&&uuid.test(candidate?.child_id||''))))
   return {saved:false,reason:'SS既存別名のメンバーIDが確認できません'};
- if(existing.some(candidate=>candidate.user_id.toLowerCase()===person.user_id.toLowerCase()))
+ // SS OpenAPI 1.7.0 supports multiple people sharing a nickname. The
+ // backend uses selected member_id; no global alias->person overwrite occurs.
+ // A child identity may also share the alias. The SS API returns all of them.
+ if(existing.some(candidate=>
+  uuid.test(candidate?.user_id||'')&&
+  candidate.user_id.toLowerCase()===person.user_id.toLowerCase()))
   return {saved:false,reason:'SSに登録済みの呼び名です'};
- // Shared nicknames (e.g. two たいせい) are valid contextually, but do not
- // mutate a second member until the upstream contract documents many-to-many
- // persistence. The human selection remains valid for the current goal.
- if(existing.length)
-  return {saved:false,reason:'同じ呼び名の選手がいます。今回の選択のみ適用します',ambiguous:true};
  return submitConfirmedSsAlias({
   spoken,officialName,memberId:person.user_id,source,
   candidates:members,confirmed:true,writeAlias

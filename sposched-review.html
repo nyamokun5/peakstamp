@@ -1699,13 +1699,30 @@ $('quickExecute').addEventListener('click',()=>{
 
 
 function learnSelectedAlias(row,role,officialName){
- // Human selection is the ONLY alias-learning trigger. This is deliberately
- // fail-closed until SS publishes an authenticated alias HTTP API adapter.
- // Historical/guest/manual records cannot establish a spoken nickname.
- if(!snapshot||!row||row.guest||row.goal?.manual||!officialName)return;
+ // Explicit human selection only; never learn on AI prefill or render.
+ // Alias registration is separate from scoring and may fail independently.
+ if(!snapshot||!row||row.guest||row.goal?.manual||!officialName||
+    !loadedFromStagingDirect||$('ssEnvironment').value!=='staging')return;
+ const selectedSnapshot=snapshot,eventId=snapshot.eventId;
+ const stillSameEvent=()=>loadedFromStagingDirect&&
+  $('ssEnvironment').value==='staging'&&snapshot?.eventId===eventId;
  void onConfirmedGoalPlayerSelection({
-  row,snapshot,field:role,officialName,source:'local-video'
- }).catch(error=>console.warn('SS alias sync unavailable',error));
+  row,snapshot:selectedSnapshot,field:role,officialName,source:'local-video',
+  resolveAlias:async({query})=>{
+   if(!stillSameEvent())throw Error('SSイベントが切り替わりました');
+   return fetchSS('/staging/alias/resolve?query='+encodeURIComponent(query));
+  },
+  writeAlias:async({alias,person,user_id})=>{
+   if(!stillSameEvent())throw Error('SSイベントが切り替わりました');
+   return postStaging('/staging/alias/confirm',{
+    event_id:eventId,member_id:user_id,
+    name:person,team:row.team,alias,source:'local-video',confirmed:true
+   });
+  }
+ }).then(result=>{
+  if(result.saved)console.info('SS nickname saved for explicitly selected member');
+  else if(result.uncertain)console.warn('SS nickname confirmation requires manual readback');
+ }).catch(()=>console.warn('SS nickname sync unavailable'));
 }
 const minimalGoalFix=installMinimalGoalFix({
  document,
