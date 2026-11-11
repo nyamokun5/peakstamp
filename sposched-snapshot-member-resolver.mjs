@@ -1,4 +1,4 @@
-import {scoredPlayerCandidates} from './sposched-review-core.mjs';
+import {scoredPlayerCandidates,normalizeTeam} from './sposched-review-core.mjs';
 
 /**
  * Read-only adapter for the existing official SS snapshot.
@@ -15,7 +15,9 @@ export function createSnapshotMemberResolver(snapshot) {
   return null;
  };
  return async ({query,team=''})=>{
-  const ranked=scoredPlayerCandidates(query,snapshot,team,7);
+  const teamKey=normalizeTeam(team);
+  const ranked=scoredPlayerCandidates(query,snapshot,team,7)
+   .filter(item=>!teamKey||normalizeTeam(item.team)===teamKey);
   const candidates=ranked.map(item=>({
    name:item.name,player_id:lookupId(item.name),team:item.team,
    score:item.score
