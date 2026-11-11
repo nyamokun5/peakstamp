@@ -47,7 +47,7 @@ export function assistRosterForReview(snapshot,row){
   return waitingKnockoutRoster(snapshot,row);
  return fixturePlayerOptions(snapshot,row?.seq,row?.team);
 }
-export function installSimpleResults({document:d,getState,onEdit,onInclude,onWinner,onDetail,onSave}){
+export function installSimpleResults({document:d,getState,onEdit,onInclude,onWinner,onDetail,onSave,onFix}){
  const el=(tag,text='',cls='')=>{const n=d.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n};
  const $=id=>d.getElementById(id);
  const style=el('style');style.textContent=`
@@ -71,6 +71,9 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
  .simple-winners button{flex:1;min-width:90px;padding:12px 8px;font-size:14px}
  .simple-winners button[aria-pressed="true"]{background:#28765f;border:2px solid #9ce2c5}
  .simple-match .quick-goal{padding:12px 0;margin:0;border:0;border-top:1px solid #3d5966;border-radius:0;background:transparent}
+ .simple-registered{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0}
+ .simple-registered .small{flex:1}
+ .simple-registered button{min-height:40px;padding:8px 13px}
  .simple-match .quick-field{font-size:13px}
  .simple-match .quick-field select{min-height:48px;font-size:16px}
  #simpleSaveArea[hidden]{display:none!important}
@@ -117,7 +120,14 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
      b.setAttribute('aria-pressed',String(s.winnerFor(m.seq)===value));choices.append(b);
     }card.append(choices);
    }
-   for(const goal of m.existingGoals||[])card.append(el('p','⚽ '+goal.scorer+(goal.assist?'　アシスト '+goal.assist:''),'small'));
+   for(const registered of m.existingGoals||[]){
+    const line=el('div','','simple-registered');
+    line.append(el('span','⚽ '+registered.scorer+
+     (registered.assist?' / '+registered.assist:''),'small'));
+    if(m.status==='finished'&&s.snapshot.rosterSource==='official-current-event-teams'&&registered.id)
+     line.append(button('修正',()=>onFix({seq:m.seq,goalId:registered.id})));
+    card.append(line);
+   }
    if(!(m.existingGoals||[]).length&&!s.rows.some(r=>r.include&&Number(r.seq)===m.seq))card.append(el('p','ゴールなし','small'));
    groups.set(m.seq,card);root.append(card);
   }
@@ -144,7 +154,19 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
     goal.append(el('p','前回の選択を復元しました','small'));
    }
    const uncertain=['attention','duplicate','manual-ss','patch','manual'].includes(item.state);
-   if(!row.include){goal.append(el('p','今回の保存に含めません','small'),button('戻す',()=>onInclude(item.index,true)))}
+   const current=s.snapshot.matches.find(x=>x.seq===Number(row.seq));
+   if(current?.status==='finished'&&!row.goal?.manual){
+    // Finished match: a small two-field correction form replaces all
+    // nested detail/JSON/preview panels. No full tournament re-registration.
+    const desiredTeam=row.team||s.snapshot.playerTeam?.get(row.scorer)||'';
+    const identical=(current.existingGoals||[]).filter(g=>
+      g.scorer===row.scorer&&
+      g.assist===(row.assistMode==='named'?row.assist:'')&&
+      normalizeTeam(g.team)===normalizeTeam(desiredTeam));
+    goal.append(button(identical.length===1?'登録済みを確認・修正':'ゴールを修正',
+      ()=>onFix({seq:current.seq,rowIndex:item.index,
+        goalId:identical.length===1?identical[0].id:''}),'primary'));
+   }else if(!row.include){goal.append(el('p','今回の保存に含めません','small'),button('戻す',()=>onInclude(item.index,true)))}
    else if(row.goal?.manual||row.updateGoalId||row.guest||item.state==='duplicate'||item.state==='patch'){
     goal.append(el('p',(row.scorer||'得点者未選択')+' / '+(row.assistMode==='named'?row.assist:'アシストなし')));
     goal.append(el('p',item.state==='duplicate'?'同じ選手のゴールがあります。同じ得点か確認してください。':item.reason||'詳細入力が必要です','quick-held-note'));
