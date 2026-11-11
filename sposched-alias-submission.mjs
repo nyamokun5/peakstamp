@@ -17,9 +17,15 @@ export async function submitConfirmedSsAlias({
  const {alias,person,user_id}=checked.proposal;
  try{
   const result=await writeAlias({alias,person,user_id});
-  if(result?.ok!==true)
-   return {saved:false,reason:result?.error||'SS側の登録完了を確認できません',proposal:checked.proposal};
-  return {saved:true,alias,person,user_id};
+  // The Worker must have verified the exact alias + member_id through
+  // the official SS GET /v1/aliases readback. A generic HTTP 200 is not proof.
+  if(result?.ok!==true||result?.saved!==true||
+     result?.user_id!==user_id||
+     typeof result?.alias!=='string'||
+     result.alias.normalize('NFKC').toLocaleLowerCase('ja-JP')!==
+      alias.normalize('NFKC').toLocaleLowerCase('ja-JP'))
+   return {saved:false,reason:'SS側の登録完了を確認できません',proposal:checked.proposal};
+  return {saved:true,alias,person,user_id,shared:result.shared===true};
  }catch{
   // Never imply the write failed definitively: the HTTP reply may be lost.
   // A future bridge must read back the alias before any retry.
