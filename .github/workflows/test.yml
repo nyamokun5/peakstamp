@@ -20,7 +20,7 @@ jobs:
       - name: Unit tests
         run: |
           node --test tests/*.test.mjs
-          node --test scripts/test-name-resolution.mjs scripts/test-goal-identity-gate.mjs scripts/test-alias-proposal.mjs scripts/test-alias-submission.mjs scripts/test-score-reconciliation.mjs
+          node --test scripts/test-name-resolution.mjs scripts/test-goal-identity-gate.mjs scripts/test-alias-proposal.mjs scripts/test-alias-submission.mjs scripts/test-goal-alias-learning.mjs scripts/test-score-reconciliation.mjs
 
   finish-browser:
     runs-on: ubuntu-24.04
