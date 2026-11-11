@@ -13,27 +13,47 @@ export function resolveSpokenNameChoices({spoken,snapshot,seq,team,aliases=[]}={
 /**
  * Called only on a human selection in the goal editor. AI prefill and render
  * never trigger alias writes. The writer is injected by a trusted SS bridge.
+ * The stable user_id is mandatory: event-specific player_id is insufficient.
  */
 export async function onConfirmedGoalPlayerSelection({
  row,snapshot,field,officialName,source='local-video',writeAlias,resolveAlias
 }={}) {
- if(!['scorer','assist'].includes(field))return {saved:false,reason:'対象外の入力です'};
+ if(!['scorer','assist'].includes(field))
+  return {saved:false,reason:'対象外の入力です'};
  const spoken=row?.goal?.[field];
- if(typeof spoken!=='string'||!spoken.trim())return {saved:false,reason:'元動画に呼び名がありません'};
- const members=fixturePlayerOptions(snapshot,row.seq,row.team).map(name=>({name}));
- if(!members.some(m=>m.name===officialName))return {saved:false,reason:'得点チームの公式名簿にありません'};
- // A full SS alias lookup is mandatory before writing: fixture rosters do
- // not contain every existing alias, including aliases of other teams.
- if(typeof resolveAlias!=='function')return {saved:false,reason:'SS別名照合APIが未接続です'};
- const resolution=await resolveAlias({query:spoken});
- if(!Array.isArray(resolution?.candidates))return {saved:false,reason:'SS別名の照合に失敗しました'};
- const existing=resolution.candidates.filter(c=>c?.name);
- if(existing.some(c=>c.name===officialName))return {saved:false,reason:'SSに登録済みの呼び名です'};
- // An alias shared by multiple players is contextual, not a globally unique
- // identity. Keep the user's selection for this goal; do not overwrite the
- // SS global alias mapping or reject the goal.
- if(existing.length)return {saved:false,reason:'同じ呼び名の選手がいます。今回の選択のみ適用します',ambiguous:true};
+ if(typeof spoken!=='string'||!spoken.trim())
+  return {saved:false,reason:'元動画に呼び名がありません'};
+ const members=fixturePlayerOptions(snapshot,row.seq,row.team).map(name=>({
+  name,user_id:snapshot?.memberIds?.get(name)||null
+ }));
+ const person=members.find(member=>member.name===officialName);
+ if(!person)return {saved:false,reason:'得点チームの公式名簿にありません'};
+ const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+ if(!uuid.test(person.user_id||''))
+  return {saved:false,reason:'SSの登録メンバーIDが確認できません'};
+ // Fixture rosters do NOT contain other teams' historical aliases. The
+ // server-side resolver must search all members before alias persistence.
+ if(typeof resolveAlias!=='function')
+  return {saved:false,reason:'SS別名照合APIが未接続です'};
+ let resolution;
+ try{resolution=await resolveAlias({query:spoken});}
+ catch{return {saved:false,reason:'SS別名の照合に失敗しました'};}
+ if(!Array.isArray(resolution?.candidates))
+  return {saved:false,reason:'SS別名の照合に失敗しました'};
+ const existing=resolution.candidates;
+ // An unverified candidate cannot be assumed to belong to the current
+ // selected member. Never create or overwrite a nickname in that case.
+ if(existing.some(candidate=>!uuid.test(candidate?.user_id||'')))
+  return {saved:false,reason:'SS既存別名のメンバーIDが確認できません'};
+ if(existing.some(candidate=>candidate.user_id.toLowerCase()===person.user_id.toLowerCase()))
+  return {saved:false,reason:'SSに登録済みの呼び名です'};
+ // Shared nicknames (e.g. two たいせい) are valid contextually, but do not
+ // mutate a second member until the upstream contract documents many-to-many
+ // persistence. The human selection remains valid for the current goal.
+ if(existing.length)
+  return {saved:false,reason:'同じ呼び名の選手がいます。今回の選択のみ適用します',ambiguous:true};
  return submitConfirmedSsAlias({
-  spoken,officialName,source,candidates:members,confirmed:true,writeAlias
+  spoken,officialName,memberId:person.user_id,source,
+  candidates:members,confirmed:true,writeAlias
  });
 }
