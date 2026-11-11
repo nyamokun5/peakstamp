@@ -98,13 +98,13 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
     // Prioritize the matching official roster candidates without hiding others.
     const choices=(hints)=>{const rank=new Map((hints||[]).map((x,i)=>[x.name,i]));
      return [...players].sort((a,b)=>(rank.get(a[0])??999)-(rank.get(b[0])??999));};
-    const scorerAmbiguous=row.scorerGuess?.confidence==='none'&&
-     (row.scorerHints||[]).filter(x=>players.some(p=>p[0]===x.name)).length>1&&!rf.scorer&&!reviewed;
+    const scorerAmbiguous=new Set((row.scorerHints||[])
+     .filter(x=>players.some(p=>p[0]===x.name)).map(x=>x.name)).size>1&&!rf.scorer&&!reviewed;
     if(scorerAmbiguous)fields.append(el('p','同じ呼び名の候補がいます。得点者を選んでください。','small'));
     fields.append(select(r,'scorer',scorerAmbiguous?'得点者（本人を選択）':'得点者',
      choices(row.scorerHints),scorerAmbiguous?'':row.scorer&&(reviewed||rf.scorer||row.scorerGuess?.confidence==='high')?row.scorer:''));
-    const assistAmbiguous=row.assistGuess?.confidence==='none'&&row.assistMode==='named'&&
-     (row.assistHints||[]).filter(x=>players.some(p=>p[0]===x.name)).length>1&&!rf.assist&&!reviewed;
+    const assistAmbiguous=row.assistMode==='named'&&new Set((row.assistHints||[])
+     .filter(x=>players.some(p=>p[0]===x.name)).map(x=>x.name)).size>1&&!rf.assist&&!reviewed;
     if(assistAmbiguous)fields.append(el('p','アシストの候補が複数います。本人を選んでください。','small'));
     fields.append(select(r,'simpleAssist',assistAmbiguous?'アシスト（本人を選択）':'アシスト',
      [['__none__','なし'],...choices(row.assistHints)],assistAmbiguous?'':row.assistMode==='none'?'__none__':row.assistMode==='named'&&(reviewed||rf.assist||row.assistGuess?.confidence==='high')?row.assist:''));
