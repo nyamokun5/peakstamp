@@ -72,7 +72,6 @@ try{
  const scorer=page.getByLabel(/ゴール 1 得点者/);
  assert.equal(await scorer.count(),1);
  await scorer.selectOption('大成A');
- await page.waitForFunction(()=>window.__aliasWaitUnused===true,{timeout:500}).catch(()=>{});
  await page.waitForFunction(()=>document.querySelector('select[aria-label^="ゴール 1 得点者"]')?.value==='大成A');
  await page.waitForTimeout(500);
  assert.deepEqual(reads,['resolve']);
