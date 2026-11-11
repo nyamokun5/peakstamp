@@ -28,3 +28,19 @@ test('no assist is accepted without a second resolver call',async()=>{
 test('unknown player IDs cannot be manually injected',()=>{
  assert.throws(()=>chooseIdentity({status:'unresolved',candidates:[player]},'other'),/名簿/);
 });
+
+
+test('two たいせい identities override an upstream preferred candidate',async()=>{
+ const players=[
+  {name:'たいせいA',player_id:'player-a',team:'チーム1'},
+  {name:'たいせいB',player_id:'player-b',team:'チーム2'}
+ ];
+ const resolveMember=async()=>({
+  confirmed:true,player_id:'player-a',candidates:players
+ });
+ const result=await resolveGoalIdentities({scorer:'たいせい',resolveMember});
+ assert.equal(result.canSubmit,false,'do not trust preferred match when 2 people share a nickname');
+ assert.equal(result.scorer.status,'unresolved');
+ assert.equal(result.scorer.candidates.length,2);
+ assert.equal(chooseIdentity(result.scorer,'player-b').player_id,'player-b');
+});
