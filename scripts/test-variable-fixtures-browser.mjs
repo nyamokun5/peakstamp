@@ -184,8 +184,8 @@ try{
    await page.click('#ssLoadEvents');
    await page.locator('#ssLoadSnapshot').waitFor({state:'visible'});
    await page.click('#ssLoadSnapshot');
-   await page.locator('#ssFixtureOverview p').first().waitFor();
-   const text=await page.locator('#ssFixtureOverview').innerText();
+   await page.locator('#ssFixtureOverview p').first().waitFor({state:'attached'});
+   const text=await page.locator('#ssFixtureOverview').textContent();
    assert.match(text,new RegExp(String(scenario.fixtures.length)+'試合'));
    assert.match(text,/SS公式/);
    assert.equal(await page.locator('#autoPanel').isVisible(),true,

@@ -17,7 +17,7 @@ const requireOnce=(source,before,after,label)=>{
 export function buildStagingReviewHtml(html){
  let out=html;
  out=requireOnce(out,'<body><main>',
-  '<body><main><div id="stagingBuildBanner" role="status" style="background:#174d43;color:#fff;padding:12px;border:2px solid #55c5a0;border-radius:10px;font-weight:700;margin-bottom:14px">🧪 PeakStamp TEST — テスト用SSだけに接続します。本番SSには送信できません。</div>',
+  '<body data-simple-results="true"><main><div id="stagingBuildBanner" role="status" style="background:#174d43;color:#fff;padding:12px;border:2px solid #55c5a0;border-radius:10px;font-weight:700;margin-bottom:14px">🧪 PeakStamp TEST — テスト用SSだけに接続します。本番SSには送信できません。</div>',
   'TEST banner placement');
  out=requireOnce(out,'id="ssModeBadge" class="step">本番SS','id="ssModeBadge" class="step">テストSS','TEST header');
  out=requireOnce(out,'<select id="ssEnvironment" aria-label="SpoSched接続先">',
