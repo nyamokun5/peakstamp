@@ -451,6 +451,7 @@ import {auditCurrentTestFixtureGates} from './sposched-gate-audit.mjs?v=gate-aud
 import {GOAL_STORE_PREFIX,confirmedGoalExport} from './goal-stats.mjs?v=40';
 import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,approximateLegacyDayGroups,projectFileKey} from './goal-project.mjs?v=project1';
 import {installSimpleResults} from './sposched-simple-results.mjs?v=1';
+import {onConfirmedGoalPlayerSelection} from './sposched-goal-alias-learning.mjs';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=review-validation2';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 import {selectBatchOperations,previewReviewedBatch,executeReviewedBatch,executeReviewedBatchOnce} from './sposched-staging-batch.mjs?v=ss-batch-roster2';
@@ -1698,9 +1699,23 @@ const simpleResults=installSimpleResults({document,
    blockReason:target===$('autoRun')?$('autoBeforeRun').textContent:$('workerBatchReadiness').textContent};},
  onEdit:(index,field,value)=>{
   if(batchBusy||autoBusy||workerBatchPolling)return;
+  const aliasField=field==='scorer'||field==='simpleAssist'&&value!=='__none__';
+  const aliasRole=field==='scorer'?'scorer':'assist';
+  const aliasRow=rows[index];
   try{
    if(field==='simpleAssist'){field=value==='__none__'?'assistMode':'assist';if(value==='__none__')value='none';}
    editQuickGoalField(snapshot,rows[index],field,value);touch();renderGoals();renderQuick();
+   if(aliasField&&aliasRow?.goal?.[aliasRole]){
+    // Human selection is the sole learning trigger. Until the SS backend
+    // publishes a documented authenticated alias-write route, fail closed.
+    void onConfirmedGoalPlayerSelection({
+     row:aliasRow,snapshot,field:aliasRole,officialName:value,
+     source:'local-video'
+    }).then(result=>{
+     if(result.reason==='SS別名登録APIが未接続です')
+      console.info('SS alias sync pending: no authenticated write endpoint');
+    }).catch(error=>console.warn('SS alias sync unavailable',error));
+   }
   }catch(e){$('simpleSaveHelp').textContent=e.message;}
  },
  onInclude:(index,include)=>{if(batchBusy||autoBusy||workerBatchPolling)return;rows[index].include=include;touch();renderGoals();renderQuick();},
