@@ -39,3 +39,12 @@ export function planVideoRegistration(requests, slots) {
     return {...base, slotId:slot.id, status:'ready'};
   });
 }
+
+
+// The app label includes a date suffix; the events API returns date and name separately.
+// Keep the approved date mandatory and let the caller reject zero or multiple matches.
+export function registrationEvents(events,date,demo=false){
+ const normalize=value=>String(value||'').normalize('NFKC').replace(/\s/g,'').toLowerCase();
+ return events.filter(event=>event.date===date && (!demo ||
+  ['日曜定期','日曜定期(10nov)'].includes(normalize(event.name))));
+}
