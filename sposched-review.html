@@ -209,6 +209,16 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <div class="line"><button id="loadSnapshot" class="primary">試合・名簿を読み込む</button><span id="snapshotStatus" class="status"></span></div>
  </details>
 </section>
+<details class="panel" id="aliasAdminPanel" hidden>
+ <summary>呼び名の登録一覧（TEST）</summary>
+ <p class="small">SS公式データを読み取り専用で表示します。修正・削除はAPI確認後に追加します。</p>
+ <div class="line"><button id="aliasAdminLoad" type="button">一覧を更新</button></div>
+ <label class="field">呼び名・選手名で検索
+  <input id="aliasAdminQuery" type="search" placeholder="呼び名または選手名">
+ </label>
+ <p id="aliasAdminStatus" class="small" role="status" aria-live="polite"></p>
+ <div id="aliasAdminList"></div>
+</details>
 <section class="panel" id="recoveryPanel" hidden>
  <h2>⚠ 前回の送信結果を確認してください（テストSSのみ）</h2>
  <p>書き込みが完了しても通信が切れた可能性があります。<strong>このイベントの次の書き込みは、安全を確認するまで禁止しています。</strong> 自動再送は行いません。</p>
@@ -454,6 +464,7 @@ import {installSimpleResults} from './sposched-simple-results.mjs?v=2';
 import {installMinimalGoalFix,makeMinimalGoalOperation} from './sposched-simple-goal-fix.mjs?v=1';
 import {onConfirmedGoalPlayerSelection} from './sposched-goal-alias-learning.mjs';
 import {aliasIntentsForCommittedGoal} from './sposched-goal-commit-alias.mjs';
+import {normalizeAliasList,aliasListView} from './sposched-alias-admin.mjs';
 import {saveConfirmedGoalSelection,restoreConfirmedGoalSelections} from './sposched-goal-selection-draft.mjs';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=review-validation2';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
@@ -474,6 +485,35 @@ import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scop
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 import {clearBridgeSession,restoreBridgeSession,rememberBridgeSession} from './sposched-bridge-session.mjs?v=bridge-tab1';
 const $=id=>document.getElementById(id);
+let officialAliasEntries=[];
+function renderAliasAdmin(){
+ const target=$('aliasAdminList');target.replaceChildren();
+ const entries=aliasListView(officialAliasEntries,$('aliasAdminQuery').value);
+ $('aliasAdminStatus').textContent=entries.length+'件表示（読み取り専用）';
+ for(const entry of entries){
+  const item=document.createElement('p');
+  item.className='small';
+  item.textContent=entry.alias+' → '+(entry.name||entry.member_id)+
+   (entry.shared?'（同じ呼び名の別メンバーあり）':'');
+  target.append(item);
+ }
+}
+$('aliasAdminQuery').addEventListener('input',renderAliasAdmin);
+$('aliasAdminLoad').addEventListener('click',async()=>{
+ if(!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging'){
+  $('aliasAdminStatus').textContent='SS TESTイベントを読み込んでください';return;
+ }
+ $('aliasAdminStatus').textContent='SS公式一覧を取得中…';
+ officialAliasEntries=[];$('aliasAdminList').replaceChildren();
+ try{
+  const response=await fetchSS('/v1/aliases');
+  officialAliasEntries=normalizeAliasList(response);
+  renderAliasAdmin();
+ }catch(e){
+  $('aliasAdminStatus').textContent='一覧を確認できません：'+e.message;
+ }
+});
+
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
 let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='',manualGoals=[];
@@ -690,6 +730,12 @@ function chosenGoals(){
  return [...video,...unsentManualGoals(manualGoals)];
 }
 function rebuild({preserveEdits=false,completedKeys=[]}={}){
+ $('aliasAdminPanel').hidden=!(snapshot&&loadedFromStagingDirect&&
+  $('ssEnvironment').value==='staging');
+ officialAliasEntries=[];
+ $('aliasAdminList').replaceChildren();
+ $('aliasAdminStatus').textContent='';
+
  const prior=rows;
  const sameEvent=preserveEdits&&snapshot?.eventId===reviewedEventId;
  const wasEditing=!$('reviewArea').hidden;
