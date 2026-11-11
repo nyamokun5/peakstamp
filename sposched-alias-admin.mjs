@@ -14,8 +14,8 @@ export function normalizeAliasList(payload) {
  return source.map(entry=>{
   const alias=txt(entry?.alias),member_id=txt(entry?.member_id||entry?.user_id);
   const id=txt(entry?.id||entry?.alias_id);
-  if(!alias||!uuid.test(member_id)||!id)
-   throw Error('名寄せデータに正式IDがありません。編集はできません');
+  if(!alias||!uuid.test(member_id))
+   throw Error('名寄せデータに正式メンバーIDがありません');
   return {id,alias,member_id,name:txt(entry.name||entry.person),
    source:txt(entry.source)};
  });
