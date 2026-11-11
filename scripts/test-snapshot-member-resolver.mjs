@@ -33,3 +33,17 @@ test('actual normalized SS snapshot has names but no verified player IDs',async(
  assert.equal(r.ready,false);
  assert.equal(r.payload,null);
 });
+
+test('candidate selection is restricted to scoring team',async()=>{
+ const roster={players:['田中太郎','田中次郎'],
+  playerTeam:new Map([['田中太郎','T1'],['田中次郎','T2']]),
+  playerIds:new Map([['田中太郎','id-1'],['田中次郎','id-2']])};
+ const resolveMember=createSnapshotMemberResolver(roster);
+ const r=await resolveMember({query:'田中',team:'T1'});
+ assert.ok(r.candidates.every(c=>c.team==='T1'));
+ assert.ok(!r.candidates.some(c=>c.player_id==='id-2'));
+ await assert.rejects(()=>prepareGoalIdentityForRegistration({
+  source:'local-video',scorer:'田中',team:'T1',resolveMember,
+  selected:{scorer:'id-2'}
+ }),/名簿/);
+});
