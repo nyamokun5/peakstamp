@@ -24,6 +24,14 @@ export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
  if(direct.length>1)return null;
  // Shared aliases remain ambiguous even when one member is outside this fixture.
  const targets=new Set(entries.filter(e=>keys.includes(normalize(e.alias))).map(e=>String(e.member_id).toLowerCase()));
+ // The observed speech recognition 足川 corresponds to the roster spelling
+ // Ashikawa only when it is unique in the selected fixture and no alias
+ // points to a different member. This is not a general fuzzy-name guess.
+ if(targets.size===0&&normalize(raw).replace(/さん$/,'')==='足川'){
+  const candidates=(snapshot.players||[]).filter(name=>normalize(name)==='ashikawa');
+  if(candidates.length===1&&snapshot.memberIds.has(candidates[0])&&
+     [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam.get(candidates[0])))return candidates[0];
+ }
  if(targets.size!==1)return null;
  for(const e of entries){
   if(!keys.includes(normalize(e.alias)))continue;
