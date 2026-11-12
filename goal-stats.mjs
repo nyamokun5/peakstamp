@@ -166,6 +166,17 @@ export function createGoalDrafts(source,storage){
     goalTimeVerified:x.goalTimeVerified===true};
   });
  const events=transcript?.data?.utterances||[];
+ // Remove previously cached commentary-only match labels, but never touch
+ // an organizer-edited card or a genuine match_label supplied by Gemini.
+ for(const item of items){
+  if(!item.matchLabel||item.userEditedGoalFields?.includes('matchLabel'))continue;
+  const start=(events||[]).filter(e=>e?.kind==='match_start'&&validTime(e.time_seconds)&&
+   Number(e.time_seconds)<=Number(item.timeSeconds))
+   .sort((a,b)=>Number(b.time_seconds)-Number(a.time_seconds))[0];
+  if(start&&clip(item.matchLabel)===clip(start.quote)&&
+     clip(start.match_label)!==clip(start.quote)&&
+     !clip(start.match_label))item.matchLabel='';
+ }
  const reactions=readGeminiGoalReactions(source,storage);
  for(const event of events){
   if(event?.kind!=='goal_call'||!validTime(event.time_seconds))continue;
