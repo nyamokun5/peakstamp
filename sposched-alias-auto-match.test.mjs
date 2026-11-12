@@ -9,3 +9,7 @@ test('ambiguous nickname never selects a player',()=>assert.equal(matchOfficialA
 test('unknown member never selects a player',()=>assert.equal(matchOfficialAlias('ハマさん',[{alias:'ハマさん',member_id:'33333333-3333-4333-8333-333333333333'}],snapshot,1),null));
 test('missing match never selects a player',()=>assert.equal(matchOfficialAlias('ハマさん',[{alias:'ハマさん',member_id:a}],snapshot,2),null));
 test('unassigned team never selects a player',()=>assert.equal(matchOfficialAlias('ハマさん',[{alias:'ハマさん',member_id:a}],{...snapshot,playerTeam:new Map([['濱直','チーム3']])},1),null));
+
+test('official roster name is matched directly without alias registration',()=>assert.equal(matchOfficialAlias('濱直',[],snapshot,1),'濱直'));
+test('official roster name takes precedence over conflicting alias',()=>assert.equal(matchOfficialAlias('濱直',[{alias:'濱直',member_id:b}],snapshot,1),'濱直'));
+test('direct official name outside fixture is not selected',()=>assert.equal(matchOfficialAlias('濱直',[],{...snapshot,playerTeam:new Map([['濱直','チーム3']])},1),null));
