@@ -172,7 +172,7 @@ test('a late spoken goal/assist call still uses the preceding actual-play scene,
   reaction_time_seconds:241,type:'goal_reaction',confidence:'high',
   suggested_clip_start_seconds:233,suggested_clip_end_seconds:246
  }],utterances:[{
-  time_seconds:251,kind:'goal_call',quote:'山田さんゴール、佐藤さんアシスト',
+  time_seconds:252,kind:'goal_call',quote:'山田さんゴール、佐藤さんアシスト',
   scorer:'山田さん',assist:'佐藤さん',confidence:'high'
  }]});
  const goals=createGoalDrafts(v,c).items;
@@ -223,12 +223,12 @@ test('a standalone assist phrase is not silently discarded',()=>{
  assert.equal(out.utterances[0].assist,'佐藤さん');
 });
 
-test('call-first linking uses preceding reaction up to ten seconds, not a later reaction',()=>{
+test('call-first linking uses preceding reaction up to fifteen seconds, not a later reaction',()=>{
  const r=[{time:80,start:73,end:85},{time:90,start:86,end:95}];
  assert.equal(reactionBeforeGoalCall(r,89)?.time,80);
  assert.equal(reactionBeforeGoalCall(r,90)?.time,90);
  assert.equal(reactionBeforeGoalCall(r,91)?.time,90);
- assert.equal(reactionBeforeGoalCall(r,101),null);
+ assert.equal(reactionBeforeGoalCall(r,106),null);
  assert.equal(reactionBeforeGoalCall(r,79),null);
 });
 test('late spoken name attaches to earlier goal scene and preserves call timestamp',()=>{
