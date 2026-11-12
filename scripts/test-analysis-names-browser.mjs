@@ -72,6 +72,8 @@ try{
   localStorage.setItem(key,JSON.stringify(d));
  });
  await page.evaluate(()=>window.testNames.refresh());
+ // Refresh may collapse optional scorer/assist editing after successful auto-match.
+ await page.locator('.goal-score-details').evaluate(el=>{el.open=true;});
  await page.locator('select[aria-label="アシスト者"]').selectOption('やまだじょ');
  // Keep uses the existing video-review action; it does not write to SS.
  const keep=page.locator('.goal-review-video-keep');await keep.click();
