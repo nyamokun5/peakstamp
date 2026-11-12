@@ -25,7 +25,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  const token=$('ssAnalysisToken'),event=$('ssAnalysisEvent'),remember=$('ssAnalysisRemember');
  const status=$('ssAnalysisStatus'),connect=$('ssAnalysisConnect');
  let revision=0;
- const savedEvent=()=>{try{return sessionStorage.getItem(ANALYSIS_EVENT_KEY)||''}catch{return ''}};
+ const savedEvent=()=>{try{return sessionStorage.getItem(ANALYSIS_EVENT_KEY)||localStorage.getItem(ANALYSIS_EVENT_KEY)||''}catch{return ''}};
  const persistentKey='peakstamp_ss_bridge_device_staging_v1';
  const readSaved=()=>{try{return localStorage.getItem(persistentKey)||''}catch{return ''}};
  const saveDevice=()=>{try{if(remember.checked&&token.value.trim())localStorage.setItem(persistentKey,token.value.trim());else localStorage.removeItem(persistentKey)}catch{}};
@@ -53,6 +53,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
    $('ssAnalysisLabel').textContent='SS：'+event.selectedOptions[0].textContent;
    if(remember.checked){rememberBridgeSession(sessionStorage,'staging',token.value.trim());saveDevice();}
    sessionStorage.setItem(ANALYSIS_EVENT_KEY,id);
+   try{localStorage.setItem(ANALYSIS_EVENT_KEY,id)}catch{}
    panel.open=context.aliasError;
   }catch(error){if(current!==revision)return;status.textContent=error.message;panel.open=true;}
   onChange();
@@ -61,6 +62,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
   const current=++revision;state.ssNameContext=null;onChange();connect.disabled=true;
   try{
    const data=await read('/events?limit=100');if(current!==revision)return;
+   if(remember.checked)saveDevice();
    const selected=event.value||savedEvent();event.replaceChildren(new Option('イベントを選択',''));
    for(const e of (data.events||[]).filter(e=>uuid.test(e.event_id||'')).sort((a,b)=>String(b.date).localeCompare(String(a.date))))
     event.add(new Option((e.date||'')+' '+(e.name||'TEST'),e.event_id));
@@ -72,7 +74,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  }
  token.addEventListener('input',invalidate);
  remember.addEventListener('change',()=>{if(!remember.checked)clearBridgeSession(sessionStorage,'staging');saveDevice();});
- event.addEventListener('change',()=>{invalidate();try{sessionStorage.removeItem(ANALYSIS_EVENT_KEY)}catch{}refresh();});
+ event.addEventListener('change',()=>{invalidate();try{sessionStorage.removeItem(ANALYSIS_EVENT_KEY);localStorage.removeItem(ANALYSIS_EVENT_KEY)}catch{}refresh();});
  connect.addEventListener('click',load);
  if(token.value)load();
  return {refresh};
