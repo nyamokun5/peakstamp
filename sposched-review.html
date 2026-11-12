@@ -465,6 +465,7 @@ import {installMinimalGoalFix,makeMinimalGoalOperation} from './sposched-simple-
 import {onConfirmedGoalPlayerSelection} from './sposched-goal-alias-learning.mjs';
 import {aliasIntentsForCommittedGoal} from './sposched-goal-commit-alias.mjs';
 import {aliasesAfterVerifiedBatch} from './sposched-batch-simple-alias.mjs';
+import {batchAliasAttemptKey} from './sposched-batch-alias-ledger.mjs';
 import {normalizeAliasList,aliasListView} from './sposched-alias-admin.mjs';
 import {saveConfirmedGoalSelection,restoreConfirmedGoalSelections} from './sposched-goal-selection-draft.mjs';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=review-validation2';
@@ -2593,9 +2594,8 @@ async function learnVerifiedBatchAliases(state){
  for(const intent of intents){
   if(snapshot?.eventId!==eventId||!loadedFromStagingDirect||
      $('ssEnvironment').value!=='staging')return;
-  const key='peakstamp:batch-alias-attempt:v1:'+eventId+':'+requestId+':'+
-   encodeURIComponent(intent.alias.normalize('NFKC').toLowerCase())+':'+intent.member_id;
-  if(localStorage.getItem(key))continue;
+  const key=batchAliasAttemptKey({eventId,requestId,alias:intent.alias,memberId:intent.member_id});
+  if(!key||localStorage.getItem(key))continue;
   const row=rows.find(row=>row.include&&!row.guest&&!row.goal?.manual&&
    row[intent.field]===intent.person&&
    row.goal?.[intent.field]?.trim()===intent.alias);
