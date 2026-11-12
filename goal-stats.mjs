@@ -230,6 +230,24 @@ export function createGoalDrafts(source,storage){
    teamB:clip(event.team_b||match?.teamB),
    matchSeq:'',status:'draft',confirmedAt:null,note:''});
  }
+ // Reconcile previously persisted duplicate AI drafts only when they clearly
+ // share the same detected reaction. Never discard a human-reviewed decision.
+ for(const reaction of reactions){
+  const related=items.filter(x=>x.origin==='audio'&&
+   x.goalTimeEdited!==true&&x.goalTimeVerified!==true&&
+   Math.abs(Number(x.goalTimeSeconds)-(reaction.time-2))<=0.11&&
+   Number(x.timeSeconds)>=reaction.time-2&&
+   Number(x.timeSeconds)<=reaction.time+15);
+  if(related.length<2)continue;
+  const keep=related.find(x=>x.videoDecision==='kept'||x.status==='confirmed'||
+   (x.userEditedGoalFields||[]).length>0)||related[0];
+  for(const duplicate of related){
+   if(duplicate===keep||duplicate.videoDecision||duplicate.status==='confirmed'||
+      (duplicate.userEditedGoalFields||[]).length>0)continue;
+   const index=items.indexOf(duplicate);
+   if(index>=0)items.splice(index,1);
+  }
+ }
  // Keep existing commentary and manual goal decisions; never create duplicates.
  for(const event of reactions){
   const existing=items.find(item=>
