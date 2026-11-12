@@ -125,6 +125,7 @@ test('one-tap keep never confirms a goal with a missing scorer',async()=>{
  try{
   const goal=createGoalDrafts(one,storage).items[0];
   goal.scorer='';
+  goal.userEditedGoalFields=['scorer']; // Preserve an intentional blank human edit against transcript prefill.
   saveGoalDrafts(one,storage,[goal]);
   let keeps=0;
   initGoalStatsReview({sources:[one]},{
