@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
  goalSourceKey,readGoalTranscript,createGoalDrafts,saveGoalDrafts,makeManualGoal,
- validateGoal,confirmedGoalExport,matchContext
+ validateGoal,confirmedGoalExport,matchContext,suspectedDuplicateGoalIds
 } from '../goal-stats.mjs';
 const storage=()=>({
  data:new Map(),
@@ -235,4 +235,16 @@ test('previously saved unreviewed duplicates are reconciled without deleting a k
  assert.equal(goals.length,1);
  assert.equal(goals[0].id,'audio-175');
  assert.equal(goals[0].videoDecision,'kept');
+});
+
+test('overlapping nearby AI clips flag only the unreviewed duplicate',()=>{
+ const a={id:'a',origin:'audio',timeSeconds:14.5,clipStartSeconds:5,clipEndSeconds:22,status:'confirmed',videoDecision:'kept'};
+ const b={id:'b',origin:'audio',timeSeconds:17.5,clipStartSeconds:6,clipEndSeconds:21,status:'draft'};
+ assert.deepEqual([...suspectedDuplicateGoalIds([a,b])],['b']);
+});
+test('distinct scenes and excluded candidates never trigger duplicate warning',()=>{
+ const a={id:'a',origin:'audio',timeSeconds:14.5,clipStartSeconds:0,clipEndSeconds:12,status:'confirmed'};
+ const b={id:'b',origin:'audio',timeSeconds:17.5,clipStartSeconds:15,clipEndSeconds:27,status:'draft'};
+ assert.equal(suspectedDuplicateGoalIds([a,b]).size,0);
+ assert.equal(suspectedDuplicateGoalIds([a,{...b,clipStartSeconds:0,clipEndSeconds:12,status:'excluded'}]).size,0);
 });
