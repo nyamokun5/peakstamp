@@ -251,13 +251,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   // Primary controls: movie, trim/zoom, Keep/Reject.
   // Detailed scorer/assist and official match inputs stay one tap away.
   const scoreDetails=make('details','goal-score-details');
-  scoreDetails.open=scoreDetailsOpen;
+  scoreDetails.open=scoreDetailsOpen || !item.scorer || (item.assistStatus==='named'&&!item.assist) || (state.ssNameEnabled===true&&!item.ssIdentity?.scorer);
   scoreDetails.addEventListener('toggle',()=>{scoreDetailsOpen=Boolean(scoreDetails.open);});
   const summaryNames=(state.ssNameEnabled&&!item.ssIdentity?.scorer?'得点者を選択':item.scorer||'得点者未入力')+' ／ '+
    (item.assistStatus==='named'?(state.ssNameEnabled&&!item.ssIdentity?.assist?'アシスト者を選択':item.assist||'アシスト者未入力'):
     item.assistStatus==='none'?'アシストなし':'アシスト未確認');
   scoreDetails.append(make('summary','',
-   (item.status==='confirmed'?'✓ 得点情報確定済み':'✎ 得点情報を確認・編集')+'　'+summaryNames));
+   summaryNames+'　✎ 修正'));
   const timing=make('details','goal-review-time-adjust');
   timing.append(make('summary','','⏱ ゴール時刻を修正（切り抜きとは別）'));
   const timingTools=make('div','goal-review-time-tools');
@@ -435,8 +435,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const videoStatus=make('p','goal-review-video-status');
   const linked=source.candidates?.find(c=>c.goalRecordId===item.id&&c.enabled===true);
   const decision=item.videoDecision||(linked?'kept':null);
-  const videoKeep=make('button','goal-review-video-keep','✓ 動画をキープ（次のゴールへ）');
-  const videoReject=make('button','goal-review-video-reject','✕ 動画は不採用');
+  const videoKeep=make('button','goal-review-video-keep','✓ ゴールを確認・次へ');
+  const videoReject=make('button','goal-review-video-reject','動画は使わない');
   videoKeep.type=videoReject.type='button';
   videoKeep.disabled=!(Number(source.duration)>0);
   videoKeep.setAttribute('aria-pressed',String(decision==='kept'));
@@ -444,12 +444,12 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   videoKeep.className='goal-review-video-keep'+(decision==='kept'?' is-active':'');
   videoReject.className='goal-review-video-reject'+(decision==='rejected'?' is-active':'');
   videoStatus.textContent=decision==='kept'
-   ?'✓ キープ済み'
-   :decision==='rejected'?'不採用':'動画を確認して選択';
+   ?'✓ 確認済み'
+   :decision==='rejected'?'動画は不採用':'';
   videoKeep.addEventListener('click',()=>setVideoDecision(entry,'kept'));
   videoReject.addEventListener('click',()=>setVideoDecision(entry,'rejected'));
   videoActions.append(videoKeep,videoReject);
-  editor.append(scoreDetails,actions,videoStatus,videoActions);
+  editor.append(scoreDetails,videoActions,actions,videoStatus);
  }
  function render(){
   const all=sources(),entries=queue();
