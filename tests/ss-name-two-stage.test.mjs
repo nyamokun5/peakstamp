@@ -44,3 +44,13 @@ test('manual edits are never overwritten',()=>{
  assert.equal(out.scorer,'田中');
  assert.equal(out.ssIdentity.scorer?.memberId,idB);
 });
+
+test('display-only names are removed when event context disappears',()=>{
+ const aliases=[{alias:'はっしー',member_id:idA}];
+ const item={rawScorer:'はっしー',scorer:'はっしー',assistStatus:'none',matchSeq:99,status:'draft',videoDecision:'kept'};
+ const matched=resolveAnalysisGoal(item,{snapshot,aliases});
+ assert.equal(matched.scorer,'橋本');
+ const cleared=resolveAnalysisGoal(matched,{snapshot:null,aliases:[]});
+ assert.equal(cleared.scorer,'はっしー');
+ assert.equal(cleared.ssIdentity.scorer,null);
+});
