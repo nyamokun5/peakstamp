@@ -182,7 +182,16 @@ export function createGoalDrafts(source,storage){
   if(event?.kind!=='goal_call'||!validTime(event.time_seconds))continue;
   const time=Number(event.time_seconds),id=goalCandidateId(time,event.quote||'');
   // Re-analysis may shift timestamp; do not generate duplicate confirmed goals.
-  const already=items.find(r=>r.id===id ||
+  // Two different spoken calls may describe the SAME goal reaction, even when
+  // Gemini transcribes the scorer differently. Only collapse when both calls
+  // point to one explicitly detected reaction; never merge on name alone.
+  const linkedReaction=reactionBeforeGoalCall(reactions,time);
+  const sameReaction=linkedReaction&&items.find(r=>r.origin==='audio'&&
+   r.status!=='excluded'&&r.goalTimeEdited!==true&&
+   r.goalTimeVerified!==true&&
+   Math.abs(Number(r.goalTimeSeconds)-(linkedReaction.time-2))<=0.11&&
+   Math.abs(Number(r.timeSeconds)-time)<=15);
+  const already=sameReaction||items.find(r=>r.id===id ||
    (r.origin==='manual'?
     time-actualGoalTime(r)>=-2 && time-actualGoalTime(r)<=15:
     r.origin==='gemini'?
