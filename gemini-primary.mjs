@@ -17,7 +17,9 @@ import { createGoalDrafts } from './goal-stats.mjs?v=goalprefill1';
 import { buildAnalysisDiagnostic } from './gemini-diagnostics.mjs?v=1';
 
 // Verified owner project: Vercel production domain for nyamokun5/peakstamp.
-const API_ENDPOINT = 'https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
+const API_ENDPOINT = location.hostname==='peakstamp-ss-stage-nyamokun5.pages.dev'
+ ? 'https://peakstamp-gemini-api-git-staging-team-opt.vercel.app/api/gemini-audio'
+ : 'https://peakstamp-gemini-api.vercel.app/api/gemini-audio';
 const MAX_AUDIO_BYTES = 2_900_000;
 const CACHE_KEY = 'peakstamp_gemini_primary_json_v1';
 const SEGMENT_CACHE_KEY='peakstamp_gemini_wav_segments_v1';
