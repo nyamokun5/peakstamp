@@ -1,7 +1,8 @@
 /** TEST-only batch alias plan. Only a fully verified batch may teach names. */
 import {aliasIntentsForCommittedGoal} from './sposched-goal-commit-alias.mjs';
 const clean=x=>typeof x==='string'?x.trim():'';
-const norm=x=>clean(x).normalize('NFKC').toLocaleLowerCase('ja-JP');
+const norm=x=>clean(x).normalize('NFKC').toLocaleLowerCase('ja-JP')
+ .replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
 export function aliasesAfterVerifiedBatch({verified=false,rows=[],snapshot}={}){
  if(verified!==true||!Array.isArray(rows)||!snapshot)return [];
  const proposals=[];
