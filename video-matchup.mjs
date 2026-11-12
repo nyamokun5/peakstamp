@@ -22,10 +22,14 @@ export function videoMatchup(source,storage){
  const starts=rows
   .filter(x=>x?.kind==='match_start'&&matchupFromUtterance(x))
   .sort((a,b)=>Number(a.time_seconds)-Number(b.time_seconds));
- // Never infer a single video-level matchup when the video contains multiple fixtures.
- const pairs=[...new Set(starts.map(x=>{const m=matchupFromUtterance(x);return m.teamA+'|'+m.teamB;}))];
+ // A match announcement in the opening 30 seconds identifies this recording.
+ // Ignore later unrelated stadium PA calls (e.g. other pitches), but remain
+ // conservative when two different matchups are announced in the opening.
+ const opening=starts.filter(x=>Number(x.time_seconds)>=0&&Number(x.time_seconds)<=30);
+ const selected=opening.length?opening:starts;
+ const pairs=[...new Set(selected.map(x=>{const m=matchupFromUtterance(x);return m.teamA+'|'+m.teamB;}))];
  if(pairs.length!==1)return {teamA:'',teamB:'',origin:pairs.length?'ambiguous':'unknown'};
- return {...matchupFromUtterance(starts[0]),origin:'audio'};
+ return {...matchupFromUtterance(selected[0]),origin:'audio'};
 }
 export function saveVideoMatchup(source,storage,teamA,teamB){
  const key=goalSourceKey(source);if(!key)return false;
