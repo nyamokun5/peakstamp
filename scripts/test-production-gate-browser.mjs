@@ -40,6 +40,8 @@ await page.addInitScript(()=>{
 });
 await page.route('**/*',async route=>{
  const url=new URL(route.request().url());
+ if(url.host==='shoot-sunday-sync-staging.yomax1979.workers.dev'&&url.pathname==='/staging/alias/list'&&route.request().method()==='GET')
+  return route.fulfill({json:{aliases:[]}});
  if(url.host==='peakstamp.local'){
   const path=url.pathname==='/'?'sposched-review.html':url.pathname.slice(1);
   try{return route.fulfill({body:await readFile(new URL('../'+path,import.meta.url)),

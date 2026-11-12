@@ -1,3 +1,4 @@
+import {initAnalysisNames} from './sposched-analysis-names.mjs';
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=peak52';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
@@ -507,6 +508,7 @@ async function commitGeminiResults({source,parsed,audio,decoded,batch=false}) {
     .sort((a,b)=>a.peakSeconds-b.peakSeconds);
   source.analysisEngine='gemini';
   source.error='';
+  await ssNames.refresh();
   syncSources();
   $('resultsPanel').hidden=false;
   if(!batch)$('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
@@ -1749,6 +1751,7 @@ const goalReview=initGoalStatsReview(state,{
     }
   }
 });
+const ssNames=initAnalysisNames(state,{onChange:()=>goalReview.refresh()});
 const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
   onResultsChange:()=>{
     goalReview.refresh();

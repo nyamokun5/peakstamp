@@ -17,6 +17,8 @@ try{
  await buildStagingSite(folder);
  await page.route('**/*',async route=>{
   const url=new URL(route.request().url());
+ if(url.host==='shoot-sunday-sync-staging.yomax1979.workers.dev'&&url.pathname==='/staging/alias/list'&&route.request().method()==='GET')
+  return route.fulfill({json:{aliases:[]}});
   if(url.hostname==='peakstamp-stage.local'){
    const name=url.pathname==='/'?'index.html':url.pathname.slice(1);
    try{

@@ -125,6 +125,8 @@ export function prefillDetectedGoalFields(goal,event,utterances=[]){
  };
  const context=matchContext(utterances,event.time_seconds);
  fill('scorer',event.scorer);
+ if(!goal.rawScorer&&clip(event.scorer))goal.rawScorer=clip(event.scorer);
+ if(!goal.rawAssist&&clip(event.assist))goal.rawAssist=clip(event.assist);
  if(!edited.has('assistStatus')&&!edited.has('assist')&&goal.assistStatus!=='none'){
   fill('assist',event.assist);
   if(clip(goal.assist)&&goal.assistStatus!=='named')goal.assistStatus='named';
@@ -170,6 +172,7 @@ export function createGoalDrafts(source,storage){
      Math.abs(Number(r.timeSeconds)-time)<=6 &&
      (!clip(r.scorer)||!clip(event.scorer)||
       clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase()||
+      clip(r.rawScorer).toLowerCase()===clip(event.scorer).toLowerCase()||
       // An organizer corrected this scorer, or already confirmed the goal.
       // Keep that human decision rather than generating another AI goal.
       r.status==='confirmed'||
@@ -194,6 +197,7 @@ export function createGoalDrafts(source,storage){
    goalTimeSeconds:estimateGoalTime(time),goalTimeVerified:false,goalTimeEdited:false,
    quote:clip(event.quote,240),
    scorer:clip(event.scorer),assist:clip(event.assist),
+   rawScorer:clip(event.scorer),rawAssist:clip(event.assist),
    assistStatus:clip(event.assist)?'named':(/アシストなし|アシスト無し|no assist/i.test(String(event.quote||''))?'none':'unknown'),
    matchLabel:clip(event.match_label||match?.label),
    teamA:clip(event.team_a||match?.teamA),
@@ -284,6 +288,7 @@ export function confirmedGoalExport(sources,storage){
     goalTimeVerified:x.goalTimeVerified===true,
     timingMethod:x.origin==='audio'?(x.goalTimeVerified===true?'video-reviewed':'comment-minus-10s'):x.origin==='gemini'?(x.goalTimeVerified===true?'video-reviewed':'audio-reaction-estimate'):'manual',
     quote:clip(x.quote,240),scorer:clip(x.scorer),
+    ...(x.ssIdentity?{ssIdentity:x.ssIdentity,rawScorer:x.rawScorer??x.scorer,rawAssist:x.rawAssist??x.assist}:{}),
     assistStatus:x.assistStatus,
     assist:x.assistStatus==='named'?clip(x.assist):null,
     matchSeq:clip(String(x.matchSeq||''))?Number(x.matchSeq):null,

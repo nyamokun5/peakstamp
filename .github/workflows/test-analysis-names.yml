@@ -1,0 +1,27 @@
+name: Analysis SS identity integration
+on:
+  push:
+    branches: [feat/analysis-ss-names-20261112, staging]
+  pull_request:
+    branches: [staging]
+permissions:
+  contents: read
+jobs:
+  analysis-names:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/*.test.mjs *.test.mjs scripts/test-goal-alias-learning.mjs scripts/test-alias-submission.mjs scripts/test-alias-proposal.mjs scripts/test-goal-selection-draft.mjs scripts/test-goal-identity-gate.mjs
+      - run: npm install --no-save playwright@1.58.2
+      - run: npx playwright install --with-deps chromium
+      - name: Mobile integration and existing registration regressions (mocked HTTP only)
+        run: |
+          node scripts/test-analysis-names-browser.mjs
+          node scripts/test-staging-site-browser.mjs
+          node scripts/test-goal-review-browser.mjs
+          node scripts/test-alias-learning-browser.mjs
+          node scripts/test-bridge-tab-browser.mjs
+          node scripts/test-simple-results-browser.mjs

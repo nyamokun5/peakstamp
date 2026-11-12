@@ -20,7 +20,7 @@ export async function onConfirmedGoalPlayerSelection({
 }={}) {
  if(!['scorer','assist'].includes(field))
   return {saved:false,reason:'対象外の入力です'};
- const spoken=row?.goal?.[field];
+ const spoken=row?.goal?.[field==='scorer'?'rawScorer':'rawAssist']??row?.goal?.[field];
  if(typeof spoken!=='string'||!spoken.trim())
   return {saved:false,reason:'元動画に呼び名がありません'};
  // For waiting knockout fixtures #3/#4, the next opponents are not yet
