@@ -26,7 +26,7 @@ export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
  const targets=new Set(entries.filter(e=>keys.includes(normalize(e.alias))).map(e=>String(e.member_id).toLowerCase()));
  if(targets.size!==1)return null;
  for(const e of entries){
-  if(normalize(e.alias)!==key)continue;
+  if(!keys.includes(normalize(e.alias)))continue;
   const official=[...snapshot.memberIds.entries()].filter(([,id])=>String(id).toLowerCase()===String(e.member_id).toLowerCase());
   for(const [name] of official){
    if(!snapshot.players.includes(name))continue;
