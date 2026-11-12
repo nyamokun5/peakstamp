@@ -26,14 +26,17 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  const status=$('ssAnalysisStatus'),connect=$('ssAnalysisConnect');
  let revision=0;
  const savedEvent=()=>{try{return sessionStorage.getItem(ANALYSIS_EVENT_KEY)||''}catch{return ''}};
- token.value=restoreBridgeSession(sessionStorage,'staging');remember.checked=Boolean(token.value);
+ const persistentKey='peakstamp_ss_bridge_device_staging_v1';
+ const readSaved=()=>{try{return localStorage.getItem(persistentKey)||''}catch{return ''}};
+ const saveDevice=()=>{try{if(remember.checked&&token.value.trim())localStorage.setItem(persistentKey,token.value.trim());else localStorage.removeItem(persistentKey)}catch{}};
+ token.value=restoreBridgeSession(sessionStorage,'staging')||readSaved();remember.checked=Boolean(readSaved());
  const invalidate=()=>{revision++;state.ssNameContext=null;onChange();};
  const read=async path=>{
   const password=token.value.trim();if(!password)throw Error('SS連携パスワードを入力してください。');
   const response=await fetch(gateway+path,{method:'GET',headers:{'X-SS-Bridge-Token':password},
    mode:'cors',cache:'no-store',signal:AbortSignal.timeout(15000)});
   if(!response.ok){
-   if([401,403].includes(response.status))clearBridgeSession(sessionStorage,'staging');
+   if([401,403].includes(response.status)){clearBridgeSession(sessionStorage,'staging');try{localStorage.removeItem(persistentKey)}catch{}}
    throw Error('SSに接続できません。パスワードと通信を確認してください。');
   }
   return response.json();
@@ -48,7 +51,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
    state.ssNameContext=context;
    status.textContent=context.aliasError?'呼び名を取得できません。未確定の選手を選んでください。':'';
    $('ssAnalysisLabel').textContent='SS：'+event.selectedOptions[0].textContent;
-   if(remember.checked)rememberBridgeSession(sessionStorage,'staging',token.value.trim());
+   if(remember.checked){rememberBridgeSession(sessionStorage,'staging',token.value.trim());saveDevice();}
    sessionStorage.setItem(ANALYSIS_EVENT_KEY,id);
    panel.open=context.aliasError;
   }catch(error){if(current!==revision)return;status.textContent=error.message;panel.open=true;}
@@ -68,7 +71,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
   finally{connect.disabled=false;}
  }
  token.addEventListener('input',invalidate);
- remember.addEventListener('change',()=>{if(!remember.checked)clearBridgeSession(sessionStorage,'staging');});
+ remember.addEventListener('change',()=>{if(!remember.checked)clearBridgeSession(sessionStorage,'staging');saveDevice();});
  event.addEventListener('change',()=>{invalidate();try{sessionStorage.removeItem(ANALYSIS_EVENT_KEY)}catch{}refresh();});
  connect.addEventListener('click',load);
  if(token.value)load();
