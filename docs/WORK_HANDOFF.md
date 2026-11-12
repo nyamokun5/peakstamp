@@ -14,6 +14,13 @@ TEST: https://peakstamp-ss-stage-nyamokun5.pages.dev/
 Worker configuration read through GitHub: existing staging config stays unchanged.
 No Worker implementation change required: use GET /events, /snapshot and /staging/alias/list.
 
+## GitHub / CI
+PR #197: https://github.com/nyamokun5/peakstamp/pull/197 (base staging).
+Implementation commits begin at 8e0915e; subsequent fixes are on the same branch.
+CI uses ubuntu-24.04 because pinned Playwright does not support ubuntu-latest 26.04.
+Browser execution now works in Actions; resolving test-harness selectors and checking full flow.
+No staging promotion yet.
+
 ## Implementation being validated
 - TEST-build-only connection/event selection in analysis panel; existing opt-in tab token reuse.
 - Resolve scorer/assist against current official roster and aliases; retain raw observations.

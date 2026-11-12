@@ -554,7 +554,7 @@ $('aliasDryRun').addEventListener('click',async()=>{
   const prepared=prepareGoalRows({goals:source},originalSnapshot);
   let checked=0,matched=0;
   for(const row of prepared){
-   for(const [role,raw] of [['得点',row.goal?.scorer],['アシスト',row.goal?.assist]]){
+   for(const [role,raw] of [['得点',row.goal?.rawScorer??row.goal?.scorer],['アシスト',row.goal?.rawAssist??row.goal?.assist]]){
     if(!raw||!String(raw).trim())continue;
     checked++;
     const name=matchOfficialAlias(raw,aliases,originalSnapshot,row.seq);
@@ -2658,7 +2658,7 @@ async function learnVerifiedBatchAliases(state){
   if(!key||localStorage.getItem(key))continue;
   const row=submittedRows.find(row=>row.include&&!row.guest&&!row.goal?.manual&&
    row[intent.field]===intent.person&&
-   row.goal?.[intent.field]?.trim()===intent.alias);
+   (row.goal?.[intent.field==='scorer'?'rawScorer':'rawAssist']??row.goal?.[intent.field])?.trim()===intent.alias);
   if(!row)continue;
   // Persist the attempt immediately before the network-capable operation.
   localStorage.setItem(key,'attempted');

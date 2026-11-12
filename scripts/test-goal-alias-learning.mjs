@@ -70,3 +70,11 @@ test('same nickname for two players remains ambiguous with team labels',()=>{
  const narrowed=resolveSpokenNameChoices({spoken:'たいせい',snapshot:roster,seq:1,team:'チーム1',aliases});
  assert.equal(narrowed.status,'unique');assert.equal(narrowed.candidates[0].name,'たいせいA');
 });
+
+test('analysis official label does not replace raw nickname in post-commit writer',async()=>{
+ const writes=[];
+ const r=await learn({row:{...row,goal:{scorer:'西村',rawScorer:'よーさん'}},snapshot,
+  field:'scorer',officialName:'西村',resolveAlias,
+  writeAlias:async x=>{writes.push(x);return {ok:true,saved:true,user_id:x.user_id,alias:x.alias}}});
+ assert.equal(r.saved,true);assert.equal(writes[0].alias,'よーさん');
+});
