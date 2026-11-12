@@ -25,3 +25,15 @@ test('duplicate source mapping never teaches twice',()=>{
 test('rejects missing source identity',()=>{
  assert.deepEqual(prove({eventVerified:true,reviewed:[{...source,sourceGoalId:''}],official:[official]}),[]);
 });
+
+test('same scorer can have two distinct goals when both official IDs are proven',()=>{
+ const second={...source,sourceGoalId:'video-goal-2',officialGoalId:'goal-2'};
+ const officialSecond={...official,id:'goal-2'};
+ const result=prove({eventVerified:true,reviewed:[source,second],official:[official,officialSecond]});
+ assert.deepEqual(result.map(x=>x.officialGoalId),['goal-1','goal-2']);
+});
+test('same source goal cannot teach aliases from two official goal IDs',()=>{
+ const second={...source,officialGoalId:'goal-2'};
+ const result=prove({eventVerified:true,reviewed:[source,second],official:[official,{...official,id:'goal-2'}]});
+ assert.deepEqual(result.map(x=>x.officialGoalId),['goal-1']);
+});
