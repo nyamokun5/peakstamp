@@ -13,8 +13,9 @@ import { createGeminiProgressUI } from './gemini-progress-ui.mjs?v=1';
 import { updateGeminiScreenNotice } from './gemini-screen-notice.mjs?v=1';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
 import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=unifiedga2';
+import { videoMatchup } from './video-matchup.mjs?v=4';
 import { createGoalDrafts } from './goal-stats.mjs?v=goalprefill1';
-import { buildAnalysisDiagnostic,buildBatchAnalysisDiagnostic } from './gemini-diagnostics.mjs?v=2';
+import { buildAnalysisDiagnostic,buildBatchAnalysisDiagnostic } from './gemini-diagnostics.mjs?v=3';
 
 // Verified owner project: Vercel production domain for nyamokun5/peakstamp.
 const API_ENDPOINT = location.hostname==='peakstamp-ss-stage-nyamokun5.pages.dev'
@@ -272,7 +273,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()
   }
   const videos=candidates(state);
   const report=videos.length>1
-   ?buildBatchAnalysisDiagnostic(videos,cachedResult,s=>createGoalDrafts(s,window.localStorage))
+   ?buildBatchAnalysisDiagnostic(videos,cachedResult,s=>createGoalDrafts(s,window.localStorage),s=>videoMatchup(s,window.localStorage))
    :buildAnalysisDiagnostic(source,cache,createGoalDrafts(source,window.localStorage));
   if(fallback)fallback.hidden=true;
   try{
