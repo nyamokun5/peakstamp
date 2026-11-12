@@ -47,3 +47,22 @@ export function buildAnalysisDiagnostic(source,geminiResult,goalReview){
    note:'Unified explicit goal calls and Gemini goal_reaction scenes both enter the priority review as unconfirmed goals.'}
  },null,2);
 }
+
+/** One report for every imported video, including missing analysis. */
+export function buildBatchAnalysisDiagnostic(sources,getResult,getGoalReview){
+ const videos=(sources||[]).map((source,index)=>{
+  const result=getResult(source);
+  const report=JSON.parse(buildAnalysisDiagnostic(source,result,getGoalReview(source)));
+  const announcements=report.gemini.utterances.filter(x=>x.kind==='match_start');
+  return {videoNumber:index+1,source:report.source,
+   analyzed:report.gemini.stored,analysisMeta:report.gemini.analysisMeta,
+   segmentCount:report.gemini.segments,
+   announcements:announcements.map(x=>({timeSeconds:x.time_seconds,quote:x.quote,
+    matchLabel:x.match_label,teamA:x.team_a||null,teamB:x.team_b||null,confidence:x.confidence})),
+   openingAnnouncements:announcements.filter(x=>Number(x.time_seconds)<=30).length,
+   utteranceCount:report.gemini.rawUtteranceCount,
+   goalCallCount:report.goalReview.explicitGoalCallCount};
+ });
+ return JSON.stringify({kind:'peakstamp-batch-analysis-diagnostic',version:1,
+  videoCount:videos.length,videos},null,2);
+}
