@@ -40,3 +40,11 @@ test('read-only listing works without a mutation-specific alias ID',()=>{
  assert.equal(list[0].id,'');
  assert.equal(aliasListView(list,'たけ').length,1);
 });
+
+test('official SS aliases response with nested member person is readable',()=>{
+ const list=normalizeAliasList({aliases:[{alias_id:'33333333-3333-4333-8333-333333333333',alias:'ハマさん',person:{type:'member',member_id:a,name:'濱直'}}]});
+ assert.deepEqual(list,[{id:'33333333-3333-4333-8333-333333333333',alias:'ハマさん',member_id:a,name:'濱直',source:''}]);
+});
+test('official child identity is not silently mistaken for member',()=>{
+ assert.throws(()=>normalizeAliasList({aliases:[{alias:'子供',person:{type:'child',child_id:b,name:'子供A'}}]}),/正式メンバーID/);
+});
