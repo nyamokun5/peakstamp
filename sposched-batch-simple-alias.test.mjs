@@ -26,3 +26,7 @@ test('hiragana and katakana of an ambiguous alias are treated as one name',()=>{
  const r=plan({verified:true,rows:[row('タロウ','田中太郎','1'),row('たろう','佐藤花子','2')],snapshot});
  assert.deepEqual(r,[]);
 });
+
+test('spoken official name needs no redundant nickname write',()=>{
+ assert.deepEqual(plan({verified:true,rows:[row('田中太郎','田中太郎','1')],snapshot}),[]);
+});
