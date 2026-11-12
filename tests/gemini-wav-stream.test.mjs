@@ -20,7 +20,8 @@ test('70-second segment stays below API ceiling; 20-second overlaps are preserve
  const s=sample({seconds:70});const audio=await encodeWavSegment(sampleIterator(s),{startSeconds:0,endSeconds:70,durationSeconds:70});
  assert.equal(audio.bytes,2240044);assert.ok(audio.bytes<2900000);
  const ranges=wavSegmentRanges(130);
- assert.equal(ranges.length,3);assert.equal(ranges[0].endSeconds-ranges[1].startSeconds,20);\n assert.equal(ranges[1].endSeconds-ranges[2].startSeconds,20);
+ assert.equal(ranges.length,3);assert.equal(ranges[0].endSeconds-ranges[1].startSeconds,20);
+ assert.equal(ranges[1].endSeconds-ranges[2].startSeconds,20);
 });
 test('sample times are mapped relative to segment start',async()=>{
  const a=sample({start:64,seconds:2,value:.2}),b=sample({start:66,seconds:1,value:.6});
