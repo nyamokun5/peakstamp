@@ -19,7 +19,7 @@ test('one verified goal produces one alias intent',()=>{
 });
 test('duplicate source mapping never teaches twice',()=>{
  const result=prove({eventVerified:true,reviewed:[source,source],official:[official]});
- assert.equal(result.length,1);
+ assert.equal(result.length,0);
 });
 
 test('rejects missing source identity',()=>{
@@ -35,5 +35,5 @@ test('same scorer can have two distinct goals when both official IDs are proven'
 test('same source goal cannot teach aliases from two official goal IDs',()=>{
  const second={...source,officialGoalId:'goal-2'};
  const result=prove({eventVerified:true,reviewed:[source,second],official:[official,{...official,id:'goal-2'}]});
- assert.deepEqual(result.map(x=>x.officialGoalId),['goal-1']);
+ assert.deepEqual(result.map(x=>x.officialGoalId),[]);
 });
