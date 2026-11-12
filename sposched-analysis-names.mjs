@@ -50,7 +50,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
    const context=await readAnalysisContext({eventId:id,read});
    if(current!==revision)return;
    state.ssNameContext=context;
-   retry.hidden=false;
+   retry.hidden=!context.aliasError;
    status.textContent=context.aliasError?'呼び名を取得できません（'+context.aliasErrorReason+'）。正式名簿は利用できます。SSに再接続すると再取得します。':'';
    $('ssAnalysisLabel').textContent='SS：'+event.selectedOptions[0].textContent;
    if(remember.checked){rememberBridgeSession(sessionStorage,'staging',token.value.trim());saveDevice();}
