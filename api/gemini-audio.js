@@ -13,7 +13,7 @@ export const PROMPT_REVISION='phonetic-hiragana-20261112-v1';
 const MAX_BYTES=2900000;
 const MAX_DURATION_SECONDS=600;
 const ORIGIN='https://nyamokun5.github.io';
-const allowedOrigins=()=>[ORIGIN,...String(process.env.PEAKSTAMP_ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean)];
+const allowedOrigins=()=>[ORIGIN,'https://peakstamp-ss-stage-nyamokun5.pages.dev',...String(process.env.PEAKSTAMP_ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean)];
 const reply=(res,status,message)=>res.status(status).json({error:message});
 const equalSecret=(value,secret)=>{
  if(typeof value!=='string'||typeof secret!=='string'||!secret)return false;
