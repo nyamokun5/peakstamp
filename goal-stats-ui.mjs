@@ -393,7 +393,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   scoreDetails.append(fields,timing,optional);
   const actions=make('div','goal-review-actions');
   const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'✓ 得点情報は確定済み':'✓ 得点情報を確定');
-  confirm.type='button';confirm.hidden=state.ssNameEnabled===true;confirm.disabled=item.status==='confirmed'||disabled;
+  confirm.type='button';confirm.hidden=true;confirm.disabled=item.status==='confirmed'||disabled;
   confirm.addEventListener('click',()=>{
    const error=validateGoal(item);
    if(error){say('確定できません：'+error);return;}
@@ -446,7 +446,44 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   videoStatus.textContent=decision==='kept'
    ?'✓ 確認済み'
    :decision==='rejected'?'動画は不採用':'';
-  videoKeep.addEventListener('click',()=>setVideoDecision(entry,'kept'));
+  videoKeep.addEventListener('click',()=>{
+   // One explicit review action: persist valid scorer/assist metadata and
+   // keep the clip. Never send data to SpoSched from this action.
+   const current=latestGoal(entry);
+   const error=validateGoal(current);
+   if(error){
+    scoreDetails.open=true;
+    scoreDetailsOpen=true;
+    say('得点情報を確認してください：'+error);
+    return;
+   }
+   if(state.ssNameEnabled===true && !current.ssIdentity?.scorer){
+    scoreDetails.open=true;
+    scoreDetailsOpen=true;
+    say('SSの得点者を選択してください。');
+    return;
+   }
+   if(state.ssNameEnabled===true && current.assistStatus==='named' && !current.ssIdentity?.assist){
+    scoreDetails.open=true;
+    scoreDetailsOpen=true;
+    say('SSのアシスト者を選択してください。');
+    return;
+   }
+   const priorStatus=current.status,priorVerified=current.goalTimeVerified,priorConfirmed=current.confirmedAt;
+   current.status='confirmed';
+   current.goalTimeVerified=true;
+   current.confirmedAt=current.confirmedAt||new Date().toISOString();
+   write(source,goalData(source).items.map(x=>x.id===current.id?current:x));
+   setVideoDecision(entry,'kept');
+   const updated=latestGoal(entry);
+   if(updated.videoDecision!=='kept'){
+    updated.status=priorStatus;
+    updated.goalTimeVerified=priorVerified;
+    updated.confirmedAt=priorConfirmed;
+    write(source,goalData(source).items.map(x=>x.id===updated.id?updated:x));
+    render();
+   }else onUpdate();
+  });
   videoReject.addEventListener('click',()=>setVideoDecision(entry,'rejected'));
   videoActions.append(videoKeep,videoReject);
   editor.append(scoreDetails,videoActions,actions,videoStatus);
