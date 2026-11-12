@@ -140,11 +140,14 @@ export function matchEventPerson(raw,entries,snapshot){
  if(!keys.length||!snapshot?.players||!snapshot?.memberIds)return null;
  const verified=(snapshot.players||[]).filter(n=>snapshot.memberIds.has(n));
  const direct=verified.filter(n=>keys.includes(normalize(n)));
- if(direct.length===1)return direct[0];
- if(direct.length>1)return null;
  const targets=new Set((entries||[]).filter(e=>keys.includes(normalize(e.alias)))
   .map(e=>String(e.member_id).toLowerCase()));
- if(targets.size>1)return null;
+ // Even an exact name must not silently override a conflicting registered alias.
+ if(direct.length>1||targets.size>1)return null;
+ if(direct.length===1){
+  const id=String(snapshot.memberIds.get(direct[0])).toLowerCase();
+  return targets.size===0||targets.has(id)?direct[0]:null;
+ }
  if(targets.size===1){
   const matches=verified.filter(n=>targets.has(String(snapshot.memberIds.get(n)).toLowerCase()));
   return matches.length===1?matches[0]:null;
