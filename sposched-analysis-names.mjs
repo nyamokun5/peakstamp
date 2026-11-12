@@ -13,10 +13,10 @@ export async function readAnalysisContext({eventId,read}){
  const snapshot=normalizeSpoSnapshot(roster.value);
  if(snapshot.eventId!==eventId||snapshot.rosterSource!=='official-current-event-teams')
   throw Error('SSの正式名簿を取得できません。イベントを確認してください。');
- let entries=[],aliasError=false;
- try{if(aliases.status!=='fulfilled')throw Error();entries=normalizeAliasList(aliases.value);}
- catch{aliasError=true;}
- return {snapshot,aliases:entries,aliasError};
+ let entries=[],aliasError=false,aliasErrorReason='';
+ try{if(aliases.status!=='fulfilled')throw aliases.reason||Error('呼び名APIへの接続に失敗');entries=normalizeAliasList(aliases.value);}
+ catch(error){aliasError=true;aliasErrorReason=error?.message||'呼び名一覧の形式を確認できません';}
+ return {snapshot,aliases:entries,aliasError,aliasErrorReason};
 }
 export function initAnalysisNames(state,{onChange=()=>{}}={}){
  const $=id=>document.getElementById(id),panel=$('ssAnalysisNames');
@@ -49,7 +49,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
    const context=await readAnalysisContext({eventId:id,read});
    if(current!==revision)return;
    state.ssNameContext=context;
-   status.textContent=context.aliasError?'呼び名を取得できません。未確定の選手を選んでください。':'';
+   status.textContent=context.aliasError?'呼び名を取得できません（'+context.aliasErrorReason+'）。正式名簿は利用できます。SSに再接続すると再取得します。':'';
    $('ssAnalysisLabel').textContent='SS：'+event.selectedOptions[0].textContent;
    if(remember.checked){rememberBridgeSession(sessionStorage,'staging',token.value.trim());saveDevice();}
    sessionStorage.setItem(ANALYSIS_EVENT_KEY,id);
