@@ -26,13 +26,13 @@ function put(store,video,result){
 }
 test('single model prompt asks for independent highlight and scorer/assist transcript',()=>{
  const p=prompt(70);
- assert.match(p,/ONE INTEGRATED AUDIO ANALYSIS/);
+ assert.match(p,/PRIMARY GOAL/);
  assert.match(p,/utterances/);
  assert.match(p,/scorer/);
  assert.match(p,/assist/);
  assert.match(p,/ナイシュー/);
- assert.match(p,/Do not mistake a miss/);
- assert.match(p,/guess or fabricate/);
+ assert.match(p,/Do not treat predictions/);
+ assert.match(p,/Never invent names/);
 });
 test('sanitizer keeps uncertain speaker fields empty, not guessed',()=>{
  const rows=normalizeUnifiedUtterances([
