@@ -1,11 +1,11 @@
-import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=3';
+import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=4';
 import {initAnalysisNames} from './sposched-analysis-names.mjs?v=aliasretry2';
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=peak52';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=batch-diagnostic2';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=batch-diagnostic3';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
 import { initGoalStatsReview } from './goal-stats-ui.mjs?v=source-matchup9';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
