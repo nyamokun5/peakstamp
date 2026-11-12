@@ -2590,7 +2590,18 @@ async function learnVerifiedBatchAliases(state){
     state.status!=='completed'||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging')return;
  const eventId=snapshot.eventId,requestId=state.request_id;
- const intents=aliasesAfterVerifiedBatch({verified:true,rows,snapshot});
+ const submittedKey='peakstamp:batch-alias-submitted:v1:'+eventId+':'+requestId;
+ let submitted;
+ try{submitted=JSON.parse(localStorage.getItem(submittedKey)||'null')}catch{submitted=null}
+ // Old jobs without an immutable submission record cannot safely teach names.
+ if(!Array.isArray(submitted)||!submitted.length)return;
+ const submittedSet=new Set(submitted);
+ const submittedRows=rows.filter(row=>{
+  const name=row.goal?.source?.name,id=row.goal?.id;
+  return typeof name==='string'&&name&&id!=null&&
+   submittedSet.has(name+'::'+id);
+ });
+ const intents=aliasesAfterVerifiedBatch({verified:true,rows:submittedRows,snapshot});
  for(const intent of intents){
   if(snapshot?.eventId!==eventId||!loadedFromStagingDirect||
      $('ssEnvironment').value!=='staging')return;
@@ -2914,6 +2925,11 @@ $('workerBatchRun').addEventListener('click',async()=>{
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
    if(manualIds.length)localStorage.setItem(
     workerManualGoalPendingKey(eventId,requestId),JSON.stringify(manualIds));
+   const submittedSources=operations.operations.filter(op=>op.action==='create'&&
+    typeof op.source_goal_key==='string'&&op.source_goal_key)
+    .map(op=>op.source_goal_key);
+   localStorage.setItem('peakstamp:batch-alias-submitted:v1:'+eventId+':'+requestId,
+    JSON.stringify(submittedSources));
    localStorage.setItem(key,requestId);
    hideCompletionPanel();
   $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋'+(operations.fixture_count||4)+'試合）…';
