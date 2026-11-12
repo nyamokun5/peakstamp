@@ -109,7 +109,7 @@ export function matchContext(utterances,time){
   .sort((a,b)=>Number(b.time_seconds)-Number(a.time_seconds));
  if(!starts.length)return null;
  const r=starts[0];
- return {label:clip(r.match_label||r.quote),teamA:clip(r.team_a),teamB:clip(r.team_b),
+ return {label:clip(r.match_label),teamA:clip(r.team_a),teamB:clip(r.team_b),
   time:Number(r.time_seconds)};
 }
 /**
