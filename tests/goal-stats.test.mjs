@@ -248,3 +248,25 @@ test('distinct scenes and excluded candidates never trigger duplicate warning',(
  assert.equal(suspectedDuplicateGoalIds([a,b]).size,0);
  assert.equal(suspectedDuplicateGoalIds([a,{...b,clipStartSeconds:0,clipEndSeconds:12,status:'excluded'}]).size,0);
 });
+
+test('verified kept goal absorbs a second transcription of the same reaction clip',()=>{
+ const cache=storage(),src={...source('VERIFIED-SCENE.MOV',180004,1789000004),duration:120};
+ cache.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({
+  [goalSourceKey(src)]:{duration_seconds:120,events:[{
+   type:'goal_reaction',confidence:'high',reaction_time_seconds:12,
+   suggested_clip_start_seconds:5,suggested_clip_end_seconds:22
+  }],utterances:[
+   {kind:'goal_call',time_seconds:14.5,quote:'Aさんゴール',scorer:'Aさん'},
+   {kind:'goal_call',time_seconds:17.5,quote:'Bさんゴール',scorer:'Bさん'}
+  ]}
+ }));
+ saveGoalDrafts(src,cache,[{id:'reviewed',origin:'audio',timeSeconds:14.5,
+  goalTimeSeconds:11,goalTimeVerified:true,clipStartSeconds:5,
+  clipEndSeconds:22,status:'confirmed',videoDecision:'kept',
+  scorer:'公式A',assist:'公式B',assistStatus:'named'}]);
+ const goals=createGoalDrafts(src,cache).items;
+ assert.equal(goals.length,1);
+ assert.equal(goals[0].id,'reviewed');
+ assert.equal(goals[0].scorer,'公式A');
+ assert.equal(goals[0].assist,'公式B');
+});
