@@ -1,6 +1,6 @@
 # PeakStamp × Shoot Sunday — analysis name integration
 
-Updated: 2026-11-12 (Asia/Singapore). Implementation on feat/analysis-ss-names-20261112; CI pending, not yet deployed to staging.
+Updated: 2026-11-12 13:45 (Asia/Singapore). Implementation on feat/analysis-ss-names-20261112; not yet deployed to staging.
 
 ## Scope / safeguards
 STAGING ONLY. No main, production Worker, production SS, or non-TEST event writes.
@@ -52,3 +52,10 @@ optionally remember this tab, select November 8 TEST event. Run Gemini normally.
 Verify official scorer/assist names, correct only unresolved names, Keep video,
 then proceed to SS review. Verify no name re-selection, correct event/fixture,
 raw name retained, export/replay still work. No live score writes during automated QA.
+
+## Continuation after Work token exhaustion (2026-11-12)
+- Retrieved this handoff and PR branch directly from GitHub; branch HEAD was 529452a352c0.
+- CI at 529452a: TEST alias safety SUCCESS, PeakStamp checks SUCCESS, Analysis SS identity integration SUCCESS, PeakStamp tests FAILURE in finish-browser job (helper browser mock rejected GET /staging/alias/list).
+- Fixed the helper browser mock in scripts/test-helper-browser.mjs; commit 8158e8b9dd7ae11e57157f19d5eb35e76e544e9f.
+- Next: verify CI for latest HEAD, inspect any further failures and fix. Keep changes isolated to PR #197; do not merge or deploy before full CI passes. Then assess staging-only promotion and browser/iPhone acceptance.
+- No production changes, no live SS writes or Worker deployment in this continuation.
