@@ -99,7 +99,15 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
    if(goalIds.has(goalId))fail('同じ動画ゴールが二重に含まれています');
    goalIds.add(goalId);
   }
-  selected.push({seq,action:'create',team,scorer,assist,helpers:helperPlan?.helpers||[]});
+  // Source identity is optional for legacy/manual goals. Never infer it from
+  // scorer or chronological order: repeated goals by one scorer are valid.
+  const sourceName=name(row.goal?.source?.name);
+  const sourceGoalKey=!row.goal?.manual&&!row.guest&&sourceName&&goalId
+   ?sourceName+'::'+goalId:'';
+  if(sourceGoalKey.length>180||/[\x00-\x1f\x7f]/.test(sourceGoalKey))
+   fail('元動画のゴール識別子を確認してください');
+  selected.push({seq,action:'create',team,scorer,assist,helpers:helperPlan?.helpers||[],
+   ...(sourceGoalKey?{source_goal_key:sourceGoalKey}:{})});
  }
  if(selected.length>20)fail('高速登録は最大20ゴールです');
  const operations=[],seenHelpers=new Set();

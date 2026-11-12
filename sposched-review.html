@@ -209,6 +209,16 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <div class="line"><button id="loadSnapshot" class="primary">試合・名簿を読み込む</button><span id="snapshotStatus" class="status"></span></div>
  </details>
 </section>
+<details class="panel" id="aliasAdminPanel" hidden>
+ <summary>呼び名の登録一覧（TEST）</summary>
+ <p class="small">SS公式データを読み取り専用で表示します。修正・削除はAPI確認後に追加します。</p>
+ <div class="line"><button id="aliasAdminLoad" type="button">一覧を更新</button></div>
+ <label class="field">呼び名・選手名で検索
+  <input id="aliasAdminQuery" type="search" placeholder="呼び名または選手名">
+ </label>
+ <p id="aliasAdminStatus" class="small" role="status" aria-live="polite"></p>
+ <div id="aliasAdminList"></div>
+</details>
 <section class="panel" id="recoveryPanel" hidden>
  <h2>⚠ 前回の送信結果を確認してください（テストSSのみ）</h2>
  <p>書き込みが完了しても通信が切れた可能性があります。<strong>このイベントの次の書き込みは、安全を確認するまで禁止しています。</strong> 自動再送は行いません。</p>
@@ -453,6 +463,11 @@ import {readCurrentGoalProject,saveCurrentGoalProject,defaultGoalCollection,appr
 import {installSimpleResults} from './sposched-simple-results.mjs?v=2';
 import {installMinimalGoalFix,makeMinimalGoalOperation} from './sposched-simple-goal-fix.mjs?v=1';
 import {onConfirmedGoalPlayerSelection} from './sposched-goal-alias-learning.mjs';
+import {aliasIntentsForCommittedGoal} from './sposched-goal-commit-alias.mjs';
+import {aliasesAfterVerifiedBatch} from './sposched-batch-simple-alias.mjs';
+import {batchAliasAttemptKey} from './sposched-batch-alias-ledger.mjs';
+import {submittedAliasRows} from './sposched-batch-alias-source.mjs';
+import {normalizeAliasList,aliasListView} from './sposched-alias-admin.mjs';
 import {saveConfirmedGoalSelection,restoreConfirmedGoalSelections} from './sposched-goal-selection-draft.mjs';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=review-validation2';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
@@ -473,6 +488,35 @@ import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scop
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 import {clearBridgeSession,restoreBridgeSession,rememberBridgeSession} from './sposched-bridge-session.mjs?v=bridge-tab1';
 const $=id=>document.getElementById(id);
+let officialAliasEntries=[];
+function renderAliasAdmin(){
+ const target=$('aliasAdminList');target.replaceChildren();
+ const entries=aliasListView(officialAliasEntries,$('aliasAdminQuery').value);
+ $('aliasAdminStatus').textContent=entries.length+'件表示（読み取り専用）';
+ for(const entry of entries){
+  const item=document.createElement('p');
+  item.className='small';
+  item.textContent=entry.alias+' → '+(entry.name||entry.member_id)+
+   (entry.shared?'（同じ呼び名の別メンバーあり）':'');
+  target.append(item);
+ }
+}
+$('aliasAdminQuery').addEventListener('input',renderAliasAdmin);
+$('aliasAdminLoad').addEventListener('click',async()=>{
+ if(!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging'){
+  $('aliasAdminStatus').textContent='SS TESTイベントを読み込んでください';return;
+ }
+ $('aliasAdminStatus').textContent='SS公式一覧を取得中…';
+ officialAliasEntries=[];$('aliasAdminList').replaceChildren();
+ try{
+  const response=await fetchSS('/v1/aliases');
+  officialAliasEntries=normalizeAliasList(response);
+  renderAliasAdmin();
+ }catch(e){
+  $('aliasAdminStatus').textContent='一覧を確認できません：'+e.message;
+ }
+});
+
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
 const mkInput=(type)=>{const el=document.createElement('input');el.type=type;return el};
 let snapshot=null,rows=[],scores=[],goalExports=[],reviewedEventId='',manualGoals=[];
@@ -689,6 +733,12 @@ function chosenGoals(){
  return [...video,...unsentManualGoals(manualGoals)];
 }
 function rebuild({preserveEdits=false,completedKeys=[]}={}){
+ $('aliasAdminPanel').hidden=!(snapshot&&loadedFromStagingDirect&&
+  $('ssEnvironment').value==='staging');
+ officialAliasEntries=[];
+ $('aliasAdminList').replaceChildren();
+ $('aliasAdminStatus').textContent='';
+
  const prior=rows;
  const sameEvent=preserveEdits&&snapshot?.eventId===reviewedEventId;
  const wasEditing=!$('reviewArea').hidden;
@@ -818,7 +868,7 @@ function renderGoals(){
      row.assist='';
    }
    invalidate('scorer');
-   if(!g.manual)learnSelectedAlias(row,'scorer',row.scorer);
+   // Nickname persistence is deferred until verified goal registration.
    if(g.manual)renderGoals();
   });
   const assistMode=select([{value:'named',label:'あり（選手を選択）'},{value:'none',label:'なし'},{value:'unknown',label:'不明（要確認）'}],row.assistMode);
@@ -831,7 +881,7 @@ function renderGoals(){
   });
   assistSelect.addEventListener('change',()=>{
    row.assist=assistSelect.value;invalidate('assist');
-   if(!g.manual)learnSelectedAlias(row,'assist',row.assist);
+   // Nickname persistence is deferred until verified goal registration.
   });
   const teamChoices=g.manual?(matched?[matched.leftTeam,matched.rightTeam].filter(Boolean):[])
    :snapshot.matches.flatMap(m=>[m.leftTeam,m.rightTeam]).filter(Boolean);
@@ -1789,6 +1839,20 @@ const minimalGoalFix=installMinimalGoalFix({
   if(pendingForEvent().length)
    throw Error('未確認の送信記録があります。新しい書き込みはできません');
   const op=approved.operation,action=approved.action;
+  // Bind to the immutable source goal ID, never scorer/team text.
+  const sourceGoalId=String(op.fromPeakStamp?.goalId||'');
+  const sourceName=String(op.fromPeakStamp?.source||'');
+  const aliasCandidates=op.action==='record_goal'&&sourceGoalId&&sourceName
+   ?rows.filter(row=>!row.goal?.manual&&!row.guest&&
+     String(row.goal?.id||'')===sourceGoalId&&
+     String(row.goal?.source?.name||'')===sourceName&&
+     Number(row.seq)===Number(op.args.seq)&&
+     row.scorer===op.args.scorer&&
+     row.team===op.args.team&&
+     String(row.assistMode==='named'?row.assist:'')===String(op.args.assist||'')):[];
+  const aliasSource=aliasCandidates.length===1?aliasCandidates[0]:null;
+  const aliasIntents=aliasSource?aliasIntentsForCommittedGoal({
+   row:aliasSource,snapshot,goalVerified:true}):[];
   // The Worker signed this specific operation & match state at preview.
   const goalKey=goalKeyOfOperation(op),before=await fetchSS(
    '/match?match_id='+encodeURIComponent(action.match_id));
@@ -1804,9 +1868,23 @@ const minimalGoalFix=installMinimalGoalFix({
   const item=reloaded.matches.find(m=>m.seq===Number(op.args.seq));
   if(!item||item.status!=='finished')
    throw Error('得点登録後の試合終了状態を確認できません');
+  // Goal success is final independently of alias persistence.
+  // Never retry an uncertain alias write; show a separate warning.
+  let aliasWarning='';
+  if(aliasSource&&aliasIntents.length){
+   for(const intent of aliasIntents){
+    try{
+     const outcome=await learnSelectedAlias(aliasSource,intent.field,intent.person);
+     if(!outcome.saved&&outcome.reason!=='SSに登録済みの呼び名です')
+      aliasWarning='ゴール登録済み。呼び名の保存は未確認です';
+    }catch{
+     aliasWarning='ゴール登録済み。呼び名の保存は未確認です';
+    }
+   }
+  }
   snapshot=reloaded;
   rebuild({preserveEdits:true,completedKeys:op.action==='record_goal'?[goalKey]:[]});
-  $('simpleSaveHelp').textContent='✓ ゴールを保存しました（SS公式データ照合済み）';
+  $('simpleSaveHelp').textContent=aliasWarning||'✓ ゴールを保存しました（SS公式データ照合済み）';
   statusSS('✓ 1ゴールの登録・照合が完了しました');
  }
 });
@@ -1822,16 +1900,14 @@ const simpleResults=installSimpleResults({document,
    blockReason:target===$('autoRun')?$('autoBeforeRun').textContent:$('workerBatchReadiness').textContent};},
  onEdit:(index,field,value)=>{
   if(batchBusy||autoBusy||workerBatchPolling)return;
-  const aliasField=field==='scorer'||field==='simpleAssist'&&value!=='__none__';
-  const aliasRole=field==='scorer'?'scorer':'assist';
-  const aliasRow=rows[index];
+
   try{
    if(field==='simpleAssist'){field=value==='__none__'?'assistMode':'assist';if(value==='__none__')value='none';}
    editQuickGoalField(snapshot,rows[index],field,value);
    if(loadedFromStagingDirect&&$('ssEnvironment').value==='staging')
     saveConfirmedGoalSelection(localStorage,snapshot,rows[index]);
    touch();renderGoals();renderQuick();
-   if(aliasField)learnSelectedAlias(aliasRow,aliasRole,value);
+
   }catch(e){$('simpleSaveHelp').textContent=e.message;}
  },
  onInclude:(index,include)=>{
@@ -2508,6 +2584,34 @@ function showWorkerBatchState(state){
   setBatchBusy(false);
  }
 }
+// One attempt per verified job/alias pair. Mark before sending: unknown responses
+// must never trigger a blind retry, including after a page reload.
+async function learnVerifiedBatchAliases(state){
+ if(!state||!workerCompletionVerified(state,snapshot)||
+    state.status!=='completed'||!loadedFromStagingDirect||
+    $('ssEnvironment').value!=='staging')return;
+ const eventId=snapshot.eventId,requestId=state.request_id;
+ const submittedKey='peakstamp:batch-alias-submitted:v1:'+eventId+':'+requestId;
+ let submitted;
+ try{submitted=JSON.parse(localStorage.getItem(submittedKey)||'null')}catch{submitted=null}
+ // Old jobs without an immutable submission record cannot safely teach names.
+ if(!Array.isArray(submitted)||!submitted.length)return;
+ const submittedRows=submittedAliasRows(rows,submitted);
+ const intents=aliasesAfterVerifiedBatch({verified:true,rows:submittedRows,snapshot});
+ for(const intent of intents){
+  if(snapshot?.eventId!==eventId||!loadedFromStagingDirect||
+     $('ssEnvironment').value!=='staging')return;
+  const key=batchAliasAttemptKey({eventId,requestId,alias:intent.alias,memberId:intent.member_id});
+  if(!key||localStorage.getItem(key))continue;
+  const row=submittedRows.find(row=>row.include&&!row.guest&&!row.goal?.manual&&
+   row[intent.field]===intent.person&&
+   row.goal?.[intent.field]?.trim()===intent.alias);
+  if(!row)continue;
+  // Persist the attempt immediately before the network-capable operation.
+  localStorage.setItem(key,'attempted');
+  await learnSelectedAlias(row,intent.field,intent.person);
+ }
+}
 async function refreshWorkerBatch({passive=false}={}){
  if(workerBatchPolling||!snapshot||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging')return;
@@ -2548,6 +2652,13 @@ async function refreshWorkerBatch({passive=false}={}){
    if(state.request_id===localStorage.getItem(workerBatchStorageKey(eventId)))
     workerCompletionProof={eventId,requestId:state.request_id,
      fixtureFingerprint:workerFixtureFingerprint(fresh)};
+   // Learn only after the entire batch has passed official readback.
+   // Preserve reviewed rows until learning finishes; score writes never depend on it.
+   if(workerCompletionVerified(state,fresh)){
+    snapshot=fresh;
+    try{await learnVerifiedBatchAliases(state)}catch{/* Alias failure never affects goals. */}
+    if(snapshot!==fresh||snapshot?.eventId!==eventId)return;
+   }
   }
   showWorkerBatchState(state);
   if(state.status==='completed'&&workerCompletionVerified(state,snapshot)){
@@ -2799,6 +2910,9 @@ $('workerBatchRun').addEventListener('click',async()=>{
   // explicitly labeled TEST button. One intentional click is approval;
   // an extra browser confirmation dialog would only duplicate that approval.
   const goalCount=operations.operations.filter(x=>x.action==='create').length;
+  // Batch alias writes are deliberately disabled until the Worker provides
+  // per-operation official goal IDs linked to the original video goal IDs.
+  // A completed fixture is not proof that an individual goal was committed.
   const manualIds=isIndependent?rows.filter(r=>r.include&&r.goal?.manual===true)
    .map(r=>r.goal.id):[];
   if(isIndependent) await assertIndependentStagingWorkerReady();
@@ -2807,6 +2921,11 @@ $('workerBatchRun').addEventListener('click',async()=>{
   storeWorkerTiming(localStorage,eventId,requestId,clickedAt);
    if(manualIds.length)localStorage.setItem(
     workerManualGoalPendingKey(eventId,requestId),JSON.stringify(manualIds));
+   const submittedSources=operations.operations.filter(op=>op.action==='create'&&
+    typeof op.source_goal_key==='string'&&op.source_goal_key)
+    .map(op=>op.source_goal_key);
+   localStorage.setItem('peakstamp:batch-alias-submitted:v1:'+eventId+':'+requestId,
+    JSON.stringify(submittedSources));
    localStorage.setItem(key,requestId);
    hideCompletionPanel();
   $('workerBatchStatus').textContent='TEST一括ジョブを開始中（'+goalCount+'ゴール＋'+(operations.fixture_count||4)+'試合）…';
