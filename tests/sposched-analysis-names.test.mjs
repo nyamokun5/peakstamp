@@ -101,3 +101,13 @@ test('spoken team conflict and out-of-fixture official-name alias cannot auto-re
  assert.equal(resolveAnalysisGoal({...goal(),teamA:'1',teamB:'2'},ctx).scorer,'濱直');
  assert.equal(resolveAnalysisGoal(goal('別チーム'),{snapshot,aliases:[{alias:'別チーム',member_id:id(1)}]}).ssIdentity.scorer,null);
 });
+
+test('observed 足川 speech variant resolves only through unique verified 芦川 alias',()=>{
+ const g=resolveAnalysisGoal(goal('足川'),ctx);
+ assert.equal(g.scorer,'Ashikawa');
+ assert.equal(g.rawScorer,'足川');
+ assert.equal(g.ssIdentity.scorer.memberId,snapshot.memberIds.get('Ashikawa'));
+ assert.equal(resolveAnalysisGoal(goal('足川'),{snapshot,aliases:[]}).ssIdentity.scorer,null);
+ const ambiguous=[...aliases,{alias:'芦川さん',member_id:id(1)}];
+ assert.equal(resolveAnalysisGoal(goal('足川'),{snapshot,aliases:ambiguous}).ssIdentity.scorer,null);
+});
