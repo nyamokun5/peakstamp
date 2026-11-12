@@ -1,3 +1,4 @@
+import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=1';
 import {initAnalysisNames} from './sposched-analysis-names.mjs?v=aliasretry2';
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=peak52';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
@@ -284,12 +285,30 @@ function renderSourceList() {
       syncSources();
     });
     label.append(input);
+    const matchup=videoMatchup(source,window.localStorage);
+    const matchupLabel=make('label','source-match-editor','対戦チーム');
+    const matchupInput=make('input','source-match-number');
+    matchupInput.type='text';matchupInput.maxLength=120;
+    matchupInput.placeholder='例：1 vs 2';
+    matchupInput.value=matchup.teamA&&matchup.teamB?matchup.teamA+' vs '+matchup.teamB:'';
+    matchupInput.setAttribute('aria-label','対戦チーム');
+    matchupInput.addEventListener('change',()=>{
+      const parts=matchupInput.value.split(/\\s+(?:vs?\\.?|対)\\s+|\\s*対\\s*/i);
+      if(parts.length!==2||!parts[0].trim()||!parts[1].trim()){
+        error('loadError','対戦チームは「1 vs 2」の形式で入力してください。');return;
+      }
+      if(!saveVideoMatchup(source,window.localStorage,parts[0],parts[1])){
+        error('loadError','対戦チームを保存できませんでした。');return;
+      }
+      error('loadError','');syncSources();
+    });
+    matchupLabel.append(matchupInput);
     // At import the organizer needs to match the clip to its match. Show the
     // ORIGINAL filename directly, rather than hiding it behind a disclosure.
     const original=make('small','source-original-filename',source.file.name);
     original.title=source.file.name;
     info.append(filename,original,make('small','source-state',status));
-    card.append(num,info,label);
+    card.append(num,info,label,matchupLabel);
     const controls = make('div','source-controls');
     const move = (label,diff) => {
       const button = make('button','source-control',label);
