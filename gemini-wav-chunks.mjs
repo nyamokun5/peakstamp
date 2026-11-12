@@ -204,5 +204,6 @@ export function mergeWavSegmentEvents(responses,duration){
   limitations:'Audio-only; spoken calls and goal reactions require video verification.',
   meta:{model:'gemini-3.8-flash',api:'generateContent-wav',
    segments:(responses||[]).length,unifiedGoalCalls,
+   promptRevision:(responses||[]).length>0&&(responses||[]).every(x=>x?.promptRevision==='phonetic-hiragana-20261112-v1'||x?.meta?.promptRevision==='phonetic-hiragana-20261112-v1')?'phonetic-hiragana-20261112-v1':null,
    goalCallCount:utterances.filter(x=>x.kind==='goal_call').length}};
 }
