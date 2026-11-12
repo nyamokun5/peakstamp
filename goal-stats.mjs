@@ -307,10 +307,11 @@ export function createGoalDrafts(source,storage){
  const unique=[...new Set(candidates.map(x=>x.teamA+'|'+x.teamB))];
  const resolved=manual||(unique.length===1?candidates[0]:null);
  if(resolved)for(const item of items){
+  if(item.status==='confirmed'||item.status==='excluded'||item.origin==='manual')continue;
   const edited=new Set(item.userEditedGoalFields||[]);
   for(const [field,value] of [['teamA',resolved.teamA],['teamB',resolved.teamB],
    ['matchLabel',resolved.teamA+' vs '+resolved.teamB]]){
-   if(!edited.has(field))item[field]=String(value).trim().slice(0,60);
+   if(!edited.has(field)&&(manual||!clip(item[field])))item[field]=String(value).trim().slice(0,60);
   }
  }
  // The organizer assigns a match number to the VIDEO, once.
