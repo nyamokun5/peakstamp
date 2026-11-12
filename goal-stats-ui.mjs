@@ -301,6 +301,14 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    select.addEventListener('change',()=>edit(entry,field,select.value));
    box.append(select);fields.append(box);
   };
+  if(state.ssNameEnabled&&!item.ssIdentity?.scorer){
+   const snapshot=state.ssNameContext?.snapshot;
+   const message=!snapshot?'SS未接続：最初の動画登録画面でTESTイベントに接続してください。':
+    !fixturePeople(snapshot,item.matchSeq).length?'SS名簿に該当する試合・選手がありません。TESTイベントと試合番号を確認してください。':
+    !item.rawScorer?'音声から得点者名を検出できませんでした。':
+    '「'+String(item.rawScorer).slice(0,50)+'」をSSの正式名・別名辞書と照合できませんでした。';
+   fields.append(make('p','fine-print',message));
+  }
   personInput('scorer','得点者（ゴール）');
   const assistBox=make('label','goal-review-field');
   assistBox.append(make('span','','アシスト'));
