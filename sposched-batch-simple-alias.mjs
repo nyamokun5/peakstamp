@@ -21,7 +21,8 @@ export function aliasesAfterVerifiedBatch({verified=false,rows=[],snapshot}={}){
  const seen=new Set();
  return proposals.filter(p=>{
   const key=norm(p.alias);
-  if(targets.get(key).size!==1)return false;
+  // A spoken official name needs no additional nickname record.
+  if(key===norm(p.person)||targets.get(key).size!==1)return false;
   const pair=key+'|'+p.member_id.toLowerCase();
   if(seen.has(pair))return false;
   seen.add(pair);
