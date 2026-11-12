@@ -468,6 +468,7 @@ import {aliasesAfterVerifiedBatch} from './sposched-batch-simple-alias.mjs';
 import {batchAliasAttemptKey} from './sposched-batch-alias-ledger.mjs';
 import {submittedAliasRows} from './sposched-batch-alias-source.mjs';
 import {normalizeAliasList,aliasListView} from './sposched-alias-admin.mjs';
+import {matchOfficialAlias} from './sposched-alias-auto-match.mjs';
 import {saveConfirmedGoalSelection,restoreConfirmedGoalSelections} from './sposched-goal-selection-draft.mjs';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=review-validation2';
 import {toStagingAction,writeableReviewOperations,assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
@@ -489,6 +490,19 @@ import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elaps
 import {clearBridgeSession,restoreBridgeSession,rememberBridgeSession} from './sposched-bridge-session.mjs?v=bridge-tab1';
 const $=id=>document.getElementById(id);
 let officialAliasEntries=[];
+let autoAliasEntries=[];
+function applyAutoAliases(){
+ if(!snapshot||!loadedFromStagingDirect||!autoAliasEntries.length)return;
+ for(const row of rows){
+  if(row.goal?.manual)continue;
+  for(const [field,raw] of [['scorer',row.goal?.scorer],['assist',row.goal?.assist]]){
+   if(row[field]||!raw)continue;
+   const name=matchOfficialAlias(raw,autoAliasEntries,snapshot,row.seq);
+   if(name){row[field]=name;if(field==='scorer')row.team=snapshot.playerTeam.get(name)||'';}
+  }
+ }
+}
+
 function renderAliasAdmin(){
  const target=$('aliasAdminList');target.replaceChildren();
  const entries=aliasListView(officialAliasEntries,$('aliasAdminQuery').value);
@@ -756,6 +770,7 @@ function rebuild({preserveEdits=false,completedKeys=[]}={}){
  rows=preserveReviewRows(applyManualRowEdits(restored,manualGoals,snapshot),prior,{
   sameEvent,completedKeys,snapshot
  });
+ applyAutoAliases();
  reviewedEventId=snapshot.eventId;
  scores=snapshot.matches.map(m=>({
   seq:m.seq,leftScore:m.leftScore,rightScore:m.rightScore,
@@ -3523,7 +3538,18 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   manualGoals=loadedFromStagingDirect?
    restoreManualGoals(localStorage,'staging',snapshot.eventId):[];
   autoMustReload=false;$('autoConflict').hidden=true;
+  autoAliasEntries=[];
   rebuild({preserveEdits:true});
+  if(loadedFromStagingDirect){
+   const loadedSnapshot=snapshot;
+   try{
+    const aliasResponse=await fetchSS('/staging/alias/list');
+    if(snapshot===loadedSnapshot&&requestRevision===ssConnectionRevision){
+     autoAliasEntries=normalizeAliasList(aliasResponse);
+     applyAutoAliases();renderGoals();renderQuick();
+    }
+   }catch{ /* Alias lookup is optional; never block event loading. */ }
+  }
   statusSS(snapshot.matches.length===0?
    '試合0件：このイベントには登録先の番号付き試合がありません。別イベントを選ぶか、SSに試合枠を作成してください。':
    '読み込み完了：試合 '+snapshot.matches.length+'件・名簿 '+snapshot.players.length+
