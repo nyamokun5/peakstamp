@@ -213,6 +213,9 @@ main,.panel,.grid-item,.quick-goal,.quick-field,.flow-guide{min-width:0;max-widt
  <summary>呼び名の登録一覧（TEST）</summary>
  <p class="small">SS公式データを読み取り専用で表示します。修正・削除はAPI確認後に追加します。</p>
  <div class="line"><button id="aliasAdminLoad" type="button">一覧を更新</button></div>
+ <div class="line"><button id="aliasDryRun" type="button">生の認識名で再照合</button></div>
+ <p id="aliasDryRunStatus" class="small" role="status" aria-live="polite"></p>
+ <div id="aliasDryRunResults"></div>
  <label class="field">呼び名・選手名で検索
   <input id="aliasAdminQuery" type="search" placeholder="呼び名または選手名">
  </label>
@@ -529,6 +532,40 @@ $('aliasAdminLoad').addEventListener('click',async()=>{
  }catch(e){
   $('aliasAdminStatus').textContent='一覧を確認できません：'+e.message;
  }
+});
+
+$('aliasDryRun').addEventListener('click',async()=>{
+ const status=$('aliasDryRunStatus'),target=$('aliasDryRunResults');
+ target.replaceChildren();
+ if(!snapshot||!loadedFromStagingDirect||$('ssEnvironment').value!=='staging'){
+  status.textContent='TESTイベントを読み込んでください';return;
+ }
+ const originalSnapshot=snapshot,eventId=snapshot.eventId;
+ status.textContent='公式の呼び名を確認中…';
+ try{
+  const response=await fetchSS('/staging/alias/list');
+  if(snapshot!==originalSnapshot||snapshot.eventId!==eventId||!loadedFromStagingDirect)
+   throw Error('イベントが変更されました。もう一度実行してください');
+  const aliases=normalizeAliasList(response);
+  // Never read or modify the manually corrected scorer/assist values.
+  // Use only immutable raw Gemini names and the currently loaded SS roster.
+  const source=chosenGoals().filter(g=>!g.manual);
+  const prepared=prepareGoalRows({goals:source},originalSnapshot);
+  let checked=0,matched=0;
+  for(const row of prepared){
+   for(const [role,raw] of [['得点',row.goal?.scorer],['アシスト',row.goal?.assist]]){
+    if(!raw||!String(raw).trim())continue;
+    checked++;
+    const name=matchOfficialAlias(raw,aliases,originalSnapshot,row.seq);
+    if(name)matched++;
+    const line=document.createElement('p');line.className='small';
+    line.textContent='第'+(row.seq||'?')+'試合 '+role+'「'+raw+'」→ '+(name||'未確定');
+    target.append(line);
+   }
+  }
+  status.textContent=checked+'件照合・'+matched+'件一致（読み取り専用／保存なし）';
+  if(!checked)status.textContent='元の解析名が見つかりません。動画の解析データを読み込んでください。';
+ }catch(e){status.textContent='再照合できません：'+e.message;}
 });
 
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el};
