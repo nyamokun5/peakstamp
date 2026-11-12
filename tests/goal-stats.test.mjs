@@ -270,3 +270,24 @@ test('verified kept goal absorbs a second transcription of the same reaction cli
  assert.equal(goals[0].scorer,'公式A');
  assert.equal(goals[0].assist,'公式B');
 });
+
+test('reanalysis adds newly heard match-start matchup without replacing manual choices',()=>{
+ const cache=storage();
+ put(cache,a,[{time_seconds:20,kind:'goal_call',quote:'Aさんゴール',scorer:'Aさん'}]);
+ const item=createGoalDrafts(a,cache).items[0];
+ assert.equal(item.teamA,'');
+ item.teamB='4';item.userEditedGoalFields=['teamB'];
+ saveGoalDrafts(a,cache,[item]);
+ put(cache,a,[
+  {time_seconds:1,kind:'match_start',quote:'第1試合、1対2',match_label:'1対2',team_a:'1',team_b:'2'},
+  {time_seconds:20,kind:'goal_call',quote:'Aさんゴール',scorer:'Aさん'}
+ ]);
+ const result=createGoalDrafts(a,cache).items[0];
+ assert.equal(result.teamA,'1');
+ assert.equal(result.teamB,'4');
+ assert.equal(result.matchLabel,'1対2');
+ result.status='confirmed';saveGoalDrafts(a,cache,[result]);
+ const after=createGoalDrafts(a,cache).items[0];
+ assert.equal(after.status,'confirmed');
+ assert.equal(after.teamB,'4');
+});
