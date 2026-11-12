@@ -33,6 +33,8 @@ export function buildAnalysisDiagnostic(source,geminiResult,goalReview){
    durationSeconds:Number(source?.duration||geminiResult?.duration_seconds||0)},
   analysisEngine:source?.analysisEngine||'unknown',
   gemini:{stored:!!geminiResult,segments:Number(geminiResult?.meta?.segments||0),
+   analysisMeta:{model:geminiResult?.meta?.model||null,promptRevision:geminiResult?.meta?.promptRevision||null,
+    cacheStatus:geminiResult?.meta?.cacheStatus||null},
    rawEventCount:events.length,byType,events,
    unifiedGoalCallsEnabled:geminiResult?.meta?.unifiedGoalCalls===true,
    rawUtteranceCount:unifiedUtterances.length,utterances:unifiedUtterances},
