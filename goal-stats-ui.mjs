@@ -7,7 +7,7 @@ import {sourceDisplayName} from './match-label.mjs?v=match1';
  * gets reset merely because a card, field or summary rerenders.
  */
 import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
- confirmedGoalExport,goalSourceKey,actualGoalTime,suspectedDuplicateGoalIds} from './goal-stats.mjs?v=source-matchup4';
+ confirmedGoalExport,goalSourceKey,actualGoalTime,suspectedDuplicateGoalIds} from './goal-stats.mjs?v=source-matchup5';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=firsttap1';
