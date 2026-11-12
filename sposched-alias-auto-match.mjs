@@ -3,9 +3,12 @@ const normalize=value=>String(value??'').trim().normalize('NFKC').toLowerCase().
 // Spoken Japanese honorifics are not part of a player's identity. Only remove
 // a terminal honorific; never infer a different kanji spelling without a
 // verified roster alias.
+const knownSpeechVariants=new Map([['足川','芦川']]);
 const spokenKeys=value=>{
  const key=normalize(value);
- return [...new Set([key,key.replace(/(?:さん|さま|様)$/,'')].filter(Boolean))];
+ const base=key.replace(/(?:さん|さま|様)$/,'');
+ const variant=knownSpeechVariants.get(base);
+ return [...new Set([key,base,...(variant?[variant,variant+'さん']:[])].filter(Boolean))];
 };
 export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
  const keys=spokenKeys(raw);
