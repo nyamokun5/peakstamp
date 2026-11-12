@@ -14,12 +14,16 @@ export function normalizeAliasList(payload) {
   Array.isArray(payload?.aliases)?payload.aliases:null;
  if(!source)throw Error('SS公式の名寄せ一覧を取得できません');
  return source.map(entry=>{
-  const alias=txt(entry?.alias),member_id=txt(entry?.member_id||entry?.user_id);
+  const alias=txt(entry?.alias);
+  const person=entry?.person&&typeof entry.person==='object'?entry.person:null;
+  const member_id=txt(entry?.member_id||entry?.user_id||
+   (person?.type==='member'?person.member_id:null));
   const id=txt(entry?.id||entry?.alias_id);
   if(!alias||!uuid.test(member_id))
    throw Error('名寄せデータに正式メンバーIDがありません');
-  return {id,alias,member_id,name:txt(entry.name||entry.person),
-   source:txt(entry.source)};
+  return {id,alias,member_id,name:txt(entry?.name||person?.name||
+   (typeof entry?.person==='string'?entry.person:'')),
+   source:txt(entry?.source)};
  });
 }
 
