@@ -290,6 +290,17 @@ export function createGoalDrafts(source,storage){
    if(value&&!edited.has(field)&&!clip(item[field]))item[field]=value;
   }
  }
+ // Video-level manual matchup is authoritative for every goal in that source.
+ // It is independent of the AI transcript and survives reanalysis.
+ let videoMatchup=null;
+ try{videoMatchup=JSON.parse(storage?.getItem('peakstamp_matchup_v1:'+key)||'null');}catch{}
+ if(videoMatchup?.origin==='manual')for(const item of items){
+  for(const [field,value] of [['teamA',videoMatchup.teamA],['teamB',videoMatchup.teamB]]){
+   if(String(value||'').trim())item[field]=String(value).trim().slice(0,60);
+  }
+  if(videoMatchup.teamA&&videoMatchup.teamB)
+   item.matchLabel=String(videoMatchup.teamA).trim()+' vs '+String(videoMatchup.teamB).trim();
+ }
  // The organizer assigns a match number to the VIDEO, once.
  // Match-number edits are reflected across all auto-filled goal drafts.
  if(Number.isInteger(source?.matchNumber)&&source.matchNumber>=1)
