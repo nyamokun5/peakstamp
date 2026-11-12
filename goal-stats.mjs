@@ -139,11 +139,11 @@ export function prefillDetectedGoalFields(goal,event,utterances=[]){
  fill('teamB',event.team_b||context?.teamB);
  return goal;
 }
-/** Goal calls are primary; find the latest preceding goal reaction within ten seconds. */
+/** Goal calls are primary; find the latest preceding goal reaction within fifteen seconds. */
 export function reactionBeforeGoalCall(reactions,callTime){
  const t=Number(callTime);
  if(!Number.isFinite(t))return null;
- const eligible=(reactions||[]).filter(r=>Number.isFinite(Number(r.time))&&Number(r.time)<=t&&t-Number(r.time)<=10);
+ const eligible=(reactions||[]).filter(r=>Number.isFinite(Number(r.time))&&Number(r.time)<=t&&t-Number(r.time)<=15);
  return eligible.sort((a,b)=>Number(b.time)-Number(a.time))[0]||null;
 }
 export function createGoalDrafts(source,storage){
