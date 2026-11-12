@@ -33,7 +33,7 @@
         <summary id="ssAnalysisLabel">SSの選手名を使う</summary>
         <label for="ssAnalysisToken">SS連携パスワード</label>
         <input id="ssAnalysisToken" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false">
-        <label><input id="ssAnalysisRemember" type="checkbox">このタブで4時間記憶</label>
+        <label><input id="ssAnalysisRemember" type="checkbox">この端末に保存（共有端末では使用しない）</label>
         <button id="ssAnalysisConnect" type="button">SSに接続</button>
         <select id="ssAnalysisEvent" aria-label="SS TESTイベント" hidden><option value="">イベントを選択</option></select>
         <p id="ssAnalysisStatus" role="status"></p>
@@ -81,6 +81,7 @@
       <label for="geminiMainAccess">アクセスコード</label>
       <input id="geminiMainAccess" type="password" autocomplete="off" autocapitalize="off"
              spellcheck="false" placeholder="アクセスコードを入力" />
+      <label class="gemini-consent"><input id="geminiRememberDevice" type="checkbox" />この端末にコードを保存（共有端末では使用しない）</label>
       <details class="compact-details gemini-diagnostics">
         <summary>接続できないとき・詳細設定</summary>
         <button id="geminiMainCheck" class="whisper-run gemini-check-button" type="button">接続テスト（課金なし）</button>
