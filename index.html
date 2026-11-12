@@ -97,6 +97,8 @@
           <p id="geminiStayDescription">LINEなど他のアプリへ切り替えたり、画面をロックすると解析が止まる場合があります。</p>
         </div>
       </div>
+      <fieldset class="gemini-batch-mode" aria-label="解析範囲"><legend>解析する範囲</legend><label><input type="radio" name="geminiBatchMode" value="pending" checked> 未解析動画のみ</label><label><input type="radio" name="geminiBatchMode" value="all"> 全動画を再解析</label></fieldset>
+      <details class="compact-details"><summary>詳細設定・初期化</summary><p class="fine-print">このiPhoneの全解析キャッシュとゴール確認情報を削除。元動画とSS登録済みデータは保持します。</p><button id="geminiResetAllCache" type="button" class="whisper-run">全キャッシュとゴール情報を削除</button></details>
       <button id="geminiMainBatch" class="main-button gemini-batch-run" type="button" disabled hidden>選んだ動画をまとめて解析 →</button>
       <button id="geminiMainRun" class="main-button gemini-main-run" type="button" disabled>Geminiで音声解析する →</button>
       <div id="geminiBatchProgress" class="gemini-batch-progress" role="progressbar" aria-label="動画一括解析の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
