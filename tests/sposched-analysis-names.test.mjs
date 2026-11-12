@@ -94,3 +94,10 @@ test('reanalysis does not duplicate a renamed goal or overwrite raw',()=>{
  store.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({'x::1::1':{utterances:[{kind:'goal_call',time_seconds:31,scorer:'ハマさん',quote:'new'}]}}));
  const rows=createGoalDrafts(source,store).items;assert.equal(rows.length,1);assert.equal(rows[0].rawScorer,'ハマさん');
 });
+
+test('spoken team conflict and out-of-fixture official-name alias cannot auto-resolve',()=>{
+ assert.equal(resolveAnalysisGoal({...goal(),teamA:'3',teamB:'4'},ctx).ssIdentity.scorer,null);
+ assert.equal(resolveAnalysisGoal({...goal(),matchLabel:'3 vs 4'},ctx).ssIdentity.scorer,null);
+ assert.equal(resolveAnalysisGoal({...goal(),teamA:'1',teamB:'2'},ctx).scorer,'濱直');
+ assert.equal(resolveAnalysisGoal(goal('別チーム'),{snapshot,aliases:[{alias:'別チーム',member_id:id(1)}]}).ssIdentity.scorer,null);
+});

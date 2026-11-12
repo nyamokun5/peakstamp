@@ -50,7 +50,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
    $('ssAnalysisLabel').textContent='SS：'+event.selectedOptions[0].textContent;
    if(remember.checked)rememberBridgeSession(sessionStorage,'staging',token.value.trim());
    sessionStorage.setItem(ANALYSIS_EVENT_KEY,id);
-   if(!context.aliasError)panel.open=false;
+   panel.open=context.aliasError;
   }catch(error){if(current!==revision)return;status.textContent=error.message;panel.open=true;}
   onChange();
  }

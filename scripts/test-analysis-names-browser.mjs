@@ -61,7 +61,7 @@ try{
  await page.click('#ssAnalysisConnect');
  await page.selectOption('#ssAnalysisEvent',E);
  await page.waitForFunction(()=>window.testState.ssNameContext?.snapshot?.eventId);
- await page.locator('.goal-score-details summary').click();
+ await page.locator('.goal-score-details > summary').click();
  assert.equal(await page.locator('select[aria-label="得点者（ゴール）"]').inputValue(),'濱直');
  assert.equal(await page.locator('select[aria-label="アシスト者"]').inputValue(),'やまだじょ');
  assert.ok(!(await page.locator('select[aria-label="得点者（ゴール）"]').innerText()).includes('対象外'));

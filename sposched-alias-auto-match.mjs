@@ -7,9 +7,9 @@ export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
  const match=snapshot.matches?.find(m=>Number(m.seq)===Number(fixtureSeq));
  if(!match)return null;
  // Prefer an exact official roster name over an alias; never create a duplicate alias.
- const direct=(snapshot.players||[]).filter(name=>normalize(name)===key&&
-  [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam.get(name)));
- if(direct.length===1)return snapshot.memberIds.has(direct[0])?direct[0]:null;
+ const direct=(snapshot.players||[]).filter(name=>normalize(name)===key);
+ if(direct.length===1)return snapshot.memberIds.has(direct[0])&&
+  [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam.get(direct[0]))?direct[0]:null;
  if(direct.length>1)return null;
  // Shared aliases remain ambiguous even when one member is outside this fixture.
  const targets=new Set(entries.filter(e=>normalize(e.alias)===key).map(e=>String(e.member_id).toLowerCase()));
