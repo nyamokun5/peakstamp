@@ -14,7 +14,7 @@ import { updateGeminiScreenNotice } from './gemini-screen-notice.mjs?v=1';
 import { parseAudioEvents } from './cloud-audio-eval.mjs?v=3';
 import { mergeWavSegmentEvents, WAV_SEGMENT_VERSION } from './gemini-wav-chunks.mjs?v=unifiedga2';
 import { createGoalDrafts } from './goal-stats.mjs?v=goalprefill1';
-import { buildAnalysisDiagnostic } from './gemini-diagnostics.mjs?v=1';
+import { buildAnalysisDiagnostic,buildBatchAnalysisDiagnostic } from './gemini-diagnostics.mjs?v=2';
 
 // Verified owner project: Vercel production domain for nyamokun5/peakstamp.
 const API_ENDPOINT = location.hostname==='peakstamp-ss-stage-nyamokun5.pages.dev'
@@ -266,11 +266,14 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()
  diagnosticCopy?.addEventListener('click',async()=>{
   const source=selectedSource(state),cache=source?cachedResult(source):null;
   const status=$('geminiMainCopyStatus'),fallback=$('geminiMainCopyFallback');
-  if(!source || (!cache && !source.bins?.length)){
+  if(!source || (candidates(state).length===1&&!cache&&!source.bins?.length)){
    if(status)status.textContent='この動画には保存済みの解析結果がありません。';
    return;
   }
-  const report=buildAnalysisDiagnostic(source,cache,createGoalDrafts(source,window.localStorage));
+  const videos=candidates(state);
+  const report=videos.length>1
+   ?buildBatchAnalysisDiagnostic(videos,cachedResult,s=>createGoalDrafts(s,window.localStorage))
+   :buildAnalysisDiagnostic(source,cache,createGoalDrafts(source,window.localStorage));
   if(fallback)fallback.hidden=true;
   try{
    if(!navigator.clipboard?.writeText)throw Error('Clipboard unsupported');
