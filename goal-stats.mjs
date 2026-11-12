@@ -278,6 +278,18 @@ export function createGoalDrafts(source,storage){
    status:'draft',confirmedAt:null,note:''
   });
  }
+ // A later Gemini pass may add only a match_start announcement, without
+ // repeating any goal_call. Propagate the announced matchup to existing
+ // unconfirmed goals while preserving all organizer-edited fields.
+ for(const item of items){
+  if(item.status!=='draft'||item.origin==='manual')continue;
+  const context=matchContext(events,item.timeSeconds);
+  if(!context)continue;
+  const edited=new Set(item.userEditedGoalFields||[]);
+  for(const [field,value] of [['matchLabel',context.label],['teamA',context.teamA],['teamB',context.teamB]]){
+   if(value&&!edited.has(field)&&!clip(item[field]))item[field]=value;
+  }
+ }
  // The organizer assigns a match number to the VIDEO, once.
  // Match-number edits are reflected across all auto-filled goal drafts.
  if(Number.isInteger(source?.matchNumber)&&source.matchNumber>=1)
