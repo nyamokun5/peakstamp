@@ -345,3 +345,26 @@ export function confirmedGoalExport(sources,storage){
   needsMatchSeq:rows.filter(x=>x.matchSeq===null).length,
   goals:rows};
 }
+
+/**
+ * Flag likely duplicate AI goals for human review; never delete or merge them.
+ * Use same-source overlap plus nearby commentary, not scorer transcription.
+ */
+export function suspectedDuplicateGoalIds(items){
+ const result=new Set(),rows=(items||[]).filter(x=>x&&x.status!=='excluded'&&x.origin!=='manual');
+ for(let i=0;i<rows.length;i++)for(let j=i+1;j<rows.length;j++){
+  const a=rows[i],b=rows[j];
+  if(Math.abs(Number(a.timeSeconds)-Number(b.timeSeconds))>8)continue;
+  const as=Number(a.clipStartSeconds),ae=Number(a.clipEndSeconds);
+  const bs=Number(b.clipStartSeconds),be=Number(b.clipEndSeconds);
+  if(![as,ae,bs,be].every(Number.isFinite)||ae<=as||be<=bs)continue;
+  const overlap=Math.max(0,Math.min(ae,be)-Math.max(as,bs));
+  if(overlap/Math.min(ae-as,be-bs)<0.75)continue;
+  // Prefer preserving the already-confirmed or kept goal.
+  const protect=x=>x.status==='confirmed'||x.videoDecision==='kept'||x.goalTimeVerified===true;
+  if(protect(a)&&!protect(b))result.add(b.id);
+  else if(protect(b)&&!protect(a))result.add(a.id);
+  else if(!protect(a)&&!protect(b))result.add(b.id);
+ }
+ return result;
+}
