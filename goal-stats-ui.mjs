@@ -353,10 +353,15 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     '「'+String(item.rawScorer).slice(0,50)+'」をSSの正式名・別名辞書と照合できませんでした。';
    fields.append(make('p','fine-print',message));
   }
-  if(state.ssNameEnabled&&item.ssIdentity?.scorer){
-   const scorer=item.ssIdentity.scorer;
-   fields.append(make('p','fine-print',
-    'SS名寄せ：'+scorer.name+(scorer.manual?'（手動選択）':'（正式名簿と照合済み）')));
+  if(state.ssNameEnabled){
+   const decision=(field,label)=>{
+    const person=item.ssIdentity?.[field];
+    if(person)return label+'：'+person.name+(person.manual?'（手動選択）':'（SS照合済み）');
+    return label+'：未照合';
+   };
+   fields.append(make('p','fine-print',decision('scorer','得点者')));
+   if(item.assistStatus==='named')
+    fields.append(make('p','fine-print',decision('assist','アシスト')));
   }
   personInput('scorer','得点者（ゴール）');
   const assistBox=make('label','goal-review-field');
