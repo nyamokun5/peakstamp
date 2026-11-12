@@ -46,3 +46,15 @@ test('missing official member UUID prevents alias learning',()=>{
  const noId={...snapshot,memberIds:new Map()};
  assert.deepEqual(plan({verified:true,rows:[row('タロウ','田中太郎','1')],snapshot:noId}),[]);
 });
+
+test('a confirmed assist nickname can be learned alongside scorer nickname',()=>{
+ const reviewed={...row('タロウ','田中太郎','1'),assistMode:'named',assist:'佐藤花子',goal:{id:'1',scorer:'タロウ',assist:'ハナ'}};
+ const result=plan({verified:true,rows:[reviewed],snapshot});
+ assert.deepEqual(result.map(x=>[x.field,x.alias,x.person]),[
+  ['scorer','タロウ','田中太郎'],['assist','ハナ','佐藤花子']]);
+});
+test('unconfirmed assist nickname cannot be learned',()=>{
+ const reviewed={...row('タロウ','田中太郎','1'),quickReviewedAll:false,quickReviewedFields:{scorer:true,assist:false},assistMode:'named',assist:'佐藤花子',goal:{id:'1',scorer:'タロウ',assist:'ハナ'}};
+ const result=plan({verified:true,rows:[reviewed],snapshot});
+ assert.deepEqual(result.map(x=>x.field),['scorer']);
+});
