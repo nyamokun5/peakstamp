@@ -9,11 +9,15 @@ export function verifiedBatchAliasIntents({reviewed=[],official=[],eventVerified
  if(!eventVerified||!Array.isArray(reviewed)||!Array.isArray(official))return [];
  const result=[];
  const used=new Set();
+ const seenSource=new Set();
  for(const source of reviewed){
   if(!source||!Array.isArray(source.intents)||!source.intents.length)continue;
   const seq=int(source.seq);
   const goalId=txt(source.officialGoalId);
-  if(seq===null||!goalId)continue;
+  const sourceKey=txt(source.sourceName)+'::'+txt(source.sourceGoalId);
+  if(seq===null||!goalId||!txt(source.sourceName)||!txt(source.sourceGoalId)||
+     seenSource.has(sourceKey))continue;
+  seenSource.add(sourceKey);
   const matches=official.filter(goal=>txt(goal.id)===goalId&&
    int(goal.seq)===seq&&txt(goal.scorer)===txt(source.scorer)&&
    txt(goal.team)===txt(source.team)&&
