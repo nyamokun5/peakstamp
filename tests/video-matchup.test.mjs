@@ -19,3 +19,16 @@ test('fourth video final announcement wins over unrelated English pitch announce
  const storage={getItem:k=>k==='peakstamp_gemini_primary_json_v1'?JSON.stringify(cache):null};
  assert.deepEqual(videoMatchup(source,storage),{teamA:'1',teamB:'3',origin:'audio'});
 });
+
+test('opening final announcement beats later explicit other-pitch match fields',async()=>{
+ const {videoMatchup}=await import('../video-matchup.mjs');
+ const source={file:{name:'IMG_3463.MOV',size:742146255,lastModified:123456}};
+ const key='IMG_3463.MOV::742146255::123456';
+ const cache={[key]:{utterances:[
+  {kind:'match_start',time_seconds:0.5,quote:'はい 1対3 決勝',match_label:'1対3 決勝'},
+  {kind:'match_start',time_seconds:96.5,team_a:'Sailors Blue Girls 8',team_b:'JSSL FC 2 Girls 8'},
+  {kind:'match_start',time_seconds:106.5,team_a:'Sailors White Girls 8',team_b:'JSSL FC 1 Girls 8'}
+ ]}};
+ const storage={getItem:k=>k==='peakstamp_gemini_primary_json_v1'?JSON.stringify(cache):null};
+ assert.deepEqual(videoMatchup(source,storage),{teamA:'1',teamB:'3',origin:'audio'});
+});
