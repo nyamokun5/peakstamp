@@ -35,6 +35,9 @@ await page.route('**/*',async route=>{
    チーム1:['橋本 泰成','T1'],チーム2:['T2'],
    チーム3:['Hiroyuki Kawata','T3'],チーム4:['T4']
   }};
+ }else if(u.pathname==='/staging/alias/list'){
+  assert.equal(method,'GET');
+  data={aliases:[]};
  }else if(u.pathname==='/staging/batch/start'){
   assert.equal(method,'POST');starts++;
   body=route.request().postDataJSON();
