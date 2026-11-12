@@ -565,7 +565,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()
  const runBatch=async()=>{
   const forceAll=document.querySelector('input[name="geminiBatchMode"]:checked')?.value==='all';
   const videos=candidates(state).slice();
-  if(videos.length<2)return run(false);
+  if(!videos.length)return;
   if(processing||state.working||state.exporting||state.geminiProcessing)return;
   const pending=videos.filter(src=>!(src.analysisEngine==='gemini'&&src.bins?.length));
   if(!pending.length&&!forceAll){
