@@ -1,3 +1,4 @@
+import {phoneticCandidates} from '../sposched-alias-auto-match.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeSpoSnapshot,prepareGoalRows} from '../sposched-review-core.mjs';
@@ -130,4 +131,12 @@ test('phonetic kana resolves unique romanized SS player but never guesses kanji'
  assert.equal(resolveAnalysisGoal(goal('あしがわ'),{snapshot,aliases:[]}).ssIdentity.scorer,null);
  const duplicate={...snapshot,players:[...snapshot.players,'ashikawa'],memberIds:new Map(snapshot.memberIds).set('ashikawa',id(80)),playerTeam:new Map(snapshot.playerTeam).set('ashikawa','チーム1')};
  assert.equal(resolveAnalysisGoal(goal('あしかわ'),{snapshot:duplicate,aliases:[]}).ssIdentity.scorer,null);
+});
+
+test('candidate picker ranks phonetic roster match and never guesses unrelated players',()=>{
+ const suggestions=phoneticCandidates('あしかわ',[],snapshot,1);
+ assert.deepEqual(suggestions.map(x=>x.name),['Ashikawa']);
+ assert.equal(suggestions[0].reason,'読み方が一致');
+ assert.deepEqual(phoneticCandidates('あしかわ',[],snapshot,2),[]);
+ assert.deepEqual(phoneticCandidates('あしがわ',[],snapshot,1),[]);
 });
