@@ -139,6 +139,13 @@ export function prefillDetectedGoalFields(goal,event,utterances=[]){
  fill('teamB',event.team_b||context?.teamB);
  return goal;
 }
+/** Goal calls are primary; find the latest preceding goal reaction within ten seconds. */
+export function reactionBeforeGoalCall(reactions,callTime){
+ const t=Number(callTime);
+ if(!Number.isFinite(t))return null;
+ const eligible=(reactions||[]).filter(r=>Number.isFinite(Number(r.time))&&Number(r.time)<=t&&t-Number(r.time)<=10);
+ return eligible.sort((a,b)=>Number(b.time)-Number(a.time))[0]||null;
+}
 export function createGoalDrafts(source,storage){
  const key=goalSourceKey(source);
  if(!key)return {items:[],transcript:null};
@@ -186,15 +193,14 @@ export function createGoalDrafts(source,storage){
   }
   const match=matchContext(events,time);
   // Relate voice announcements to the earlier goal reaction, keeping the shot.
-  const linked=reactions.filter(r=>r.time<=time+2&&time-r.time<=15)
-   .sort((a,b)=>Math.abs(time-a.time)-Math.abs(time-b.time))[0];
+  const linked=reactionBeforeGoalCall(reactions,time);
   const fresh=transcript?.scope==='unified';
   const start=linked?.start??(fresh?Math.max(0,time-12):null);
   const end=linked?.end??(fresh?Math.min(Number(source.duration)||time+2,time+2):null);
   items.push({id,origin:'audio',timeSeconds:time,
    ...(start!==null?{clipStartSeconds:roundTime(start)}:{}),
    ...(end!==null?{clipEndSeconds:roundTime(end)}:{}),
-   goalTimeSeconds:estimateGoalTime(time),goalTimeVerified:false,goalTimeEdited:false,
+   goalTimeSeconds:linked?roundTime(Math.max(0,linked.time-2)):estimateGoalTime(time),goalTimeVerified:false,goalTimeEdited:false,
    quote:clip(event.quote,240),
    scorer:clip(event.scorer),assist:clip(event.assist),
    rawScorer:clip(event.scorer),rawAssist:clip(event.assist),
