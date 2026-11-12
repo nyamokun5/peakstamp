@@ -353,6 +353,11 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     '「'+String(item.rawScorer).slice(0,50)+'」をSSの正式名・別名辞書と照合できませんでした。';
    fields.append(make('p','fine-print',message));
   }
+  if(state.ssNameEnabled&&item.ssIdentity?.scorer){
+   const scorer=item.ssIdentity.scorer;
+   fields.append(make('p','fine-print',
+    'SS名寄せ：'+scorer.name+(scorer.manual?'（手動選択）':'（正式名簿と照合済み）')));
+  }
   personInput('scorer','得点者（ゴール）');
   const assistBox=make('label','goal-review-field');
   assistBox.append(make('span','','アシスト'));
