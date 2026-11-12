@@ -123,3 +123,11 @@ test('phonetic hiragana scorer matches unique official romanized name without al
  assert.equal(resolveAnalysisGoal(goal('あしかわ'),{snapshot:duplicate,aliases:[]}).ssIdentity.scorer,null);
  assert.equal(resolveAnalysisGoal(goal('あしかわ'),{snapshot,aliases:[{alias:'あしかわ',member_id:id(1)}]}).ssIdentity.scorer.name,'濱直');
 });
+
+test('phonetic kana resolves unique romanized SS player but never guesses kanji',()=>{
+ assert.equal(resolveAnalysisGoal(goal('あしかわ'),{snapshot,aliases:[]}).scorer,'Ashikawa');
+ assert.equal(resolveAnalysisGoal(goal('アシカワさん'),{snapshot,aliases:[]}).scorer,'Ashikawa');
+ assert.equal(resolveAnalysisGoal(goal('あしがわ'),{snapshot,aliases:[]}).ssIdentity.scorer,null);
+ const duplicate={...snapshot,players:[...snapshot.players,'ashikawa'],memberIds:new Map(snapshot.memberIds).set('ashikawa',id(80)),playerTeam:new Map(snapshot.playerTeam).set('ashikawa','チーム1')};
+ assert.equal(resolveAnalysisGoal(goal('あしかわ'),{snapshot:duplicate,aliases:[]}).ssIdentity.scorer,null);
+});
