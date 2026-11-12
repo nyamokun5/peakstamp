@@ -436,7 +436,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const linked=source.candidates?.find(c=>c.goalRecordId===item.id&&c.enabled===true);
   const decision=item.videoDecision||(linked?'kept':null);
   const videoKeep=make('button','goal-review-video-keep','✓ 動画をキープ・次へ');
-  const videoReject=make('button','goal-review-video-reject','動画は使わない');
+  const videoReject=make('button','goal-review-video-reject','動画だけ不採用');
   videoKeep.type=videoReject.type='button';
   videoKeep.disabled=!(Number(source.duration)>0);
   videoKeep.setAttribute('aria-pressed',String(decision==='kept'));
