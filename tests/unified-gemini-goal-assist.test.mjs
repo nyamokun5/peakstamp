@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {prompt,normalizeUnifiedUtterances} from '../api/gemini-audio.js';
 import {mergeWavSegmentEvents,WAV_SEGMENT_VERSION} from '../gemini-wav-chunks.mjs';
 import {goalSourceKey,readGoalTranscript,createGoalDrafts,saveGoalDrafts,
- confirmedGoalExport,makeManualGoal} from '../goal-stats.mjs';
+ confirmedGoalExport,makeManualGoal,reactionBeforeGoalCall} from '../goal-stats.mjs';
 import {goalSceneBounds} from '../goal-scene-edit.mjs';
 import {keepGoalClip} from '../goal-video-clip.mjs';
 
@@ -221,4 +221,24 @@ test('a standalone assist phrase is not silently discarded',()=>{
  assert.equal(out.utterances.length,1);
  assert.equal(out.utterances[0].scorer,null);
  assert.equal(out.utterances[0].assist,'佐藤さん');
+});
+
+test('call-first linking uses preceding reaction up to ten seconds, not a later reaction',()=>{
+ const r=[{time:80,start:73,end:85},{time:90,start:86,end:95}];
+ assert.equal(reactionBeforeGoalCall(r,89)?.time,80);
+ assert.equal(reactionBeforeGoalCall(r,90)?.time,90);
+ assert.equal(reactionBeforeGoalCall(r,91)?.time,90);
+ assert.equal(reactionBeforeGoalCall(r,101),null);
+ assert.equal(reactionBeforeGoalCall(r,79),null);
+});
+test('late spoken name attaches to earlier goal scene and preserves call timestamp',()=>{
+ const c=store(),v=source('late-call.mov');
+ put(c,v,{duration_seconds:120,events:[{reaction_time_seconds:60,type:'goal_reaction',confidence:'high',quote:'ナイシュー',suggested_clip_start_seconds:53,suggested_clip_end_seconds:65}],utterances:[{time_seconds:69,kind:'goal_call',quote:'得点ハマさん、アシストジョージさん',scorer:'ハマさん',assist:'ジョージさん'}]});
+ const goals=createGoalDrafts(v,c).items;
+ assert.equal(goals.length,1);
+ assert.equal(goals[0].timeSeconds,69);
+ assert.equal(goals[0].goalTimeSeconds,58);
+ assert.equal(goals[0].clipStartSeconds,53);
+ assert.equal(goals[0].scorer,'ハマさん');
+ assert.equal(goals[0].assist,'ジョージさん');
 });
