@@ -295,10 +295,12 @@ export function createGoalDrafts(source,storage){
  let videoMatchup=null;
  try{videoMatchup=JSON.parse(storage?.getItem('peakstamp_matchup_v1:'+key)||'null');}catch{}
  if(videoMatchup?.origin==='manual')for(const item of items){
+  if(item.status==='confirmed'||item.status==='excluded'||item.origin==='manual')continue;
+  const edited=new Set(item.userEditedGoalFields||[]);
   for(const [field,value] of [['teamA',videoMatchup.teamA],['teamB',videoMatchup.teamB]]){
-   if(String(value||'').trim())item[field]=String(value).trim().slice(0,60);
+   if(String(value||'').trim()&&!edited.has(field))item[field]=String(value).trim().slice(0,60);
   }
-  if(videoMatchup.teamA&&videoMatchup.teamB)
+  if(videoMatchup.teamA&&videoMatchup.teamB&&!edited.has('matchLabel'))
    item.matchLabel=String(videoMatchup.teamA).trim()+' vs '+String(videoMatchup.teamB).trim();
  }
  // The organizer assigns a match number to the VIDEO, once.
