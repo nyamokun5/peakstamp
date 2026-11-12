@@ -107,7 +107,9 @@ test('observed 足川 speech variant resolves only through unique verified 芦�
  assert.equal(g.scorer,'Ashikawa');
  assert.equal(g.rawScorer,'足川');
  assert.equal(g.ssIdentity.scorer.memberId,snapshot.memberIds.get('Ashikawa'));
- assert.equal(resolveAnalysisGoal(goal('足川'),{snapshot,aliases:[]}).ssIdentity.scorer,null);
+ assert.equal(resolveAnalysisGoal(goal('足川'),{snapshot,aliases:[]}).scorer,'Ashikawa');
  const ambiguous=[...aliases,{alias:'芦川さん',member_id:id(1)}];
  assert.equal(resolveAnalysisGoal(goal('足川'),{snapshot,aliases:ambiguous}).ssIdentity.scorer,null);
+ const absent={...snapshot,players:snapshot.players.filter(name=>name!=='Ashikawa')};
+ assert.equal(resolveAnalysisGoal(goal('足川'),{snapshot:absent,aliases:[]}).ssIdentity.scorer,null);
 });
