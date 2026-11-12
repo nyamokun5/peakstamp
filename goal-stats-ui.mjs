@@ -409,10 +409,15 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     :'得点情報を確定しました。動画をキープ／不採用にすると次のゴールへ進みます。');
    onUpdate();
   });
+  const possibleDuplicate=suspectedDuplicateGoalIds(goalData(source).items).has(item.id);
   const reject=make('button','goal-review-exclude',
-   item.status==='excluded'?'除外を取り消す':'✕ ゴールではない');
+   item.status==='excluded'?'除外を取り消す':
+    possibleDuplicate?'重複を除外':'✕ ゴールではない');
   reject.type='button';
   reject.addEventListener('click',()=>{
+   // Never silently remove a real goal or an already-confirmed record.
+   if(possibleDuplicate&&item.status!=='excluded'&&
+      !window.confirm('動画で同じゴールと確認しましたか？ この候補のみ除外します（取り消し可能）。'))return;
    const now=item.status==='excluded'?'draft':'excluded';
    item.status=now;item.confirmedAt=null;
    write(source,goalData(source).items.map(x=>x.id===item.id?item:x));
