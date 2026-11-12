@@ -120,10 +120,12 @@ test('actual app wires analysis callbacks, missed-goal registration and final sa
  assert.match(montage,/onComplete\(\)/);
  assert.match(montage,/hsJsonReminder/);
 });
-test('goal review places scoring confirmation ahead of clip Keep and keeps automatic next',()=>{
+test('goal review combines score validation and video Keep, with automatic next',()=>{
  const goal=readFileSync(new URL('../goal-stats-ui.mjs',import.meta.url),'utf8');
- assert.match(goal,/editor\.append\(scoreDetails,actions,videoStatus,videoActions\)/);
- assert.match(goal,/動画をキープ（次のゴールへ）/);
+ assert.match(goal,/editor\.append\(scoreDetails,videoActions,actions,videoStatus\)/);
+ assert.match(goal,/動画をキープ・次へ/);
+ assert.match(goal,/const error=validateGoal\(current\)/);
+ assert.match(goal,/current\.status='confirmed'/);
  assert.match(goal,/nextUnreviewedGoalVideo\(queue\(\),entry\.key\)/);
 });
 
