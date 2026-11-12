@@ -147,12 +147,11 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   await settleMedia();
   assert.equal(stats.loads,1,'Replay must not reload the same source');
   assert.equal(stats.plays,1);
-  find(dom.goalStatsEditor,'goal-review-confirm').events.click();
-  assert.equal(createGoalDrafts(one,storage).items[0].status,'confirmed');
-  assert.equal(stats.loads,1,'scorer confirmation must not skip unjudged video');
+  assert.equal(stats.loads,1,'review must not skip unjudged video');
   assert.match(dom.goalStatsStep.textContent,/1 \/ 2/);
 
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  assert.equal(createGoalDrafts(one,storage).items[0].status,'confirmed');
   await settleMedia();
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
   assert.equal(stats.loads,2,'next goal loads only when its source changes');
@@ -161,9 +160,9 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
   assert.match(dom.goalStatsPlayingLabel.textContent,/第2試合/);
 
-  find(dom.goalStatsEditor,'goal-review-confirm').events.click();
-  assert.equal(createGoalDrafts(two,storage).items[0].status,'confirmed');
   find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
+  assert.equal(createGoalDrafts(two,storage).items[0].status,'draft',
+   'rejecting only the video does not silently confirm its score');
   await settleMedia();
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
   assert.equal(dom.goalStatsViewer.hidden,false,'after last goal the editor stays available for replay');
@@ -171,7 +170,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.match(dom.goalStatsStatus.textContent,/全件判定済み/);
   assert.equal(dom.goalStatsDone.hidden,false);
   assert.match(dom.goalStatsDoneText.textContent,/2件の判定が完了/);
-  assert.equal(confirmedGoalExport([one,two],storage).goals.length,2);
+  assert.equal(confirmedGoalExport([one,two],storage).goals.length,1);
   assert.equal(stats.competingPaused,2);
  }finally{await restore()}
 });
@@ -304,8 +303,8 @@ test('video can be kept or rejected inside goal editor without second review',as
   assert.equal(one.candidates.length,1);
   assert.equal(one.candidates[0].enabled,true);
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
-  assert.equal(createGoalDrafts(one,storage).items[0].status,'draft',
-   'scoring confirmation is independent of video acceptance');
+  assert.equal(createGoalDrafts(one,storage).items[0].status,'confirmed',
+   'one review action confirms valid scorer data and keeps the video');
   assert.equal(find(dom.goalStatsEditor,'goal-review-video-keep').className.includes('is-active'),true);
   find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
   assert.equal(calls.rejected,1);
