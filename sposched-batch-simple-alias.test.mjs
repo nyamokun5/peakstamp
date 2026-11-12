@@ -21,3 +21,8 @@ test('unreviewed goals cannot teach names',()=>{
  const r=plan({verified:true,rows:[{...row('タロウ','田中太郎','1'),quickReviewedAll:false}],snapshot});
  assert.deepEqual(r,[]);
 });
+
+test('hiragana and katakana of an ambiguous alias are treated as one name',()=>{
+ const r=plan({verified:true,rows:[row('タロウ','田中太郎','1'),row('たろう','佐藤花子','2')],snapshot});
+ assert.deepEqual(r,[]);
+});
