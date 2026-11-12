@@ -307,6 +307,43 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    select.value=item.ssIdentity?.[field]?.name||'';
    select.addEventListener('change',()=>edit(entry,field,select.value));
    box.append(select);fields.append(box);
+   // Explicit TEST-only learning: never persist an AI suggestion or a passive prefill.
+   if(select.value&&item.userEditedGoalFields?.includes(field)&&
+      (field==='scorer'?item.rawScorer:item.rawAssist)){
+    const learn=make('button','','呼び名を登録');learn.type='button';
+    learn.addEventListener('click',async()=>{
+     const current=latestGoal(entry);
+     const spoken=String(field==='scorer'?current.rawScorer:current.rawAssist||'').trim();
+     const official=String(current[field]||'');
+     const context=state.ssNameContext;
+     const memberId=context?.snapshot?.memberIds?.get(official);
+     const team=context?.snapshot?.playerTeam?.get(official);
+     const eventId=context?.snapshot?.eventId;
+     const password=document.getElementById('ssAnalysisToken')?.value.trim();
+     if(!spoken||!official||!memberId||!team||!eventId||!password||
+        !current.userEditedGoalFields?.includes(field)||
+        !fixturePeople(context.snapshot,current.matchSeq).includes(official)){
+      say('SS接続と選手の確定を確認してください。');return;
+     }
+     learn.disabled=true;learn.textContent='登録中…';
+     try{
+      const response=await fetch('https://shoot-sunday-sync-staging.yomax1979.workers.dev/staging/alias/confirm',{
+       method:'POST',headers:{'Content-Type':'application/json','X-SS-Bridge-Token':password},
+       body:JSON.stringify({event_id:eventId,member_id:memberId,name:official,team,
+        alias:spoken,source:'local-video',confirmed:true}),signal:AbortSignal.timeout(15000)
+      });
+      const result=await response.json();
+      if(!response.ok||result.ok!==true||result.saved!==true||
+         result.user_id!==memberId||String(result.alias).normalize('NFKC')!==spoken.normalize('NFKC'))
+       throw Error('登録を確認できません。SSの別名一覧を確認してください。');
+      context.aliases=[...(context.aliases||[]),{alias:spoken,member_id:memberId,name:official}];
+      say('「'+spoken+'」を'+official+'の呼び名として登録しました。');
+      learn.textContent='登録済み';
+     }catch(error){say(error.message||'登録結果を確認できません。再送せずSSを確認してください。');learn.textContent='登録結果を確認';}
+     // Do not automatically retry a potentially completed alias write.
+    });
+    box.append(learn);
+   }
   };
   if(state.ssNameEnabled&&!item.ssIdentity?.scorer){
    const snapshot=state.ssNameContext?.snapshot;
