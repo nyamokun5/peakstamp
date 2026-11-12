@@ -104,7 +104,7 @@ export function prepareWorkerTournament({snapshot,rows,decisions,requestId,winne
   const sourceName=name(row.goal?.source?.name);
   const sourceGoalKey=!row.goal?.manual&&!row.guest&&sourceName&&goalId
    ?sourceName+'::'+goalId:'';
-  if(sourceGoalKey.length>180||/[\\x00-\\x1f\\x7f]/.test(sourceGoalKey))
+  if(sourceGoalKey.length>180||/[\x00-\x1f\x7f]/.test(sourceGoalKey))
    fail('元動画のゴール識別子を確認してください');
   selected.push({seq,action:'create',team,scorer,assist,helpers:helperPlan?.helpers||[],
    ...(sourceGoalKey?{source_goal_key:sourceGoalKey}:{})});
