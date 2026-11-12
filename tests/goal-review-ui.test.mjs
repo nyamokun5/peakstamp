@@ -812,7 +812,7 @@ test('last video decision calls completion once and preserves automatic Keep nav
   await settleMedia();
   assert.equal(completed.length,1);
   assert.equal(completed[0].total,2);
-  assert.equal(completed[0].unconfirmed,2,'do not imply unconfirmed AI scorer data is official');
+  assert.equal(completed[0].unconfirmed,1,'only the rejected-video goal remains unconfirmed');
   dom.goalQueueKept.events.click();
   dom.goalStatsList.children[0].events.click();
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
