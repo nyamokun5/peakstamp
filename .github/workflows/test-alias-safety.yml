@@ -10,6 +10,7 @@ on:
       - 'sposched-batch-alias-proof*'
       - 'sposched-batch-simple-alias*'
       - 'sposched-batch-alias-ledger*'
+      - 'sposched-batch-alias-source*'
       - '.github/workflows/test-alias-safety.yml'
 jobs:
   alias-safety:
@@ -22,4 +23,4 @@ jobs:
         with:
           node-version: '22'
       - name: Run alias safety tests
-        run: node --test sposched-goal-commit-alias.test.mjs sposched-alias-admin.test.mjs sposched-batch-alias-proof.test.mjs sposched-batch-simple-alias.test.mjs sposched-batch-alias-ledger.test.mjs
+        run: node --test sposched-goal-commit-alias.test.mjs sposched-alias-admin.test.mjs sposched-batch-alias-proof.test.mjs sposched-batch-simple-alias.test.mjs sposched-batch-alias-ledger.test.mjs sposched-batch-alias-source.test.mjs
