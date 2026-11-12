@@ -5,6 +5,12 @@ export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
  if(!key||!Array.isArray(entries)||!snapshot?.memberIds||!snapshot?.playerTeam)return null;
  const names=new Set();
  const match=snapshot.matches?.find(m=>Number(m.seq)===Number(fixtureSeq));
+ if(!match)return null;
+ // Prefer an exact official roster name over an alias; never create a duplicate alias.
+ const direct=(snapshot.players||[]).filter(name=>normalize(name)===key&&
+  [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam.get(name)));
+ if(direct.length===1)return direct[0];
+ if(direct.length>1)return null;
  for(const e of entries){
   if(normalize(e.alias)!==key)continue;
   const official=[...snapshot.memberIds.entries()].filter(([,id])=>String(id).toLowerCase()===String(e.member_id).toLowerCase());
