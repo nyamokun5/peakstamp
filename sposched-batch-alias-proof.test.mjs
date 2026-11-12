@@ -37,3 +37,12 @@ test('same source goal cannot teach aliases from two official goal IDs',()=>{
  const result=prove({eventVerified:true,reviewed:[source,second],official:[official,{...official,id:'goal-2'}]});
  assert.deepEqual(result.map(x=>x.officialGoalId),[]);
 });
+
+test('two different spoken aliases for one official player remain independently learnable',()=>{
+ const first={...source,intents:[{...intent,alias:'タロウ'}]};
+ const second={...source,sourceGoalId:'video-goal-2',officialGoalId:'goal-2',intents:[{...intent,alias:'タナカ'}]};
+ const officialSecond={...official,id:'goal-2'};
+ const result=prove({eventVerified:true,reviewed:[first,second],official:[official,officialSecond]});
+ assert.deepEqual(result.map(x=>[x.alias,x.person,x.officialGoalId]),[
+  ['タロウ','竹田','goal-1'],['タナカ','竹田','goal-2']]);
+});
