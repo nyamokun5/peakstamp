@@ -202,8 +202,25 @@ async function callApi(audio,duration,access,signal,format='m4a') {
   throw Error('Geminiからの候補データを読み取れませんでした。');
  return result;
 }
+const ACCESS_SESSION_KEY='peakstamp_gemini_access_tab_v1';
+const ACCESS_TTL_MS=4*60*60*1000;
+function restoreAccess(){
+ try{
+  const value=JSON.parse(sessionStorage.getItem(ACCESS_SESSION_KEY)||'null');
+  if(value&&typeof value.code==='string'&&value.code&&value.expiresAt>Date.now()&&value.expiresAt<=Date.now()+ACCESS_TTL_MS)return value.code;
+  sessionStorage.removeItem(ACCESS_SESSION_KEY);
+ }catch{}
+ return '';
+}
+function saveAccess(code){
+ try{if(code)sessionStorage.setItem(ACCESS_SESSION_KEY,JSON.stringify({code,expiresAt:Date.now()+ACCESS_TTL_MS}));
+ else sessionStorage.removeItem(ACCESS_SESSION_KEY);}catch{}
+}
 export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()=>{}}) {
  if(!$('geminiMainRun')||typeof decodeAudio!=='function'||typeof commitResults!=='function')return;
+ const accessField=$('geminiMainAccess');
+ accessField.value=restoreAccess();
+ accessField.addEventListener('change',()=>saveAccess(accessField.value.trim()));
  const progressUI=createGeminiProgressUI();
  const eta=createGeminiEta();
  let inBatch=false;
