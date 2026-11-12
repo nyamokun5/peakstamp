@@ -140,3 +140,20 @@ test('candidate picker ranks phonetic roster match and never guesses unrelated p
  assert.deepEqual(phoneticCandidates('あしかわ',[],snapshot,2),[]);
  assert.deepEqual(phoneticCandidates('あしがわ',[],snapshot,1),[]);
 });
+
+test('ambiguous learned pronunciation never auto-confirms a scorer',()=>{
+ const conflicting=[
+  {alias:'あしかわ',member_id:id(3)},
+  {alias:'あしかわ',member_id:id(1)}
+ ];
+ const result=resolveAnalysisGoal(goal('あしかわ'),{snapshot,aliases:conflicting});
+ assert.equal(result.ssIdentity.scorer,null);
+ assert.equal(result.status,'draft');
+ const outside=[
+  {alias:'あしかわ',member_id:id(3)},
+  {alias:'あしかわ',member_id:id(8)}
+ ];
+ assert.equal(resolveAnalysisGoal(goal('あしかわ'),{snapshot,aliases:outside}).ssIdentity.scorer,null);
+ const unique=resolveAnalysisGoal(goal('あしかわ'),{snapshot,aliases:[{alias:'あしかわ',member_id:id(3)}]});
+ assert.equal(unique.scorer,'Ashikawa');
+});
