@@ -114,3 +114,20 @@ export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
  }
  return names.size===1?[...names][0]:null;
 }
+
+/** Read-only candidate ranking for human review; never confirms a scorer. */
+export function phoneticCandidates(raw,entries,snapshot,fixtureSeq){
+ const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(fixtureSeq));
+ if(!match||!Array.isArray(snapshot?.players))return [];
+ const keys=spokenKeys(raw),reading=romaji(raw);
+ if(!keys.length||!keys[0])return [];
+ const eligible=(snapshot.players||[]).filter(name=>snapshot.memberIds?.has(name)&&
+  [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam?.get(name)));
+ return eligible.map(name=>{
+  const id=String(snapshot.memberIds.get(name)).toLowerCase();
+  const direct=keys.includes(normalize(name));
+  const alias=Array.isArray(entries)&&entries.some(e=>keys.includes(normalize(e.alias))&&String(e.member_id).toLowerCase()===id);
+  const phonetic=Boolean(reading&&romaji(name)===reading);
+  return {name,reason:direct?'正式名一致':alias?'登録済みの呼び名':phonetic?'読み方が一致':'',rank:direct?3:alias?2:phonetic?1:0};
+ }).filter(x=>x.rank>0).sort((a,b)=>b.rank-a.rank||a.name.localeCompare(b.name,'ja'));
+}
