@@ -298,17 +298,18 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    box.append(make('span','',label));select.setAttribute('aria-label',label);
    select.append(new Option('選手を選択',''));
    const snapshot=state.ssNameContext?.snapshot;
-   let names=fixturePeople(snapshot,item.matchSeq);
-   if(field==='assist')names=names.filter(name=>name!==item.scorer&&
-    snapshot.playerTeam.get(name)===snapshot.playerTeam.get(item.scorer));
+   // Editing is event-wide; only SS registration is restricted to a verified fixture.
+   // Do not hide an identified player just because the match has no result/card yet.
+   let names=(snapshot?.players||[]).filter(name=>snapshot?.memberIds?.has(name));
+   if(field==='assist')names=names.filter(name=>name!==item.scorer);
    const suggestions=phoneticCandidates(field==='scorer'?item.rawScorer:item.rawAssist,
     state.ssNameContext?.aliases||[],snapshot,item.matchSeq);
-   const ranked=[...suggestions.map(x=>x.name),...names.filter(n=>!suggestions.some(x=>x.name===n))];
+   const ranked=[...new Set([...suggestions.map(x=>x.name),...names])].filter(n=>names.includes(n));
    for(const name of ranked){
     const suggested=suggestions.find(x=>x.name===name);
     select.append(new Option(suggested?name+'（'+suggested.reason+'）':name,name));
    }
-   select.value=item.ssIdentity?.[field]?.name||'';
+   select.value=ranked.includes(item[field])?item[field]:'';
    select.addEventListener('change',()=>edit(entry,field,select.value));
    box.append(select);fields.append(box);
    // Explicit TEST-only learning: never persist an AI suggestion or a passive prefill.
