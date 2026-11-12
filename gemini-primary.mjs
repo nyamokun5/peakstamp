@@ -203,6 +203,7 @@ async function callApi(audio,duration,access,signal,format='m4a') {
  return result;
 }
 const ACCESS_SESSION_KEY='peakstamp_gemini_access_tab_v1';
+const ACCESS_DEVICE_KEY='peakstamp_gemini_access_device_v1';
 const ACCESS_TTL_MS=4*60*60*1000;
 function restoreAccess(){
  try{
@@ -219,8 +220,17 @@ function saveAccess(code){
 export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()=>{}}) {
  if(!$('geminiMainRun')||typeof decodeAudio!=='function'||typeof commitResults!=='function')return;
  const accessField=$('geminiMainAccess');
- accessField.value=restoreAccess();
- accessField.addEventListener('change',()=>saveAccess(accessField.value.trim()));
+ const deviceSave=$('geminiRememberDevice');
+ let savedDevice='';try{savedDevice=localStorage.getItem(ACCESS_DEVICE_KEY)||''}catch{}
+ accessField.value=savedDevice||restoreAccess();
+ if(deviceSave)deviceSave.checked=Boolean(savedDevice);
+ const persistAccess=()=>{
+  const value=accessField.value.trim();saveAccess(value);
+  try{if(deviceSave?.checked&&value)localStorage.setItem(ACCESS_DEVICE_KEY,value);
+   else localStorage.removeItem(ACCESS_DEVICE_KEY)}catch{}
+ };
+ accessField.addEventListener('change',persistAccess);
+ deviceSave?.addEventListener('change',persistAccess);
  const progressUI=createGeminiProgressUI();
  const eta=createGeminiEta();
  let inBatch=false;
