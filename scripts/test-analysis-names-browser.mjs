@@ -85,6 +85,7 @@ try{
  assert.equal(await page.evaluate(()=>window.testState.sources[0].duration),60);
  outage=false;await page.evaluate(()=>window.testNames.refresh());
  // A response after password edit cannot install stale context.
+ await page.locator('#ssAnalysisLabel').click();
  delay=true;const pending=page.evaluate(()=>window.testNames.refresh());
  while(!release)await page.waitForTimeout(10);await page.fill('#ssAnalysisToken','changed');
  release();await pending;delay=false;

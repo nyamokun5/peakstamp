@@ -249,7 +249,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   scoreDetails.open=scoreDetailsOpen;
   scoreDetails.addEventListener('toggle',()=>{scoreDetailsOpen=Boolean(scoreDetails.open);});
   const summaryNames=(state.ssNameEnabled&&!item.ssIdentity?.scorer?'得点者を選択':item.scorer||'得点者未入力')+' ／ '+
-   (item.assistStatus==='named'?(item.assist||'アシスト者未入力'):
+   (item.assistStatus==='named'?(state.ssNameEnabled&&!item.ssIdentity?.assist?'アシスト者を選択':item.assist||'アシスト者未入力'):
     item.assistStatus==='none'?'アシストなし':'アシスト未確認');
   scoreDetails.append(make('summary','',
    (item.status==='confirmed'?'✓ 得点情報確定済み':'✎ 得点情報を確認・編集')+'　'+summaryNames));
@@ -327,7 +327,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   scoreDetails.append(fields,timing,optional);
   const actions=make('div','goal-review-actions');
   const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'✓ 得点情報は確定済み':'✓ 得点情報を確定');
-  confirm.type='button';confirm.disabled=item.status==='confirmed'||disabled;
+  confirm.type='button';confirm.hidden=state.ssNameEnabled===true;confirm.disabled=item.status==='confirmed'||disabled;
   confirm.addEventListener('click',()=>{
    const error=validateGoal(item);
    if(error){say('確定できません：'+error);return;}
