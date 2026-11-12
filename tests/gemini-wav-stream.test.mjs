@@ -16,11 +16,11 @@ test('stereo 48 kHz decoded sample produces valid mono WAV 16 kHz and closes sam
  const v=new DataView(await audio.blob.arrayBuffer());
  assert.equal(v.getUint32(24,true),16000);assert.equal(v.getUint16(22,true),1);assert.equal(v.getInt16(44,true),16384);
 });
-test('70-second segment stays below API ceiling; 5-second overlaps are preserved',async()=>{
+test('70-second segment stays below API ceiling; 20-second overlaps are preserved',async()=>{
  const s=sample({seconds:70});const audio=await encodeWavSegment(sampleIterator(s),{startSeconds:0,endSeconds:70,durationSeconds:70});
  assert.equal(audio.bytes,2240044);assert.ok(audio.bytes<2900000);
  const ranges=wavSegmentRanges(130);
- assert.equal(ranges.length,2);assert.equal(ranges[0].endSeconds-ranges[1].startSeconds,5);
+ assert.equal(ranges.length,3);assert.equal(ranges[0].endSeconds-ranges[1].startSeconds,20);\n assert.equal(ranges[1].endSeconds-ranges[2].startSeconds,20);
 });
 test('sample times are mapped relative to segment start',async()=>{
  const a=sample({start:64,seconds:2,value:.2}),b=sample({start:66,seconds:1,value:.6});
@@ -50,4 +50,9 @@ test('original video is decoded lazily by region and disposed',async()=>{
  const wav=await segmenter.makeSegment(segmenter.ranges[0]);
  assert.equal(reads,1);assert.equal(wav.bytes,32044);
  await segmenter.close();assert.equal(disposed,true);
+});
+
+test('goal at 321.5s and scorer discussion at 332s share an audio chunk',()=>{
+ const ranges=wavSegmentRanges(430.5493333333333);
+ assert.ok(ranges.some(r=>r.startSeconds<=321.5&&r.endSeconds>=332));
 });
