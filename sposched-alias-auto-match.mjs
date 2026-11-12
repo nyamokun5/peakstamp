@@ -10,6 +10,34 @@ const spokenKeys=value=>{
  const variant=knownSpeechVariants.get(base);
  return [...new Set([key,base,...(variant?[variant,variant+'さん']:[])].filter(Boolean))];
 };
+// Convert audible kana to a comparable romanized reading. Kanji names are
+// never assigned a guessed reading: they need a verified alias.
+const digraphs={しゃ:'sha',しゅ:'shu',しょ:'sho',ちゃ:'cha',ちゅ:'chu',ちょ:'cho',じゃ:'ja',じゅ:'ju',じょ:'jo',きゃ:'kya',きゅ:'kyu',きょ:'kyo',ぎゃ:'gya',ぎゅ:'gyu',ぎょ:'gyo',にゃ:'nya',にゅ:'nyu',にょ:'nyo',ひゃ:'hya',ひゅ:'hyu',ひょ:'hyo',びゃ:'bya',びゅ:'byu',びょ:'byo',ぴゃ:'pya',ぴゅ:'pyu',ぴょ:'pyo',りゃ:'rya',りゅ:'ryu',りょ:'ryo'};
+const syllables=['あいうえお','かきくけこ','さしすせそ','たちつてと','なにぬねの','はひふへほ','まみむめも','や ゆ よ','らりるれろ','わ   を','がぎぐげご','ざじずぜぞ','だぢづでど','ばびぶべぼ','ぱぴぷぺぽ'];
+const sounds=['aiueo','kakikukeko','sashisuseso','tachitsuteto','naninuneno','hahifuheho','mamimumemo','ya yu yo','rarirurero','wa   wo','gagigugego','zajizuzezo','dadidzudedo','babibubebo','papipupepo'];
+const kanaMap={};
+const romanRows=[['あ','a'],['い','i'],['う','u'],['え','e'],['お','o']];
+const rows=[['かきくけこ',['ka','ki','ku','ke','ko']],['さしすせそ',['sa','shi','su','se','so']],['たちつてと',['ta','chi','tsu','te','to']],['なにぬねの',['na','ni','nu','ne','no']],['はひふへほ',['ha','hi','fu','he','ho']],['まみむめも',['ma','mi','mu','me','mo']],['やゆよ',['ya','yu','yo']],['らりるれろ',['ra','ri','ru','re','ro']],['わを',['wa','wo']],['がぎぐげご',['ga','gi','gu','ge','go']],['ざじずぜぞ',['za','ji','zu','ze','zo']],['だぢづでど',['da','ji','zu','de','do']],['ばびぶべぼ',['ba','bi','bu','be','bo']],['ぱぴぷぺぽ',['pa','pi','pu','pe','po']]];
+for(const [chars,values] of rows)for(let i=0;i<chars.length;i++)kanaMap[chars[i]]=values[i];
+for(const [k,v] of romanRows)kanaMap[k]=v;
+kanaMap['ん']='n';
+export function phoneticRoman(value){
+ const v=normalize(value).replace(/(?:さん|くん|ちゃん|さま)$/,'');
+ if(!/^[ぁ-ゖー]+$/.test(v))return null;
+ let out='';
+ for(let i=0;i<v.length;i++){
+  if(v[i]==='っ'){
+   const next=digraphs[v.slice(i+1,i+3)]||kanaMap[v[i+1]];
+   if(!next)return null;out+=next[0];continue;
+  }
+  if(v[i]==='ー'){const vowel=out.match(/[aeiou]$/)?.[0];if(!vowel)return null;out+=vowel;continue;}
+  const pair=digraphs[v.slice(i,i+2)];
+  if(pair){out+=pair;i++;continue;}
+  if(!kanaMap[v[i]])return null;
+  out+=kanaMap[v[i]];
+ }
+ return out;
+}
 export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
  const keys=spokenKeys(raw);
  const key=keys[0];
@@ -31,6 +59,16 @@ export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
   const candidates=(snapshot.players||[]).filter(name=>normalize(name)==='ashikawa');
   if(candidates.length===1&&snapshot.memberIds.has(candidates[0])&&
      [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam.get(candidates[0])))return candidates[0];
+ }
+ // Phonetic match is a suggestion only if exactly one verified official
+ // participant has this romanized reading and no stored alias conflicts.
+ if(targets.size===0){
+  const reading=phoneticRoman(raw);
+  if(reading){
+   const candidates=(snapshot.players||[]).filter(name=>normalize(name).replace(/[^a-z]/g,'')===reading);
+   if(candidates.length===1&&snapshot.memberIds.has(candidates[0])&&
+      [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam.get(candidates[0])))return candidates[0];
+  }
  }
  if(targets.size!==1)return null;
  for(const e of entries){
