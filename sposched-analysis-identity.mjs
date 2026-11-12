@@ -1,5 +1,5 @@
 // Read-only identity resolution. No score/alias writes, network or credentials.
-import {matchOfficialAlias} from './sposched-alias-auto-match.mjs';
+import {matchOfficialAlias,matchEventPerson} from './sposched-alias-auto-match.mjs';
 const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 // Commentary team labels must agree with the selected numbered fixture.
 export function analysisFixtureAgrees(goal,match){
@@ -35,6 +35,8 @@ export function resolveAnalysisGoal(item,context){
   if(previous?.[field]&&!manual)result[field]=raw;
   if(field==='assist'&&item.assistStatus!=='named')continue;
   if(!snapshot||snapshot.rosterSource!=='official-current-event-teams')continue;
+  const displayName=manual?null:matchEventPerson(raw,entries,snapshot);
+  if(displayName&&!manual)result[field]=displayName;
   const name=manual?(people.includes(item[field])?item[field]:null):
    matchOfficialAlias(raw,entries,snapshot,seq);
   if(!name||!people.includes(name))continue;
