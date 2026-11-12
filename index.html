@@ -175,34 +175,13 @@
       </div>
       <div id="goalStatsEditor" class="goal-review-editor"></div>
 
-      <div class="goal-review-external-sync" style="margin:15px 0">
-        <button id="goalSsInlineOpen" type="button" class="main-button" aria-expanded="false">⚽ SS TESTに登録</button>
-        <div id="goalSsInlinePanel" hidden style="margin-top:12px">
-          <p class="fine-print">同じ画面でSSの試合とゴールを確認します。登録前に内容を確認してください。</p>
-          <iframe id="goalSsInlineFrame" title="Shoot Sunday TEST 登録" loading="lazy"
-            style="display:block;width:100%;height:78vh;min-height:520px;border:1px solid #508e83;border-radius:11px;background:#091927"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-          <button id="goalSsInlineClose" type="button" class="whisper-run">登録画面を閉じる</button>
-          <details><summary>別画面で開く（詳細）</summary>
-            <a href="./sposched-review.html?v=composite-tatsuo1&returnTab=1" target="_blank" rel="noopener noreferrer">SS登録画面を別タブで開く</a>
-          </details>
-        </div>
+      <div class="goal-review-external-sync" style="margin:15px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
+        <strong>⚽ SS TESTへの登録</strong>
+        <p class="fine-print">ゴール解析で選手・試合を確定します。SS登録操作の統合は準備中です。</p>
+        <details><summary>従来のSS登録画面（詳細・暫定）</summary>
+          <a href="./sposched-review.html?v=composite-tatsuo1&returnTab=1" target="_blank" rel="noopener noreferrer">従来のSS登録画面を開く</a>
+        </details>
       </div>
-      <script>
-      (() => {
-        const open=document.getElementById('goalSsInlineOpen');
-        const panel=document.getElementById('goalSsInlinePanel');
-        const frame=document.getElementById('goalSsInlineFrame');
-        const close=document.getElementById('goalSsInlineClose');
-        open.addEventListener('click',()=>{
-          if(!frame.src)frame.src='./sposched-review.html?v=inline-ss-test1&embedded=1&returnTab=1';
-          panel.hidden=false;open.hidden=true;open.setAttribute('aria-expanded','true');
-        });
-        close.addEventListener('click',()=>{
-          panel.hidden=true;open.hidden=false;open.setAttribute('aria-expanded','false');
-        });
-      })();
-      </script>
       <details class="goal-review-export">
         <summary>確定データを共有・保存</summary>
         <p class="fine-print">確定したゴール・アシストを保存できます。</p>
