@@ -180,3 +180,11 @@ test('uncertain spoken assist and match labels are prefilled, not asserted as co
  assert.equal(goals[0].teamB,'3');
  assert.equal(goals[0].status,'draft');
 });
+
+test('match-start commentary without a matchup never becomes the match label',()=>{
+ const utterances=[{kind:'match_start',time_seconds:1,quote:'はい、始まりました',match_label:null,team_a:null,team_b:null}];
+ const context=matchContext(utterances,318);
+ assert.equal(context.label,'');
+ assert.equal(context.teamA,'');
+ assert.equal(context.teamB,'');
+});
