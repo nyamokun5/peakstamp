@@ -2596,11 +2596,12 @@ async function learnVerifiedBatchAliases(state){
   const key='peakstamp:batch-alias-attempt:v1:'+eventId+':'+requestId+':'+
    encodeURIComponent(intent.alias.normalize('NFKC').toLowerCase())+':'+intent.member_id;
   if(localStorage.getItem(key))continue;
-  localStorage.setItem(key,'attempted');
   const row=rows.find(row=>row.include&&!row.guest&&!row.goal?.manual&&
    row[intent.field]===intent.person&&
    row.goal?.[intent.field]?.trim()===intent.alias);
   if(!row)continue;
+  // Persist the attempt immediately before the network-capable operation.
+  localStorage.setItem(key,'attempted');
   await learnSelectedAlias(row,intent.field,intent.person);
  }
 }
