@@ -188,3 +188,32 @@ test('match-start commentary without a matchup never becomes the match label',()
  assert.equal(context.teamA,'');
  assert.equal(context.teamB,'');
 });
+
+test('two differently transcribed goal calls sharing one Gemini reaction become one draft',()=>{
+ const cache=storage(),src={...source('SAME-SCENE.MOV',180000,1789000000),duration:120};
+ cache.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({
+  [goalSourceKey(src)]:{duration_seconds:120,events:[{
+   type:'goal_reaction',confidence:'high',reaction_time_seconds:12,
+   suggested_clip_start_seconds:5,suggested_clip_end_seconds:22
+  }],utterances:[
+   {kind:'goal_call',time_seconds:14.5,quote:'Aさんゴール',scorer:'Aさん'},
+   {kind:'goal_call',time_seconds:17.5,quote:'Bさんゴール',scorer:'Bさん'}
+  ]}
+ }));
+ const goals=createGoalDrafts(src,cache).items;
+ assert.equal(goals.length,1);
+ assert.equal(goals[0].scorer,'Aさん');
+});
+test('nearby calls with separate goal reactions remain distinct goals',()=>{
+ const cache=storage(),src={...source('TWO-SCENES.MOV',180001,1789000001),duration:120};
+ cache.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({
+  [goalSourceKey(src)]:{duration_seconds:120,events:[
+   {type:'goal_reaction',confidence:'high',reaction_time_seconds:10},
+   {type:'goal_reaction',confidence:'high',reaction_time_seconds:15}
+  ],utterances:[
+   {kind:'goal_call',time_seconds:11,quote:'Aさんゴール',scorer:'Aさん'},
+   {kind:'goal_call',time_seconds:16,quote:'Bさんゴール',scorer:'Bさん'}
+  ]}
+ }));
+ assert.equal(createGoalDrafts(src,cache).items.length,2);
+});
