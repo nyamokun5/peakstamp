@@ -466,6 +466,7 @@ import {onConfirmedGoalPlayerSelection} from './sposched-goal-alias-learning.mjs
 import {aliasIntentsForCommittedGoal} from './sposched-goal-commit-alias.mjs';
 import {aliasesAfterVerifiedBatch} from './sposched-batch-simple-alias.mjs';
 import {batchAliasAttemptKey} from './sposched-batch-alias-ledger.mjs';
+import {submittedAliasRows} from './sposched-batch-alias-source.mjs';
 import {normalizeAliasList,aliasListView} from './sposched-alias-admin.mjs';
 import {saveConfirmedGoalSelection,restoreConfirmedGoalSelections} from './sposched-goal-selection-draft.mjs';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=review-validation2';
@@ -2595,12 +2596,7 @@ async function learnVerifiedBatchAliases(state){
  try{submitted=JSON.parse(localStorage.getItem(submittedKey)||'null')}catch{submitted=null}
  // Old jobs without an immutable submission record cannot safely teach names.
  if(!Array.isArray(submitted)||!submitted.length)return;
- const submittedSet=new Set(submitted);
- const submittedRows=rows.filter(row=>{
-  const name=row.goal?.source?.name,id=row.goal?.id;
-  return typeof name==='string'&&name&&id!=null&&
-   submittedSet.has(name+'::'+id);
- });
+ const submittedRows=submittedAliasRows(rows,submitted);
  const intents=aliasesAfterVerifiedBatch({verified:true,rows:submittedRows,snapshot});
  for(const intent of intents){
   if(snapshot?.eventId!==eventId||!loadedFromStagingDirect||
