@@ -464,6 +464,7 @@ import {installSimpleResults} from './sposched-simple-results.mjs?v=2';
 import {installMinimalGoalFix,makeMinimalGoalOperation} from './sposched-simple-goal-fix.mjs?v=1';
 import {onConfirmedGoalPlayerSelection} from './sposched-goal-alias-learning.mjs';
 import {aliasIntentsForCommittedGoal} from './sposched-goal-commit-alias.mjs';
+import {aliasesAfterVerifiedBatch} from './sposched-batch-simple-alias.mjs';
 import {normalizeAliasList,aliasListView} from './sposched-alias-admin.mjs';
 import {saveConfirmedGoalSelection,restoreConfirmedGoalSelections} from './sposched-goal-selection-draft.mjs';
 import {normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,selectPlayerCandidates,fixturePlayerOptions,existingGoalsForMatch,matchingExistingGoals,buildReviewPayload} from './sposched-review-core.mjs?v=review-validation2';
@@ -2581,6 +2582,28 @@ function showWorkerBatchState(state){
   setBatchBusy(false);
  }
 }
+// One attempt per verified job/alias pair. Mark before sending: unknown responses
+// must never trigger a blind retry, including after a page reload.
+async function learnVerifiedBatchAliases(state){
+ if(!state||!workerCompletionVerified(state,snapshot)||
+    state.status!=='completed'||!loadedFromStagingDirect||
+    $('ssEnvironment').value!=='staging')return;
+ const eventId=snapshot.eventId,requestId=state.request_id;
+ const intents=aliasesAfterVerifiedBatch({verified:true,rows,snapshot});
+ for(const intent of intents){
+  if(snapshot?.eventId!==eventId||!loadedFromStagingDirect||
+     $('ssEnvironment').value!=='staging')return;
+  const key='peakstamp:batch-alias-attempt:v1:'+eventId+':'+requestId+':'+
+   encodeURIComponent(intent.alias.normalize('NFKC').toLowerCase())+':'+intent.member_id;
+  if(localStorage.getItem(key))continue;
+  localStorage.setItem(key,'attempted');
+  const row=rows.find(row=>row.include&&!row.guest&&!row.goal?.manual&&
+   row[intent.field]===intent.person&&
+   row.goal?.[intent.field]?.trim()===intent.alias);
+  if(!row)continue;
+  await learnSelectedAlias(row,intent.field,intent.person);
+ }
+}
 async function refreshWorkerBatch({passive=false}={}){
  if(workerBatchPolling||!snapshot||!loadedFromStagingDirect||
     $('ssEnvironment').value!=='staging')return;
@@ -2621,6 +2644,14 @@ async function refreshWorkerBatch({passive=false}={}){
    if(state.request_id===localStorage.getItem(workerBatchStorageKey(eventId)))
     workerCompletionProof={eventId,requestId:state.request_id,
      fixtureFingerprint:workerFixtureFingerprint(fresh)};
+   // Learn only after the entire batch has passed official readback.
+   // Preserve reviewed rows until learning finishes; score writes never depend on it.
+   if(workerCompletionVerified(state,fresh)){
+    const previousSnapshot=snapshot;
+    snapshot=fresh;
+    try{await learnVerifiedBatchAliases(state)}catch{/* Alias failure never affects goals. */}
+    if(snapshot!==fresh||snapshot?.eventId!==eventId)return;
+   }
   }
   showWorkerBatchState(state);
   if(state.status==='completed'&&workerCompletionVerified(state,snapshot)){
