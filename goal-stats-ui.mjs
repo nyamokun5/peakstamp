@@ -399,6 +399,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const error=validateGoal(item);
    if(error){say('確定できません：'+error);return;}
    item.status='confirmed';item.goalTimeVerified=true;
+   item.ssAutoConfirmed=false; // Explicit organizer confirmation survives SS re-matching.
    item.confirmedAt=new Date().toISOString();
    write(source,goalData(source).items.map(x=>x.id===item.id?item:x));
    // Confirming scorer/assist must not silently skip the video decision.
@@ -476,7 +477,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     return;
    }
    const priorStatus=current.status,priorVerified=current.goalTimeVerified,priorConfirmed=current.confirmedAt;
+   const priorAutoConfirmed=current.ssAutoConfirmed;
    current.status='confirmed';
+   current.ssAutoConfirmed=false; // A deliberate video Keep is a human confirmation.
    current.goalTimeVerified=true;
    current.confirmedAt=current.confirmedAt||new Date().toISOString();
    write(source,goalData(source).items.map(x=>x.id===current.id?current:x));
