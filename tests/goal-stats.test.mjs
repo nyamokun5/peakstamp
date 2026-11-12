@@ -217,3 +217,22 @@ test('nearby calls with separate goal reactions remain distinct goals',()=>{
  }));
  assert.equal(createGoalDrafts(src,cache).items.length,2);
 });
+
+test('previously saved unreviewed duplicates are reconciled without deleting a kept clip',()=>{
+ const cache=storage(),src={...source('SAVED-DUPLICATES.MOV',180002,1789000002),duration:120};
+ cache.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({
+  [goalSourceKey(src)]:{duration_seconds:120,events:[
+   {type:'goal_reaction',confidence:'high',reaction_time_seconds:12}
+  ],utterances:[]}
+ }));
+ const common={origin:'audio',goalTimeSeconds:10,goalTimeEdited:false,
+  goalTimeVerified:false,assistStatus:'unknown',status:'draft'};
+ saveGoalDrafts(src,cache,[
+  {...common,id:'audio-145',timeSeconds:14.5,scorer:'Aさん'},
+  {...common,id:'audio-175',timeSeconds:17.5,scorer:'Bさん',videoDecision:'kept'}
+ ]);
+ const goals=createGoalDrafts(src,cache).items;
+ assert.equal(goals.length,1);
+ assert.equal(goals[0].id,'audio-175');
+ assert.equal(goals[0].videoDecision,'kept');
+});
