@@ -3,14 +3,14 @@
  * No original video bytes are sent. Output: 16 kHz, mono, signed 16-bit PCM.
  *
  * Each <=70s chunk is <=2.25MB, under the Vercel 4.5MB JSON-body ceiling
- * after base64. 5s overlaps help preserve speech near cut boundaries.
+ * after base64. 20s overlaps preserve goal celebrations and scorer conversations up to 15s later across cut boundaries.
  */
 export const WAV_SAMPLE_RATE=16000;
 export const WAV_CHUNK_SECONDS=70;
-export const WAV_OVERLAP_SECONDS=5;
+export const WAV_OVERLAP_SECONDS=20;
 // Per-file AI duration; 70s WAV chunks keep each request below the API body limit.
 export const MAX_GEMINI_DURATION_SECONDS=1800;
-export const WAV_SEGMENT_VERSION='pcm16-wav-direct-source-70s-5s-goalassist-v3';
+export const WAV_SEGMENT_VERSION='pcm16-wav-direct-source-70s-20s-goalassist-v4';
 export function wavSegmentRanges(duration,{length=WAV_CHUNK_SECONDS,overlap=WAV_OVERLAP_SECONDS}={}){
  const total=Number(duration);
  if(!Number.isFinite(total)||total<=0||total>MAX_GEMINI_DURATION_SECONDS)
