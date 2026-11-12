@@ -30,3 +30,19 @@ test('hiragana and katakana of an ambiguous alias are treated as one name',()=>{
 test('spoken official name needs no redundant nickname write',()=>{
  assert.deepEqual(plan({verified:true,rows:[row('田中太郎','田中太郎','1')],snapshot}),[]);
 });
+
+test('excluded goal never contributes to nickname learning',()=>{
+ const r=plan({verified:true,rows:[{...row('タロウ','田中太郎','1'),include:false}],snapshot});
+ assert.deepEqual(r,[]);
+});
+test('manual goal and guest goal never teach aliases',()=>{
+ const r=plan({verified:true,rows:[
+  {...row('タロウ','田中太郎','1'),goal:{id:'1',scorer:'タロウ',manual:true}},
+  {...row('タナカ','田中太郎','2'),guest:true}
+ ],snapshot});
+ assert.deepEqual(r,[]);
+});
+test('missing official member UUID prevents alias learning',()=>{
+ const noId={...snapshot,memberIds:new Map()};
+ assert.deepEqual(plan({verified:true,rows:[row('タロウ','田中太郎','1')],snapshot:noId}),[]);
+});
