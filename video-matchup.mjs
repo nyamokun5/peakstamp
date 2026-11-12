@@ -13,7 +13,7 @@ export function videoMatchup(source,storage){
  const key=goalSourceKey(source);if(!key)return {teamA:'',teamB:'',origin:'unknown'};
  let saved=null;
  try{saved=JSON.parse(storage?.getItem(prefix+key)||'null');}catch{}
- if(saved?.origin==='manual')return {teamA:clean(saved.teamA),teamB:clean(saved.teamB),origin:'manual'};
+ if(saved?.origin==='manual'&&clean(saved.teamA)&&clean(saved.teamB))return {teamA:clean(saved.teamA),teamB:clean(saved.teamB),origin:'manual'};
  const starts=(readGoalTranscript(source,storage)?.data?.utterances||[])
   .filter(x=>x?.kind==='match_start'&&matchupFromUtterance(x))
   .sort((a,b)=>Number(a.time_seconds)-Number(b.time_seconds));
