@@ -647,7 +647,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()
  if(processing||state.geminiProcessing)return;
  if(!window.confirm('全動画の解析キャッシュ・ハイライト候補・ローカルのゴール情報を削除します。SS登録済みデータと元動画は残ります。元に戻せません。'))return;
  if(!window.confirm('最終確認：この端末の解析・ゴール情報をすべて初期化しますか？'))return;
- const prefixes=[CACHE_KEY,SEGMENT_CACHE_KEY+'::',WAVEFORM_CACHE_KEY+'::','peakstamp_confirmed_goals_v1:','peakstamp_callout_pilot_v1:','peakstamp_callout_pilot_v2:'];
+ const prefixes=[CACHE_KEY,SEGMENT_CACHE_KEY+'::',WAVEFORM_CACHE_KEY+'::','peakstamp_confirmed_goals_v1:','peakstamp_callout_pilot_v1:','peakstamp_callout_pilot_v2:','peakstamp_current_video_project_v1'];
  let count=0;
  try{
   for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key&&prefixes.some(p=>key===p||key.startsWith(p))){localStorage.removeItem(key);count++;}}
