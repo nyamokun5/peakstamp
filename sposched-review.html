@@ -1674,6 +1674,10 @@ function renderQuick(){
      fields.append(quickSelect(row,'team','得点チーム',
       possible.map(t=>({value:t,label:t})),row.team,teamNeedsSelection));
    }
+   if(staging&&row.goal?.source?.name&&row.goal?.id){
+    fields.append(aliasSkipControl(row,'scorer'));
+    if(row.assistMode==='named')fields.append(aliasSkipControl(row,'assist'));
+   }
    el.append(fields);
   }
   // Exclusion reason is visible in expandable details.
@@ -1801,7 +1805,30 @@ $('quickExecute').addEventListener('click',()=>{
 });
 
 
+// Persist a per-goal, per-role opt-out across SS review reloads.
+function aliasSkipKey(row,role){
+ const event=snapshot?.eventId||'';
+ const source=row?.goal?.source?.name||'',id=row?.goal?.id||'';
+ return event&&source&&id&&['scorer','assist'].includes(role)
+  ?'peakstamp:ss-alias-skip:v1:'+event+':'+source+':'+id+':'+role:'';
+}
+function aliasLearningSkipped(row,role){
+ const key=aliasSkipKey(row,role);
+ try{return !!key&&localStorage.getItem(key)==='1'}catch{return false}
+}
+function aliasSkipControl(row,role){
+ const button=node('button',aliasLearningSkipped(row,role)?'✓ 学習しない（解除）':'学習しない','quick-exception');
+ button.type='button';
+ button.addEventListener('click',()=>{
+  const key=aliasSkipKey(row,role);if(!key)return;
+  if(aliasLearningSkipped(row,role))localStorage.removeItem(key);
+  else localStorage.setItem(key,'1');
+  renderQuick();
+ });
+ return button;
+}
 async function learnSelectedAlias(row,role,officialName,{aliasOnly=false,team=''}={}){
+ if(!aliasOnly&&aliasLearningSkipped(row,role))return {saved:false,reason:'学習しない設定'};
  // Scoring selection and nickname-only confirmation both require a human.
  // Alias-only actions never mutate a reviewed score or guessed match pairing.
  if(!snapshot||!row||row.guest||row.goal?.manual||!officialName||
@@ -1926,6 +1953,7 @@ const minimalGoalFix=installMinimalGoalFix({
   let aliasWarning='';
   if(aliasSource&&aliasIntents.length){
    for(const intent of aliasIntents){
+    if(aliasLearningSkipped(aliasSource,intent.field))continue;
     try{
      const outcome=await learnSelectedAlias(aliasSource,intent.field,intent.person);
      if(!outcome.saved&&outcome.reason!=='SSに登録済みの呼び名です')
@@ -2659,7 +2687,7 @@ async function learnVerifiedBatchAliases(state){
   const row=submittedRows.find(row=>row.include&&!row.guest&&!row.goal?.manual&&
    row[intent.field]===intent.person&&
    (row.goal?.[intent.field==='scorer'?'rawScorer':'rawAssist']??row.goal?.[intent.field])?.trim()===intent.alias);
-  if(!row)continue;
+  if(!row||aliasLearningSkipped(row,intent.field))continue;
   // Persist the attempt immediately before the network-capable operation.
   localStorage.setItem(key,'attempted');
   await learnSelectedAlias(row,intent.field,intent.person);
