@@ -7,7 +7,7 @@ import {sourceDisplayName} from './match-label.mjs?v=match1';
  * gets reset merely because a card, field or summary rerenders.
  */
 import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
- confirmedGoalExport,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=goalprefill1';
+ confirmedGoalExport,goalSourceKey,actualGoalTime,suspectedDuplicateGoalIds} from './goal-stats.mjs?v=goalprefill1';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=firsttap1';
@@ -556,6 +556,11 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
      ?'まだキープしたゴールはありません。すべてから確認できます。'
      :'ゴール候補はまだありません。解析後にここへ表示されます。';
   }
+  const duplicatesBySource=new Map();
+  for(const entry of entries){
+   const key=goalSourceKey(entry.source);
+   if(key&&!duplicatesBySource.has(key))duplicatesBySource.set(key,suspectedDuplicateGoalIds(goalData(entry.source).items));
+  }
   const cards=[];
   for(const entry of filtered){
    const index=entries.findIndex(row=>row.key===entry.key);
@@ -571,8 +576,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
       :item.assistStatus==='none'?'アシストなし':'アシスト未確認')+
       (item.matchLabel?'　·　'+item.matchLabel:'')+
       (item.videoDecision==='kept'?'　·　🎬 動画キープ':item.videoDecision==='rejected'?'　·　動画不採用':''));
+   const possibleDuplicate=duplicatesBySource.get(goalSourceKey(source))?.has(item.id);
    const badge=make('span','goal-queue-badge '+item.status,
-    item.status==='confirmed'?'確定済み':item.status==='excluded'?'除外':'未確定');
+    possibleDuplicate?'重複の可能性':item.status==='confirmed'?'確定済み':item.status==='excluded'?'除外':'未確定');
    row.append(main,names,badge);
    row.addEventListener('click',()=>focusActive(entry,{autoplay:true}));
    cards.push(row);
