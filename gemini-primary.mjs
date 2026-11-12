@@ -46,7 +46,7 @@ function saveChunk(source,range,answer){
   const cache=getSavedChunks(source);
   cache[range.startSeconds+':'+range.durationSeconds]={
    startSeconds:range.startSeconds,events:answer.events,utterances:answer.utterances,unifiedGoalCalls:answer?.meta?.unifiedGoalCalls===true,
-   model:answer?.meta?.model||'unknown'
+   model:answer?.meta?.model||'unknown',promptRevision:answer?.meta?.promptRevision||null
   };
   localStorage.setItem(key,JSON.stringify(cache));
  }catch(_){/* Private Safari/limited storage; processing still continues. */}
@@ -452,7 +452,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()
        try{return await callApi(wav,range.durationSeconds,access,signal,'wav');}
        finally{apiWaitSum+=(performance.now()-started)/1000;}
       },
-      cached:range=>{if(force)return null;const chunk=previous[range.startSeconds+':'+range.durationSeconds];return chunk?.unifiedGoalCalls===true&&Array.isArray(chunk.utterances)?chunk:null;},
+      cached:range=>{if(force)return null;const chunk=previous[range.startSeconds+':'+range.durationSeconds];return chunk?.unifiedGoalCalls===true&&chunk?.promptRevision==='phonetic-hiragana-20261112-v1'&&Array.isArray(chunk.utterances)?chunk:null;},
       save:(range,response)=>{alive();saveChunk(source,range,response);},
       isCancelled:()=>signal.aborted||id!==generation,
       onFailure:()=>{if(id===generation)abortController?.abort();},
@@ -471,6 +471,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()
      geminiSeconds=(performance.now()-geminiStarted)/1000;
      alive();
      answer=mergeWavSegmentEvents(completed.responses,segmenter.durationSeconds);
+     answer.meta.cacheStatus=completed.responses.every(x=>x.promptRevision==='phonetic-hiragana-20261112-v1')?'current-prompt':'mixed-or-legacy';
      if(!waveformFailed)decodedDuringGemini=waveform.finish();
      saveResult(source,answer);
     }finally{
