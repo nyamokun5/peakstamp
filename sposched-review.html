@@ -2607,7 +2607,7 @@ async function learnVerifiedBatchAliases(state){
      $('ssEnvironment').value!=='staging')return;
   const key=batchAliasAttemptKey({eventId,requestId,alias:intent.alias,memberId:intent.member_id});
   if(!key||localStorage.getItem(key))continue;
-  const row=rows.find(row=>row.include&&!row.guest&&!row.goal?.manual&&
+  const row=submittedRows.find(row=>row.include&&!row.guest&&!row.goal?.manual&&
    row[intent.field]===intent.person&&
    row.goal?.[intent.field]?.trim()===intent.alias);
   if(!row)continue;
