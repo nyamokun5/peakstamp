@@ -1,4 +1,4 @@
-import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=2';
+import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=3';
 import {initAnalysisNames} from './sposched-analysis-names.mjs?v=aliasretry2';
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=peak52';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
