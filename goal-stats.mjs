@@ -290,18 +290,28 @@ export function createGoalDrafts(source,storage){
    if(value&&!edited.has(field)&&!clip(item[field]))item[field]=value;
   }
  }
- // Video-level manual matchup is authoritative for every goal in that source.
- // It is independent of the AI transcript and survives reanalysis.
- let videoMatchup=null;
- try{videoMatchup=JSON.parse(storage?.getItem('peakstamp_matchup_v1:'+key)||'null');}catch{}
- if(videoMatchup?.origin==='manual')for(const item of items){
-  if(item.status==='confirmed'||item.status==='excluded'||item.origin==='manual')continue;
+ // Propagate video-level matchup (manual or Gemini) to every goal card.
+ const saved=readJson(storage,'peakstamp_matchup_v1:'+key);
+ const manual=saved?.origin==='manual'&&clip(saved.teamA)&&clip(saved.teamB)
+  ?{teamA:clip(saved.teamA),teamB:clip(saved.teamB)}:null;
+ const primary=readJson(storage,GEMINI_RESULT_CACHE_KEY)?.[key];
+ const calls=(Array.isArray(primary?.utterances)?primary.utterances:[])
+  .filter(x=>x?.kind==='match_start').map(x=>{
+   const a=clip(x.team_a),b=clip(x.team_b);
+   if(a&&b)return {teamA:a,teamB:b,time:Number(x.time_seconds)};
+   const m=clip(x.match_label||x.quote).normalize('NFKC').match(/(?:チーム\\s*)?([1-9][0-9]?)\\s*(?:対|vs?\\.?|と)\\s*(?:チーム\\s*)?([1-9][0-9]?)/i);
+   return m?{teamA:m[1],teamB:m[2],time:Number(x.time_seconds)}:null;
+  }).filter(Boolean);
+ const opening=calls.filter(x=>x.time>=0&&x.time<=30);
+ const candidates=opening.length?opening:calls;
+ const unique=[...new Set(candidates.map(x=>x.teamA+'|'+x.teamB))];
+ const resolved=manual||(unique.length===1?candidates[0]:null);
+ if(resolved)for(const item of items){
   const edited=new Set(item.userEditedGoalFields||[]);
-  for(const [field,value] of [['teamA',videoMatchup.teamA],['teamB',videoMatchup.teamB]]){
-   if(String(value||'').trim()&&!edited.has(field))item[field]=String(value).trim().slice(0,60);
+  for(const [field,value] of [['teamA',resolved.teamA],['teamB',resolved.teamB],
+   ['matchLabel',resolved.teamA+' vs '+resolved.teamB]]){
+   if(!edited.has(field))item[field]=String(value).trim().slice(0,60);
   }
-  if(videoMatchup.teamA&&videoMatchup.teamB&&!edited.has('matchLabel'))
-   item.matchLabel=String(videoMatchup.teamA).trim()+' vs '+String(videoMatchup.teamB).trim();
  }
  // The organizer assigns a match number to the VIDEO, once.
  // Match-number edits are reflected across all auto-filled goal drafts.
