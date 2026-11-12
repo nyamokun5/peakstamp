@@ -113,3 +113,13 @@ test('observed 足川 speech variant resolves only through unique verified 芦�
  const absent={...snapshot,players:snapshot.players.filter(name=>name!=='Ashikawa')};
  assert.equal(resolveAnalysisGoal(goal('足川'),{snapshot:absent,aliases:[]}).ssIdentity.scorer,null);
 });
+
+test('phonetic hiragana scorer matches unique official romanized name without alias',()=>{
+ const result=resolveAnalysisGoal(goal('あしかわ'),{snapshot,aliases:[]});
+ assert.equal(result.scorer,'Ashikawa');
+ assert.equal(result.rawScorer,'あしかわ');
+ assert.equal(result.ssIdentity.scorer.memberId,snapshot.memberIds.get('Ashikawa'));
+ const duplicate={...snapshot,players:[...snapshot.players,'ashikawa'],memberIds:new Map(snapshot.memberIds).set('ashikawa',id(50)),playerTeam:new Map(snapshot.playerTeam).set('ashikawa','チーム1')};
+ assert.equal(resolveAnalysisGoal(goal('あしかわ'),{snapshot:duplicate,aliases:[]}).ssIdentity.scorer,null);
+ assert.equal(resolveAnalysisGoal(goal('あしかわ'),{snapshot,aliases:[{alias:'あしかわ',member_id:id(1)}]}).ssIdentity.scorer.name,'濱直');
+});
