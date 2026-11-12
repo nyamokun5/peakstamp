@@ -291,3 +291,17 @@ test('reanalysis adds newly heard match-start matchup without replacing manual c
  assert.equal(after.status,'confirmed');
  assert.equal(after.teamB,'4');
 });
+
+test('video-level matchup updates drafts but never overwrites confirmed or per-goal edits',()=>{
+ const cache=storage();put(cache,a,transcript1);
+ const item=createGoalDrafts(a,cache).items[0];
+ item.teamA='9';item.userEditedGoalFields=['teamA'];
+ saveGoalDrafts(a,cache,[item]);
+ cache.setItem('peakstamp_matchup_v1:'+goalSourceKey(a),JSON.stringify({origin:'manual',teamA:'1',teamB:'2'}));
+ const draft=createGoalDrafts(a,cache).items[0];
+ assert.equal(draft.teamA,'9');assert.equal(draft.teamB,'2');
+ draft.status='confirmed';saveGoalDrafts(a,cache,[draft]);
+ cache.setItem('peakstamp_matchup_v1:'+goalSourceKey(a),JSON.stringify({origin:'manual',teamA:'3',teamB:'4'}));
+ const confirmed=createGoalDrafts(a,cache).items[0];
+ assert.equal(confirmed.teamB,'2');assert.equal(confirmed.status,'confirmed');
+});
