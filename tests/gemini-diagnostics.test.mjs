@@ -30,3 +30,15 @@ test('explicit goal call is counted independently of Gemini candidate',()=>{
  assert.equal(d.goalReview.explicitGoalCallCount,1);
  assert.equal(d.goalReview.draftCount,1);
 });
+
+test('batch diagnostic includes fourth video opening and missing-analysis status',async()=>{
+ const {buildBatchAnalysisDiagnostic}=await import('../gemini-diagnostics.mjs');
+ const sources=[1,2,3,4].map(n=>({file:{name:'video'+n+'.MOV',size:100*n},duration:90}));
+ const result=JSON.parse(buildBatchAnalysisDiagnostic(sources,s=>s===sources[3]
+  ?{meta:{segments:2},utterances:[{kind:'match_start',time_seconds:1,quote:'決勝1対3',match_label:'決勝1対3'}]}
+  :null,()=>({items:[]})));
+ assert.equal(result.videoCount,4);
+ assert.equal(result.videos[0].analyzed,false);
+ assert.equal(result.videos[3].announcements[0].quote,'決勝1対3');
+ assert.equal(result.videos[3].openingAnnouncements,1);
+});
