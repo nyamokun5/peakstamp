@@ -645,7 +645,8 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()
  };
  $('geminiResetAllCache')?.addEventListener('click',()=>{
  if(processing||state.geminiProcessing)return;
- if(!window.confirm('このiPhoneの解析キャッシュとゴール確認・修正情報をすべて削除します。元に戻せません。続けますか？'))return;
+ if(!window.confirm('全動画の解析キャッシュ・ハイライト候補・ローカルのゴール情報を削除します。SS登録済みデータと元動画は残ります。元に戻せません。'))return;
+ if(!window.confirm('最終確認：この端末の解析・ゴール情報をすべて初期化しますか？'))return;
  const prefixes=[CACHE_KEY,SEGMENT_CACHE_KEY+'::',WAVEFORM_CACHE_KEY+'::','peakstamp_confirmed_goals_v1:','peakstamp_callout_pilot_v1:','peakstamp_callout_pilot_v2:'];
  let count=0;
  try{
