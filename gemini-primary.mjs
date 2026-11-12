@@ -425,7 +425,7 @@ export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()
        try{return await callApi(wav,range.durationSeconds,access,signal,'wav');}
        finally{apiWaitSum+=(performance.now()-started)/1000;}
       },
-      cached:range=>{const chunk=previous[range.startSeconds+':'+range.durationSeconds];return chunk?.unifiedGoalCalls===true&&Array.isArray(chunk.utterances)?chunk:null;},
+      cached:range=>{if(force)return null;const chunk=previous[range.startSeconds+':'+range.durationSeconds];return chunk?.unifiedGoalCalls===true&&Array.isArray(chunk.utterances)?chunk:null;},
       save:(range,response)=>{alive();saveChunk(source,range,response);},
       isCancelled:()=>signal.aborted||id!==generation,
       onFailure:()=>{if(id===generation)abortController?.abort();},
