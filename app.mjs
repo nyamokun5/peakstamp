@@ -1,12 +1,12 @@
-import {initAnalysisNames} from './sposched-analysis-names.mjs';
+import {initAnalysisNames} from './sposched-analysis-names.mjs?v=aliasretry2';
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=peak52';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=guided1';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=batchmode2';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=firsttap1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=displaymatch2';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=matchui1';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
