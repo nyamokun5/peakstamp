@@ -24,6 +24,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  state.ssNameEnabled=true;panel.hidden=false;
  const token=$('ssAnalysisToken'),event=$('ssAnalysisEvent'),remember=$('ssAnalysisRemember');
  const status=$('ssAnalysisStatus'),connect=$('ssAnalysisConnect');
+ const retry=document.createElement('button');retry.type='button';retry.textContent='名寄せを再実行';retry.hidden=true;retry.className='whisper-run';status.after(retry);
  let revision=0;
  const savedEvent=()=>{try{return sessionStorage.getItem(ANALYSIS_EVENT_KEY)||localStorage.getItem(ANALYSIS_EVENT_KEY)||''}catch{return ''}};
  const persistentKey='peakstamp_ss_bridge_device_staging_v1';
@@ -43,19 +44,20 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  };
  async function refresh(){
   const current=++revision,id=event.value;
-  state.ssNameContext=null;
+  state.ssNameContext=null;retry.hidden=true;
   if(!id){status.textContent='SSイベントを選ぶと正式名で表示します。';onChange();return;}
   try{
    const context=await readAnalysisContext({eventId:id,read});
    if(current!==revision)return;
    state.ssNameContext=context;
+   retry.hidden=false;
    status.textContent=context.aliasError?'呼び名を取得できません（'+context.aliasErrorReason+'）。正式名簿は利用できます。SSに再接続すると再取得します。':'';
    $('ssAnalysisLabel').textContent='SS：'+event.selectedOptions[0].textContent;
    if(remember.checked){rememberBridgeSession(sessionStorage,'staging',token.value.trim());saveDevice();}
    sessionStorage.setItem(ANALYSIS_EVENT_KEY,id);
    try{localStorage.setItem(ANALYSIS_EVENT_KEY,id)}catch{}
    panel.open=context.aliasError;
-  }catch(error){if(current!==revision)return;status.textContent=error.message;panel.open=true;}
+  }catch(error){if(current!==revision)return;retry.hidden=true;status.textContent=error.message;panel.open=true;}
   onChange();
  }
  async function load(){
@@ -76,6 +78,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  remember.addEventListener('change',()=>{if(!remember.checked)clearBridgeSession(sessionStorage,'staging');saveDevice();});
  event.addEventListener('change',()=>{invalidate();try{sessionStorage.removeItem(ANALYSIS_EVENT_KEY);localStorage.removeItem(ANALYSIS_EVENT_KEY)}catch{}refresh();});
  connect.addEventListener('click',load);
+ retry.addEventListener('click',()=>refresh());
  if(token.value)load();
  return {refresh};
 }
