@@ -16,8 +16,8 @@ import {proposedMatchHelpers,waitingHelperScoringSideIssue} from './sposched-hel
 export function quickAIObservation(row){
  const goal=row?.goal||{};
  const heard=value=>typeof value==='string'?value.trim():'';
- const scorerRaw=heard(goal.scorer)||'聞き取れず';
- const spokenAssist=heard(goal.assist);
+ const scorerRaw=heard(goal.rawScorer??goal.scorer)||'聞き取れず';
+ const spokenAssist=heard(goal.rawAssist??goal.assist);
  const assistRaw=goal.assistStatus==='none'
   ?spokenAssist?spokenAssist+'（AI判定：アシストなし）':'なし（AI判定）'
   :spokenAssist||(

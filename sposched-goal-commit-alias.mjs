@@ -15,7 +15,7 @@ export function aliasIntentsForCommittedGoal({row, snapshot, goalVerified = fals
   if (row.quickReviewedAll !== true && row.quickReviewedFields?.[reviewed] !== true)
    continue;
   if (field === 'assist' && row.assistMode !== 'named') continue;
-  const alias = clean(row.goal?.[field]); // immutable Gemini observation, NOT row[field]
+  const alias = clean(row.goal?.[field==='scorer'?'rawScorer':'rawAssist'] ?? row.goal?.[field]); // immutable Gemini observation, NOT row[field]
   const person = clean(row[field]); // human-selected official roster name
   const member_id = snapshot.memberIds?.get(person);
   const team = snapshot.playerTeam?.get(person);

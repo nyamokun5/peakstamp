@@ -50,6 +50,9 @@ export async function buildStagingSite(destination=path.join(root,'dist')){
   const target=path.join(destination,entry.name);
   if(entry.name==='sposched-review.html'){
    await writeFile(target,buildStagingReviewHtml(await readFile(source,'utf8')));
+  }else if(entry.name==='index.html'){
+   const html=await readFile(source,'utf8');
+   await writeFile(target,requireOnce(html,'<body>','<body data-ss-analysis="staging">','analysis staging gate'));
   }else await copyFile(source,target);
  }
  await writeFile(path.join(destination,'staging-production-disabled.mjs'),

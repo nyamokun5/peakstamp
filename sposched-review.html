@@ -491,13 +491,14 @@ import {installProductionUI} from './sposched-production-ui.mjs?v=production-ui1
 import {assertCurrentConnection} from './sposched-connection-scope.mjs?v=ss-scope1';
 import {workerTimeKey,storeWorkerTiming,readWorkerTiming,completionSeconds,elapsedSeconds,savedSSAppLink,validatedSSAppLink,resultLinkKey} from './sposched-completion.mjs?v=complete1';
 import {clearBridgeSession,restoreBridgeSession,rememberBridgeSession} from './sposched-bridge-session.mjs?v=bridge-tab1';
+import {ANALYSIS_EVENT_KEY} from './sposched-analysis-names.mjs';
 const $=id=>document.getElementById(id);
 let officialAliasEntries=[];
 let autoAliasEntries=[];
 function applyAutoAliases(){
  if(!snapshot||!loadedFromStagingDirect||!autoAliasEntries.length)return;
  for(const row of rows){
-  if(row.goal?.manual)continue;
+  if(row.goal?.manual||row.goal?.ssIdentity)continue;
   for(const [field,raw] of [['scorer',row.goal?.scorer],['assist',row.goal?.assist]]){
    if(row[field]||!raw)continue;
    const name=matchOfficialAlias(raw,autoAliasEntries,snapshot,row.seq);
@@ -3539,6 +3540,8 @@ $('ssLoadEvents').addEventListener('click',async()=>{
   if($('ssEnvironment').value==='production'&&target.length===1)
    select.value=target[0].event_id;
   else if(past)select.value=past.event_id;
+  const analysisEvent=$('ssEnvironment').value==='staging'?sessionStorage.getItem(ANALYSIS_EVENT_KEY):'';
+  if(analysisEvent&&[...select.options].some(o=>o.value===analysisEvent))select.value=analysisEvent;
   $('ssSelectWrap').hidden=!select.options.length;
   $('ssLoadSnapshot').hidden=!select.options.length;
   statusSS(select.options.length+'件取得しました。'+
@@ -3578,6 +3581,7 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   autoAliasEntries=[];
   rebuild({preserveEdits:true});
   if(loadedFromStagingDirect){
+   sessionStorage.setItem(ANALYSIS_EVENT_KEY,snapshot.eventId);
    const loadedSnapshot=snapshot;
    try{
     const aliasResponse=await fetchSS('/staging/alias/list');

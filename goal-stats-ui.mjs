@@ -1,3 +1,4 @@
+import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
 /**
  * Unified, goal-first video review. All source files appear in one ordered
@@ -52,8 +53,19 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  const textBox=$('goalStatsJsonArea'),textArea=$('goalStatsJson');
  const cache=()=>window.localStorage;
  const sources=()=>state.sources.filter(s=>s?.file&&s?.objectUrl);
- const goalData=s=>createGoalDrafts(s,cache());
- const queue=()=>collectGoalQueue(sources(),cache());
+ const goalData=s=>{
+  const data=createGoalDrafts(s,cache());
+  if(state.ssNameEnabled){
+   const items=data.items.map(item=>resolveAnalysisGoal(item,state.ssNameContext));
+   if(JSON.stringify(items)!==JSON.stringify(data.items))saveGoalDrafts(s,cache(),items);
+   data.items=items;
+  }
+  return data;
+ };
+ const queue=()=>{
+  if(state.ssNameEnabled)for(const src of sources())goalData(src);
+  return collectGoalQueue(sources(),cache());
+ };
  let activeKey='',displayedKey='',hadGoalCandidates=false,liveEntry=null;
  let queueFilter='all',scoreDetailsOpen=false;
  const say=s=>{status.textContent=s;};
@@ -236,7 +248,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const scoreDetails=make('details','goal-score-details');
   scoreDetails.open=scoreDetailsOpen;
   scoreDetails.addEventListener('toggle',()=>{scoreDetailsOpen=Boolean(scoreDetails.open);});
-  const summaryNames=(item.scorer||'得点者未入力')+' ／ '+
+  const summaryNames=(state.ssNameEnabled&&!item.ssIdentity?.scorer?'得点者を選択':item.scorer||'得点者未入力')+' ／ '+
    (item.assistStatus==='named'?(item.assist||'アシスト者未入力'):
     item.assistStatus==='none'?'アシストなし':'アシスト未確認');
   scoreDetails.append(make('summary','',
@@ -275,7 +287,21 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   });
   timingTools.append(earlier,stamp,later,useVideo);
   timing.append(timingTools);
-  inputRow(fields,'得点者（ゴール）',item.scorer,v=>edit(entry,'scorer',v),{placeholder:'例：若さん'});
+  const personInput=(field,label)=>{
+   if(!state.ssNameEnabled){inputRow(fields,label,item[field],v=>edit(entry,field,v),{placeholder:'選手名'});return;}
+   const box=make('label','goal-review-field'),select=make('select','');
+   box.append(make('span','',label));select.setAttribute('aria-label',label);
+   select.append(new Option('選手を選択',''));
+   const snapshot=state.ssNameContext?.snapshot;
+   let names=fixturePeople(snapshot,item.matchSeq);
+   if(field==='assist')names=names.filter(name=>name!==item.scorer&&
+    snapshot.playerTeam.get(name)===snapshot.playerTeam.get(item.scorer));
+   for(const name of names)select.append(new Option(name,name));
+   select.value=item.ssIdentity?.[field]?.name||'';
+   select.addEventListener('change',()=>edit(entry,field,select.value));
+   box.append(select);fields.append(box);
+  };
+  personInput('scorer','得点者（ゴール）');
   const assistBox=make('label','goal-review-field');
   assistBox.append(make('span','','アシスト'));
   const assistChoice=make('select','');
@@ -288,7 +314,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   assistChoice.addEventListener('change',()=>edit(entry,'assistStatus',assistChoice.value));
   assistBox.append(assistChoice);fields.append(assistBox);
   if(item.assistStatus==='named')
-   inputRow(fields,'アシスト者',item.assist,v=>edit(entry,'assist',v),{placeholder:'例：野田さん'});
+   personInput('assist','アシスト者');
   inputRow(fields,'対戦カード',item.matchLabel,v=>edit(entry,'matchLabel',v),{placeholder:'例：3 vs 4'});
   inputRow(fields,'SS試合番号（任意）',item.matchSeq||'',v=>edit(entry,'matchSeq',v),{type:'number',placeholder:'例：3'});
   const optional=make('details','goal-optional-fields');
@@ -520,6 +546,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  });
  function refresh(){
   const all=sources();
+  if(state.ssNameEnabled)for(const src of all)goalData(src);
   const old=manualSource.value;
   manualSource.replaceChildren();
   for(const src of all){

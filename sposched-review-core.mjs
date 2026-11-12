@@ -1,3 +1,4 @@
+import {verifiedAnalysisPerson} from './sposched-analysis-identity.mjs';
 /** PeakStamp → Shoot Sunday (SpoSched) review-only bridge.
  * Inputs come from explicitly imported event snapshots. NO HTTP endpoints,
  * tokens, writes, or automatic state mutations are assumed here.
@@ -369,8 +370,12 @@ export function prepareGoalRows(rawGoals,snapshot){
   const matchGuess=inferMatchFromCommentary(g,snapshot);
   const onlyMatch=snapshot.matches.find(m=>m.seq===matchGuess.seq)||null;
   const teamHint=onlyMatch?onlyMatch.leftTeam:'';
-  const scorerGuess=suggestedPlayer(g.scorer,snapshot,teamHint);
-  const assistGuess=suggestedPlayer(g.assist,snapshot,'');
+  const transferred=field=>{
+   const person=verifiedAnalysisPerson(g,snapshot,onlyMatch?.seq,field);
+   return {name:person?.name||'',confidence:person?'high':'none',candidates:[],source:'analysis-identity'};
+  };
+  const scorerGuess=g.ssIdentity?transferred('scorer'):suggestedPlayer(g.scorer,snapshot,teamHint);
+  const assistGuess=g.ssIdentity?transferred('assist'):suggestedPlayer(g.assist,snapshot,'');
   const scorerTeam=scorerGuess.name?snapshot.playerTeam.get(scorerGuess.name)||'':'';
   const sides=onlyMatch?[nameForTeam(onlyMatch.leftTeam),nameForTeam(onlyMatch.rightTeam)]:[];
   const prefilledTeam=scorerTeam&&sides.includes(nameForTeam(scorerTeam))?
@@ -384,6 +389,9 @@ export function prepareGoalRows(rawGoals,snapshot){
    assistMode:g.assistStatus==='none'?'none':
     g.assistStatus==='named'?'named':'unknown',
    scorerHints,assistHints,team:prefilledTeam,confirmed:false,include:true,
+   ...(g.ssIdentity?{quickReviewedFields:{
+    scorer:Boolean(verifiedAnalysisPerson(g,snapshot,onlyMatch?.seq,'scorer')?.manual),
+    assist:Boolean(verifiedAnalysisPerson(g,snapshot,onlyMatch?.seq,'assist')?.manual)}}:{}),
    guest:false,scoreConfirmed:false,duplicateApproved:false,updateGoalId:''};
  });
 }
