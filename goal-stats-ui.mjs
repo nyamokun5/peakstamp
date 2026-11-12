@@ -1,3 +1,4 @@
+import {phoneticCandidates} from './sposched-alias-auto-match.mjs';
 import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
 /**
@@ -296,7 +297,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    let names=fixturePeople(snapshot,item.matchSeq);
    if(field==='assist')names=names.filter(name=>name!==item.scorer&&
     snapshot.playerTeam.get(name)===snapshot.playerTeam.get(item.scorer));
-   for(const name of names)select.append(new Option(name,name));
+   const suggestions=phoneticCandidates(field==='scorer'?item.rawScorer:item.rawAssist,
+    state.ssNameContext?.aliases||[],snapshot,item.matchSeq);
+   const ranked=[...suggestions.map(x=>x.name),...names.filter(n=>!suggestions.some(x=>x.name===n))];
+   for(const name of ranked){
+    const suggested=suggestions.find(x=>x.name===name);
+    select.append(new Option(suggested?name+'（'+suggested.reason+'）':name,name));
+   }
    select.value=item.ssIdentity?.[field]?.name||'';
    select.addEventListener('change',()=>edit(entry,field,select.value));
    box.append(select);fields.append(box);
