@@ -6,7 +6,7 @@ export function matchupFromUtterance(row){
  if(explicitA&&explicitB)return {teamA:explicitA,teamB:explicitB};
  const phrase=clean(row?.match_label||row?.quote).normalize('NFKC');
  // Only parse an explicit pair in a match_start record, never an arbitrary score.
- const match=phrase.match(/(?:チーム\\s*)?([1-9][0-9]?)\\s*(?:対|vs?\\.?|と)\\s*(?:チーム\\s*)?([1-9][0-9]?)/i);
+ const match=phrase.match(/(?:チーム\s*)?([1-9][0-9]?)\s*(?:対|vs?\.?|と)\s*(?:チーム\s*)?([1-9][0-9]?)/i);
  return match?{teamA:match[1],teamB:match[2]}:null;
 }
 export function videoMatchup(source,storage){
