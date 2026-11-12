@@ -68,7 +68,11 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   return collectGoalQueue(sources(),cache());
  };
  let activeKey='',displayedKey='',hadGoalCandidates=false,liveEntry=null;
- let queueFilter='all',scoreDetailsOpen=false;
+ let queueFilter='all',showExcluded=false,scoreDetailsOpen=false;
+ const excludedToggle=make('button','goal-review-excluded-toggle','除外した動画を表示');
+ excludedToggle.type='button';excludedToggle.hidden=true;
+ excludedToggle.addEventListener('click',()=>{showExcluded=!showExcluded;render();});
+ list.parentElement?.append(excludedToggle);
  const say=s=>{status.textContent=s;};
  const player=createGoalPlaybackController(video,{
   notify:s=>{$('goalStatsVideoStatus').textContent=s;},
@@ -465,12 +469,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   summary.textContent='ゴール '+entries.length+'件 · キープ '+videoKept+'件 · 未確認 '+
    entries.filter(row=>goalNeedsVideoReview(row.item)).length+'件';
   exportButton.disabled=copyButton.disabled=showButton.disabled=confirmed===0;
-  const previous=entries.find(row=>row.key===activeKey);
+  const visibleEntries=entries.filter(row=>showExcluded||row.item.status!=='excluded');
+  const previous=visibleEntries.find(row=>row.key===activeKey);
   if(!previous){
-   const firstToReview=entries.find(row=>goalNeedsVideoReview(row.item));
-   activeKey=(firstToReview||entries[0])?.key||'';
+   const firstToReview=visibleEntries.find(row=>goalNeedsVideoReview(row.item));
+   activeKey=(firstToReview||visibleEntries[0])?.key||'';
   }
-  const active=entries.find(row=>row.key===activeKey);
+  const active=visibleEntries.find(row=>row.key===activeKey);
   liveEntry=active||null;
   if(!active){viewer.hidden=true;displayedKey='';player.pause();}
   if(active)scene.activate(active.source,active.item);
@@ -501,8 +506,10 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    button.classList.toggle('is-active',activeFilter);
    button.setAttribute('aria-pressed',String(activeFilter));
   }
-  const filtered=entries.filter(({item})=>queueFilter==='all'||
+  const filtered=visibleEntries.filter(({item})=>queueFilter==='all'||
    (queueFilter==='kept'?item.videoDecision==='kept':goalNeedsVideoReview(item)));
+  excludedToggle.hidden=excluded===0;
+  excludedToggle.textContent=showExcluded?'除外した動画を隠す':'除外した動画を表示（'+excluded+'）';
   if(libraryEmpty){
    libraryEmpty.hidden=filtered.length>0;
    libraryEmpty.textContent=queueFilter==='pending'
