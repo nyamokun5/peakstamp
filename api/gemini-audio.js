@@ -9,6 +9,7 @@
 import { timingSafeEqual } from 'node:crypto';
 
 const MODEL='gemini-3.8-flash';
+export const PROMPT_REVISION='phonetic-hiragana-20261112-v1';
 const MAX_BYTES=2900000;
 const MAX_DURATION_SECONDS=600;
 const ORIGIN='https://nyamokun5.github.io';
@@ -358,7 +359,7 @@ export default async function handler(req,res){
   }
   return res.status(200).json({duration_seconds:seconds,utterances,
    limitations:'Audio-only transcription; speech may be misheard and does not verify an actual goal.',
-   meta:{model:MODEL,api:result.api,mode:'callout-test'}});
+   meta:{model:MODEL,api:result.api,mode:'callout-test',promptRevision:PROMPT_REVISION}});
  }
  if(!Array.isArray(parsed?.events))return reply(res,502,'Geminiの回答にevents配列がありません。');
  if(!Array.isArray(parsed?.utterances))return reply(res,502,'統合解析のゴール・アシスト結果（utterances）がありません。保存せずに停止しました。');
@@ -383,7 +384,7 @@ export default async function handler(req,res){
  return res.status(200).json({
   duration_seconds:seconds,events,utterances:normalizeUnifiedUtterances(parsed.utterances,seconds),
   limitations:'Audio-only results are not evidence that these shots or goals occurred.',
-  meta:{model:MODEL,api:result.api,audioFormat:format,usedFallback:result.fallback,unifiedGoalCalls:true,
+  meta:{model:MODEL,api:result.api,audioFormat:format,usedFallback:result.fallback,unifiedGoalCalls:true,promptRevision:PROMPT_REVISION,
    inputTokens:result.api==='interactions'?(google?.usage?.total_input_tokens??null):
     (google?.usageMetadata?.promptTokenCount??null),
    outputTokens:result.api==='interactions'?(google?.usage?.total_output_tokens??null):
