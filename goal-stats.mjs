@@ -186,11 +186,20 @@ export function createGoalDrafts(source,storage){
   // Gemini transcribes the scorer differently. Only collapse when both calls
   // point to one explicitly detected reaction; never merge on name alone.
   const linkedReaction=reactionBeforeGoalCall(reactions,time);
-  const sameReaction=linkedReaction&&items.find(r=>r.origin==='audio'&&
-   r.status!=='excluded'&&r.goalTimeEdited!==true&&
-   r.goalTimeVerified!==true&&
-   Math.abs(Number(r.goalTimeSeconds)-(linkedReaction.time-2))<=0.11&&
-   Math.abs(Number(r.timeSeconds)-time)<=15);
+  const sameReaction=linkedReaction&&items.find(r=>{
+   if(r.origin!=='audio'||r.status==='excluded'||r.goalTimeEdited===true||
+      Math.abs(Number(r.timeSeconds)-time)>15)return false;
+   // An organizer may verify a different playback time. In that case,
+   // compare the original reaction clip rather than the edited timestamp.
+   if(r.goalTimeVerified===true){
+    const start=Number(r.clipStartSeconds),end=Number(r.clipEndSeconds);
+    const rs=Number(linkedReaction.start),re=Number(linkedReaction.end);
+    return [start,end,rs,re].every(Number.isFinite)&&end>start&&re>rs&&
+     Math.max(0,Math.min(end,re)-Math.max(start,rs))/
+      Math.min(end-start,re-rs)>=0.75;
+   }
+   return Math.abs(Number(r.goalTimeSeconds)-(linkedReaction.time-2))<=0.11;
+  });
   const already=sameReaction||items.find(r=>r.id===id ||
    (r.origin==='manual'?
     time-actualGoalTime(r)>=-2 && time-actualGoalTime(r)<=15:
