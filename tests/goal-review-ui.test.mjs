@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initGoalStatsReview} from '../goal-stats-ui.mjs';
-import {createGoalDrafts,goalSourceKey,confirmedGoalExport} from '../goal-stats.mjs';
+import {createGoalDrafts,goalSourceKey,confirmedGoalExport,saveGoalDrafts} from '../goal-stats.mjs';
 import {keepGoalClip,rejectGoalClip} from '../goal-video-clip.mjs';
 import {buildMultiClipPlan} from '../multi-plan.mjs';
 
@@ -120,6 +120,22 @@ function find(node,cls){
  }
  return null;
 }
+test('one-tap keep never confirms a goal with a missing scorer',async()=>{
+ const {dom,one,storage,restore}=setup();
+ try{
+  const goal=createGoalDrafts(one,storage).items[0];
+  goal.scorer='';
+  saveGoalDrafts(one,storage,[goal]);
+  let keeps=0;
+  initGoalStatsReview({sources:[one]},{
+   onKeepClip:()=>{keeps++;return true;}
+  });
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  assert.equal(keeps,0,'invalid score cannot create a kept clip');
+  assert.notEqual(createGoalDrafts(one,storage).items[0].status,'confirmed');
+ }finally{await restore()}
+});
+
 test('first goal is immediately visible; score confirmation stays put; video judgment advances one decoder',async()=>{
  const {dom,storage,one,two,stats,restore}=setup();
  try{
