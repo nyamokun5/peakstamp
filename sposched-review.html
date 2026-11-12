@@ -509,7 +509,7 @@ $('aliasAdminLoad').addEventListener('click',async()=>{
  $('aliasAdminStatus').textContent='SS公式一覧を取得中…';
  officialAliasEntries=[];$('aliasAdminList').replaceChildren();
  try{
-  const response=await fetchSS('/v1/aliases');
+  const response=await fetchSS('/staging/alias/list');
   officialAliasEntries=normalizeAliasList(response);
   renderAliasAdmin();
  }catch(e){
