@@ -133,3 +133,25 @@ export function phoneticCandidates(raw,entries,snapshot,fixtureSeq){
   return {name,reason:direct?'正式名一致':alias?'登録済みの呼び名':phonetic?'読み方が一致':'',rank:direct?3:alias?2:phonetic?1:0};
  }).filter(x=>x.rank>0).sort((a,b)=>b.rank-a.rank||a.name.localeCompare(b.name,'ja'));
 }
+
+/** Event-wide, read-only display matching. Never authorizes SS score registration. */
+export function matchEventPerson(raw,entries,snapshot){
+ const keys=spokenKeys(raw);
+ if(!keys.length||!snapshot?.players||!snapshot?.memberIds)return null;
+ const verified=(snapshot.players||[]).filter(n=>snapshot.memberIds.has(n));
+ const direct=verified.filter(n=>keys.includes(normalize(n)));
+ if(direct.length===1)return direct[0];
+ if(direct.length>1)return null;
+ const targets=new Set((entries||[]).filter(e=>keys.includes(normalize(e.alias)))
+  .map(e=>String(e.member_id).toLowerCase()));
+ if(targets.size>1)return null;
+ if(targets.size===1){
+  const matches=verified.filter(n=>targets.has(String(snapshot.memberIds.get(n)).toLowerCase()));
+  return matches.length===1?matches[0]:null;
+ }
+ const reading=romaji(raw);
+ if(!reading)return null;
+ const phonetic=verified.filter(n=>romaji(n)===reading||
+  normalize(n).replace(/[^a-z]/g,'')===reading);
+ return phonetic.length===1?phonetic[0]:null;
+}
