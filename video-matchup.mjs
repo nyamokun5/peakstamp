@@ -14,7 +14,12 @@ export function videoMatchup(source,storage){
  let saved=null;
  try{saved=JSON.parse(storage?.getItem(prefix+key)||'null');}catch{}
  if(saved?.origin==='manual'&&clean(saved.teamA)&&clean(saved.teamB))return {teamA:clean(saved.teamA),teamB:clean(saved.teamB),origin:'manual'};
- const starts=(readGoalTranscript(source,storage)?.data?.utterances||[])
+ // Prefer current Gemini utterances; legacy pilot transcripts can contain unrelated match calls.
+ let primary=[];
+ try{const all=JSON.parse(storage?.getItem('peakstamp_gemini_primary_json_v1')||'{}');primary=all[key]?.utterances||[];}catch{}
+ const rows=Array.isArray(primary)&&primary.some(x=>x?.kind==='match_start'&&matchupFromUtterance(x))
+  ?primary:(readGoalTranscript(source,storage)?.data?.utterances||[]);
+ const starts=rows
   .filter(x=>x?.kind==='match_start'&&matchupFromUtterance(x))
   .sort((a,b)=>Number(a.time_seconds)-Number(b.time_seconds));
  // Never infer a single video-level matchup when the video contains multiple fixtures.
