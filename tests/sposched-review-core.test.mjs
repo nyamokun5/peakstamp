@@ -781,6 +781,11 @@ test('SS identity: waiting fixture resolves players but missing fixture IDs do n
  assert.equal(resolved.status,'confirmed');
  assert.equal(resolved.ssIdentity.scorer.name,'Yohei Tyler Takasaki');
  assert.ok(verifiedAnalysisPerson(resolved,snap,3,'scorer'));
+ const alreadyOfficial={...goal,rawScorer:'たけざき',userEditedGoalFields:[]};
+ const fromDisplayed=resolveAnalysisGoal(alreadyOfficial,{snapshot:snap,aliases:[]});
+ // An official name already in the goal field is not a reason to force
+ // another dropdown selection merely because the spoken alias was unknown.
+ assert.equal(fromDisplayed.ssIdentity.scorer?.name,'Yohei Tyler Takasaki');
  snap.matches[0]={...snap.matches[0],matchId:''};
  assert.deepEqual(fixturePeople(snap,3),[]);
  assert.equal(resolveAnalysisGoal(goal,{snapshot:snap,aliases:[]}).status,'draft');
