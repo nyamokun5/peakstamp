@@ -1,3 +1,4 @@
+import {analysisFixtureAgrees,fixturePeople as officialFixturePeople} from './sposched-analysis-identity.mjs';
 import {phoneticCandidates} from './sposched-alias-auto-match.mjs';
 import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
@@ -264,9 +265,19 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     if(!snap)ssIssues.push('SSイベントが未接続');
     else if(!fixture)ssIssues.push('SSの第'+(item.matchSeq||'?')+'試合を特定できません');
     else{
-     if(!item.ssIdentity?.scorer)ssIssues.push('得点者「'+(item.scorer||'未入力')+'」がSS名簿と未照合');
-     if(item.assistStatus==='named'&&!item.ssIdentity?.assist)
-      ssIssues.push('アシスト「'+(item.assist||'未入力')+'」がSS名簿と未照合');
+     
+     if(!analysisFixtureAgrees(item,fixture))
+      ssIssues.push('動画の対戦カードとSS第'+item.matchSeq+'試合のチームが一致しません');
+     else if(!officialFixturePeople(snap,item.matchSeq).length)
+      ssIssues.push('SS第'+item.matchSeq+'試合の正式選手名簿を取得できません（試合状態・所属チームを確認）');
+     else if(snap.rosterSource!=='official-current-event-teams')
+      ssIssues.push('SSの正式なイベント選手名簿を取得できません');
+     else{
+      if(!item.ssIdentity?.scorer)
+       ssIssues.push('得点者「'+(item.scorer||'未入力')+'」は表示されていますが、この試合の選手IDを確認できません');
+      if(item.assistStatus==='named'&&!item.ssIdentity?.assist)
+       ssIssues.push('アシスト「'+(item.assist||'未入力')+'」の選手IDを確認できません');
+     }
     }
    }
   }
@@ -275,7 +286,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    alert.setAttribute('role','status');
    alert.style.cssText='padding:10px;margin:8px 0;border:1px solid #e6a24c;border-radius:8px';
    alert.append(make('strong','','SS未確定：'+ssIssues.join(' ／ ')));
-   alert.append(make('p','fine-print','動画はキープ済みです。下の選手欄を修正してください。'));
+   alert.append(make('p','fine-print','動画はキープ済みです。呼び名の登録とSS試合への選手照合は別です。'));
    editor.append(alert);
   }
   const scoreDetails=make('details','goal-score-details');
