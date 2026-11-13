@@ -1838,6 +1838,44 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   const rows=prepareGoalRows(goals,snapshot);
   const {projectFourMatchTournament}=await import('./sposched-inline-tournament.mjs');
   const {validateInlineBatchReadiness}=await import('./sposched-inline-batch-gate.mjs');
+  // Show the actual registration inputs BEFORE any bracket validation. This
+  // read-only list must remain visible when a scorer or matchup check fails.
+  const detail=document.createElement('details');
+  detail.open=true;
+  const heading=document.createElement('summary');
+  heading.textContent='Worker送信予定の内容（確認用・未送信）';
+  detail.append(heading);
+  const meta=document.createElement('p');
+  meta.textContent='SSイベントID：'+snapshot.eventId+' ／ ゴール：'+rows.length+'件';
+  detail.append(meta);
+  const formatPair=(a,b)=>a&&b?a+' vs '+b:'未確定';
+  for(const [index,row] of rows.entries()){
+   const goal=row.goal||goals.goals[index]||{};
+   const fixture=snapshot.matches.find(m=>Number(m.seq)===Number(row.seq));
+   const entry=document.createElement('div');
+   entry.style.cssText='border-top:1px solid #508e83;padding:9px 0;white-space:pre-wrap;overflow-wrap:anywhere';
+   const original=goal.rawScorer||goal.scorer||'未取得';
+   const identity=goal.ssIdentity?.scorer;
+   const videoPair=formatPair(goal.teamA,goal.teamB);
+   const ssPair=fixture?formatPair(fixture.leftTeam,fixture.rightTeam):'該当なし';
+   const {analysisFixtureAgrees}=await import('./sposched-analysis-identity.mjs');
+   const {scorerRosterError}=await import('./sposched-inline-scorer-diagnostic.mjs');
+   const issue=scorerRosterError(row,snapshot,index);
+   const lines=[
+    'ゴール'+(index+1)+' ／ 第'+(row.seq||'?')+'試合'+(row.include===false?'（除外）':''),
+    '動画：'+String(goal.source?.name||'不明')+' ／ 時刻：'+String(goal.time??goal.timestamp??goal.start??'不明'),
+    '得点者：'+(row.scorer||'未確定')+'（解析：'+original+'）',
+    'アシスト：'+(row.assistMode==='none'?'なし':row.assist||'未確定'),
+    '動画の対戦：'+videoPair+' ／ SSの対戦：'+ssPair,
+    'SS試合ID：'+(fixture?.matchId||'未確定')+' ／ 状態：'+(fixture?.status||'不明'),
+    '照合ID：'+(identity?.playerId||'未確定'),
+    '判定：'+(issue||(!fixture?'SS試合なし':!analysisFixtureAgrees(goal,fixture)?'動画とSSの対戦カードに差異あり':'入力照合済み（登録可否は別途検証）'))
+   ];
+   entry.textContent=lines.join('\n');
+   detail.append(entry);
+  }
+  matches.append(detail);
+  matches.hidden=false;
   const bracket=projectFourMatchTournament(snapshot,rows);
   let registrationGate='';
   try{
