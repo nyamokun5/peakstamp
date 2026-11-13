@@ -121,9 +121,16 @@ export function resolveAnalysisGoal(item,context){
 export function verifiedAnalysisPerson(goal,snapshot,seq,field){
  const identity=goal?.ssIdentity,p=identity?.[field];
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
- if(!uuid.test(match?.matchId||''))return null;
+ // Waiting knockout slots are identified by event + numbered fixture.
+ // They may not have a match UUID until the first-round results are written.
+ // This verifies a roster identity only; it never authorizes a score write.
+ const waiting=match?.status==='waiting'&&[3,4].includes(Number(seq))&&
+  snapshot?.matches?.length===4&&!match?.leftTeam&&!match?.rightTeam;
+ if(!waiting&&!uuid.test(match?.matchId||''))return null;
  if(identity?.environment!=='staging'||identity.eventId!==snapshot?.eventId||
-    identity.matchId!==match?.matchId||identity.seq!==Number(seq)||!p||
+    (!waiting&&identity.matchId!==match?.matchId)||
+    (waiting&&identity.matchId&&match?.matchId&&identity.matchId!==match.matchId)||
+    identity.seq!==Number(seq)||!p||
     p.name!==goal[field]||!fixturePeople(snapshot,seq,goal).includes(p.name)||
     snapshot.memberIds.get(p.name)!==p.memberId||snapshot.playerIds.get(p.name)!==p.playerId||
     snapshot.playerTeam.get(p.name)!==p.team)return null;
