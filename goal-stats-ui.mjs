@@ -313,8 +313,23 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    select.addEventListener('change',()=>edit(entry,field,select.value));
    box.append(select);fields.append(box);
    // Explicit TEST-only learning: never persist an AI suggestion or a passive prefill.
-   if(select.value&&item.userEditedGoalFields?.includes(field)&&
-      (field==='scorer'?item.rawScorer:item.rawAssist)){
+   const spokenName=String((field==='scorer'?item.rawScorer:item.rawAssist)||'').trim();
+   const officialName=String(select.value||'').trim();
+   const memberId=state.ssNameContext?.snapshot?.memberIds?.get(officialName);
+   const normalizeName=s=>String(s||'').normalize('NFKC').trim().toLocaleLowerCase('ja-JP')
+    .replace(/[ァ-ヶ]/g,x=>String.fromCharCode(x.charCodeAt(0)-0x60));
+   const existing=(state.ssNameContext?.aliases||[]).filter(a=>normalizeName(a.alias)===normalizeName(spokenName));
+   const registered=existing.some(a=>a.member_id===memberId);
+   const conflict=existing.length>0&&!registered;
+   if(officialName&&spokenName&&normalizeName(spokenName)!==normalizeName(officialName)&&memberId){
+    if(registered){
+     box.append(make('span','fine-print','✓ この呼び名は登録済み'));
+     return;
+    }
+    if(conflict){
+     box.append(make('span','fine-print','別の選手の呼び名として登録済み。自動登録はしません。'));
+     return;
+    }
     // Per-goal, per-role opt-out. This affects alias learning only,
     // never the selected official scorer/assist or the video decision.
     const skipKey=field==='scorer'?'scorer':'assist';
