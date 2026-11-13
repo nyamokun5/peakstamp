@@ -42,8 +42,12 @@ export function resolveAnalysisGoal(item,context){
   if(!snapshot||snapshot.rosterSource!=='official-current-event-teams')continue;
   const displayName=manual?null:matchEventPerson(raw,entries,snapshot);
   if(displayName&&!manual)result[field]=displayName;
+  // The displayed official name can already be a verified member of this
+  // fixture even when the spoken alias cannot be resolved again. Do not
+  // require a second manual selection of an unchanged dropdown value.
   const name=manual?(people.includes(item[field])?item[field]:null):
-   matchOfficialAlias(raw,entries,snapshot,seq);
+   (matchOfficialAlias(raw,entries,snapshot,seq)||
+    (people.includes(result[field])?result[field]:null));
   if(!name||!people.includes(name))continue;
   if(field==='assist'&&(!identity.scorer||name===identity.scorer.name||
      snapshot.playerTeam.get(name)!==identity.scorer.team))continue;
