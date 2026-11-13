@@ -307,7 +307,9 @@ export function createGoalDrafts(source,storage){
  const unique=[...new Set(candidates.map(x=>x.teamA+'|'+x.teamB))];
  const resolved=manual||(unique.length===1?candidates[0]:null);
  if(resolved)for(const item of items){
-  if(item.status==='confirmed'||item.status==='excluded'||item.origin==='manual')continue;
+  // A confirmed goal still needs the video's manually corrected matchup.
+  // Excluded goals remain untouched; individual field edits take precedence.
+  if(item.status==='excluded')continue;
   const edited=new Set(item.userEditedGoalFields||[]);
   for(const [field,value] of [['teamA',resolved.teamA],['teamB',resolved.teamB],
    ['matchLabel',resolved.teamA+' vs '+resolved.teamB]]){
