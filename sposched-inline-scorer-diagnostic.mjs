@@ -34,6 +34,10 @@ export function scorerRosterError(row,snapshot,index){
    return prefix+'試合番号の形式が解析時と異なります。SSに再接続してください';
   if(!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(fixture.matchId))
    return prefix+'SS試合IDの形式が不正です。SSの試合枠を確認してください';
+  if(fixture.status==='waiting'&&[3,4].includes(Number(row.seq))&&
+     !fixture.leftTeam&&!fixture.rightTeam&&
+     row.goal?.matchupConfirmed!==true&&row.goal?.userConfirmedMatchup!==true)
+   return prefix+'動画の対戦カードは認識済みですが、登録前の対戦カード確認が未完了です';
   if(!analysisFixtureAgrees(row.goal,fixture))
    return prefix+'動画の対戦カードとSSの試合枠が一致しません';
   if(!fixturePeople(snapshot,Number(row.seq),row.goal).includes(official))
