@@ -795,3 +795,17 @@ test('SS identity: waiting fixture resolves roster without match ID but write id
  snap.matches[0]={...snap.matches[0],matchId:'match-3-new'};
  assert.equal(verifiedAnalysisPerson(waiting,snap,3,'scorer'),null);
 });
+
+test('pending placement goal keeps official roster name as unconfirmed review draft',()=>{
+ const raw=event();
+ raw.matches.push({seq:3,title:'#3 third place',left_team:'Team1',right_team:'Team3',status:'waiting'});
+ const snap=normalizeSpoSnapshot(raw);
+ const goal={id:'placement-1',source:{name:'third.mov'},matchSeq:3,
+  teamA:'2',teamB:'4',matchupConfirmed:true,scorer:'Hiroyuki Kawata',
+  assistStatus:'none',ssIdentity:{environment:'staging',eventId:snap.eventId,
+   matchId:'',seq:3,scorer:{name:'Hiroyuki Kawata'}}};
+ const row=prepareGoalRows({goals:[goal]},snap)[0];
+ assert.equal(row.scorer,'Hiroyuki Kawata');
+ assert.equal(row.confirmed,false);
+ assert.equal(validateGoalRow({...row,confirmed:true},snap)?.includes('異なります'),true);
+});
