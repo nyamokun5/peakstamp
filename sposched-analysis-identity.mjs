@@ -44,8 +44,20 @@ export function selectedFixtureTeams(goal,snapshot,seq){
 // Display official event roster names even if the upstream TEST API has not
 // supplied both identity UUIDs. Registration still requires fixturePeople().
 export function fixtureRosterNames(snapshot,seq,goal=null){
- const teams=selectedFixtureTeams(goal,snapshot,seq);
- if(teams.length!==2||snapshot?.rosterSource!=='official-current-event-teams')return [];
+ if(snapshot?.rosterSource!=='official-current-event-teams')return [];
+ let teams=selectedFixtureTeams(goal,snapshot,seq);
+ // A user-confirmed video matchup may differ from a TEST bracket's stale
+ // numbered fixture. Show those players for read-only identification, but
+ // NEVER treat this as permission to write goals to the conflicting SS match.
+ if(teams.length!==2&&(goal?.matchupConfirmed===true||goal?.userConfirmedMatchup===true)){
+  const canonical=v=>String(v||'').normalize('NFKC').toLowerCase().replace(/\\s/g,'')
+   .replace(/^チーム/,'team').replace(/^(?:team)?(\\d{1,2})$/,'team$1');
+  const rosterTeams=[...new Set(snapshot.playerTeam?.values?.()||[])];
+  const selected=[goal.teamA,goal.teamB].map(v=>rosterTeams.filter(t=>canonical(t)===canonical(v)));
+  if(selected.every(a=>a.length===1)&&selected[0][0]!==selected[1][0])
+   teams=selected.map(a=>a[0]);
+ }
+ if(teams.length!==2)return [];
  return (snapshot.players||[]).filter(name=>teams.includes(snapshot.playerTeam?.get(name)));
 }
 export function fixturePeople(snapshot,seq,goal=null){
