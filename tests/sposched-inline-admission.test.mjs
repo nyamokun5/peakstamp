@@ -15,8 +15,10 @@ test('blocks repeat request when local job has an uncertain outcome',()=>{
  const r=decideInlineBatchAdmission({eventId,localJob:{event_id:eventId,request_id:'job-1'}});
  assert.equal(r.allowed,false);
 });
-test('does not confuse a different event job with this event',()=>{
- assert.equal(decideInlineBatchAdmission({eventId,workerJob:{event_id:'other',request_id:'job-1',status:'completed'}}).allowed,true);
+test('rejects a mismatched event in the Worker response',()=>{
+ const r=decideInlineBatchAdmission({eventId,workerJob:{event_id:'other',request_id:'job-1',status:'completed'}});
+ assert.equal(r.allowed,false);
+ assert.match(r.reason,/別イベント/);
 });
 
 test('fails closed when Worker status has not been queried',()=>{
