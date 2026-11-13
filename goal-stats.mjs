@@ -335,7 +335,10 @@ export function createGoalDrafts(source,storage){
   const edited=new Set(item.userEditedGoalFields||[]);
   for(const [field,value] of [['teamA',resolved.teamA],['teamB',resolved.teamB],
    ['matchLabel',resolved.teamA+' vs '+resolved.teamB]]){
-   if(!edited.has(field)&&(manual||!clip(item[field])))item[field]=String(value).trim().slice(0,60);
+   // Video registration is authoritative. A blank legacy field is not an
+   // intentional override, even when an old edit flag says it was edited.
+   if((!edited.has(field)||!clip(item[field]))&&(manual||!clip(item[field])))
+    item[field]=String(value).trim().slice(0,60);
   }
  }
  // The organizer assigns a match number to the VIDEO, once.
