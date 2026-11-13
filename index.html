@@ -177,13 +177,13 @@
       </div>
       <div id="goalStatsEditor" class="goal-review-editor"></div>
 
-      <div class="goal-review-external-sync" style="margin:15px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
-        <strong>⚽ SS TESTへの登録</strong>
-        <p class="fine-print">ゴール解析で選手・試合を確定します。SS登録操作の統合は準備中です。</p>
-        <details><summary>従来のSS登録画面（詳細・暫定）</summary>
-          <a href="./sposched-review.html?v=composite-tatsuo1&returnTab=1" target="_blank" rel="noopener noreferrer">従来のSS登録画面を開く</a>
-        </details>
-      </div>
+      <section class="goal-review-external-sync" aria-label="SS登録確認" style="margin:12px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
+        <strong>⚽ SS登録（TEST）</strong>
+        <p id="ssInlineSummary" class="fine-print" role="status">ゴール確認後、ここで登録内容を確認できます。</p>
+        <button id="ssInlinePreview" type="button" class="main-button">SS登録内容を確認</button>
+        <div id="ssInlineMatches" class="fine-print" hidden></div>
+        <p id="ssInlineStatus" class="fine-print" role="status" aria-live="polite"></p>
+      </section>
       <details class="goal-review-export">
         <summary>確定データを共有・保存</summary>
         <p class="fine-print">確定したゴール・アシストを保存できます。</p>
