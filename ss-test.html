@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#091728" />
+  <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
+  <title>PeakStamp | Audio Highlights</title>
+  <link rel="stylesheet" href="styles.css?v=reviewagain1" />
+</head>
+<body data-ss-analysis="staging">
+  <header class="topbar">
+    <div class="brandmark">P<span>•</span></div>
+    <div class="brandtext"><strong>PEAKSTAMP</strong><span>AUDIO HIGHLIGHTS</span></div>
+    <div class="local-pill"><span class="green-dot"></span>動画は端末内</div>
+    <button id="openGuide" class="header-help" type="button" aria-label="使い方を見る">使い方 <span aria-hidden="true">?</span></button>
+  </header>
+  <main class="page">
+    <section class="hero">
+      <h1>あの瞬間を、<br/><em>音で見つける。</em></h1>
+      <p>試合動画を選ぶだけ。AIで見どころを探して、好きなシーンを1本に。</p>
+    </section>
+    <p><a href="?youtube=1">YouTubeからハイライトを作る（TEST）</a></p>
+    <nav id="journeyNav" class="journey-nav workflow-nav" aria-label="PeakStampの作業ステップ">
+      <button type="button" data-journey-step="0" class="current" aria-current="step">1 <span>解析</span></button>
+      <button type="button" data-journey-step="1" disabled>2 <span>編集</span></button>
+      <button type="button" data-journey-step="2" disabled>3 <span>書き出し</span></button>
+    </nav>
+    <p id="workflowStageNotice" class="workflow-stage-notice" role="status" aria-live="polite">動画を選び、AIで見どころを検出します。</p>
+    <section class="panel choose-panel" id="choosePanel">
+      <div class="panel-label"><span class="number">01</span><h2>試合動画を登録</h2></div>
+      <details id="ssAnalysisNames" class="compact-details" hidden open>
+        <summary id="ssAnalysisLabel">SSの選手名を使う</summary>
+        <label for="ssAnalysisToken">SS連携パスワード</label>
+        <input id="ssAnalysisToken" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false">
+        <label><input id="ssAnalysisRemember" type="checkbox">この端末に保存（共有端末では使用しない）</label>
+        <button id="ssAnalysisConnect" type="button">SSに接続</button>
+        <select id="ssAnalysisEvent" aria-label="SS TESTイベント" hidden><option value="">イベントを選択</option></select>
+        <p id="ssAnalysisStatus" role="status"></p>
+      </details>
+      <label class="upload" id="uploadZone">
+        <input id="fileInput" type="file" multiple accept="video/*,.mov,.mp4,.m4v" />
+        <span class="upload-icon" aria-hidden="true">＋</span>
+        <strong>動画を追加</strong>
+        <span>1本につき試合番号を指定</span>
+        <small>元動画は送信されません</small>
+      </label>
+      <details class="compact-details">
+        <summary>このiPhoneに保存したゴール判定・編集データを消す</summary>
+        <p class="fine-print">動画ごとにゴールのキープ／不採用・得点／アシスト確認・切り取り・画角の保存情報だけを削除できます。別の動画やGemini解析結果は残ります。</p>
+        <a href="./reset-goals.html?v=reset59&returnTab=1" class="plain-link" target="_blank" rel="noopener noreferrer" aria-label="保存されたゴール情報の管理を別タブで開く">保存された動画を確認して削除する →</a>
+      </details>
+      <details class="compact-details"><summary>iPhoneで動画が選べない場合</summary><p class="photo-picker-tip">長い動画は1本ずつ選択。失敗するときは写真アプリから「未編集のオリジナルを書き出す」でiPhone内に保存して選択してください。</p></details>
+      <div class="file-details" id="fileDetails" hidden>
+        <div class="file-logo">▶</div>
+        <div class="file-info"><strong id="fileName"></strong><span id="fileSize"></span></div>
+        <button id="changeFile" class="plain-link" type="button">変更</button>
+        <button id="addFiles" class="plain-link" type="button">＋追加</button>
+      </div>
+      <p id="fileImportTiming" class="file-import-timing" role="status" aria-live="polite" hidden></p>
+      <p id="fileImportHelp" class="file-import-help" hidden>「ファイル選択」には写真を探す・選ぶ時間や、iCloudからの取得・iOS側の変換があればその時間も含まれます。iCloud取得だけを個別に計測することはできません。</p>
+      <div class="source-board" id="sourceBoard" hidden>
+        <div class="source-board-header"><strong>試合番号を確認 · <span id="sourceCount">0</span>本</strong><button id="sortFilesByName" class="source-sort-btn" type="button">ファイル名順に並べ直す</button></div>
+        <div id="sourceList" class="source-list"></div>
+        <p class="fine-print">ファイルごとに音声解析し、ここに並んだ順番でハイライトを結合します。</p>
+      </div>
+      <div id="videoWrapper" hidden>
+        <button id="loadPreview" class="preview-load-button" type="button">▶ 先頭動画をプレビュー（必要な場合のみ）</button>
+        <video id="preview" controls playsinline preload="none" hidden></video>
+      </div>
+      <p id="loadError" class="error" role="alert" hidden></p>
+    </section>
+
+    <section class="panel gemini-primary-panel" id="geminiPrimaryPanel" aria-label="Geminiで音声を解析" hidden>
+      <div class="panel-label"><span class="number">02</span><h2>AIでシーンを検出</h2></div>
+      <p class="gemini-brief">ゴール・見どころ・選手名をまとめて検出。動画で確認してからキープします。</p>
+
+      <label id="geminiSourceLabel" for="geminiMainSource">解析する動画</label>
+      <select id="geminiMainSource" disabled aria-label="Geminiで解析する動画"></select>
+      <p id="geminiMainFileHelp" class="fine-print">上からMOV/MP4を選択してください。</p>
+      <label for="geminiMainAccess">アクセスコード</label>
+      <input id="geminiMainAccess" type="password" autocomplete="off" autocapitalize="off"
+             spellcheck="false" placeholder="アクセスコードを入力" />
+      <label class="gemini-consent"><input id="geminiRememberDevice" type="checkbox" />この端末にコードを保存（共有端末では使用しない）</label>
+      <details class="compact-details gemini-diagnostics">
+        <summary>接続できないとき・詳細設定</summary>
+        <button id="geminiMainCheck" class="whisper-run gemini-check-button" type="button">接続テスト（課金なし）</button>
+        <button id="geminiMainDiagnostic" class="whisper-run gemini-check-button" type="button">音声診断（API料金が発生する場合あり）</button>
+      </details>
+      <label class="gemini-consent"><input id="geminiMainConsent" type="checkbox" />
+        <span>試合中の会話・声を含む音声データがGoogleへ送信されることを了承します。</span>
+      </label>
+      <div id="geminiStayNotice" class="gemini-stay-notice" role="note" hidden>
+        <span class="gemini-stay-icon" aria-hidden="true">!</span>
+        <div>
+          <strong id="geminiStayTitle">解析中はこの画面を開いたままにしてください</strong>
+          <p id="geminiStayDescription">LINEなど他のアプリへ切り替えたり、画面をロックすると解析が止まる場合があります。</p>
+        </div>
+      </div>
+      <fieldset class="gemini-batch-mode" aria-label="解析範囲"><legend>解析する範囲</legend><label><input type="radio" name="geminiBatchMode" value="pending" checked> 未解析動画のみ</label><label><input type="radio" name="geminiBatchMode" value="all"> 全動画を再解析</label></fieldset>
+      <details class="compact-details"><summary>詳細設定・初期化</summary><p class="fine-print">このiPhoneの全解析キャッシュとゴール確認情報を削除。元動画とSS登録済みデータは保持します。</p><button id="geminiResetAllCache" type="button" class="whisper-run">全キャッシュとゴール情報を削除</button></details>
+      <button id="geminiMainBatch" class="main-button gemini-batch-run" type="button" disabled hidden>選んだ動画をまとめて解析 →</button>
+      <button id="geminiMainRun" class="main-button gemini-main-run" type="button" disabled>Geminiで音声解析する →</button>
+      <div id="geminiBatchProgress" class="gemini-batch-progress" role="progressbar" aria-label="動画一括解析の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+        <div class="gemini-batch-head"><strong id="geminiBatchLabel">まとめて解析する動画を準備中</strong><output id="geminiBatchPercent">0%</output></div>
+        <div class="gemini-batch-track"><div id="geminiBatchBar"></div></div>
+        <small id="geminiBatchDetail">動画を1本ずつ自動処理します</small>
+        <p id="geminiBatchEta" class="gemini-time-remaining" aria-live="off">推定残り時間：計測中</p>
+      </div>
+      <button id="geminiMainForce" class="whisper-run" type="button" hidden>Geminiで再解析（追加料金が発生する場合があります）</button>
+      <div id="geminiProgress" class="gemini-progress" role="progressbar" aria-label="Gemini音声解析の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+        <div class="gemini-progress-top"><strong id="geminiProgressLabel">解析の準備中…</strong><output id="geminiProgressPercent">0%</output></div>
+        <div class="gemini-progress-track"><div id="geminiProgressBar"></div></div>
+        <small id="geminiProgressDetail">区間完了数に基づく進捗です</small>
+        <p id="geminiCurrentEta" class="gemini-time-remaining" aria-live="off">推定残り時間：計測中</p>
+      </div>
+      <button id="geminiMainCancel" class="cancel-button" type="button" hidden>解析を中止</button>
+      <p id="geminiMainStatus" role="status" aria-live="polite" class="gemini-main-status"></p>
+      <details id="geminiAdvancedTools" class="workflow-advanced-settings">
+        <summary>詳細設定・再解析・接続診断</summary>
+        <p class="fine-print">通常の解析には不要です。再解析・接続テスト・診断ログ・予備の音量解析を利用する場合だけ開いてください。</p>
+      </details>
+      <div class="gemini-diagnostic-export">
+        <button id="geminiMainResultCopy" class="whisper-run" type="button" hidden>診断用の解析結果をコピー</button>
+        <p id="geminiMainCopyStatus" class="fine-print" role="status" aria-live="polite"></p>
+        <textarea id="geminiMainCopyFallback" readonly rows="7" hidden aria-label="診断用解析結果JSON"></textarea>
+        <p class="fine-print">音声・動画・APIアクセスコードは含みません。認識された発話やファイル名を含むため共有前に確認してください。</p>
+      </div>
+      <details class="compact-details gemini-diagnostics">
+        <summary>解析方法と注意事項</summary>
+        <p class="fine-print">元動画は端末内に残ります。約70秒ごとに音声だけをGoogleへ送信。成功した区間は再利用できます。API利用料や通信料が発生することがあります。Safariを離れると解析が中断される場合があります。</p>
+      </details>
+    </section>
+
+    <nav id="editorQuickNav" class="editor-quick-nav" aria-label="編集画面内の移動">
+      <button type="button" data-editor-jump="goalStatsPanel">⚽ ゴール一覧</button>
+      <button type="button" data-editor-jump="resultsPanel">🎞 ハイライト</button>
+    </nav>
+    <!-- Goal review first: placed directly below analysis, before
+         experimental tools and all regular highlight editing. -->
+    <section class="panel goal-stats-panel" id="goalStatsPanel" aria-label="PeakStamp内でゴールとアシストを確定" hidden>
+      <div class="panel-label"><span class="number">⚽</span><h2>ゴールを編集</h2></div>
+      <details id="goalReviewFirstGuide" class="goal-first-guide" open>
+        <summary>初回ガイド：ゴールの確認方法</summary>
+        <ol>
+          <li>▶ 再生し、画角（2本指）と切り取り秒数を調整。</li>
+          <li>AIが読み取った得点者・アシストを<strong>映像で確認</strong>し、「得点情報を確定」。</li>
+          <li>最後に動画のキープ／不採用を押すと次のゴールへ。</li>
+        </ol>
+      </details>
+      <p id="goalStatsSummary" class="goal-review-summary" aria-live="polite"></p>
+      <section class="goal-review-library" aria-label="すべてのゴールシーン">
+        <div class="goal-review-library-head"><strong>⚽ ゴール一覧</strong><small>タップで再編集</small></div>
+        <div class="goal-review-library-tabs" role="group" aria-label="ゴール一覧の絞り込み">
+          <button id="goalQueuePending" type="button" data-goal-filter="pending" aria-pressed="false">未確認 <span id="goalQueuePendingCount">0</span></button>
+          <button id="goalQueueKept" type="button" data-goal-filter="kept" aria-pressed="false">キープ済み <span id="goalQueueKeptCount">0</span></button>
+          <button id="goalQueueAll" type="button" data-goal-filter="all" class="is-active" aria-pressed="true">すべて <span id="goalQueueAllCount">0</span></button>
+        </div>
+        <div class="goal-review-queue-fold">
+          <div id="goalStatsList" class="goal-review-list"></div>
+          <p id="goalQueueEmpty" class="goal-review-library-empty" hidden></p>
+        </div>
+      </section>
+      <div id="goalStatsStep" class="goal-review-step" aria-live="polite"></div>
+      <div id="goalStatsDone" class="goal-review-completed" hidden role="status">
+        <strong id="goalStatsDoneText">すべてのゴール動画を判定しました。</strong>
+        <p>キープ済みも上の一覧から再編集できます。</p>
+        <div class="goal-review-completed-actions">
+          <button id="goalStatsDoneToRegular" type="button" class="whisper-run" hidden>ハイライトを確認 →</button>
+          <button id="goalStatsDoneAdd" type="button" hidden>ゴールを手動追加</button>
+        </div>
+      </div>
+      <div id="goalStatsViewer" class="goal-review-viewer" hidden>
+        <strong id="goalStatsPlayingLabel"></strong>
+        <video id="goalStatsPreview" controls playsinline preload="metadata" hidden aria-label="ゴール候補を確認する共通動画プレーヤー"></video>
+        <p id="goalStatsVideoStatus" class="fine-print" role="status" aria-live="polite"></p>
+      </div>
+      <div id="goalStatsEditor" class="goal-review-editor"></div>
+
+      <section class="goal-review-external-sync" aria-label="SS登録確認" style="margin:12px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
+        <strong>⚽ SS登録（TEST）</strong>
+        <p id="ssInlineSummary" class="fine-print" role="status">ゴール確認後、ここで登録内容を確認できます。</p>
+        <button id="ssInlinePreview" type="button" class="main-button">SS登録内容を確認</button>
+        <div id="ssInlineMatches" class="fine-print" hidden></div>
+        <button id="ssInlineInspect" type="button" class="whisper-run">SS登録状況を確認</button>
+        <p id="ssInlineStatus" class="fine-print" role="status" aria-live="polite"></p>
+        <div hidden aria-hidden="true"><a href="./sposched-review.html?v=composite-tatsuo1&returnTab=1" target="_blank" rel="noopener noreferrer" tabindex="-1">旧画面（非表示の互換リンク）</a></div>
+      </section>
+      <details class="goal-review-export">
+        <summary>確定データを共有・保存</summary>
+        <p class="fine-print">確定したゴール・アシストを保存できます。</p>
+        <button id="goalStatsExport" class="main-button" type="button" disabled>iPhone：確定JSONを共有・保存</button>
+        <button id="goalStatsCopy" class="whisper-run" type="button" disabled>確定JSONをコピー</button>
+        <button id="goalStatsShow" class="whisper-run" type="button" disabled>JSONを表示</button>
+        <div id="goalStatsJsonArea" hidden>
+          <label for="goalStatsJson">確認済みゴール情報のJSON（長押しでコピー可能）</label>
+          <textarea id="goalStatsJson" rows="8" readonly spellcheck="false"></textarea>
+        </div>
+      </details>
+      <p id="goalStatsStatus" role="status" aria-live="polite" class="gemini-main-status"></p>
+      <button id="workflowToExport" class="workflow-next-btn" type="button">書き出しへ進む →</button>
+    </section>
+
+    <details class="panel gemini-callout-panel" id="geminiCalloutPanel" hidden>
+      <summary>🧪 実験：試合開始・「○○さんゴール」を文字で拾う</summary>
+      <p class="fine-print">既存のゴール・シュート候補検出とは別の音声解析です。撮影者が「1対2」「1と2」「1番と2番」「青と赤」などの対戦宣言や「山田さんゴール！」と話したかを、発言時刻と原文で確認します。SSアプリへの登録は行いません。</p>
+      <div class="callout-input-row">
+        <label>調べる動画
+          <select id="calloutSource" aria-label="実況文字起こしの対象動画"></select>
+        </label>
+        <label>解析する範囲
+          <select id="calloutScope">
+            <option value="first">動画の冒頭70秒（まず試す）</option>
+            <option value="whole">動画全体（最大10分・追加料金）</option>
+          </select>
+        </label>
+      </div>
+      <p class="fine-print">上のGeminiアクセスコードと「音声をGoogleへ送信する」同意を利用します。別途Gemini APIリクエストが発生し、API利用料がかかる場合があります。元動画は送らず音声だけを送信します。</p>
+      <button id="calloutRun" class="main-button" type="button" disabled>実況を文字で拾う（API料金あり）</button>
+      <button id="calloutRerun" class="whisper-run" type="button" hidden>再解析する（追加料金）</button>
+      <button id="calloutStop" class="cancel-button" type="button" hidden>実況テストを中止</button>
+      <p id="calloutProgress" role="status" class="fine-print" hidden></p>
+      <p id="calloutStatus" role="status" class="gemini-main-status"></p>
+      <div id="calloutResultArea" hidden>
+        <strong id="calloutCount">検出 0件</strong>
+        <p class="fine-print">音声の書き起こしは誤る場合があります。「1対2」は得点結果とは限りません。実際の音声を聞いて評価してください。</p>
+        <video id="calloutPreview" controls playsinline preload="none" hidden aria-label="文字起こし位置を確認する元動画"></video>
+        <div id="calloutList" class="callout-list"></div>
+        <label for="calloutMissed">聞き逃し・未検出の発言（任意メモ）</label>
+        <textarea id="calloutMissed" rows="3" maxlength="3000" placeholder="例：04:35 山田さんゴール、Geminiは検出できず"></textarea>
+        <div class="callout-export-options">
+          <button id="calloutExport" class="main-button" type="button" disabled>iPhone：共有してファイル保存</button>
+          <button id="calloutCopy" class="whisper-run" type="button" disabled>JSONをコピー（ChatGPTに貼り付け）</button>
+          <button id="calloutShow" class="whisper-run" type="button" disabled>JSONの中身を表示</button>
+          <button id="calloutDownload" class="whisper-run" type="button" disabled>PC：JSONをダウンロード</button>
+        </div>
+        <div id="calloutJsonArea" class="callout-json-area" hidden>
+          <label for="calloutRawJson">JSONテキスト（長押しで「すべてを選択」→「コピー」できます）</label>
+          <textarea id="calloutRawJson" rows="8" readonly spellcheck="false" aria-label="実況解析結果のJSONテキスト"></textarea>
+        </div>
+        <p class="fine-print">iPhoneでは「共有してファイル保存」→共有メニューの「ファイルに保存」を選んでください。保存できない場合は「JSONをコピー」が使えます。動画・音声そのものは含みません。</p>
+      </div>
+    </details>
+
+    <details class="legacy-audio-details">
+      <summary>予備：無料の音量解析を使う（Geminiを使わない場合）</summary>
+    <section class="panel settings-panel" id="settingsPanel">
+      <div class="panel-label"><span class="number">予備</span><h2>従来の音量解析</h2></div>
+      <div class="setting-head"><span>検出感度</span><span class="sub-label">音量変化のしきい値</span></div>
+      <div class="segmented" role="group" aria-label="検出感度">
+        <button data-sensitivity="sensitive" type="button">多めに拾う</button>
+        <button class="active" data-sensitivity="normal" type="button" aria-pressed="true">標準</button>
+        <button data-sensitivity="strict" type="button">厳選</button>
+      </div>
+      <div class="controls">
+        <label>歓声の何秒前から？ <strong><output id="leadValue">4秒</output></strong>
+          <input id="leadInput" type="range" min="0" max="15" step="1" value="4" />
+        </label>
+        <label>最大検出件数 <strong><output id="maxValue">8件</output></strong>
+          <input id="maxInput" type="range" min="3" max="15" step="1" value="8" />
+        </label>
+      </div>
+      <button class="main-button" id="analyzeButton" disabled type="button"><span class="icon-wave">⌁</span> 音声を解析する <span aria-hidden="true">→</span></button>
+      <button class="cancel-button" id="cancelButton" hidden type="button">解析を中止</button>
+      <div class="progress-area" id="progressArea" hidden aria-live="polite">
+        <div class="progress-label"><span id="progressLabel">解析準備中…</span><span id="progressPercent">0%</span></div>
+        <div class="progress-track"><div id="progressBar"></div></div>
+      </div>
+      <p id="analysisError" class="error" role="alert" hidden></p>
+      <p class="fine-print">AI・サーバー・ログイン不要。音量変化に加え、音の持続性・音域・背景ノイズの特徴で候補を選定します。会話や工事音が混じる場合は「厳選」、見どころを見逃した場合は「多めに拾う」を試してください。音の意味やゴールそのものは認識しません。</p>
+    </section>
+
+    </details>
+
+    <section class="panel results-panel" id="resultsPanel" hidden>
+      <div class="panel-label"><span class="number">03</span><h2>ハイライト</h2></div>
+      <div id="standardReviewArea">
+      <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
+
+      <p id="multiWaveNotice" class="fine-print" hidden>波形は全動画をつなげた表示です。オレンジ線は各動画の検出位置を示します。</p>
+      <div class="waveform-wrap"><canvas id="waveCanvas" height="110" aria-label="音声の音量グラフ"></canvas><div class="wave-label"><span>00:00</span><span id="waveEnd">00:00</span></div></div>
+      <div id="emptyResults" class="empty-results" hidden>指定した感度では見どころを検出できませんでした。「多めに拾う」に切り替えて再解析するか、音声が入っているかご確認ください。</div>
+      <p class="list-help">▶ 再生 → 調整 → キープ</p>
+      <div class="selected-overview">
+        <strong>採用するシーン：<span id="selectedCount">0</span>件</strong>
+        <div id="selectedSummary" class="selected-summary" hidden></div>
+      </div>
+      <div class="edit-transfer-actions">
+        <button id="exportEditData" type="button" class="main-button" disabled>HS向け編集データを書き出す（JSON）</button>
+        <p class="fine-print">キープ済みシーンの確定した開始・終了秒数を保存します。動画ファイル自体は含まれません。</p>
+        <p id="exportEditStatus" role="status" aria-live="polite"></p>
+      </div>
+      <div class="review-tabs" role="group" aria-label="シーンの表示切り替え">
+        <button id="tabAll" type="button" class="review-tab active" data-review-tab="all" aria-pressed="true">未判断 <span id="tabAllCount">0</span></button>
+        <button id="tabKept" type="button" class="review-tab" data-review-tab="kept" aria-pressed="false">キープ済み <span id="tabKeptCount">0</span></button>
+        <button id="tabReviewed" type="button" class="review-tab" data-review-tab="reviewed" aria-pressed="false">すべて <span id="tabReviewedCount">0</span></button>
+      </div>
+      <p id="reviewProgress" class="review-progress" role="status" aria-live="polite"></p>
+      <p id="reviewEmpty" class="empty-results" hidden>キープしたシーンはまだありません。「未判断」タブから選んでください。</p>
+      <div id="highlightList" class="highlight-list"></div>
+      <details id="missingGoalFallback" class="missing-goal-fallback">
+        <summary>ゴール一覧にもハイライトにも見つからない場合</summary>
+        <p>該当するシーンがハイライトにある場合は、そのカードの「＋ このシーンをゴールとして追加」を使ってください。<strong>どちらにも見つからない場合だけ</strong>、元動画とゴール時刻を指定して追加できます。</p>
+      <div class="goal-review-manual-add">
+        <div id="goalStatsManualWrap" hidden>
+          <label for="goalStatsManualSource">手動追加先の動画</label>
+          <select id="goalStatsManualSource"></select>
+        </div>
+        <button id="goalStatsAdd" class="whisper-run" type="button">＋ 見逃したゴールを手動追加</button>
+      </div>
+      </details>
+      </div>
+      <details class="extra-analysis-tools">
+        <summary>その他の実験ツール（詳細を開く）</summary>
+        <p class="fine-print">以前のAI再評価・映像探索・Whisperなどを使う場合に開いてください。</p>
+      <section id="aiRerankPanel" class="whisper-experiment" aria-label="AIハイライト再評価の実験">
+        <div class="whisper-experiment-head"><strong>β AI広域探索 — 新しいシーンを発見</strong><span>任意・無料</span></div>
+        <p>従来の上位5件の並べ替えではなく、音声データから最大20件の候補を探索。通常より高感度な音響検出と短い間隔のピーク検出を使い、従来の候補外の場面も探します。</p>
+        <button id="aiRerankButton" class="whisper-run" type="button" disabled>最大20件の見どころを広域探索</button>
+        <small id="aiRerankHelp" class="whisper-disclaimer">先に音声を解析して候補を作成してください。初回は追加モデルの取得が必要です。iPhoneでは時間がかかる場合があります。</small>
+        <p id="aiRerankStatus" class="whisper-status" role="status" aria-live="polite"></p>
+        <div id="aiRerankResults" class="whisper-output" hidden></div>
+        <small class="whisper-disclaimer">新しく探した候補は通常のシーン一覧に自動追加しません。上位5件に加え、その他の候補も展開して再生・評価できます。Whisperは最大10件、声の検査は最大20件を対象にします。モデル取得以外で元動画・音声は送信せず、評価はこの端末内に保存されます。映像自体をAIで認識する機能ではありません。</small>
+      </section>
+      <details class="legacy-gemini-details">
+        <summary>旧Gemini手動比較（必要な場合だけ開く）</summary>
+      <section id="cloudAudioPanel" class="whisper-experiment" aria-label="クラウド音声AI比較実験">
+        <div class="whisper-experiment-head"><strong>β クラウド音声AI比較 — Gemini</strong><span>音声だけ・任意</span></div>
+        <p>550MBの動画をアップロードせず、<strong>音声だけをM4Aに取り出し</strong>、Geminiで歓声・「ナイシュー」などの反応時刻を解析。AIの結果とPeakStampの候補を比較する初回実験です。</p>
+        <label for="cloudAudioSourcePicker">実験する動画（1回1本）</label>
+        <select id="cloudAudioSourcePicker" disabled></select>
+        <label for="cloudAudioMode">音声取り出し方法</label>
+        <select id="cloudAudioMode">
+          <option value="fast" selected>高速：音声のみコピー（音質を維持・推奨）</option>
+          <option value="small">軽量：48kbps AACで圧縮（処理に時間がかかる場合あり）</option>
+        </select>
+        <button id="cloudAudioExtract" type="button" class="whisper-run" disabled>① 音声だけ取り出す</button>
+        <p id="cloudAudioStatus" class="whisper-status" role="status" aria-live="polite"></p>
+        <div id="cloudAudioReady" class="whisper-output" hidden>
+          <strong id="cloudAudioFileInfo"></strong>
+          <audio id="cloudAudioPlayback" controls preload="none" style="width:100%;margin:8px 0"></audio>
+          <button id="cloudAudioShare" type="button" class="whisper-run">↑ iPhoneの「ファイルに保存」で音声を保存</button>
+          <button id="cloudAudioDownload" type="button" class="whisper-run">↓ M4A音声をダウンロード</button>
+          <a id="cloudAudioFallback" download class="save-fallback" hidden>保存されない場合はこちらを長押し</a>
+        </div>
+        <div class="cloud-audio-steps">
+          <p><strong>② Geminiで音声解析</strong>（初回はAPIキー不要）</p>
+          <button id="cloudAudioCopyPrompt" type="button" class="whisper-run" disabled>Geminiへの解析指示を表示・コピー</button>
+          <div id="cloudAudioPromptArea" class="cloud-audio-prompt-area" hidden>
+            <label for="cloudAudioPromptText">Geminiへ貼り付ける解析指示（コピーできない場合もここから取得できます）</label>
+            <textarea id="cloudAudioPromptText" rows="8" readonly spellcheck="false" aria-label="Geminiへの解析指示"></textarea>
+            <button id="cloudAudioSelectPrompt" type="button" class="whisper-run">↑ 指示文を全選択する</button>
+            <p id="cloudAudioCopyStatus" class="whisper-status" role="status" aria-live="polite"></p>
+            <small class="whisper-disclaimer">iPhoneで自動コピーできない場合は「指示文を全選択する」を押し、表示されたテキストを長押しして「コピー」を選んでください。指示文は常にこの欄に残ります。</small>
+          </div>
+          <a class="whisper-run cloud-audio-open" href="https://aistudio.google.com/prompts/new_chat" target="_blank" rel="noopener noreferrer">Google AI Studioを開く ↗</a>
+          <a class="cloud-audio-open-alt" href="https://gemini.google.com/app" target="_blank" rel="noopener noreferrer">AI StudioがiPhoneで使えない場合：Geminiを開く ↗</a>
+          <small class="whisper-disclaimer">Google AI StudioでGemini 2.5 Flashなどの音声対応モデルを選び、保存したM4A音声をアップロードして、コピーした指示を貼り付けて実行。GeminiのJSON回答をコピーします。</small>
+          <label for="cloudAudioPaste">③ Geminiが返したJSONをここに貼り付け</label>
+          <textarea id="cloudAudioPaste" rows="5" placeholder='{"events":[{"reaction_time_seconds":123.4, ...}]}'></textarea>
+          <button id="cloudAudioCompare" type="button" class="whisper-run" disabled>PeakStampの候補と比較する</button>
+          <small class="whisper-disclaimer">確認画面は1つの動画プレーヤーを使い回し、候補を切り替えます。「前の候補／次の候補」「−5秒／＋5秒」で確認できます。選択した評価とGemini回答は端末内に自動保存します。</small>
+          <p id="cloudAudioCompareStatus" class="whisper-status" role="status" aria-live="polite"></p>
+          <div id="cloudAudioResults" class="whisper-output" hidden></div>
+        </div>
+        <small class="whisper-disclaimer">PeakStamp自身は音声も動画も送信しません。音声M4AをGoogle AI Studioへアップロードする場合のみ、音声データがGoogleへ送信されます。会話などが含まれる場合はアップロード前にご確認ください。現在は手動の比較実験で、API自動連携や課金はありません。音だけではシュート・ゴールの発生を確定できません。</small>
+      </section>
+      </details>
+      <section id="videoExplorePanel" class="whisper-experiment" aria-label="映像探索ベータ（カメラ追尾対応）">
+        <div class="whisper-experiment-head"><strong>β 映像探索 — カメラ追尾対応</strong><span>無料・端末内</span></div>
+        <p>手持ちスマホの左右追尾に対応するため、低解像度のフレームからカメラの移動を推定・補正して、映像に変化のある場面を探します。<strong>ボール・ゴール・シュートそのものを認識するAIではなく、試験的な候補探索です。</strong></p>
+        <label for="videoSourcePicker">映像解析する動画（1回1本）</label>
+        <select id="videoSourcePicker" disabled aria-label="映像探索の対象動画"></select>
+        <label for="videoExploreMode">解析モード</label>
+        <select id="videoExploreMode">
+          <option value="standard" selected>標準：最大150フレーム（iPhone推奨）</option>
+          <option value="detail">詳細：最大280フレーム（時間がかかります）</option>
+        </select>
+        <button id="videoExploreButton" class="whisper-run" type="button" disabled>この動画を映像で探索</button>
+        <button id="videoExploreCancel" class="video-explore-cancel" type="button" hidden>探索を停止</button>
+        <small id="videoExploreHelp" class="whisper-disclaimer">先に音声を解析し、動画を選択してください。</small>
+        <p id="videoExploreStatus" class="whisper-status" role="status" aria-live="polite"></p>
+        <div id="videoExploreResults" class="whisper-output" hidden></div>
+        <small class="whisper-disclaimer">新たなAIモデル・有料API・サーバー処理は使用しません。元動画は送信せず、Safari内で解析。初回検証ではまず短い動画と標準モードを試してください。iPhoneでの速度、手持ちブレへの耐性、シュート検出率は未検証です。通常のキープ／不採用／書き出しには反映しません。</small>
+      </section>
+      <section id="whisperExperiment" class="whisper-experiment" aria-label="AI文字起こしの実験">
+        <div class="whisper-experiment-head"><strong>β AI文字起こし（実験）</strong><span>任意・無料</span></div>
+        <p>音声ピークの前後約16秒だけをiPhone内で日本語文字起こし。まず1シーンずつ精度を確認できます。候補の判定や動画編集には自動反映しません。</p>
+        <label for="whisperTarget">試すシーン</label>
+        <select id="whisperTarget" disabled aria-label="文字起こしするシーン"></select>
+        <button id="whisperButton" class="whisper-run" type="button" disabled>このシーンをWhisperで文字起こしする</button>
+        <p id="whisperStatus" class="whisper-status" role="status" aria-live="polite"></p>
+        <div id="whisperOutput" class="whisper-output" hidden></div>
+        <small class="whisper-disclaimer">初回のみAIモデル（大きなデータ）をダウンロードします。Wi-Fi推奨。動画・音声は送信しません。認識結果は誤認識の可能性があり、歓声のみは検出できない場合があります。iPhone Safariでの動作は検証中です。</small>
+      </section>
+
+      </details>
+      <div class="comment-section" hidden aria-hidden="true">
+        <div class="comment-heading"><strong id="commentHeading">YouTubeコメント用</strong><span>そのまま貼り付け</span></div>
+        <p id="commentHelp" class="fine-print" hidden>各動画の元の時刻を表示します。動画ごとに「この動画の時刻をコピー」も使えます。</p>
+        <textarea id="commentText" rows="7" spellcheck="false" aria-label="YouTubeコメント用テキスト"></textarea>
+        <button class="main-button copy-button" id="copyButton" type="button">▢　コメントをコピー <span aria-hidden="true">↗</span></button>
+        <p id="copyStatus" class="copy-status" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <details id="advancedTools" class="panel workflow-experiments" hidden aria-hidden="true">
+      <summary>旧実験ツール（非表示）</summary>
+      <p class="fine-print">実況テスト、映像探索、旧式の解析などは必要なときだけ利用してください。通常のゴール／ハイライト編集では開く必要はありません。</p>
+    </details>
+    <section class="panel montage-panel" id="montagePanel" hidden>
+      <div class="panel-label"><span class="number">03</span><h2>動画を書き出す</h2></div>
+      <button id="workflowBackToEdit" class="workflow-back-btn" type="button">← 編集に戻る</button>
+      <div class="export-steps">
+        <strong>仕上げは3ステップ</strong>
+        <p><b>① タイトル</b> 最初の数秒に文字を入れます。タイトルだけ、または画像・動画を使ったイントロも選べます。</p>
+        <p><b>② 書き出す</b> MP4を作成したら完成動画を再生して確認。</p>
+        <p><b>③ 保存・共有</b> iPhoneに保存し、HS向けJSONを幹事に共有してください。</p>
+      </div>
+
+      <fieldset class="intro-presentation-picker">
+        <legend>タイトルの見せ方</legend>
+        <label><input type="radio" name="introPresentation" value="overlay" checked />
+          <span><strong>最初のシーンに重ねる</strong><small>おすすめ · 試合音声をそのまま使用</small></span>
+        </label>
+        <label><input type="radio" name="introPresentation" value="card" />
+          <span><strong>5秒イントロを入れる</strong><small>画像・動画も設定可能</small></span>
+        </label>
+      </fieldset>
+      <label class="montage-label" for="montageTitle">タイトル文字</label>
+      <div class="montage-presets" role="group" aria-label="タイトルのテンプレート">
+        <button type="button" class="active" data-montage-title="GOALS!">GOALS!</button>
+        <button type="button" data-montage-title="HIGHLIGHTS!">HIGHLIGHTS!</button>
+        <button type="button" data-montage-title="BEST PLAYS!">BEST PLAYS!</button>
+      </div>
+      <input class="montage-title-input" id="montageTitle" maxlength="32" value="GOALS!" aria-label="冒頭に表示する文字" />
+      <div class="montage-typography">
+        <label class="montage-label" for="titleFont">タイトルのフォント</label>
+        <select id="titleFont">
+          <option value="impact">インパクト（太字）</option>
+          <option value="modern">モダン（ゴシック）</option>
+          <option value="serif">セリフ体（クラシック）</option>
+          <option value="mono">モノスペース</option>
+        </select>
+        <label class="montage-label" for="titleSize">文字サイズ <strong id="titleSizeValue">100%</strong></label>
+        <input id="titleSize" type="range" min="60" max="150" value="100" step="5" />
+      </div>
+
+      <section class="intro-customizer" aria-label="イントロ素材を編集">
+        <div class="intro-section-heading"><strong>イントロをカスタマイズ</strong><span id="introDurationLabel">シーン先行再生・3秒</span></div>
+        <div id="introCardBackgroundSettings" hidden>
+        <fieldset class="intro-background-modes">
+          <legend>背景を選択</legend>
+          <label><input type="radio" name="introBackgroundMode" value="default" checked /> デフォルト</label>
+          <label><input type="radio" name="introBackgroundMode" value="image" /> 静止画</label>
+          <label><input type="radio" name="introBackgroundMode" value="video" /> 動画</label>
+        </fieldset>
+        <label id="introImagePicker" class="intro-file-picker" hidden>背景画像を選択（JPG / PNG / WebP）
+          <input type="file" id="introImageFile" accept="image/jpeg,image/png,image/webp" />
+        </label>
+        <label id="introVideoPicker" class="intro-file-picker" hidden>背景動画を選択（MP4 / MOV）
+          <input type="file" id="introVideoFile" accept="video/*,.mp4,.mov,.m4v" />
+        </label>
+        <p id="introBackgroundName" class="intro-asset-name">デフォルトの背景を使用</p>
+        </div>
+        <div class="intro-overlay-input">
+          <label for="introOverlayFile">文字・ロゴの透過PNG</label>
+          <input type="file" id="introOverlayFile" accept="image/png" />
+          <button id="introOverlayClear" type="button" class="intro-small-button" hidden>PNGを削除</button>
+          <p id="introOverlayName" class="intro-asset-name">未設定：下のタイトル文字を使用</p>
+        </div>
+        <div class="intro-preview-header">
+          <strong>イントロプレビュー</strong>
+          <button type="button" id="introPlay" class="intro-small-button">▶ 5秒再生</button>
+        </div>
+        <div class="intro-preview-frame" id="introPreviewFrame">
+          <canvas id="introCanvas" width="640" height="360" aria-label="背景と文字タイトルまたは透過PNGの配置プレビュー"></canvas>
+          <video id="introVideoPreview" muted playsinline preload="metadata" hidden></video>
+          <video id="introFirstScenePreview" muted playsinline preload="metadata" hidden></video>
+        </div>
+        <p class="intro-help" id="introPreviewHelp">最初のシーンにタイトルを重ねます。ドラッグで位置を変更できます。プレビューはミュートですが、完成MP4では試合音声も再生されます。</p>
+        <p class="intro-error" id="introError" role="alert" hidden></p>
+        <div id="introPlacementControls" class="intro-placement-controls">
+          <span id="introPositionLabel">文字を指でドラッグして位置を調整</span>
+          <button type="button" id="introCenterPosition" class="intro-small-button">中央に戻す</button>
+        </div>
+        <div id="introOverlayControls" hidden>
+          <label class="montage-label" for="introOverlayScale">PNGのサイズ <strong id="introScaleValue">60%</strong></label>
+          <input class="montage-slider" id="introOverlayScale" type="range" min="20" max="100" step="5" value="60" />
+        </div>
+        <p class="intro-help">PNGを使うと文字タイトルの代わりに表示されます。</p>
+      </section>
+
+      <p class="fine-print">新規候補の切り抜きはピークの4秒前〜2秒後（初期6秒）。共通タイムラインで開始・終了を直接調整できます。</p>
+      <div class="montage-summary"><span id="montageSelected">0シーンを結合</span><span id="montageLength">完成：約00:05</span></div>
+
+      <fieldset class="quality-picker">
+        <legend>出力画質</legend>
+        <label><input type="radio" name="exportQuality" value="high" checked /><span><strong>高画質 1080p / 30fps</strong><small>おすすめ・高ビットレート（書き出しに時間がかかります）</small></span></label>
+        <label><input type="radio" name="exportQuality" value="standard" /><span><strong>標準 720p / 30fps</strong><small>画質と容量のバランスを重視</small></span></label>
+        <label><input type="radio" name="exportQuality" value="compact" /><span><strong>省容量 540p / 30fps</strong><small>容量不足時におすすめ・画質は低下します</small></span></label>
+      </fieldset>
+      <div class="storage-estimate" aria-live="polite">
+        <div><strong>完成動画の推定サイズ</strong><strong id="montageSizeEstimate">—</strong></div>
+        <p>動画の推定ファイルサイズです。Safariの作業用メモリや端末の実際の空き容量は含みません。</p>
+      </div>
+      <details class="storage-tips">
+        <summary>iPhoneの容量が足りないときは？</summary>
+        <p>まず「省容量 540p」を選び、シーン数や切り取り時間を減らしてください。元動画は削除されません。十分な空き容量を確保できない場合は、PCなど空き容量の多い端末での編集をおすすめします。</p>
+        <p>iPhoneの空き容量は「設定 → 一般 → iPhoneストレージ」で確認できます。ファイルに保存する前に完成動画を確認し、不要な古い動画を整理する場合もバックアップを確認してください。</p>
+        <p>クラウドを保存先に選んでも、一時的に端末内の空き容量が必要になることがあります。</p>
+      </details>
+      <button class="main-button montage-export" type="button" id="montageExport" disabled>▶ ハイライト動画を作成する</button>
+      <button class="cancel-button" type="button" id="montageCancel" hidden>書き出しを中止</button>
+      <div class="progress-area" id="montageProgress" hidden aria-live="polite">
+        <div class="progress-label"><span id="montageStatus"></span><span id="montagePercent">0%</span></div>
+        <div class="progress-track"><div id="montageBar"></div></div>
+      </div>
+      <p id="montageError" class="error" role="alert" hidden></p>
+      <video id="montagePreview" controls playsinline hidden aria-label="完成したハイライト動画"></video>
+      <button id="montageShare" class="main-button montage-share" type="button" hidden>↑ iPhoneに保存・共有</button>
+      <a id="montageDownload" class="main-button montage-download" hidden download="PeakStamp.mp4">↓ MP4をダウンロード</a>
+      <a id="montageOpen" class="save-fallback" target="_blank" rel="noopener" hidden>動画を別タブで開く（保存できない場合）</a>
+      <p id="montageSaveHelp" class="save-help" hidden>iPhoneでは「iPhoneに保存・共有」から共有メニューを開き、「ビデオを保存」または「ファイルに保存」を選択してください。うまくいかない場合は「動画を別タブで開く」を試してください。</p>
+      <p id="montageSaveStatus" class="save-status" role="status" aria-live="polite"></p>
+      <section id="hsJsonReminder" class="hs-json-reminder" hidden>
+        <strong>最後に：HS用JSONを幹事へ</strong>
+        <p>Instagramリール制作に必要な、キープ済みシーンの開始・終了時刻と編集情報です。完成動画とあわせて共有してください。</p>
+        <button id="hsJsonShareFinal" class="main-button" type="button">HS向けJSONを保存・共有</button>
+        <p id="hsJsonReminderStatus" role="status" aria-live="polite"></p>
+      </section>
+      <p class="fine-print">動画・音声は端末内で処理し、PeakStampのサーバーには送信しません。最初は30秒ほどの素材で試してください。iPhoneのOS・動画形式によってはMP4の書き出しに対応しない場合があります。長時間の処理中はSafariを閉じないでください。</p>
+    </section>
+    <footer><strong>PEAKSTAMP</strong><span>Enjoy the game. Capture the moment.</span>
+            <details class="compact-details share-details">
+        <summary>LINEでアプリを共有</summary>
+        <div class="line-share-row">
+          <button id="lineShareCopy" type="button" class="line-share-copy">共有リンクをコピー ↗</button>
+          <span id="lineShareStatus" role="status" aria-live="polite" class="line-share-status"></span>
+          <input id="lineShareFallback" class="line-share-fallback" type="text" readonly aria-label="LINEで送るURL" hidden />
+        </div>
+      </details>
+      <p>元動画は端末内に残ります。Gemini解析時は音声のみGoogleへ送信されます。</p>
+    </footer>
+  </main>
+  <aside id="undoReview" class="review-undo-toast" hidden aria-live="polite">
+    <span id="undoReviewText">シーンを不採用にしました</span>
+    <button id="undoReviewButton" type="button">元に戻す</button>
+  </aside>
+  <div id="firstRunOverlay" class="first-run-overlay" role="dialog" aria-modal="true" aria-labelledby="guideTitle" aria-describedby="guideDescription" hidden>
+    <div class="first-run-card">
+      <div class="first-run-top"><span>PEAKSTAMP GUIDE</span><span id="guideCounter">1 / 3</span></div>
+      <div class="first-run-art" aria-hidden="true"><span>▣</span><span>✦</span><span>▶</span></div>
+      <h2 id="guideTitle">動画を選ぶ</h2>
+      <p id="guideDescription">試合動画を選んでください。</p>
+      <div class="first-run-dots" aria-label="ガイドのステップ">
+        <button type="button" data-guide-step="0" class="active" aria-label="ガイド1: 動画を選ぶ">1</button>
+        <button type="button" data-guide-step="1" aria-label="ガイド2: Gemini解析">2</button>
+        <button type="button" data-guide-step="2" aria-label="ガイド3: 編集・保存">3</button>
+      </div>
+      <button id="guideNext" type="button" class="main-button first-run-next">次へ →</button>
+      <button id="guideSkip" type="button" class="first-run-skip">スキップ</button>
+    </div>
+  </div>
+  <div id="journeyDialog" class="journey-dialog" role="dialog" aria-modal="true" aria-labelledby="journeyDialogTitle" aria-describedby="journeyDialogBody" hidden>
+    <div class="journey-dialog-card">
+      <button id="journeyDialogDismiss" type="button" class="journey-dialog-dismiss" aria-label="閉じる">×</button>
+      <h2 id="journeyDialogTitle"></h2>
+      <p id="journeyDialogBody"></p>
+      <div class="journey-dialog-actions">
+        <button id="journeyDialogPrimary" class="main-button" type="button"></button>
+        <button id="journeyDialogSecondary" class="whisper-run" type="button" hidden></button>
+      </div>
+    </div>
+  </div>
+  <!-- Secondary settings stay in this document: iPhone Safari must not lose
+       browser-owned MOV File objects when coming back from another page. -->
+  <div id="settingsOverlay" class="settings-inline-overlay" role="dialog"
+       aria-modal="true" aria-labelledby="settingsOverlayTitle" hidden>
+    <div class="settings-inline-sheet">
+      <header class="settings-inline-head">
+        <strong id="settingsOverlayTitle">詳細設定</strong>
+        <button id="settingsOverlayClose" class="settings-inline-close" type="button">← 編集中の動画に戻る</button>
+      </header>
+      <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
+    </div>
+  </div>
+  <script type="module" src="app.mjs?v=ss-inline-test-20261114"></script>
+</body>
+</html>
