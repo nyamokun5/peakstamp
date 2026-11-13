@@ -803,9 +803,9 @@ test('pending placement goal keeps official roster name as unconfirmed review dr
  const goal={id:'placement-1',source:{name:'third.mov'},matchSeq:3,
   teamA:'2',teamB:'4',matchupConfirmed:true,scorer:'Hiroyuki Kawata',
   assistStatus:'none',ssIdentity:{environment:'staging',eventId:snap.eventId,
-   matchId:'',seq:3,scorer:{name:'Hiroyuki Kawata'}}};
+   matchId:'',seq:3,scorer:{name:'Hiroyuki Kawata',memberId:snap.memberIds.get('Hiroyuki Kawata'),playerId:snap.playerIds.get('Hiroyuki Kawata')}}};
  const row=prepareGoalRows({goals:[goal]},snap)[0];
  assert.equal(row.scorer,'Hiroyuki Kawata');
  assert.equal(row.confirmed,false);
- assert.equal(validateGoalRow({...row,confirmed:true},snap)?.includes('異なります'),true);
+ assert.equal(validateGoalRow({...row,confirmed:true,team:'チーム4'},snap)?.includes('異なります'),true);
 });
