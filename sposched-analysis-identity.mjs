@@ -21,12 +21,10 @@ export function selectedFixtureTeams(goal,snapshot,seq){
  const teamName=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/\s/g,'')
   .replace(/^チーム/,'team').replace(/^(?:team)?(\d{1,2})$/,'team$1');
  const rosterTeams=[...new Set(snapshot?.playerTeam?.values?.()||[])];
- const edits=new Set(goal?.userEditedGoalFields||[]);
  // Video transcription is a suggestion, not a user-confirmed matchup.
  // Only use video sides while SS is waiting when the organizer has explicitly
  // reviewed the pairing; otherwise keep identity unresolved.
- const confirmed=goal?.matchupConfirmed===true||goal?.userConfirmedMatchup===true||
-  (edits.has('teamA')&&edits.has('teamB'));
+ const confirmed=goal?.matchupConfirmed===true||goal?.userConfirmedMatchup===true;
  const selected=confirmed?[goal?.teamA,goal?.teamB]:[];
  if(confirmed){
   if(!selected.every(Boolean))return [];
@@ -42,6 +40,13 @@ export function selectedFixtureTeams(goal,snapshot,seq){
   return chosen;
  }
  return [match.leftTeam,match.rightTeam].filter(Boolean);
+}
+// Display official event roster names even if the upstream TEST API has not
+// supplied both identity UUIDs. Registration still requires fixturePeople().
+export function fixtureRosterNames(snapshot,seq,goal=null){
+ const teams=selectedFixtureTeams(goal,snapshot,seq);
+ if(teams.length!==2||snapshot?.rosterSource!=='official-current-event-teams')return [];
+ return (snapshot.players||[]).filter(name=>teams.includes(snapshot.playerTeam?.get(name)));
 }
 export function fixturePeople(snapshot,seq,goal=null){
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
