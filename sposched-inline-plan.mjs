@@ -50,8 +50,16 @@ export function buildInlineSecondRoundPlan({snapshot,rows,workerJob}={}){
  if(invalid)throw Error('後半ゴール'+(invalid.index+1)+'：'+invalid.reason);
  // This uses the canonical plan validator, but only later operations are
  // submitted; official fixture and player checks remain in the Worker.
+ // The canonical four-match planner rejects finished fixtures. The
+ // already-completed semifinals are not sent again: use a planning-only
+ // projection while retaining the official later fixture IDs and roster.
+ const first=snapshot.matches.filter(m=>[1,2].includes(Number(m.seq)));
+ if(first.length!==2||first.some(m=>m.status!=='finished'))
+  throw Error('SSで準決勝2試合の終了を確認できません');
+ const projected={...snapshot,matches:snapshot.matches.map(m=>
+  [1,2].includes(Number(m.seq))?{...m,status:'scheduled'}:m)};
  const plan=prepareWorkerTournament({
-  snapshot,rows:laterRows,decisions,requestId:workerJob.request_id
+  snapshot:projected,rows:laterRows,decisions,requestId:workerJob.request_id
  });
  const operations=plan.operations.filter(op=>op.seq>=3);
  if(operations.filter(op=>op.action==='finish').length!==2)
