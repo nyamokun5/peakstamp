@@ -50,8 +50,8 @@ export function fixtureRosterNames(snapshot,seq,goal=null){
  // numbered fixture. Show those players for read-only identification, but
  // NEVER treat this as permission to write goals to the conflicting SS match.
  if(teams.length!==2&&(goal?.matchupConfirmed===true||goal?.userConfirmedMatchup===true)){
-  const canonical=v=>String(v||'').normalize('NFKC').toLowerCase().replace(/\\s/g,'')
-   .replace(/^チーム/,'team').replace(/^(?:team)?(\\d{1,2})$/,'team$1');
+  const canonical=v=>String(v||'').normalize('NFKC').toLowerCase().replace(/\s/g,'')
+   .replace(/^チーム/,'team').replace(/^(?:team)?(\d{1,2})$/,'team$1');
   const rosterTeams=[...new Set(snapshot.playerTeam?.values?.()||[])];
   const selected=[goal.teamA,goal.teamB].map(v=>rosterTeams.filter(t=>canonical(t)===canonical(v)));
   if(selected.every(a=>a.length===1)&&selected[0][0]!==selected[1][0])
