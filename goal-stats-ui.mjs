@@ -415,7 +415,6 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   assistBox.append(assistChoice);fields.append(assistBox);
   if(item.assistStatus==='named')
    personInput('assist','アシスト者');
-  inputRow(fields,'SS試合番号（任意）',item.matchSeq||'',v=>edit(entry,'matchSeq',v),{type:'number',placeholder:'例：3'});
   const optional=make('details','goal-optional-fields');
   optional.append(make('summary','','詳細：チーム番号・メモ'));
   const optionalBody=make('div','goal-review-fields');
