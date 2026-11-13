@@ -7,7 +7,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=batch-diagnostic3';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=fixture-autofill7';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=video-source8';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=source-matchup5';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
@@ -317,6 +317,13 @@ function renderSourceList() {
     matchupInput.placeholder='例：1 vs 2';
     matchupInput.value=matchup.teamA&&matchup.teamB?matchup.teamA+' vs '+matchup.teamB:'';
     matchupInput.setAttribute('aria-label','対戦チーム');
+    // Save as soon as a complete pair is typed, before the user taps Next.
+    // iPhone Safari may not fire change/blur before navigation.
+    matchupInput.addEventListener('input',()=>{
+      const parts=matchupInput.value.split(/\\s*(?:vs?\\.?|対)\\s*/i);
+      if(parts.length===2&&parts[0].trim()&&parts[1].trim())
+       saveVideoMatchup(source,window.localStorage,parts[0],parts[1]);
+    });
     matchupInput.addEventListener('change',()=>{
       const parts=matchupInput.value.split(/\s*(?:vs?\.?|対)\s*/i);
       if(parts.length!==2||!parts[0].trim()||!parts[1].trim()){
