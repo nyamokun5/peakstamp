@@ -315,9 +315,24 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    // Explicit TEST-only learning: never persist an AI suggestion or a passive prefill.
    if(select.value&&item.userEditedGoalFields?.includes(field)&&
       (field==='scorer'?item.rawScorer:item.rawAssist)){
+    // Per-goal, per-role opt-out. This affects alias learning only,
+    // never the selected official scorer/assist or the video decision.
+    const skipKey=field==='scorer'?'scorer':'assist';
+    const skipped=Boolean(item.aliasLearningSkipped?.[skipKey]);
+    const skip=make('button','quick-exception',skipped?'✓ 名寄せ登録しない':'名寄せ登録しない');
+    skip.type='button';skip.setAttribute('aria-pressed',String(skipped));
+    skip.addEventListener('click',()=>{
+     const current=latestGoal(entry);
+     current.aliasLearningSkipped={...(current.aliasLearningSkipped||{}),[skipKey]:!current.aliasLearningSkipped?.[skipKey]};
+     write(entry.source,goalData(entry.source).items.map(x=>x.id===current.id?current:x));
+     render();
+     say(current.aliasLearningSkipped[skipKey]?'この呼び名は登録しません。選手の選択と動画キープは維持します。':'呼び名の登録を再び許可しました。');
+    });
     const learn=make('button','','呼び名を登録');learn.type='button';
+    learn.hidden=skipped;
     learn.addEventListener('click',async()=>{
      const current=latestGoal(entry);
+     if(current.aliasLearningSkipped?.[skipKey]){say('この呼び名は登録しない設定です。');return;}
      const spoken=String(field==='scorer'?current.rawScorer:current.rawAssist||'').trim();
      const official=String(current[field]||'');
      const context=state.ssNameContext;
@@ -347,7 +362,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
      }catch(error){say(error.message||'登録結果を確認できません。再送せずSSを確認してください。');learn.textContent='登録結果を確認';}
      // Do not automatically retry a potentially completed alias write.
     });
-    box.append(learn);
+    box.append(skip,learn);
    }
   };
   if(state.ssNameEnabled&&!item.ssIdentity?.scorer){
