@@ -10,21 +10,23 @@ const make=overrides=>({
  refreshOfficial:async()=>({eventId:id}),
  buildSecond:async()=>({event_id:id,request_id:req,confirm:'TEST-ONLY BATCH APPEND',operations:[]}),
  append:async()=>({event_id:id,request_id:req,status:'running'}),
+ verifyFinished:async()=>{},
  verifyCurrent:async()=>{},
  wait:async()=>{},
  ...overrides
 });
 test('one click starts once, refreshes official snapshot and appends once',async()=>{
  const calls=[];
+ let inspections=0;
  const result=await runOneClickKnockout(make({
  start:async()=>{calls.push('start');return {event_id:id,request_id:req}},
- inspect:async()=>{calls.push('inspect');return job},
+ inspect:async()=>{calls.push('inspect');return ++inspections===1?job:{...job,status:'completed'}},
  refreshOfficial:async()=>{calls.push('refresh');return {eventId:id}},
  buildSecond:async()=>{calls.push('build');return {event_id:id,request_id:req,confirm:'TEST-ONLY BATCH APPEND'}},
  append:async()=>{calls.push('append');return {event_id:id,request_id:req,status:'running'}}
  }));
- assert.equal(result.status,'running');
- assert.deepEqual(calls,['start','inspect','refresh','build','append']);
+ assert.equal(result.status,'completed');
+ assert.deepEqual(calls,['start','inspect','refresh','build','append','inspect','refresh']);
 });
 test('blocked job never appends',async()=>{
  let appended=false;
