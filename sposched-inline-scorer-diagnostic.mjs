@@ -1,3 +1,4 @@
+import {fixturePeople,analysisFixtureAgrees} from './sposched-analysis-identity.mjs';
 /** Explain a read-only SS scorer validation failure without guessing identity.
  * Never changes a scorer, confirms an identity or permits a write.
  */
@@ -27,7 +28,17 @@ export function scorerRosterError(row,snapshot,index){
   const officialTeam=String(snapshot?.playerTeam?.get(official)||'');
   if(String(identity?.scorer?.team||'')!==officialTeam)
    return prefix+'得点者の所属チームが解析時から変わりました';
-  return prefix+'得点者の照合情報を再検証できません。ゴールを再確認してください';
+  if(identity?.environment!=='staging')
+   return prefix+'照合環境がTESTではありません。SSの接続先を確認してください';
+  if(identity?.seq!==Number(row.seq))
+   return prefix+'試合番号の形式が解析時と異なります。SSに再接続してください';
+  if(!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(fixture.matchId))
+   return prefix+'SS試合IDの形式が不正です。SSの試合枠を確認してください';
+  if(!analysisFixtureAgrees(row.goal,fixture))
+   return prefix+'動画の対戦カードとSSの試合枠が一致しません';
+  if(!fixturePeople(snapshot,Number(row.seq),row.goal).includes(official))
+   return prefix+'得点者が対象試合の選手候補に含まれていません。対戦カードと所属チームを確認してください';
+  return prefix+'照合情報が再検証に通りません。SS登録は停止しています';
  }
  if(display)return prefix+'得点者「'+display+'」が現在のSS名簿にありません';
  if(official)return prefix+'照合済み得点者「'+official+'」が現在のSS名簿にありません';
