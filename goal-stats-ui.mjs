@@ -57,7 +57,27 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  const goalData=s=>{
   const data=createGoalDrafts(s,cache());
   if(state.ssNameEnabled){
-   const items=data.items.map(item=>resolveAnalysisGoal(item,state.ssNameContext));
+   const snapshot=state.ssNameContext?.snapshot;
+   const items=data.items.map(item=>{
+    // Old saved goals often have the SS fixture number but no matchup label.
+    // The authoritative TEST fixture already knows both teams. Use it only
+    // when the corresponding card has no manually edited matchup.
+    const fixture=snapshot?.matches?.find(m=>Number(m.seq)===Number(item.matchSeq));
+    const edited=new Set(item.userEditedGoalFields||[]);
+    const left=String(fixture?.leftTeam||'').trim();
+    const right=String(fixture?.rightTeam||'').trim();
+    let updated=item;
+    if(item.status!=='excluded'&&left&&right){
+     const pair=[left,right];
+     const changes={};
+     if(!String(item.teamA||'').trim()&&!edited.has('teamA'))changes.teamA=pair[0];
+     if(!String(item.teamB||'').trim()&&!edited.has('teamB'))changes.teamB=pair[1];
+     if(!String(item.matchLabel||'').trim()&&!edited.has('matchLabel'))
+      changes.matchLabel=pair[0]+' vs '+pair[1];
+     if(Object.keys(changes).length)updated={...item,...changes};
+    }
+    return resolveAnalysisGoal(updated,state.ssNameContext);
+   });
    if(JSON.stringify(items)!==JSON.stringify(data.items))saveGoalDrafts(s,cache(),items);
    data.items=items;
   }
