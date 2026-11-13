@@ -342,9 +342,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    box.append(make('span','',label));select.setAttribute('aria-label',label);
    select.append(new Option('選手を選択',''));
    const snapshot=state.ssNameContext?.snapshot;
-   // Editing is event-wide; only SS registration is restricted to a verified fixture.
-   // Do not hide an identified player just because the match has no result/card yet.
-   let names=(snapshot?.players||[]).filter(name=>snapshot?.memberIds?.has(name));
+   // Keep selection within the confirmed fixture; an unrelated team's player
+   // must not become a valid scorer merely by being in the event roster.
+   let names=fixturePeople(snapshot,item.matchSeq,item);
    if(field==='assist')names=names.filter(name=>name!==item.scorer);
    const suggestions=phoneticCandidates(field==='scorer'?item.rawScorer:item.rawAssist,
     state.ssNameContext?.aliases||[],snapshot,item.matchSeq);
