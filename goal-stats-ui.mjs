@@ -592,6 +592,30 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  }
  function render(){
   const all=sources(),entries=queue();
+  // A reviewed/kept video with fully resolved SS identities needs no second
+  // explicit goal confirmation. Do not auto-approve an unreviewed video.
+  const snapshot=state.ssNameContext?.snapshot;
+  if(state.ssNameEnabled===true&&snapshot?.eventId){
+   const changed=new Map();
+   for(const {source,item} of entries){
+    if(item.status!=='draft'||item.videoDecision!=='kept'||
+       item.ssIdentity?.environment!=='staging'||
+       item.ssIdentity?.eventId!==snapshot.eventId||
+       !item.ssIdentity?.scorer||
+       (item.assistStatus==='named'&&!item.ssIdentity?.assist)||
+       !['none','named'].includes(item.assistStatus)||
+       validateGoal(item)||item.goalTimeVerified===false)continue;
+    // The official scorer/assist must still be on the event roster.
+    const people=[item.ssIdentity.scorer,...(item.assistStatus==='named'?[item.ssIdentity.assist]:[])];
+    if(!people.every(p=>p?.name&&snapshot.memberIds?.get(p.name)===p.memberId&&
+      snapshot.playerIds?.get(p.name)===p.playerId&&
+      snapshot.playerTeam?.get(p.name)))continue;
+    item.status='confirmed';item.ssAutoConfirmed=true;
+    item.confirmedAt=item.confirmedAt||new Date().toISOString();
+    if(!changed.has(source))changed.set(source,goalData(source).items);
+   }
+   for(const [source,items] of changed)write(source,items);
+  }
   // This standalone priority panel appears as soon as there are actual
   // goals, transcript results, or a completed waveform analysis.
   panel.hidden=all.length===0 || (!entries.length &&
