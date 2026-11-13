@@ -44,3 +44,25 @@ test('unconfirmed event cannot append',async()=>{
  })),/一致しません/);
  assert.equal(appended,false);
 });
+
+test('append response alone never reports success',async()=>{
+ let checks=0;
+ await assert.rejects(runOneClickKnockout(make({
+  inspect:async()=>++checks===1?job:{...job,status:'running'},
+  maxChecks:2
+ })),/完了確認がタイムアウト/);
+});
+test('official verification failure never reports completion',async()=>{
+ let checks=0;
+ await assert.rejects(runOneClickKnockout(make({
+  inspect:async()=>++checks===1?job:{...job,status:'completed'},
+  verifyFinished:async()=>{throw Error('正式試合が未終了')}
+ })),/正式試合が未終了/);
+});
+test('ambiguous append is never retried',async()=>{
+ let calls=0;
+ await assert.rejects(runOneClickKnockout(make({
+  append:async()=>{calls++;throw Error('通信応答が不明')}
+ })),/通信応答が不明/);
+ assert.equal(calls,1);
+});
