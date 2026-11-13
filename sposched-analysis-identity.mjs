@@ -109,6 +109,7 @@ export function resolveAnalysisGoal(item,context){
 export function verifiedAnalysisPerson(goal,snapshot,seq,field){
  const identity=goal?.ssIdentity,p=identity?.[field];
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
+ if(!uuid.test(match?.matchId||''))return null;
  if(identity?.environment!=='staging'||identity.eventId!==snapshot?.eventId||
     identity.matchId!==match?.matchId||identity.seq!==Number(seq)||!p||
     p.name!==goal[field]||!fixturePeople(snapshot,seq,goal).includes(p.name)||
