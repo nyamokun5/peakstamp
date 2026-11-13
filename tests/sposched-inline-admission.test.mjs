@@ -24,3 +24,8 @@ test('fails closed when Worker status has not been queried',()=>{
  assert.equal(result.allowed,false);
  assert.match(result.reason,/未確認/);
 });
+
+test('fails closed for an unrecognized Worker job status',()=>{
+ const result=decideInlineBatchAdmission({eventId,workerJob:{event_id:eventId,request_id:'job-1',status:'unexpected'}});
+ assert.equal(result.allowed,false);
+});
