@@ -170,6 +170,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const source=entry.source,item=latestGoal(entry);
   if(String(item[name]??'')===String(value??''))return;
   item[name]=value;
+  // A changed fixture or side invalidates previously resolved SS player IDs.
+  // Never carry identities from an earlier pairing into a different match.
+  if(['matchSeq','teamA','teamB'].includes(name)){
+   item.ssIdentity=null;
+   item.matchupConfirmed=false;
+   item.userConfirmedMatchup=false;
+  }
   // Clearing a name or choosing an assist state is also a deliberate edit.
   // Do not let subsequent Gemini refresh silently refill it.
   if(['scorer','assist','assistStatus','matchLabel','teamA','teamB','matchSeq'].includes(name)){
