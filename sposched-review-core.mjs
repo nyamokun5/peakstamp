@@ -376,9 +376,15 @@ export function prepareGoalRows(rawGoals,snapshot){
    // Before the knockout slot has an official match UUID, retain a verified
    // roster display name as an UNCONFIRMED draft. The review must not claim
    // registration identity or send it until the official fixture is refreshed.
-   const allowed=fixtureRosterNames(snapshot,onlyMatch?.seq,g);
+   const pending=onlyMatch&&!onlyMatch.matchId&&onlyMatch.status==='waiting'&&
+    g?.ssIdentity?.environment==='staging'&&g.ssIdentity.eventId===snapshot.eventId&&
+    g.ssIdentity.seq===onlyMatch.seq;
+   const allowed=pending?fixtureRosterNames(snapshot,onlyMatch.seq,g):[];
    const tentative=[g?.[field],g?.ssIdentity?.[field]?.name]
-    .find(name=>allowed.includes(name))||'';
+    .find(name=>allowed.includes(name)&&
+     g.ssIdentity?.[field]?.name===name&&
+     snapshot.memberIds?.get(name)===g.ssIdentity[field]?.memberId&&
+     snapshot.playerIds?.get(name)===g.ssIdentity[field]?.playerId)||'';
    return {name:tentative,confidence:'none',candidates:[],source:'pending-fixture-roster'};
   };
   const scorerGuess=g.ssIdentity?transferred('scorer'):suggestedPlayer(g.scorer,snapshot,teamHint);
