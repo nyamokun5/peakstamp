@@ -120,7 +120,7 @@ function find(node,cls){
  }
  return null;
 }
-test('one-tap keep saves video but does not confirm a goal with a missing scorer',async()=>{
+test('one-tap keep requires resolving a missing scorer before advancing',async()=>{
  const {dom,one,storage,restore}=setup();
  try{
   const goal=createGoalDrafts(one,storage).items[0];
@@ -132,7 +132,7 @@ test('one-tap keep saves video but does not confirm a goal with a missing scorer
    onKeepClip:()=>{keeps++;return true;}
   });
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
-  assert.equal(keeps,1,'video keep must not depend on score validation');
+  assert.equal(keeps,0,'unresolved scorer must block goal confirmation and advancement');
   assert.notEqual(createGoalDrafts(one,storage).items[0].status,'confirmed');
  }finally{await restore()}
 });
@@ -718,7 +718,7 @@ test('existing generic goal review displays names and teams recognized by Gemini
   const field=label=>fields.find(row=>row.children[0]?.textContent===label);
   assert.equal(field('得点者（ゴール）')?.children[1]?.value,'若さん');
   assert.equal(field('アシスト者')?.children[1]?.value,'野田さん');
-  assert.equal(field('対戦カード')?.children[1]?.value,'チーム3対4');
+  assert.equal(find(dom.goalStatsEditor,'goal-review-matchup')?.textContent,'チーム3対4');
   assert.equal(dom.goalStatsList.children.length,1);
  }finally{await restore()}
 });
