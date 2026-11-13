@@ -1811,6 +1811,7 @@ const ssNames=initAnalysisNames(state,{onChange:()=>goalReview.refresh()});
 $('ssInlinePreview')?.addEventListener('click',async()=>{
  const button=$('ssInlinePreview'),status=$('ssInlineStatus'),summary=$('ssInlineSummary'),matches=$('ssInlineMatches');
  button.disabled=true;matches.hidden=true;matches.replaceChildren();
+ const registration=document.getElementById('ssOpenRegistration');if(registration)registration.hidden=true;
  try{
   const {confirmedGoalExport,createGoalDrafts}=await import('./goal-stats.mjs?v=source-matchup5');
   const {prepareGoalRows}=await import('./sposched-review-core.mjs');
@@ -1852,6 +1853,8 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    matches.append(item);
   }
   matches.hidden=false;
+  const registration=document.getElementById('ssOpenRegistration');
+  if(registration)registration.hidden=false;
   summary.textContent='SS：'+(snapshot.eventName||'選択中イベント')+' ／ '+rows.length+'ゴール';
   status.textContent=errors.length?errors.slice(0,4).join(' ／ ')+(errors.length>4?' ほか'+(errors.length-4)+'件':''):
    '登録内容を確認しました。SSにはまだ送信していません。試合結果・重複の最終照合は未実装です。';
