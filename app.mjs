@@ -1838,17 +1838,31 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   const rows=prepareGoalRows(goals,snapshot);
   const errors=[];
   const counts=new Map();
+  const computedScores=new Map();
+  const normalizedTeam=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/\\s/g,'').replace(/^チーム/,'team').replace(/^(?:team)?(\\d+)$/,'team$1');
   for(const [i,row] of rows.entries()){
    if(!row.seq||!snapshot.matches.some(m=>m.seq===row.seq))errors.push('ゴール'+(i+1)+'：試合を特定できません');
    if(!row.scorer)errors.push('ゴール'+(i+1)+'：得点者が未照合です');
    if(!['named','none'].includes(row.assistMode)||(row.assistMode==='named'&&!row.assist))
     errors.push('ゴール'+(i+1)+'：アシストを確認してください');
    if(row.seq)counts.set(row.seq,(counts.get(row.seq)||0)+1);
+   // Count only roster-verified goals against an official, known fixture.
+   const fixture=snapshot.matches.find(m=>m.seq===row.seq);
+   const team=row.scorer?snapshot.playerTeam?.get(row.scorer):'';
+   if(fixture?.leftTeam&&fixture?.rightTeam&&team){
+    const side=normalizedTeam(team)===normalizedTeam(fixture.leftTeam)?'left':
+     normalizedTeam(team)===normalizedTeam(fixture.rightTeam)?'right':'';
+    if(side){const score=computedScores.get(row.seq)||{left:0,right:0};score[side]++;computedScores.set(row.seq,score);}
+    else errors.push('ゴール'+(i+1)+'：所属チームが対戦カードと一致しません');
+   }
+   else if(row.scorer&&fixture?.leftTeam&&fixture?.rightTeam)
+    errors.push('ゴール'+(i+1)+'：所属チームを確認できません');
   }
   for(const fixture of snapshot.matches){
    const item=document.createElement('p');
    item.textContent='第'+fixture.seq+'試合 '+(fixture.leftTeam||'?')+' vs '+(fixture.rightTeam||'?')+
-    '　'+(counts.get(fixture.seq)||0)+'ゴール';
+    '　'+(counts.get(fixture.seq)||0)+'ゴール'+
+    (computedScores.has(fixture.seq)?' ／ 推定 '+computedScores.get(fixture.seq).left+'−'+computedScores.get(fixture.seq).right:'');
    matches.append(item);
   }
   matches.hidden=false;
