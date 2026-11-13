@@ -108,7 +108,7 @@ export function normalizeSpoSnapshot(raw){
   if(ref.player_id)playerIds.set(name,ref.player_id);
   if(ref.user_id)memberIds.set(name,ref.user_id);
  }
- return {eventId,eventName,matchFormat:string(obj.event?.match_format||''),matches,players,roster,playerTeam,rosterSource,
+ return {eventId,eventName,matchFormat:string(obj.match_format||obj.event?.match_format||input.match_format||''),matches,players,roster,playerTeam,rosterSource,
   ...(playerIds.size?{playerIds}:{}),
   ...(memberIds.size?{memberIds}:{})};
 }
@@ -529,7 +529,7 @@ export function validateFourTeamBracket(snapshot,scoreRows){
   const selected=[row.leftTeam,row.rightTeam].filter(Boolean);
   // Score rows may omit the organizer's matchup. Do not substitute waiting
   // fixture sides and silently declare the user's matchup verified.
-  if(selected.length!==2)continue;
+  if(selected.length!==2)return '試合 #'+seq+' の対戦カードが未確定です。登録前に確認してください';
   if(selected.map(norm).sort().join('|')!==expected.map(norm).sort().join('|'))
    return '試合 #'+seq+' の対戦カードが準決勝の結果と一致しません。入力：'+
     selected.join(' vs ')+'／結果から導かれる対戦：'+expected.join(' vs ');
