@@ -50,3 +50,12 @@ test('editing both team names does not silently confirm an AI matchup',()=>{
  const s=snapshot();
  assert.deepEqual(selectedFixtureTeams({teamA:'Team 1',teamB:'Team 2',userEditedGoalFields:['teamA','teamB']},s,3),[]);
 });
+
+test('read-only dropdown uses confirmed video teams even when stale SS fixture has different sides',()=>{
+ const s=snapshot();
+ s.matches[0].leftTeam='Team 1';s.matches[0].rightTeam='Team 3';
+ const goal={teamA:'2',teamB:'3',matchupConfirmed:true};
+ assert.deepEqual(selectedFixtureTeams(goal,s,3),[]);
+ assert.deepEqual(fixtureRosterNames(s,3,goal),['Bob','Carol']);
+ assert.deepEqual(fixturePeople(s,3,goal),[]);
+});
