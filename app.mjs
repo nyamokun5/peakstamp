@@ -85,10 +85,32 @@ const workflow=initWorkflowSteps({
   sceneReplayMedia.dispose();
  }
 });
+function showMatchupReview(){
+ workflow.setStage('analysis',{scroll:false});
+ const list=$('sourceList');
+ let next=document.getElementById('matchupReviewNext');
+ if(!next){
+  next=document.createElement('button');next.id='matchupReviewNext';
+  next.type='button';next.textContent='ゴールを確認';
+  next.addEventListener('click',()=>{
+   // Source edits are saved and goal drafts are rebuilt before navigation.
+   syncSources();
+   workflow.setStage('edit',{scroll:false});
+   $('goalStatsPanel').scrollIntoView({behavior:'smooth',block:'start'});
+   coaching.showGoalIntro();
+  });
+  list.after(next);
+ }
+ next.hidden=false;
+ list.scrollIntoView({behavior:'smooth',block:'start'});
+ const blank=state.sources.filter(s=>{const m=videoMatchup(s,window.localStorage);return !m.teamA||!m.teamB;}).length;
+ next.textContent=blank?'ゴールを確認（未入力 '+blank+'試合）':'ゴールを確認';
+}
 const coaching=initJourneyCoach({
  counts:()=>analysisCounts(state.sources,state.sources.flatMap(src=>
   createGoalDrafts(src,window.localStorage).items.map(item=>({item})))),
  actions:{
+  reviewMatchups:()=>showMatchupReview(),
   goAnalysis:()=>{workflow.setStage('analysis',{scroll:false});$('geminiPrimaryPanel').scrollIntoView({behavior:'smooth',block:'start'});},
   goGoals:()=>{workflow.setStage('edit',{scroll:false});$('goalStatsPanel').scrollIntoView({behavior:'smooth',block:'start'});},
   showGoalList:()=>{$('goalQueueAll').click();$('goalStatsList').scrollIntoView({behavior:'smooth',block:'start'});},
@@ -301,6 +323,8 @@ function renderSourceList() {
         error('loadError','対戦チームを保存できませんでした。');return;
       }
       error('loadError','');syncSources();
+      const next=document.getElementById('matchupReviewNext');
+      if(next&&!next.hidden){const blank=state.sources.filter(s=>{const m=videoMatchup(s,window.localStorage);return !m.teamA||!m.teamB;}).length;next.textContent=blank?'ゴールを確認（未入力 '+blank+'試合）':'ゴールを確認';}
     });
     matchupLabel.append(matchupInput);
     // At import the organizer needs to match the clip to its match. Show the
