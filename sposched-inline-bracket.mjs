@@ -1,3 +1,4 @@
+import {scorerRosterError} from './sposched-inline-scorer-diagnostic.mjs';
 /** Pure, read-only first-round outcome calculation for a four-team bracket.
  * The official SS roster supplies team membership. A draw requires a human
  * decision and must never be silently treated as a winner.
@@ -16,8 +17,8 @@ export function inferFirstRoundBracket(snapshot, rows) {
  for (const [i,row] of rows.entries()) {
   if (row.include===false || ![1,2].includes(Number(row.seq))) continue;
   const fixture=fixtures.get(Number(row.seq));
-  if (!row.scorer || !snapshot.playerTeam?.has(row.scorer))
-   throw Error('ゴール'+(i+1)+'：得点者がSS名簿にありません');
+  const scorerError=scorerRosterError(row,snapshot,i);
+  if(scorerError)throw Error(scorerError);
   if (!['none','named'].includes(row.assistMode) ||
       (row.assistMode==='named' && !snapshot.playerTeam?.has(row.assist)))
    throw Error('ゴール'+(i+1)+'：アシストが未確定です');
