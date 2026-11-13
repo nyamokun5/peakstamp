@@ -1,3 +1,4 @@
+import {scorerRosterError} from './sposched-inline-scorer-diagnostic.mjs';
 /** Pure tournament score projection. No network calls or SS mutations.
  * First-round outcomes establish the third-place and final opponents.
  * A tied knockout game needs a human winner decision.
@@ -23,8 +24,8 @@ export function projectFourMatchTournament(snapshot,rows){
    if(seen.has(key))throw Error('同じ動画ゴールが重複しています');
    seen.add(key);
   }
-  if(!row.scorer||!snapshot.playerTeam?.has(row.scorer))
-   throw Error('ゴール'+(index+1)+'：得点者がSS名簿にありません');
+  const scorerError=scorerRosterError(row,snapshot,index);
+  if(scorerError)throw Error(scorerError);
   if(!['named','none'].includes(row.assistMode)||
      (row.assistMode==='named'&&!snapshot.playerTeam?.has(row.assist)))
    throw Error('ゴール'+(index+1)+'：アシストが未確定です');
