@@ -1883,6 +1883,38 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    note.textContent='第3・第4試合：引き分けの勝者を指定してください';
    matches.append(note);
   }
+  if(!registrationGate){
+   const register=document.createElement('button');
+   register.type='button';register.className='whisper-run';
+   register.textContent='TESTに4試合を登録';
+   register.addEventListener('click',async()=>{
+    register.disabled=true;
+    try{
+     const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
+     assertCurrentInlineEvent(snapshot,state.ssNameContext);
+     // Re-read the current confirmed goals. An edit after preview must
+     // invalidate the plan, never silently submit the old rows.
+     const fresh=confirmedGoalExport(state.sources,window.localStorage);
+     if(JSON.stringify(fresh)!==JSON.stringify(goals))
+      throw Error('ゴールが変更されました。登録前チェックをやり直してください');
+     const {buildInlineWorkerPlan}=await import('./sposched-inline-plan.mjs');
+     const {startInlineBatchOnce}=await import('./sposched-inline-dispatch.mjs');
+     const {plan}=buildInlineWorkerPlan({snapshot,rows,requestId:crypto.randomUUID()});
+     status.textContent='TEST登録を送信しています。画面を閉じないでください';
+     const result=await startInlineBatchOnce({
+      plan,storage:window.localStorage,
+      inspect:eventId=>ssNames.inspectBatch(eventId),
+      send:payload=>ssNames.startBatch(payload)
+     });
+     status.textContent='TEST登録ジョブを受け付けました（'+
+      (result.status||'状態確認中')+'）。SSへの反映は完了確認が必要です';
+    }catch(error){
+     status.textContent=error.message||String(error);
+     register.disabled=false;
+    }
+   });
+   matches.append(register);
+  }
   matches.hidden=false;
   summary.textContent='SS：'+(snapshot.eventName||'選択中イベント')+' ／ '+rows.length+'ゴール';
   status.textContent=(registrationGate||'4試合の登録データを検証しました。')+' ／ SSへの書き込みは未実施です。';
