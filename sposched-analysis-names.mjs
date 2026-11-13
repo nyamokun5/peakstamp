@@ -62,6 +62,14 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
   if(!response.ok)throw Error(data?.error?.message||'Worker登録エラー '+response.status+'。再送しないでください');
   return data;
  };
+ const refreshOfficial=async eventId=>{
+  if(!uuid.test(eventId)||event.value!==eventId)
+   throw Error('SSイベントが変更されました');
+  const snapshot=normalizeSpoSnapshot(await read('/snapshot?event_id='+encodeURIComponent(eventId)));
+  if(snapshot.eventId!==eventId||snapshot.rosterSource!=='official-current-event-teams')
+   throw Error('SSの正式な最新試合情報を確認できません');
+  return snapshot;
+ };
  const appendSecondRound=async plan=>{
   const password=token.value.trim();
   if(!password||plan?.confirm!=='TEST-ONLY BATCH APPEND')
@@ -137,5 +145,5 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  connect.addEventListener('click',load);
  retry.addEventListener('click',()=>refresh());
  if(token.value)load();
- return {refresh,inspectBatch,startBatch,appendSecondRound};
+ return {refresh,inspectBatch,startBatch,appendSecondRound,refreshOfficial};
 }
