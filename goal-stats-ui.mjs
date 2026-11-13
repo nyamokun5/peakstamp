@@ -1,4 +1,4 @@
-import {fixturePeople as officialFixturePeople} from './sposched-analysis-identity.mjs';
+import {fixtureRosterNames} from './sposched-analysis-identity.mjs';
 import {phoneticCandidates} from './sposched-alias-auto-match.mjs';
 import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
@@ -289,7 +289,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     else if(!fixture)ssIssues.push('SSの第'+(item.matchSeq||'?')+'試合を特定できません');
     else{
      
-     if(!officialFixturePeople(snap,item.matchSeq,item).length)
+     if(!fixtureRosterNames(snap,item.matchSeq,item).length)
       ssIssues.push('SS第'+item.matchSeq+'試合の対戦チームと正式選手名簿を確認してください');
      else if(snap.rosterSource!=='official-current-event-teams')
       ssIssues.push('SSの正式なイベント選手名簿を取得できません');
@@ -360,7 +360,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const snapshot=state.ssNameContext?.snapshot;
    // Keep selection within the confirmed fixture; an unrelated team's player
    // must not become a valid scorer merely by being in the event roster.
-   let names=fixturePeople(snapshot,item.matchSeq,item);
+   let names=fixtureRosterNames(snapshot,item.matchSeq,item);
    if(field==='assist')names=names.filter(name=>name!==item.scorer);
    const suggestions=phoneticCandidates(field==='scorer'?item.rawScorer:item.rawAssist,
     state.ssNameContext?.aliases||[],snapshot,item.matchSeq);
@@ -442,7 +442,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   if(state.ssNameEnabled&&!item.ssIdentity?.scorer){
    const snapshot=state.ssNameContext?.snapshot;
    const message=!snapshot?'SS未接続：最初の動画登録画面でTESTイベントに接続してください。':
-    !fixturePeople(snapshot,item.matchSeq,item).length?'SS名簿に該当する試合・選手がありません。TESTイベントと試合番号を確認してください。':
+    !fixtureRosterNames(snapshot,item.matchSeq,item).length?'SS名簿に該当する試合・選手がありません。TESTイベントと試合番号を確認してください。':
     !item.rawScorer?'音声から得点者名を検出できませんでした。':
     '「'+String(item.rawScorer).slice(0,50)+'」をSSの正式名・別名辞書と照合できませんでした。';
    fields.append(make('p','fine-print',message));
