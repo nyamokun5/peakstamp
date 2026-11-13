@@ -20,27 +20,28 @@ function setup(values={goals:3,highlights:5}){
  };
  const called=[];
  const callbacks=Object.fromEntries([
-  'goAnalysis','goGoals','showGoalList','goHighlights','reviewAllHighlights',
+  'goAnalysis','goGoals','reviewMatchups','showGoalList','goHighlights','reviewAllHighlights',
   'goExport','showExportPreview','saveHSJson'
  ].map(name=>[name,()=>called.push(name)]));
  const coach=initJourneyCoach({document:doc,counts:()=>values,actions:callbacks});
  return {coach,ids,called,doc};
 }
-test('analysis success tells actual goal/highlight counts and goes through first goal guide',()=>{
+test('analysis success routes to matchup review before goal guide',()=>{
  const x=setup();
  x.coach.analysisFinished({success:true});
  assert.equal(x.ids.journeyDialog.hidden,false);
  assert.match(x.ids.journeyDialogBody.textContent,/ゴール 3件 ／ ハイライト 5件/);
- assert.match(x.ids.journeyDialogPrimary.textContent,/ゴール一覧/);
+ assert.match(x.ids.journeyDialogPrimary.textContent,/対戦カードを確認/);
  x.ids.journeyDialogPrimary.click();
- assert.deepEqual(x.called,['goGoals']);
+ assert.deepEqual(x.called,['reviewMatchups']);
+ assert.equal(x.ids.journeyDialog.hidden,true);
+ x.coach.showGoalIntro();
  assert.match(x.ids.journeyDialogTitle.textContent,/ゴールを確認/);
- assert.match(x.ids.journeyDialogBody.textContent,/画角と切り取り秒数/);
  assert.match(x.ids.journeyDialogBody.textContent,/得点者・アシスト/);
- assert.match(x.ids.journeyDialogBody.textContent,/得点情報を確定/);
  x.ids.journeyDialogPrimary.click();
- assert.deepEqual(x.called,['goGoals','showGoalList']);
- assert.equal(x.coach.showGoalIntro(),false,'only the first goal visit shows instructions');
+ assert.deepEqual(x.called,['reviewMatchups','showGoalList']);
+ assert.equal(x.coach.showGoalIntro(),false);
+
 });
 test('failed and partial Gemini scans show actionable alternatives',()=>{
  const x=setup({goals:2,highlights:1});
