@@ -245,7 +245,7 @@ function syncSources({skipGoalReviewRefresh=false}={}) {
   if (state.bins) drawResults();
   else updateMontageEditor(state);
   renderSourceList();
-  workflow.autoAdvance({busy:state.geminiProcessing||state.working||state.exporting});
+  workflow.autoAdvance({busy:state.geminiProcessing||state.working||state.exporting||Boolean(document.getElementById('matchupReviewNext')&&!document.getElementById('matchupReviewNext').hidden)});
   guide.update({hasVideo:state.sources.length>0,hasResults:!!state.bins});
 }
 function renderSourceList() {
