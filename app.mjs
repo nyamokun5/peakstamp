@@ -1904,7 +1904,13 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
      const result=await startInlineBatchOnce({
       plan,storage:window.localStorage,
       inspect:eventId=>ssNames.inspectBatch(eventId),
-      send:payload=>ssNames.startBatch(payload)
+      send:payload=>ssNames.startBatch(payload),
+      verifyCurrent:()=>{
+       assertCurrentInlineEvent(snapshot,state.ssNameContext);
+       const current=confirmedGoalExport(state.sources,window.localStorage);
+       if(JSON.stringify(current)!==JSON.stringify(goals))
+        throw Error('ゴールが変更されました。登録前チェックをやり直してください');
+      }
      });
      status.textContent='TEST登録ジョブを受け付けました（'+
       (result.status||'状態確認中')+'）。SSへの反映は完了確認が必要です';
