@@ -1842,6 +1842,12 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   let registrationGate='';
   try{
    validateInlineBatchReadiness(snapshot,rows);
+   // Dry-run the exact Worker contract before presenting a ready state.
+   // No request ID is persisted and no network mutation is performed here.
+   const {buildInlineWorkerPlan}=await import('./sposched-inline-plan.mjs');
+   const {plan}=buildInlineWorkerPlan({snapshot,rows,requestId:crypto.randomUUID()});
+   if(plan.operations.filter(op=>op.action==='finish').length!==4)
+    throw Error('4試合の登録計画が不完全です');
    const {decideInlineBatchAdmission}=await import('./sposched-inline-admission.mjs');
    const workerJob=await ssNames.inspectBatch(snapshot.eventId);
    const localKey='peakstamp:test:worker-batch:'+snapshot.eventId;
@@ -1879,7 +1885,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   }
   matches.hidden=false;
   summary.textContent='SS：'+(snapshot.eventName||'選択中イベント')+' ／ '+rows.length+'ゴール';
-  status.textContent=(registrationGate||'4試合の登録前チェックに合格しました。')+' ／ SSへの書き込みは未実施です。';
+  status.textContent=(registrationGate||'4試合の登録データを検証しました。')+' ／ SSへの書き込みは未実施です。';
  }catch(error){status.textContent=error.message||String(error)}
  finally{button.disabled=false}
 });
