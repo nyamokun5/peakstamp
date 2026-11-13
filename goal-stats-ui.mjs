@@ -9,7 +9,7 @@ import {sourceDisplayName} from './match-label.mjs?v=match1';
 import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
  confirmedGoalExport,goalSourceKey,actualGoalTime,suspectedDuplicateGoalIds} from './goal-stats.mjs?v=source-matchup5';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
-import {collectGoalQueue,nextGoalAfterDecision,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
+import {collectGoalQueue,nextGoalAfterDecision,goalNeedsVideoReview} from './goal-review-queue.mjs?v=sequential2';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=firsttap1';
 import {createGoalSceneControls} from './goal-scene-editor.mjs?v=goalnative2';
 
