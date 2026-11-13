@@ -456,7 +456,15 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     !fixtureRosterNames(snapshot,item.matchSeq,item).length?'SS名簿に該当する試合・選手がありません。TESTイベントと試合番号を確認してください。':
     !item.rawScorer?'音声から得点者名を検出できませんでした。':
     '「'+String(item.rawScorer).slice(0,50)+'」をSSの正式名・別名辞書と照合できませんでした。';
+   const teams=[...new Set(snapshot?.playerTeam?.values?.()||[])];
+   const fixture=snapshot?.matches?.find(m=>Number(m.seq)===Number(item.matchSeq));
+   const diagnostics='診断：名簿 '+(snapshot?.players?.length||0)+'人 / '+
+    (snapshot?.rosterSource||'名簿未取得')+' / SS第'+(item.matchSeq||'?')+'試合 '+
+    (fixture?((fixture.leftTeam||'未定')+' vs '+(fixture.rightTeam||'未定')):'枠なし')+
+    ' / SSチーム ['+teams.join(', ')+'] / 動画 '+(item.teamA||'?')+' vs '+(item.teamB||'?')+
+    ' / 確認 '+(item.matchupConfirmed===true?'済':'未');
    fields.append(make('p','fine-print',message));
+   fields.append(make('p','fine-print',diagnostics));
   }
   if(state.ssNameEnabled){
    const decision=(field,label)=>{
