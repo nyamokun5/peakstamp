@@ -457,31 +457,20 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    // One explicit review action: persist valid scorer/assist metadata and
    // keep the clip. Never send data to SpoSched from this action.
    const current=latestGoal(entry);
-   const error=validateGoal(current);
-   if(error){
-    scoreDetails.open=true;
-    scoreDetailsOpen=true;
-    say('得点情報を確認してください：'+error);
-    return;
-   }
-   if(state.ssNameEnabled===true && !current.ssIdentity?.scorer){
-    scoreDetails.open=true;
-    scoreDetailsOpen=true;
-    say('SSの得点者を選択してください。');
-    return;
-   }
-   if(state.ssNameEnabled===true && current.assistStatus==='named' && !current.ssIdentity?.assist){
-    scoreDetails.open=true;
-    scoreDetailsOpen=true;
-    say('SSのアシスト者を選択してください。');
-    return;
-   }
+   // Video Keep is a video-only decision. SS scorer/assist verification
+   // must never block navigation to the next goal; registration validates later.
    const priorStatus=current.status,priorVerified=current.goalTimeVerified,priorConfirmed=current.confirmedAt;
    const priorAutoConfirmed=current.ssAutoConfirmed;
-   current.status='confirmed';
-   current.ssAutoConfirmed=false; // A deliberate video Keep is a human confirmation.
-   current.goalTimeVerified=true;
-   current.confirmedAt=current.confirmedAt||new Date().toISOString();
+   const valid=validateGoal(current)===null || validateGoal(current)==='';
+   const ssReady=state.ssNameEnabled!==true ||
+     (Boolean(current.ssIdentity?.scorer) &&
+      (current.assistStatus!=='named'||Boolean(current.ssIdentity?.assist)));
+   if(valid&&ssReady){
+    current.status='confirmed';
+    current.ssAutoConfirmed=false;
+    current.goalTimeVerified=true;
+    current.confirmedAt=current.confirmedAt||new Date().toISOString();
+   }
    write(source,goalData(source).items.map(x=>x.id===current.id?current:x));
    setVideoDecision(entry,'kept');
    const updated=latestGoal(entry);
