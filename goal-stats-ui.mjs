@@ -9,7 +9,7 @@ import {sourceDisplayName} from './match-label.mjs?v=match1';
 import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
  confirmedGoalExport,goalSourceKey,actualGoalTime,suspectedDuplicateGoalIds} from './goal-stats.mjs?v=source-matchup5';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
-import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
+import {collectGoalQueue,nextGoalAfterDecision,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=firsttap1';
 import {createGoalSceneControls} from './goal-scene-editor.mjs?v=goalnative2';
 
@@ -206,14 +206,14 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const wasUnjudged=previous!=='kept'&&previous!=='rejected';
   const rows=queue();
   const lastGoal=rows.filter(row=>row.item.status!=='excluded').at(-1);
-  const next=nextUnreviewedGoalVideo(rows,entry.key);
+  const next=nextGoalAfterDecision(rows,entry.key,{wasUnjudged});
   if(next){
    // Switching is performed within the original Keep/Reject tap so iOS
    // can authorize playback of the next MOV. The main app no longer
    // synchronously refreshes this editor during the decision callback.
    focusActive(next,{autoplay:true,scroll:true});
    say((decision==='kept'?'動画をキープ':'動画を不採用')+
-    'にしました。次の未判断ゴールへ進みました。');
+    'にしました。次のゴールへ進みました。');
   }else{
    // Distinguish a completed one-goal queue from a broken auto-advance:
    // no new candidate exists until the user adds or detects another goal.
