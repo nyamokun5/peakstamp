@@ -34,3 +34,28 @@ export function buildInlineFirstRoundPlan({snapshot,rows,requestId}={}){
   throw Error('準決勝2試合の終了操作がありません');
  return {plan:{...plan,layout_mode:'four-knockout-staged-v1',operations}};
 }
+
+/** Build the continuation only after the persisted Worker confirms phase one.
+ * No earlier operations are ever included in the append request.
+ */
+export function buildInlineSecondRoundPlan({snapshot,rows,workerJob}={}){
+ if(workerJob?.layout_mode!=='four-knockout-staged-v1'||
+    workerJob.status!=='awaiting_second_round'||
+    workerJob.event_id!==snapshot?.eventId||
+    workerJob.cursor!==workerJob.total)
+  throw Error('準決勝の完了記録をWorkerから確認してください');
+ const laterRows=(rows||[]).filter(r=>[3,4].includes(Number(r?.seq)));
+ const decisions=quickGoalDecisions(snapshot,laterRows);
+ const invalid=decisions.find(d=>!['ready','waiting','skipped'].includes(d.state));
+ if(invalid)throw Error('後半ゴール'+(invalid.index+1)+'：'+invalid.reason);
+ // This uses the canonical plan validator, but only later operations are
+ // submitted; official fixture and player checks remain in the Worker.
+ const plan=prepareWorkerTournament({
+  snapshot,rows:laterRows,decisions,requestId:workerJob.request_id
+ });
+ const operations=plan.operations.filter(op=>op.seq>=3);
+ if(operations.filter(op=>op.action==='finish').length!==2)
+  throw Error('後半2試合の終了操作がありません');
+ return {event_id:snapshot.eventId,request_id:workerJob.request_id,
+  confirm:'TEST-ONLY BATCH APPEND',operations};
+}
