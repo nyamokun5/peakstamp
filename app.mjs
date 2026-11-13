@@ -1883,7 +1883,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    const firstRound=inspectFirstRound(snapshot,rows);
    const note=document.createElement('p');
    note.textContent='第1・第2試合：'+firstRound.firstRows.length+
-    'ゴールの登録前チェック完了（先行送信は未実装）';
+    'ゴールの登録前チェック完了';
    matches.append(note);
   }catch(e){
    const note=document.createElement('p');
@@ -1947,8 +1947,11 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    const {decideInlineBatchAdmission}=await import('./sposched-inline-admission.mjs');
    const workerJob=await ssNames.inspectBatch(snapshot.eventId);
    let localJob;
-   try{localJob=JSON.parse(localStorage.getItem('peakstamp:test:worker-batch:'+snapshot.eventId)||'null');}
-   catch{throw Error('端末の登録履歴を確認できません');}
+   let storedJob;
+   try{storedJob=localStorage.getItem('peakstamp:test:worker-batch:'+snapshot.eventId);}
+   catch{throw Error('Safariの端末保存が利用できません。プライベートブラウズ・サイトデータの設定を確認してください');}
+   try{localJob=storedJob?JSON.parse(storedJob):null;}
+   catch{throw Error('端末の登録履歴が破損しています。再送せずSS登録状況を確認してください');}
    const admission=decideInlineBatchAdmission({eventId:snapshot.eventId,workerJob,localJob});
    if(!admission.allowed)throw Error(admission.reason);
    const startFirst=document.createElement('button');
