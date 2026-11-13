@@ -1836,8 +1836,8 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   }
   if(!goals.goals.length)throw Error('SS登録対象の確定済みゴールがありません。');
   const rows=prepareGoalRows(goals,snapshot);
-  const {inferFirstRoundBracket}=await import('./sposched-inline-bracket.mjs');
-  const bracket=inferFirstRoundBracket(snapshot,rows);
+  const {projectFourMatchTournament}=await import('./sposched-inline-tournament.mjs');
+  const bracket=projectFourMatchTournament(snapshot,rows);
   const errors=[];
   const counts=new Map();
   const computedScores=new Map();
@@ -1880,10 +1880,16 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    ?'3位決定戦：'+bracket.thirdPlace.join(' vs ')+' ／ 決勝：'+bracket.final.join(' vs ')
    :'第1・第2試合に引き分けがあります。勝者確定後に対戦カードを算出します。';
   matches.append(pairing);
+  if(bracket.knockout)for(const match of bracket.knockout){
+   const item=document.createElement('p');
+   item.textContent='第'+match.seq+'試合：'+match.leftTeam+' '+match.left+'−'+match.right+
+    ' '+match.rightTeam+(match.requiresDecision?' ／ 引き分け・勝者指定が必要':' ／ 勝者 '+match.winner);
+   matches.append(item);
+  }
   matches.hidden=false;
   summary.textContent='SS：'+(snapshot.eventName||'選択中イベント')+' ／ '+rows.length+'ゴール';
   status.textContent=errors.length?errors.slice(0,4).join(' ／ ')+(errors.length>4?' ほか'+(errors.length-4)+'件':''):
-   (bracket.ready?'第1・第2試合の勝敗と決勝・3位決定戦を算出しました。':'引き分けの勝者指定が必要です。')+' SSへの書き込みは未実施です。重複・正式試合IDの最終照合は未実装です。';
+   (bracket.complete?'4試合のスコア・勝敗を算出しました。':bracket.ready?'第3・第4試合に引き分けがあります。勝者指定が必要です。':'第1・第2試合に引き分けがあります。勝者指定が必要です。')+' SSへの書き込みは未実施です。重複・正式試合IDの最終照合は未実装です。';
  }catch(error){status.textContent=error.message||String(error)}
  finally{button.disabled=false}
 });
