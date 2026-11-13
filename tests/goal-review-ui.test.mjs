@@ -120,7 +120,7 @@ function find(node,cls){
  }
  return null;
 }
-test('one-tap keep never confirms a goal with a missing scorer',async()=>{
+test('one-tap keep saves video but does not confirm a goal with a missing scorer',async()=>{
  const {dom,one,storage,restore}=setup();
  try{
   const goal=createGoalDrafts(one,storage).items[0];
@@ -132,7 +132,7 @@ test('one-tap keep never confirms a goal with a missing scorer',async()=>{
    onKeepClip:()=>{keeps++;return true;}
   });
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
-  assert.equal(keeps,0,'invalid score cannot create a kept clip');
+  assert.equal(keeps,1,'video keep must not depend on score validation');
   assert.notEqual(createGoalDrafts(one,storage).items[0].status,'confirmed');
  }finally{await restore()}
 });
