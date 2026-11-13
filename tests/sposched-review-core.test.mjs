@@ -780,7 +780,7 @@ test('SS identity: waiting fixture resolves roster without match ID but write id
  const resolved=resolveAnalysisGoal(goal,{snapshot:snap,aliases:[]});
  assert.equal(resolved.status,'confirmed');
  assert.equal(resolved.ssIdentity.scorer.name,'Yohei Tyler Takasaki');
- assert.ok(verifiedAnalysisPerson(resolved,snap,3,'scorer'));
+ assert.equal(verifiedAnalysisPerson(resolved,snap,3,'scorer'),null);
  const alreadyOfficial={...goal,rawScorer:'たけざき',userEditedGoalFields:[]};
  const fromDisplayed=resolveAnalysisGoal(alreadyOfficial,{snapshot:snap,aliases:[]});
  // An official name already in the goal field is not a reason to force
