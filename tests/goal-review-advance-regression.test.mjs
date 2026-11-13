@@ -2,25 +2,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {nextGoalAfterDecision,nextUnreviewedGoalVideo} from '../goal-review-queue.mjs';
 const row=(key,videoDecision=null,status='draft')=>({key,item:{videoDecision,status}});
-test('Keep advances to next unreviewed goal even when earlier ones were kept',()=>{
- const rows=[row('a','kept','confirmed'),row('b','kept','confirmed'),row('c'),row('d')];
- assert.equal(nextGoalAfterDecision(rows,'b',{wasUnjudged:true})?.key,'c');
+test('Keep proceeds in strict numbered order despite cached kept goals',()=>{
+ const rows=[row('1','kept','confirmed'),row('2','kept','confirmed'),row('3','kept','confirmed'),row('4'),row('5')];
+ for(let i=1;i<5;i++)assert.equal(nextGoalAfterDecision(rows,String(i))?.key,String(i+1));
+ assert.equal(nextGoalAfterDecision(rows,'5'),null);
 });
-test('re-Keep of already reviewed goal advances to next sequential video',()=>{
- const rows=[row('a','kept','confirmed'),row('b','kept','confirmed'),row('c','kept','confirmed')];
- assert.equal(nextGoalAfterDecision(rows,'a',{wasUnjudged:false})?.key,'b');
- assert.equal(nextGoalAfterDecision(rows,'b',{wasUnjudged:false})?.key,'c');
- assert.equal(nextGoalAfterDecision(rows,'c',{wasUnjudged:false}),null);
+test('Keep advances past already judged next item, not the next pending item',()=>{
+ const rows=[row('1','kept'),row('2','rejected'),row('3','kept'),row('4')];
+ assert.equal(nextGoalAfterDecision(rows,'1')?.key,'2');
+ assert.equal(nextGoalAfterDecision(rows,'2')?.key,'3');
+ assert.equal(nextGoalAfterDecision(rows,'3')?.key,'4');
 });
-test('newly completed final goal ends review, no loop back',()=>{
- const rows=[row('a','kept','confirmed'),row('b','kept','confirmed')];
- assert.equal(nextGoalAfterDecision(rows,'b',{wasUnjudged:true}),null);
+test('first time Keep on goal four advances to goal five even if goal five was kept',()=>{
+ const rows=[row('1','kept'),row('2','kept'),row('3','kept'),row('4','kept'),row('5','kept')];
+ assert.equal(nextGoalAfterDecision(rows,'4',{wasUnjudged:true})?.key,'5');
 });
-test('current video is never returned as its own next pending goal',()=>{
- assert.equal(nextUnreviewedGoalVideo([row('a')],'a'),null);
- assert.equal(nextUnreviewedGoalVideo([row('a'),row('b')],'a')?.key,'b');
+test('last goal completes without looping',()=>{
+ const rows=[row('1','kept'),row('2','kept')];
+ assert.equal(nextGoalAfterDecision(rows,'2',{wasUnjudged:true}),null);
 });
-test('pending goals are preferred over already judged sequential videos',()=>{
- const rows=[row('a','kept'),row('b','kept'),row('c'),row('d','kept')];
- assert.equal(nextGoalAfterDecision(rows,'a',{wasUnjudged:false})?.key,'c');
+test('excluded rows are not navigated into',()=>{
+ const rows=[row('1','kept'),row('2',null,'excluded'),row('3')];
+ assert.equal(nextGoalAfterDecision(rows,'1')?.key,'3');
+});
+test('current video is never its own next pending goal',()=>{
+ assert.equal(nextUnreviewedGoalVideo([row('1')],'1'),null);
 });
