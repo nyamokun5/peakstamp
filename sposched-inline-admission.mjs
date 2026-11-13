@@ -6,6 +6,8 @@ const blocked=new Set(['running','paused','needs_decision','blocked','completed'
 export function decideInlineBatchAdmission({eventId,workerJob,localJob}={}){
  if(!eventId)return {allowed:false,reason:'SSイベントが未確定です'};
  if(workerJob===undefined)return {allowed:false,reason:'Workerのジョブ状態が未確認です。再送せず状態を取得してください'};
+ if(workerJob===null&&localJob?.request_id)
+  return {allowed:false,reason:'端末に登録履歴があります。Workerに記録がなくても再送できません',requestId:localJob.request_id};
  for(const [label,job] of [['Worker',workerJob],['端末',localJob]]){
   if(!job)continue;
   if(job.event_id&&job.event_id!==eventId)continue;
