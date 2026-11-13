@@ -16,3 +16,24 @@ export function buildInlineWorkerPlan({snapshot,rows,requestId}={}){
   throw Error('4試合の終了処理を生成できません');
  return {plan,tournament};
 }
+
+/** TEST-only phase-one plan: validate only semifinals, leaving later
+ * waiting-fixture goals untouched. Never dispatch from this pure function.
+ */
+export function buildInlineFirstRoundPlan({snapshot,rows,requestId}={}){
+ if(!snapshot?.eventId||!Array.isArray(rows))throw Error('SSイベントを再取得してください');
+ const firstRows=rows.filter(r=>[1,2].includes(Number(r?.seq)));
+ const decisions=quickGoalDecisions(snapshot,firstRows);
+ const invalid=decisions.find(d=>!['ready','skipped'].includes(d.state));
+ if(invalid)throw Error('準決勝ゴール'+(invalid.index+1)+'：'+invalid.reason);
+ const {plan}=(()=>{ 
+  // Canonical planner still requires four fixtures. Give it only the
+  // verified semifinal goals and discard the synthetic later finishes.
+  const p=prepareWorkerTournament({snapshot,rows:firstRows,decisions,requestId});
+  return {plan:p};
+ })();
+ const operations=plan.operations.filter(op=>op.seq<=2);
+ if(operations.filter(op=>op.action==='finish').length!==2)
+  throw Error('準決勝2試合の終了操作がありません');
+ return {plan:{...plan,layout_mode:'four-knockout-staged-v1',operations}};
+}
