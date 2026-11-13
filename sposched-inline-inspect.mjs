@@ -13,7 +13,7 @@ export async function inspectInlineBatchJob({eventId,postInspect}={}){
   return null;
  if(response?.status!==200||response?.body?.inspection_only!==true||
     response.body.event_id!==eventId.toLowerCase()||!UUID.test(response.body.request_id||'')||
-    !['running','paused','needs_decision','blocked','completed','failed'].includes(response.body.status))
+    !['running','paused','needs_decision','awaiting_second_round','blocked','completed','failed'].includes(response.body.status))
   throw Error('Workerの登録状態を検証できません。再送せず状態を確認してください');
  return response.body;
 }
