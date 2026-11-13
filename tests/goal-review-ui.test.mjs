@@ -241,8 +241,8 @@ test('goal preview has shared replay, pinch controls and colored trim/playhead i
   const labels=allLabels(dom.goalStatsEditor);
   assert.ok(labels.includes('得点者（ゴール）'));
   assert.ok(labels.includes('アシスト'));
-  assert.ok(labels.includes('対戦カード'));
-  assert.ok(labels.includes('SS試合番号（任意）'));
+  assert.ok(find(dom.goalStatsEditor,'goal-review-matchup'));
+  assert.ok(!labels.includes('SS試合番号（任意）'));
  }finally{await restore()}
 });
 function allLabels(root){
