@@ -800,6 +800,9 @@ test('pending placement goal keeps official roster name as unconfirmed review dr
  const raw=event();
  raw.matches.push({seq:3,title:'#3 third place',left_team:'Team1',right_team:'Team3',status:'waiting'});
  const snap=normalizeSpoSnapshot(raw);
+ snap.rosterSource='official-current-event-teams';
+ snap.memberIds=new Map([['Hiroyuki Kawata','00000001-0000-4000-8000-000000000001']]);
+ snap.playerIds=new Map([['Hiroyuki Kawata','00000002-0000-4000-8000-000000000002']]);
  const goal={id:'placement-1',source:{name:'third.mov'},matchSeq:3,
   teamA:'2',teamB:'4',matchupConfirmed:true,scorer:'Hiroyuki Kawata',
   assistStatus:'none',ssIdentity:{environment:'staging',eventId:snap.eventId,
