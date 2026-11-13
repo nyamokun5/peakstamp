@@ -35,12 +35,9 @@ export function nextUnreviewedGoalVideo(rows,currentKey){
    list.find((row,index)=>index<position&&row.key!==currentKey&&goalNeedsVideoReview(row.item))||null;
 }
 
-/** Revisiting a judged goal still advances to the next goal in sequence.
- * Pending videos always take priority; never loop back to the same row. */
-export function nextGoalAfterDecision(rows,currentKey,{wasUnjudged=false}={}){
- const pending=nextUnreviewedGoalVideo(rows,currentKey);
- if(pending)return pending;
- if(wasUnjudged)return null;
+/** Advance strictly in displayed goal order, regardless of cached decisions.
+ * A Keep/Reject tap must never jump over an already reviewed goal. */
+export function nextGoalAfterDecision(rows,currentKey){
  const list=(rows||[]).filter(row=>row?.item?.status!=='excluded');
  const index=list.findIndex(row=>row.key===currentKey);
  return index>=0&&index<list.length-1?list[index+1]:null;
