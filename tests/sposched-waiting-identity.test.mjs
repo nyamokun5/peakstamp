@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {selectedFixtureTeams,fixtureRosterNames,fixturePeople,verifiedAnalysisPerson} from '../sposched-analysis-identity.mjs';
+import {analysisFixtureAgrees,selectedFixtureTeams,fixtureRosterNames,fixturePeople,verifiedAnalysisPerson} from '../sposched-analysis-identity.mjs';
 
 const id=n=>String(n).padStart(8,'0')+'-0000-4000-8000-000000000001';
 const snapshot=()=>({
@@ -72,4 +72,12 @@ test('four-match waiting slot accepts confirmed roster identity without match UU
  assert.equal(verifiedAnalysisPerson(goal,ss,3,'scorer')?.name,'Alice');
  goal.ssIdentity.scorer.memberId=id(99);
  assert.equal(verifiedAnalysisPerson(goal,ss,3,'scorer'),null);
+});
+
+test('waiting placement has no official matchup to contradict a confirmed video pairing',()=>{
+ const match={seq:3,status:'waiting',leftTeam:'',rightTeam:'',matchId:id(9)};
+ assert.equal(analysisFixtureAgrees({teamA:'2',teamB:'4',matchupConfirmed:true},match),true);
+ assert.equal(analysisFixtureAgrees({teamA:'2',teamB:'4'},match),false);
+ assert.equal(analysisFixtureAgrees({teamA:'2',teamB:'4',matchupConfirmed:true},
+  {...match,status:'scheduled',leftTeam:'チーム1',rightTeam:'チーム3'}),false);
 });
