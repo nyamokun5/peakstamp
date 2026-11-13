@@ -1984,6 +1984,10 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
        return buildInlineSecondRoundPlan({snapshot:fresh,rows,workerJob:job});
       },
       append:payload=>ssNames.appendSecondRound(payload),
+      verifyFinished:async(job,fresh,previous)=>{
+       const {verifyCompletedWorkerSnapshot}=await import('./sposched-worker-batch.mjs');
+       verifyCompletedWorkerSnapshot(job,fresh,previous);
+      },
       verifyCurrent:()=>{
        assertCurrentInlineEvent(snapshot,state.ssNameContext);
        if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage))!==JSON.stringify(goals))
@@ -1991,7 +1995,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
       },
       onStatus:message=>{status.textContent=message;}
      });
-     status.textContent='4試合の登録ジョブを受け付けました（'+result.status+'）。完了確認が必要です';
+     status.textContent='TESTの4試合登録が完了しました';
     }catch(e){status.textContent=e.message||String(e);}
    });
    matches.append(startFirst);
