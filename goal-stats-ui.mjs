@@ -1,6 +1,6 @@
-import {fixtureRosterNames} from './sposched-analysis-identity.mjs';
+import {fixtureRosterNames} from './sposched-analysis-identity.mjs?v=ss-roster-debug-20261113';
 import {phoneticCandidates} from './sposched-alias-auto-match.mjs';
-import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs';
+import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs?v=ss-roster-debug-20261113';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
 /**
  * Unified, goal-first video review. All source files appear in one ordered
