@@ -319,20 +319,20 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     // never the selected official scorer/assist or the video decision.
     const skipKey=field==='scorer'?'scorer':'assist';
     const skipped=Boolean(item.aliasLearningSkipped?.[skipKey]);
-    const skip=make('button','quick-exception',skipped?'✓ 名寄せ登録しない':'名寄せ登録しない');
+    const skip=make('button','quick-exception',skipped?'✓ 覚えない':'覚えない');
     skip.type='button';skip.setAttribute('aria-pressed',String(skipped));
     skip.addEventListener('click',()=>{
      const current=latestGoal(entry);
      current.aliasLearningSkipped={...(current.aliasLearningSkipped||{}),[skipKey]:!current.aliasLearningSkipped?.[skipKey]};
      write(entry.source,goalData(entry.source).items.map(x=>x.id===current.id?current:x));
      render();
-     say(current.aliasLearningSkipped[skipKey]?'この呼び名は登録しません。選手の選択と動画キープは維持します。':'呼び名の登録を再び許可しました。');
+     say(current.aliasLearningSkipped[skipKey]?'この呼び名は覚えません。選手の選択と動画キープは維持します。':'この呼び名を覚えられるようにしました。');
     });
-    const learn=make('button','','呼び名を登録');learn.type='button';
+    const learn=make('button','','覚える');learn.type='button';
     learn.hidden=skipped;
     learn.addEventListener('click',async()=>{
      const current=latestGoal(entry);
-     if(current.aliasLearningSkipped?.[skipKey]){say('この呼び名は登録しない設定です。');return;}
+     if(current.aliasLearningSkipped?.[skipKey]){say('この呼び名は覚えない設定です。');return;}
      const spoken=String(field==='scorer'?current.rawScorer:current.rawAssist||'').trim();
      const official=String(current[field]||'');
      const context=state.ssNameContext;
@@ -345,7 +345,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
         !fixturePeople(context.snapshot,current.matchSeq).includes(official)){
       say('SS接続と選手の確定を確認してください。');return;
      }
-     learn.disabled=true;learn.textContent='登録中…';
+     learn.disabled=true;learn.textContent='記憶中…';
      try{
       const response=await fetch('https://shoot-sunday-sync-staging.yomax1979.workers.dev/staging/alias/confirm',{
        method:'POST',headers:{'Content-Type':'application/json','X-SS-Bridge-Token':password},
@@ -358,7 +358,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
        throw Error('登録を確認できません。SSの別名一覧を確認してください。');
       context.aliases=[...(context.aliases||[]),{alias:spoken,member_id:memberId,name:official}];
       say('「'+spoken+'」を'+official+'の呼び名として登録しました。');
-      learn.textContent='登録済み';
+      learn.textContent='✓ 覚えた';
      }catch(error){say(error.message||'登録結果を確認できません。再送せずSSを確認してください。');learn.textContent='登録結果を確認';}
      // Do not automatically retry a potentially completed alias write.
     });
