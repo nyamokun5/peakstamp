@@ -1,4 +1,4 @@
-import {verifiedAnalysisPerson} from './sposched-analysis-identity.mjs';
+import {verifiedAnalysisPerson,fixtureRosterNames} from './sposched-analysis-identity.mjs';
 /** PeakStamp → Shoot Sunday (SpoSched) review-only bridge.
  * Inputs come from explicitly imported event snapshots. NO HTTP endpoints,
  * tokens, writes, or automatic state mutations are assumed here.
@@ -372,7 +372,14 @@ export function prepareGoalRows(rawGoals,snapshot){
   const teamHint=onlyMatch?onlyMatch.leftTeam:'';
   const transferred=field=>{
    const person=verifiedAnalysisPerson(g,snapshot,onlyMatch?.seq,field);
-   return {name:person?.name||'',confidence:person?'high':'none',candidates:[],source:'analysis-identity'};
+   if(person)return {name:person.name,confidence:'high',candidates:[],source:'analysis-identity'};
+   // Before the knockout slot has an official match UUID, retain a verified
+   // roster display name as an UNCONFIRMED draft. The review must not claim
+   // registration identity or send it until the official fixture is refreshed.
+   const allowed=fixtureRosterNames(snapshot,onlyMatch?.seq,g);
+   const tentative=[g?.[field],g?.ssIdentity?.[field]?.name]
+    .find(name=>allowed.includes(name))||'';
+   return {name:tentative,confidence:'none',candidates:[],source:'pending-fixture-roster'};
   };
   const scorerGuess=g.ssIdentity?transferred('scorer'):suggestedPlayer(g.scorer,snapshot,teamHint);
   const assistGuess=g.ssIdentity?transferred('assist'):suggestedPlayer(g.assist,snapshot,'');
