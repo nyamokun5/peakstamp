@@ -251,6 +251,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const fields=make('div','goal-review-fields');
   // Primary controls: movie, trim/zoom, Keep/Reject.
   // Detailed scorer/assist and official match inputs stay one tap away.
+  const matchup=make('div','goal-review-matchup');
+  matchup.textContent=item.matchLabel||((item.teamA&&item.teamB)?item.teamA+' vs '+item.teamB:'対戦カード未設定');
+  editor.append(matchup);
   const scoreDetails=make('details','goal-score-details');
   scoreDetails.open=scoreDetailsOpen || !item.scorer || (item.assistStatus==='named'&&!item.assist) || (state.ssNameEnabled===true&&!item.ssIdentity?.scorer);
   scoreDetails.addEventListener('toggle',()=>{scoreDetailsOpen=Boolean(scoreDetails.open);});
@@ -377,7 +380,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
      }catch(error){say(error.message||'登録結果を確認できません。再送せずSSを確認してください。');learn.textContent='登録結果を確認';}
      // Do not automatically retry a potentially completed alias write.
     });
-    box.append(skip,learn);
+    const aliasTools=make('details','goal-alias-tools');aliasTools.append(make('summary','','呼び名を管理'));aliasTools.append(skip,learn);box.append(aliasTools);
    }
   };
   if(state.ssNameEnabled&&!item.ssIdentity?.scorer){
@@ -412,13 +415,10 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   assistBox.append(assistChoice);fields.append(assistBox);
   if(item.assistStatus==='named')
    personInput('assist','アシスト者');
-  inputRow(fields,'対戦カード',item.matchLabel,v=>edit(entry,'matchLabel',v),{placeholder:'例：3 vs 4'});
   inputRow(fields,'SS試合番号（任意）',item.matchSeq||'',v=>edit(entry,'matchSeq',v),{type:'number',placeholder:'例：3'});
   const optional=make('details','goal-optional-fields');
   optional.append(make('summary','','詳細：チーム番号・メモ'));
   const optionalBody=make('div','goal-review-fields');
-  inputRow(optionalBody,'チームA',item.teamA||'',v=>edit(entry,'teamA',v),{placeholder:'例：3'});
-  inputRow(optionalBody,'チームB',item.teamB||'',v=>edit(entry,'teamB',v),{placeholder:'例：4'});
   inputRow(optionalBody,'メモ（任意）',item.note||'',v=>edit(entry,'note',v),{maxLength:400});
   optional.append(optionalBody);
   scoreDetails.append(fields,timing,optional);
@@ -495,7 +495,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const ssReady=state.ssNameEnabled!==true ||
      (Boolean(current.ssIdentity?.scorer) &&
       (current.assistStatus!=='named'||Boolean(current.ssIdentity?.assist)));
-   if(valid&&ssReady){
+   if(!valid||!ssReady){scoreDetailsOpen=true;say(!valid?'得点情報を修正してからキープしてください。':'得点者・アシストをSS名簿から選択してください。');render();return;}
+    if(valid&&ssReady){
     current.status='confirmed';
     current.ssAutoConfirmed=false;
     current.goalTimeVerified=true;
