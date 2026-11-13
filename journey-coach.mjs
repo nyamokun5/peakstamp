@@ -52,6 +52,7 @@ export function initJourneyCoach({
   if(event.key==='Escape'&&!root.hidden){event.preventDefault?.();close();}
  });
  const reviewGoals=()=>{actions.goGoals?.();showGoalIntro();};
+ const reviewMatchups=()=>actions.reviewMatchups?.();
  const goHighlights=()=>actions.goHighlights?.();
  function showGoalIntro(){
   if(goalIntroSeen)return false;
@@ -78,10 +79,10 @@ export function initJourneyCoach({
    title:failures?'解析完了（一部失敗）':'解析が完了しました！',
    body:'ゴール '+goals+'件 ／ ハイライト '+highlights+'件を検出しました。'+
     (failures?'\n解析できなかった動画：'+failures+'本。後から再解析できます。':'')+
-    '\n'+(goals?'まず「ゴール一覧」から映像を確認して、得点者・アシストを確定しましょう。':
+    '\n'+(goals?'まず各動画の対戦カードを確認し、空欄だけ入力してください。次にゴールを確認します。':
      'ゴール候補はありません。ハイライトを確認するか、ゴールを手動追加してください。'),
-   main:{label:goals?'⚽ ゴール一覧で確認':'🎞 ハイライトを確認',
-    run:goals?reviewGoals:goHighlights},
+   main:{label:goals?'対戦カードを確認':'🎞 ハイライトを確認',
+    run:goals?reviewMatchups:goHighlights},
    other:failures?{label:'失敗した動画を確認',run:()=>actions.goAnalysis?.()}:null
   });
  }
