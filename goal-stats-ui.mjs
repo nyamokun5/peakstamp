@@ -254,8 +254,32 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const matchup=make('div','goal-review-matchup');
   matchup.textContent=item.matchLabel||((item.teamA&&item.teamB)?item.teamA+' vs '+item.teamB:'対戦カード未設定');
   editor.append(matchup);
+  const ssIssues=[];
+  if(item.status!=='excluded'&&item.status!=='confirmed'&&item.videoDecision==='kept'){
+   const validation=validateGoal(item);
+   if(validation)ssIssues.push(validation);
+   if(state.ssNameEnabled){
+    const snap=state.ssNameContext?.snapshot;
+    const fixture=snap?.matches?.find(m=>Number(m.seq)===Number(item.matchSeq));
+    if(!snap)ssIssues.push('SSイベントが未接続');
+    else if(!fixture)ssIssues.push('SSの第'+(item.matchSeq||'?')+'試合を特定できません');
+    else{
+     if(!item.ssIdentity?.scorer)ssIssues.push('得点者「'+(item.scorer||'未入力')+'」がSS名簿と未照合');
+     if(item.assistStatus==='named'&&!item.ssIdentity?.assist)
+      ssIssues.push('アシスト「'+(item.assist||'未入力')+'」がSS名簿と未照合');
+    }
+   }
+  }
+  if(ssIssues.length){
+   const alert=make('div','goal-ss-unresolved');
+   alert.setAttribute('role','status');
+   alert.style.cssText='padding:10px;margin:8px 0;border:1px solid #e6a24c;border-radius:8px';
+   alert.append(make('strong','','SS未確定：'+ssIssues.join(' ／ ')));
+   alert.append(make('p','fine-print','動画はキープ済みです。下の選手欄を修正してください。'));
+   editor.append(alert);
+  }
   const scoreDetails=make('details','goal-score-details');
-  scoreDetails.open=scoreDetailsOpen || !item.scorer || (item.assistStatus==='named'&&!item.assist) || (state.ssNameEnabled===true&&!item.ssIdentity?.scorer);
+  scoreDetails.open=scoreDetailsOpen || ssIssues.length>0 || !item.scorer || (item.assistStatus==='named'&&!item.assist) || (state.ssNameEnabled===true&&!item.ssIdentity?.scorer);
   scoreDetails.addEventListener('toggle',()=>{scoreDetailsOpen=Boolean(scoreDetails.open);});
   const summaryNames=(state.ssNameEnabled&&!item.ssIdentity?.scorer?'得点者を選択':item.scorer||'得点者未入力')+' ／ '+
    (item.assistStatus==='named'?(state.ssNameEnabled&&!item.ssIdentity?.assist?'アシスト者を選択':item.assist||'アシスト者未入力'):
