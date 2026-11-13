@@ -1805,6 +1805,46 @@ const goalReview=initGoalStatsReview(state,{
   }
 });
 const ssNames=initAnalysisNames(state,{onChange:()=>goalReview.refresh()});
+// Read-only in-place SS preflight. No credential prompt, navigation or writes.
+// Batch mutation will only be enabled after the official fixture/duplicate
+// verification flow is integrated into this page.
+$('ssInlinePreview')?.addEventListener('click',async()=>{
+ const button=$('ssInlinePreview'),status=$('ssInlineStatus'),summary=$('ssInlineSummary'),matches=$('ssInlineMatches');
+ button.disabled=true;matches.hidden=true;matches.replaceChildren();
+ try{
+  const {confirmedGoalExport,createGoalDrafts}=await import('./goal-stats.mjs?v=source-matchup5');
+  const {prepareGoalRows}=await import('./sposched-review-core.mjs');
+  const snapshot=state.ssNameContext?.snapshot;
+  if(!snapshot)throw Error('最初の画面でSSイベントに接続してください。パスコードの再入力は不要です。');
+  const goals=confirmedGoalExport(state.sources,window.localStorage);
+  const unresolved=state.sources.flatMap(src=>createGoalDrafts(src,window.localStorage).items)
+   .filter(g=>g.status!=='excluded'&&g.status!=='confirmed');
+  if(unresolved.length)throw Error('未確定のゴールが'+unresolved.length+'件あります。先に確認してください。');
+  if(!goals.goals.length)throw Error('SS登録対象の確定済みゴールがありません。');
+  const rows=prepareGoalRows(goals,snapshot);
+  const errors=[];
+  const counts=new Map();
+  for(const [i,row] of rows.entries()){
+   if(!row.seq||!snapshot.matches.some(m=>m.seq===row.seq))errors.push('ゴール'+(i+1)+'：試合を特定できません');
+   if(!row.scorer)errors.push('ゴール'+(i+1)+'：得点者が未照合です');
+   if(!['named','none'].includes(row.assistMode)||(row.assistMode==='named'&&!row.assist))
+    errors.push('ゴール'+(i+1)+'：アシストを確認してください');
+   if(row.seq)counts.set(row.seq,(counts.get(row.seq)||0)+1);
+  }
+  for(const fixture of snapshot.matches){
+   const item=document.createElement('p');
+   item.textContent='第'+fixture.seq+'試合 '+(fixture.leftTeam||'?')+' vs '+(fixture.rightTeam||'?')+
+    '　'+(counts.get(fixture.seq)||0)+'ゴール';
+   matches.append(item);
+  }
+  matches.hidden=false;
+  summary.textContent='SS：'+(snapshot.eventName||'選択中イベント')+' ／ '+rows.length+'ゴール';
+  status.textContent=errors.length?errors.slice(0,4).join(' ／ ')+(errors.length>4?' ほか'+(errors.length-4)+'件':''):
+   '登録内容を確認しました。SSにはまだ送信していません。試合結果・重複の最終照合は未実装です。';
+ }catch(error){status.textContent=error.message||String(error)}
+ finally{button.disabled=false}
+});
+
 const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
   onResultsChange:()=>{
     goalReview.refresh();
