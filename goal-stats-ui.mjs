@@ -356,7 +356,6 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
      const eventId=context?.snapshot?.eventId;
      const password=document.getElementById('ssAnalysisToken')?.value.trim();
      if(!spoken||!official||!memberId||!team||!eventId||!password||
-        !current.userEditedGoalFields?.includes(field)||
         !fixturePeople(context.snapshot,current.matchSeq).includes(official)){
       say('SS接続と選手の確定を確認してください。');return;
      }
