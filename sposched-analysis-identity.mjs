@@ -31,8 +31,15 @@ export function selectedFixtureTeams(goal,snapshot,seq){
  if(confirmed){
   if(!selected.every(Boolean))return [];
   const resolved=selected.map(v=>rosterTeams.filter(t=>teamName(t)===teamName(v)));
-  return resolved.every(a=>a.length===1)&&resolved[0][0]!==resolved[1][0]
-   ?resolved.map(a=>a[0]):[];
+  if(!resolved.every(a=>a.length===1)||resolved[0][0]===resolved[1][0])return [];
+  const chosen=resolved.map(a=>a[0]);
+  // Once SS publishes the actual sides, a previously confirmed video pairing
+  // must not silently override a conflicting official fixture.
+  if(match.leftTeam&&match.rightTeam){
+   const official=[match.leftTeam,match.rightTeam].map(teamName).sort().join('|');
+   if(chosen.map(teamName).sort().join('|')!==official)return [];
+  }
+  return chosen;
  }
  return [match.leftTeam,match.rightTeam].filter(Boolean);
 }
