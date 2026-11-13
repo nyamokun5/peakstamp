@@ -1848,6 +1848,10 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    let localJob=null;
    try{localJob=JSON.parse(localStorage.getItem(localKey)||'null');}
    catch{throw Error('端末の登録履歴を確認できません。再送せず確認してください');}
+   // The user may switch events while the read-only Worker request is pending.
+   // Never approve an obsolete event or a stale roster snapshot.
+   if(state.ssNameContext?.snapshot!==snapshot)
+    throw Error('SSイベントが変更されました。最新のイベントで確認してください');
    const admission=decideInlineBatchAdmission({eventId:snapshot.eventId,workerJob,localJob});
    if(!admission.allowed)throw Error(admission.reason);
   }catch(error){registrationGate=error.message||String(error);}
