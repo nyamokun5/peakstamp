@@ -28,7 +28,7 @@ export function selectedFixtureTeams(goal,snapshot,seq){
  const confirmed=goal?.matchupConfirmed===true||goal?.userConfirmedMatchup===true||
   (edits.has('teamA')&&edits.has('teamB'));
  const selected=confirmed?[goal?.teamA,goal?.teamB]:[];
- if(selected.some(Boolean)){
+ if(confirmed){
   if(!selected.every(Boolean))return [];
   const resolved=selected.map(v=>rosterTeams.filter(t=>teamName(t)===teamName(v)));
   return resolved.every(a=>a.length===1)&&resolved[0][0]!==resolved[1][0]
@@ -40,9 +40,10 @@ export function fixturePeople(snapshot,seq,goal=null){
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
  // A fixture can be awaiting its result (notably placement matches) while its
  // teams and players are already assigned. Result status is not identity status.
- // Keep requiring a real match ID and a uniquely resolved team pair;
- // registration checks remain separate from this read-only lookup.
- if(!match?.matchId)return [];
+ // Waiting placement fixtures may not have a match_id yet. Read-only
+ // identity lookup can use the numbered slot; writes still require a
+ // freshly verified official match_id after the semifinals finish.
+ if(!match)return [];
  const teams=selectedFixtureTeams(goal,snapshot,seq);
  if(teams.length!==2)return [];
  return (snapshot.players||[]).filter(name=>uuid.test(snapshot.memberIds?.get(name)||'')&&
@@ -51,7 +52,6 @@ export function fixturePeople(snapshot,seq,goal=null){
 }
 export function resolveAnalysisGoal(item,context){
  const result={...item,rawScorer:item.rawScorer??item.scorer??'',rawAssist:item.rawAssist??item.assist??''};
- const previous=item.ssIdentity;
  const snapshot=context?.snapshot,entries=context?.aliases||[];
  const seq=Number(item.matchSeq),match=snapshot?.matches?.find(m=>Number(m.seq)===seq);
  const people=fixturePeople(snapshot,seq,item);
