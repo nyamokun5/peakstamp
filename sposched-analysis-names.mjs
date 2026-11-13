@@ -34,13 +34,24 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  const invalidate=()=>{revision++;state.ssNameContext=null;onChange();};
  const read=async path=>{
   const password=token.value.trim();if(!password)throw Error('SS連携パスワードを入力してください。');
-  const response=await fetch(gateway+path,{method:'GET',headers:{'X-SS-Bridge-Token':password},
-   mode:'cors',cache:'no-store',signal:AbortSignal.timeout(15000)});
+  let response;
+  for(let attempt=0;attempt<2;attempt++){
+   try{
+    response=await fetch(gateway+path,{method:'GET',headers:{'X-SS-Bridge-Token':password},
+     mode:'cors',cache:'no-store',signal:AbortSignal.timeout(20000)});
+    break;
+   }catch(error){
+    if(attempt===0)continue; // One bounded retry for transient iPhone network failures.
+    throw Error(error?.name==='TimeoutError'?'SS接続がタイムアウトしました。通信状態を確認して再接続してください。':
+     'SSサーバーに接続できません（通信エラー）。少し待って「SSに接続」を押してください。');
+   }
+  }
   if(!response.ok){
    if([401,403].includes(response.status)){clearBridgeSession(sessionStorage,'staging');try{localStorage.removeItem(persistentKey)}catch{}}
-   throw Error('SSに接続できません。パスワードと通信を確認してください。');
+   throw Error([401,403].includes(response.status)?'SS連携パスワードを確認してください。':
+    'SSサーバーからエラー '+response.status+' が返りました。少し待って再接続してください。');
   }
-  return response.json();
+  try{return await response.json();}catch{throw Error('SSサーバーの応答を読み取れません。再接続してください。');}
  };
  async function refresh(){
   const current=++revision,id=event.value;
