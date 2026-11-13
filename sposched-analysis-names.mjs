@@ -32,6 +32,21 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  const saveDevice=()=>{try{if(remember.checked&&token.value.trim())localStorage.setItem(persistentKey,token.value.trim());else localStorage.removeItem(persistentKey)}catch{}};
  token.value=restoreBridgeSession(sessionStorage,'staging')||readSaved();remember.checked=Boolean(readSaved());
  const invalidate=()=>{revision++;state.ssNameContext=null;onChange();};
+ const inspectBatch=async eventId=>{
+  const password=token.value.trim();
+  if(!password)throw Error('SS連携パスワードを確認してください');
+  // Read-only POST: do not retry a failed inspection and never treat it
+  // as proof that a write can safely start.
+  const {inspectInlineBatchJob}=await import('./sposched-inline-inspect.mjs');
+  return inspectInlineBatchJob({eventId,postInspect:async body=>{
+   const response=await fetch(gateway+'/staging/batch/inspect',{
+    method:'POST',headers:{'X-SS-Bridge-Token':password,'Content-Type':'application/json'},
+    body:JSON.stringify(body),mode:'cors',cache:'no-store',signal:AbortSignal.timeout(20000)});
+   let data;
+   try{data=await response.json();}catch{throw Error('Workerの応答を解析できません');}
+   return {status:response.status,body:data};
+  }});
+ };
  const read=async path=>{
   const password=token.value.trim();if(!password)throw Error('SS連携パスワードを入力してください。');
   let response;
@@ -91,5 +106,5 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  connect.addEventListener('click',load);
  retry.addEventListener('click',()=>refresh());
  if(token.value)load();
- return {refresh};
+ return {refresh,inspectBatch};
 }
