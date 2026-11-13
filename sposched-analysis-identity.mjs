@@ -22,10 +22,11 @@ export function selectedFixtureTeams(goal,snapshot,seq){
   .replace(/^チーム/,'team').replace(/^(?:team)?(\\d{1,2})$/,'team$1');
  const rosterTeams=[...new Set(snapshot?.playerTeam?.values?.()||[])];
  const selected=[goal?.teamA,goal?.teamB];
- if(selected.every(Boolean)){
+ if(selected.some(Boolean)){
+  if(!selected.every(Boolean))return [];
   const resolved=selected.map(v=>rosterTeams.filter(t=>teamName(t)===teamName(v)));
-  if(resolved.every(a=>a.length===1)&&resolved[0][0]!==resolved[1][0])
-   return resolved.map(a=>a[0]);
+  return resolved.every(a=>a.length===1)&&resolved[0][0]!==resolved[1][0]
+   ?resolved.map(a=>a[0]):[];
  }
  return [match.leftTeam,match.rightTeam].filter(Boolean);
 }
@@ -33,8 +34,8 @@ export function fixturePeople(snapshot,seq,goal=null){
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
  // A fixture can be awaiting its result (notably placement matches) while its
  // teams and players are already assigned. Result status is not identity status.
- // Keep requiring a real match ID and both assigned teams; registration checks
- // remain separate and must not be relaxed by this read-only lookup.
+ // Keep requiring a real match ID and a uniquely resolved team pair;
+ // registration checks remain separate from this read-only lookup.
  if(!match?.matchId)return [];
  const teams=selectedFixtureTeams(goal,snapshot,seq);
  if(teams.length!==2)return [];
