@@ -59,3 +59,17 @@ test('read-only dropdown uses confirmed video teams even when stale SS fixture h
  assert.deepEqual(fixtureRosterNames(s,3,goal),['Bob','Carol']);
  assert.deepEqual(fixturePeople(s,3,goal),[]);
 });
+
+test('four-match waiting slot accepts confirmed roster identity without match UUID',()=>{
+ const ss=snapshot();ss.matches=[
+ {seq:1,status:'scheduled',matchId:id(10),leftTeam:'Team 1',rightTeam:'Team 2'},
+ {seq:2,status:'scheduled',matchId:id(11),leftTeam:'Team 3',rightTeam:'Team 4'},
+ ss.matches[0],
+ {seq:4,status:'waiting',matchId:'',leftTeam:'',rightTeam:''}];
+ const goal={teamA:'Team 1',teamB:'Team 2',matchupConfirmed:true,scorer:'Alice',
+  ssIdentity:{environment:'staging',eventId:'event-1',matchId:'',seq:3,
+   scorer:{name:'Alice',memberId:id(1),playerId:id(4),team:'Team 1'}}};
+ assert.equal(verifiedAnalysisPerson(goal,ss,3,'scorer')?.name,'Alice');
+ goal.ssIdentity.scorer.memberId=id(99);
+ assert.equal(verifiedAnalysisPerson(goal,ss,3,'scorer'),null);
+});
