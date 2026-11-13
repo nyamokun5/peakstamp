@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {selectedFixtureTeams,fixturePeople,verifiedAnalysisPerson} from '../sposched-analysis-identity.mjs';
+import {selectedFixtureTeams,fixtureRosterNames,fixturePeople,verifiedAnalysisPerson} from '../sposched-analysis-identity.mjs';
 
 const id=n=>String(n).padStart(8,'0')+'-0000-4000-8000-000000000001';
 const snapshot=()=>({
@@ -19,6 +19,7 @@ test('confirmed waiting pairing uses only its official roster even without match
  const s=snapshot(),goal={teamA:'Team 1',teamB:'Team 2',matchupConfirmed:true};
  assert.deepEqual(selectedFixtureTeams(goal,s,3),['Team 1','Team 2']);
  assert.deepEqual(fixturePeople(s,3,goal),['Alice','Bob']);
+ assert.deepEqual(fixtureRosterNames(s,3,goal),['Alice','Bob']);
 });
 test('partial or ambiguous pairing fails closed',()=>{
  const s=snapshot();
@@ -34,7 +35,18 @@ test('export identity is checked against latest official fixture and ID',()=>{
  const s=snapshot(),goal={teamA:'Team 1',teamB:'Team 2',matchupConfirmed:true,
   scorer:'Alice',ssIdentity:{environment:'staging',eventId:'event-1',matchId:'',seq:3,
    scorer:{name:'Alice',memberId:id(1),playerId:id(4),team:'Team 1'}}};
- assert.equal(verifiedAnalysisPerson(goal,s,3,'scorer')?.name,'Alice');
+ assert.equal(verifiedAnalysisPerson(goal,s,3,'scorer'),null);
  s.matches[0].matchId=id(7);
  assert.equal(verifiedAnalysisPerson(goal,s,3,'scorer'),null);
+});
+
+test('official roster is selectable even when the TEST API omits player identity IDs',()=>{
+ const s=snapshot();s.memberIds=new Map();s.playerIds=new Map();
+ const goal={teamA:'2',teamB:'3',matchupConfirmed:true};
+ assert.deepEqual(fixtureRosterNames(s,3,goal),['Bob','Carol']);
+ assert.deepEqual(fixturePeople(s,3,goal),[]);
+});
+test('editing both team names does not silently confirm an AI matchup',()=>{
+ const s=snapshot();
+ assert.deepEqual(selectedFixtureTeams({teamA:'Team 1',teamB:'Team 2',userEditedGoalFields:['teamA','teamB']},s,3),[]);
 });
