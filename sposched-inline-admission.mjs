@@ -12,9 +12,9 @@ export function decideInlineBatchAdmission({eventId,workerJob,localJob}={}){
   if(job.request_id&&blocked.has(job.status))
    return {allowed:false,reason:label+'に登録ジョブが存在します。再送せず状態を確認してください',
     requestId:job.request_id,status:job.status};
-  if(job.request_id&&!job.status)
-   return {allowed:false,reason:label+'の登録結果が不明です。再送せず状態を確認してください',
-    requestId:job.request_id};
+  if(job.request_id)
+   return {allowed:false,reason:label+'の登録状態を安全に判定できません。再送せず状態を確認してください',
+    requestId:job.request_id,status:job.status};
  }
  return {allowed:true};
 }
