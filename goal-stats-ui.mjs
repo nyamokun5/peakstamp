@@ -262,6 +262,22 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const matchup=make('div','goal-review-matchup');
   matchup.textContent=item.matchLabel||((item.teamA&&item.teamB)?item.teamA+' vs '+item.teamB:'対戦カード未設定');
   editor.append(matchup);
+  // The AI pairing is not authoritative. One explicit organizer tap allows
+  // read-only roster resolution while SS's placement fixture is still waiting.
+  if(state.ssNameEnabled&&item.teamA&&item.teamB){
+   const pairButton=make('button','goal-review-mark-button',
+    item.matchupConfirmed===true?'✓ 対戦カード確認済み':'対戦カードを確認');
+   pairButton.type='button';pairButton.disabled=item.matchupConfirmed===true;
+   pairButton.addEventListener('click',()=>{
+    const current=latestGoal(entry);
+    if(!current.teamA||!current.teamB)return;
+    current.matchupConfirmed=true;
+    current.ssIdentity=null;
+    write(entry.source,goalData(entry.source).items.map(x=>x.id===current.id?current:x));
+    render();
+   });
+   editor.append(pairButton);
+  }
   const ssIssues=[];
   if(item.status!=='excluded'&&item.status!=='confirmed'&&item.videoDecision==='kept'){
    const validation=validateGoal(item);
