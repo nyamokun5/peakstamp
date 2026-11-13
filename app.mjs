@@ -1900,7 +1900,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
     const continuation=buildInlineSecondRoundPlan({snapshot,rows,workerJob:existing});
     const continueButton=document.createElement('button');
     continueButton.type='button';continueButton.className='whisper-run';
-    continueButton.textContent='TEST後半2試合を登録';
+    continueButton.textContent='TEST登録を再開';
     continueButton.addEventListener('click',async()=>{
      continueButton.disabled=true;
      try{
@@ -2000,28 +2000,6 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    note.textContent='準決勝登録の確認：'+(e.message||String(e));
    matches.append(note);
   }
-  let registrationGate='';
-  try{
-   validateInlineBatchReadiness(snapshot,rows);
-   // Dry-run the exact Worker contract before presenting a ready state.
-   // No request ID is persisted and no network mutation is performed here.
-   const {buildInlineWorkerPlan}=await import('./sposched-inline-plan.mjs');
-   const {plan}=buildInlineWorkerPlan({snapshot,rows,requestId:crypto.randomUUID()});
-   if(plan.operations.filter(op=>op.action==='finish').length!==4)
-    throw Error('4試合の登録計画が不完全です');
-   const {decideInlineBatchAdmission}=await import('./sposched-inline-admission.mjs');
-   const workerJob=await ssNames.inspectBatch(snapshot.eventId);
-   const localKey='peakstamp:test:worker-batch:'+snapshot.eventId;
-   let localJob=null;
-   try{localJob=JSON.parse(localStorage.getItem(localKey)||'null');}
-   catch{throw Error('端末の登録履歴を確認できません。再送せず確認してください');}
-   // The user may switch events while the read-only Worker request is pending.
-   // Never approve an obsolete event or a stale roster snapshot.
-   const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
-   assertCurrentInlineEvent(snapshot,state.ssNameContext);
-   const admission=decideInlineBatchAdmission({eventId:snapshot.eventId,workerJob,localJob});
-   if(!admission.allowed)throw Error(admission.reason);
-  }catch(error){registrationGate=error.message||String(error);}
   // Read-only preview: no job or write is created here.
   for(const fixture of snapshot.matches){
    const item=document.createElement('p');
@@ -2044,47 +2022,9 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    note.textContent='第3・第4試合：引き分けの勝者を指定してください';
    matches.append(note);
   }
-  if(!registrationGate){
-   const register=document.createElement('button');
-   register.type='button';register.className='whisper-run';
-   register.textContent='TESTに4試合を登録';
-   register.addEventListener('click',async()=>{
-    register.disabled=true;
-    try{
-     const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
-     assertCurrentInlineEvent(snapshot,state.ssNameContext);
-     // Re-read the current confirmed goals. An edit after preview must
-     // invalidate the plan, never silently submit the old rows.
-     const fresh=confirmedGoalExport(state.sources,window.localStorage);
-     if(JSON.stringify(fresh)!==JSON.stringify(goals))
-      throw Error('ゴールが変更されました。登録前チェックをやり直してください');
-     const {buildInlineWorkerPlan}=await import('./sposched-inline-plan.mjs');
-     const {startInlineBatchOnce}=await import('./sposched-inline-dispatch.mjs');
-     const {plan}=buildInlineWorkerPlan({snapshot,rows,requestId:crypto.randomUUID()});
-     status.textContent='TEST登録を送信しています。画面を閉じないでください';
-     const result=await startInlineBatchOnce({
-      plan,storage:window.localStorage,
-      inspect:eventId=>ssNames.inspectBatch(eventId),
-      send:payload=>ssNames.startBatch(payload),
-      verifyCurrent:()=>{
-       assertCurrentInlineEvent(snapshot,state.ssNameContext);
-       const current=confirmedGoalExport(state.sources,window.localStorage);
-       if(JSON.stringify(current)!==JSON.stringify(goals))
-        throw Error('ゴールが変更されました。登録前チェックをやり直してください');
-      }
-     });
-     status.textContent='TEST登録ジョブを受け付けました（'+
-      (result.status||'状態確認中')+'）。SSへの反映は完了確認が必要です';
-    }catch(error){
-     status.textContent=error.message||String(error);
-     register.disabled=false;
-    }
-   });
-   matches.append(register);
-  }
   matches.hidden=false;
   summary.textContent='SS：'+(snapshot.eventName||'選択中イベント')+' ／ '+rows.length+'ゴール';
-  status.textContent=(registrationGate||'4試合の登録データを検証しました。')+' ／ SSへの書き込みは未実施です。';
+  status.textContent='登録前の確認画面です。SSへの書き込みは未実施です。';
  }catch(error){status.textContent=error.message||String(error)}
  finally{button.disabled=false}
 });
