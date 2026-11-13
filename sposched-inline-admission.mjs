@@ -10,7 +10,8 @@ export function decideInlineBatchAdmission({eventId,workerJob,localJob}={}){
   return {allowed:false,reason:'端末に登録履歴があります。Workerに記録がなくても再送できません',requestId:localJob.request_id};
  for(const [label,job] of [['Worker',workerJob],['端末',localJob]]){
   if(!job)continue;
-  if(job.event_id&&job.event_id!==eventId)continue;
+  if(job.event_id&&job.event_id!==eventId)
+   return {allowed:false,reason:label+'のジョブが別イベントを指しています。再送せず確認してください',requestId:job.request_id};
   if(job.request_id&&blocked.has(job.status))
    return {allowed:false,reason:label+'に登録ジョブが存在します。再送せず状態を確認してください',
     requestId:job.request_id,status:job.status};
