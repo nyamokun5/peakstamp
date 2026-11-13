@@ -62,6 +62,9 @@ export function resolveAnalysisGoal(item,context){
  const snapshot=context?.snapshot,entries=context?.aliases||[];
  const seq=Number(item.matchSeq),match=snapshot?.matches?.find(m=>Number(m.seq)===seq);
  const people=fixturePeople(snapshot,seq,item);
+ // A spoken pairing that conflicts with an already published SS fixture is
+ // not a verified scorer identity, even if its name happens to match.
+ const pairingAgrees=(!match?.leftTeam||!match?.rightTeam)||analysisFixtureAgrees(item,match);
  const edits=new Set(item.userEditedGoalFields||[]);
  const identity={environment:'staging',eventId:snapshot?.eventId||'',matchId:match?.matchId||'',seq,scorer:null,assist:null};
  for(const field of ['scorer','assist']){
@@ -71,7 +74,7 @@ export function resolveAnalysisGoal(item,context){
   // Display-only matches have no ssIdentity, so checking previous identity is insufficient.
   if(!manual&&!people.includes(result[field]))result[field]=raw;
   if(field==='assist'&&item.assistStatus!=='named')continue;
-  if(!snapshot||snapshot.rosterSource!=='official-current-event-teams')continue;
+  if(!pairingAgrees||!snapshot||snapshot.rosterSource!=='official-current-event-teams')continue;
   const displayName=manual?null:matchEventPerson(raw,entries,snapshot);
   if(displayName&&!manual)result[field]=displayName;
   // The displayed official name can already be a verified member of this
