@@ -13,23 +13,58 @@ export function analysisFixtureAgrees(goal,match){
  }
  return !pair||pair.sort().join('|')===[team(match.leftTeam),team(match.rightTeam)].sort().join('|');
 }
-export function fixturePeople(snapshot,seq){
+// A confirmed video matchup may identify the participants before SpoSched
+// fills the waiting placement fixture. Never infer a team from the scorer.
+export function selectedFixtureTeams(goal,snapshot,seq){
+ const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
+ if(!match)return [];
+ const teamName=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/\s/g,'')
+  .replace(/^チーム/,'team').replace(/^(?:team)?(\d{1,2})$/,'team$1');
+ const rosterTeams=[...new Set(snapshot?.playerTeam?.values?.()||[])];
+ const edits=new Set(goal?.userEditedGoalFields||[]);
+ // Video transcription is a suggestion, not a user-confirmed matchup.
+ // Only use video sides while SS is waiting when the organizer has explicitly
+ // reviewed the pairing; otherwise keep identity unresolved.
+ const confirmed=goal?.matchupConfirmed===true||goal?.userConfirmedMatchup===true||
+  (edits.has('teamA')&&edits.has('teamB'));
+ const selected=confirmed?[goal?.teamA,goal?.teamB]:[];
+ if(confirmed){
+  if(!selected.every(Boolean))return [];
+  const resolved=selected.map(v=>rosterTeams.filter(t=>teamName(t)===teamName(v)));
+  if(!resolved.every(a=>a.length===1)||resolved[0][0]===resolved[1][0])return [];
+  const chosen=resolved.map(a=>a[0]);
+  // Once SS publishes the actual sides, a previously confirmed video pairing
+  // must not silently override a conflicting official fixture.
+  if(match.leftTeam&&match.rightTeam){
+   const official=[match.leftTeam,match.rightTeam].map(teamName).sort().join('|');
+   if(chosen.map(teamName).sort().join('|')!==official)return [];
+  }
+  return chosen;
+ }
+ return [match.leftTeam,match.rightTeam].filter(Boolean);
+}
+export function fixturePeople(snapshot,seq,goal=null){
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
  // A fixture can be awaiting its result (notably placement matches) while its
  // teams and players are already assigned. Result status is not identity status.
- // Keep requiring a real match ID and both assigned teams; registration checks
- // remain separate and must not be relaxed by this read-only lookup.
- if(!match?.matchId||!match.leftTeam||!match.rightTeam)return [];
+ // Waiting placement fixtures may not have a match_id yet. Read-only
+ // identity lookup can use the numbered slot; writes still require a
+ // freshly verified official match_id after the semifinals finish.
+ if(!match)return [];
+ const teams=selectedFixtureTeams(goal,snapshot,seq);
+ if(teams.length!==2)return [];
  return (snapshot.players||[]).filter(name=>uuid.test(snapshot.memberIds?.get(name)||'')&&
   uuid.test(snapshot.playerIds?.get(name)||'')&&
-  [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam?.get(name)));
+  teams.includes(snapshot.playerTeam?.get(name)));
 }
 export function resolveAnalysisGoal(item,context){
  const result={...item,rawScorer:item.rawScorer??item.scorer??'',rawAssist:item.rawAssist??item.assist??''};
- const previous=item.ssIdentity;
  const snapshot=context?.snapshot,entries=context?.aliases||[];
  const seq=Number(item.matchSeq),match=snapshot?.matches?.find(m=>Number(m.seq)===seq);
- const people=analysisFixtureAgrees(item,match)?fixturePeople(snapshot,seq):[];
+ const people=fixturePeople(snapshot,seq,item);
+ // A spoken pairing that conflicts with an already published SS fixture is
+ // not a verified scorer identity, even if its name happens to match.
+ const pairingAgrees=(!match?.leftTeam||!match?.rightTeam)||analysisFixtureAgrees(item,match);
  const edits=new Set(item.userEditedGoalFields||[]);
  const identity={environment:'staging',eventId:snapshot?.eventId||'',matchId:match?.matchId||'',seq,scorer:null,assist:null};
  for(const field of ['scorer','assist']){
@@ -39,14 +74,14 @@ export function resolveAnalysisGoal(item,context){
   // Display-only matches have no ssIdentity, so checking previous identity is insufficient.
   if(!manual&&!people.includes(result[field]))result[field]=raw;
   if(field==='assist'&&item.assistStatus!=='named')continue;
-  if(!snapshot||snapshot.rosterSource!=='official-current-event-teams')continue;
+  if(!pairingAgrees||!snapshot||snapshot.rosterSource!=='official-current-event-teams')continue;
   const displayName=manual?null:matchEventPerson(raw,entries,snapshot);
   if(displayName&&!manual)result[field]=displayName;
   // The displayed official name can already be a verified member of this
   // fixture even when the spoken alias cannot be resolved again. Do not
   // require a second manual selection of an unchanged dropdown value.
   const name=manual?(people.includes(item[field])?item[field]:null):
-   (matchOfficialAlias(raw,entries,snapshot,seq)||
+   (matchOfficialAlias(raw,entries,snapshot,seq,selectedFixtureTeams(item,snapshot,seq))||
     (people.includes(result[field])?result[field]:null));
   if(!name||!people.includes(name))continue;
   if(field==='assist'&&(!identity.scorer||name===identity.scorer.name||
@@ -70,8 +105,8 @@ export function verifiedAnalysisPerson(goal,snapshot,seq,field){
  const identity=goal?.ssIdentity,p=identity?.[field];
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
  if(identity?.environment!=='staging'||identity.eventId!==snapshot?.eventId||
-    identity.matchId!==match?.matchId||identity.seq!==Number(seq)||!analysisFixtureAgrees(goal,match)||!p||
-    p.name!==goal[field]||!fixturePeople(snapshot,seq).includes(p.name)||
+    identity.matchId!==match?.matchId||identity.seq!==Number(seq)||!p||
+    p.name!==goal[field]||!fixturePeople(snapshot,seq,goal).includes(p.name)||
     snapshot.memberIds.get(p.name)!==p.memberId||snapshot.playerIds.get(p.name)!==p.playerId||
     snapshot.playerTeam.get(p.name)!==p.team)return null;
  return p;

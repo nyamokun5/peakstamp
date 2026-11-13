@@ -766,7 +766,7 @@ test('pending fixture gives an actionable message and keeps original row number 
 
 // The first three fixtures and the placement fixture can have different
 // lifecycle states. A waiting result must not erase an assigned player.
-test('SS identity: waiting fixture resolves players but missing fixture IDs do not',()=>{
+test('SS identity: waiting fixture resolves roster without match ID but write identity must refresh',()=>{
  const {fixturePeople,resolveAnalysisGoal,verifiedAnalysisPerson}=identity;
  const snap={eventId:'event-1',rosterSource:'official-current-event-teams',
   matches:[{seq:3,matchId:'match-3',status:'waiting',leftTeam:'Team2',rightTeam:'Team4'}],
@@ -787,6 +787,11 @@ test('SS identity: waiting fixture resolves players but missing fixture IDs do n
  // another dropdown selection merely because the spoken alias was unknown.
  assert.equal(fromDisplayed.ssIdentity.scorer?.name,'Yohei Tyler Takasaki');
  snap.matches[0]={...snap.matches[0],matchId:''};
- assert.deepEqual(fixturePeople(snap,3),[]);
- assert.equal(resolveAnalysisGoal(goal,{snapshot:snap,aliases:[]}).status,'draft');
+ assert.deepEqual(fixturePeople(snap,3),['Yohei Tyler Takasaki']);
+ const waiting=resolveAnalysisGoal(goal,{snapshot:snap,aliases:[]});
+ assert.equal(waiting.status,'confirmed');
+ // Read-only pre-resolution is allowed; a newly assigned official match ID
+ // invalidates the cached identity until it is refreshed.
+ snap.matches[0]={...snap.matches[0],matchId:'match-3-new'};
+ assert.equal(verifiedAnalysisPerson(waiting,snap,3,'scorer'),null);
 });

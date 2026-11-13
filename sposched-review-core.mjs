@@ -108,7 +108,7 @@ export function normalizeSpoSnapshot(raw){
   if(ref.player_id)playerIds.set(name,ref.player_id);
   if(ref.user_id)memberIds.set(name,ref.user_id);
  }
- return {eventId,eventName,matches,players,roster,playerTeam,rosterSource,
+ return {eventId,eventName,matchFormat:string(obj.match_format||obj.event?.match_format||input.match_format||''),matches,players,roster,playerTeam,rosterSource,
   ...(playerIds.size?{playerIds}:{}),
   ...(memberIds.size?{memberIds}:{})};
 }
@@ -504,6 +504,38 @@ export function matchingExistingGoals(row,snapshot){
 export function findPotentialDuplicate(row,snapshot){
  return matchingExistingGoals(row,snapshot).length>0;
 }
+// Validate the four-team bracket only after the organizer has entered all
+// four results. SS's waiting fixture sides are not an early source of truth.
+export function validateFourTeamBracket(snapshot,scoreRows){
+ if(snapshot?.matchFormat!=='4teams_1pitch')return null;
+ const active=scoreRows.filter(r=>r.include);
+ if(active.length!==4)return null;
+ const bySeq=new Map(active.map(r=>[Number(r.seq),r]));
+ if([1,2,3,4].some(n=>!bySeq.has(n)||!bySeq.get(n).confirmed))return null;
+ const semis=[1,2].map(n=>{
+  const m=snapshot.matches.find(x=>x.seq===n),r=bySeq.get(n);
+  if(!m?.leftTeam||!m?.rightTeam)return null;
+  const l=Number(r.leftScore),right=Number(r.rightScore);
+  if(!Number.isInteger(l)||!Number.isInteger(right)||l<0||right<0)return null;
+  const win=l>right?'left':l<right?'right':r.winner;
+  if(!['left','right'].includes(win))return null;
+  return {winner:win==='left'?m.leftTeam:m.rightTeam,
+   loser:win==='left'?m.rightTeam:m.leftTeam};
+ });
+ if(semis.some(x=>!x))return null;
+ const norm=x=>normalizeTeam(x);
+ for(const [seq,expected] of [[3,semis.map(x=>x.loser)],[4,semis.map(x=>x.winner)]]){
+  const row=bySeq.get(seq);
+  const selected=[row.leftTeam,row.rightTeam].filter(Boolean);
+  // Score rows may omit the organizer's matchup. Do not substitute waiting
+  // fixture sides and silently declare the user's matchup verified.
+  if(selected.length!==2)return '試合 #'+seq+' の対戦カードが未確定です。登録前に確認してください';
+  if(selected.map(norm).sort().join('|')!==expected.map(norm).sort().join('|'))
+   return '試合 #'+seq+' の対戦カードが準決勝の結果と一致しません。入力：'+
+    selected.join(' vs ')+'／結果から導かれる対戦：'+expected.join(' vs ');
+ }
+ return null;
+}
 export function buildReviewPayload(snapshot,rows,scoreRows=[]){
  const items=rows.filter(row=>row.include!==false);
  if(!items.length&&!scoreRows.some(row=>row.include))
@@ -559,6 +591,8 @@ export function buildReviewPayload(snapshot,rows,scoreRows=[]){
    goalTimeSeconds:row.goal.goalTimeSeconds,quote:row.goal.quote
   }};
  });
+ const bracketIssue=validateFourTeamBracket(snapshot,scoreRows);
+ if(bracketIssue)throw Error(bracketIssue);
  const operationMatches=[];
  for(const item of scoreRows){
   if(!item.include)continue;

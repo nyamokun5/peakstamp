@@ -1,4 +1,4 @@
-import {analysisFixtureAgrees,fixturePeople as officialFixturePeople} from './sposched-analysis-identity.mjs';
+import {fixturePeople as officialFixturePeople} from './sposched-analysis-identity.mjs';
 import {phoneticCandidates} from './sposched-alias-auto-match.mjs';
 import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
@@ -170,6 +170,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const source=entry.source,item=latestGoal(entry);
   if(String(item[name]??'')===String(value??''))return;
   item[name]=value;
+  // A changed fixture or side invalidates previously resolved SS player IDs.
+  // Never carry identities from an earlier pairing into a different match.
+  if(['matchSeq','teamA','teamB'].includes(name)){
+   item.ssIdentity=null;
+   item.matchupConfirmed=false;
+   item.userConfirmedMatchup=false;
+  }
   // Clearing a name or choosing an assist state is also a deliberate edit.
   // Do not let subsequent Gemini refresh silently refill it.
   if(['scorer','assist','assistStatus','matchLabel','teamA','teamB','matchSeq'].includes(name)){
@@ -255,6 +262,22 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const matchup=make('div','goal-review-matchup');
   matchup.textContent=item.matchLabel||((item.teamA&&item.teamB)?item.teamA+' vs '+item.teamB:'対戦カード未設定');
   editor.append(matchup);
+  // The AI pairing is not authoritative. One explicit organizer tap allows
+  // read-only roster resolution while SS's placement fixture is still waiting.
+  if(state.ssNameEnabled&&item.teamA&&item.teamB){
+   const pairButton=make('button','goal-review-mark-button',
+    item.matchupConfirmed===true?'✓ 対戦カード確認済み':'対戦カードを確認');
+   pairButton.type='button';pairButton.disabled=item.matchupConfirmed===true;
+   pairButton.addEventListener('click',()=>{
+    const current=latestGoal(entry);
+    if(!current.teamA||!current.teamB)return;
+    current.matchupConfirmed=true;
+    current.ssIdentity=null;
+    write(entry.source,goalData(entry.source).items.map(x=>x.id===current.id?current:x));
+    render();
+   });
+   editor.append(pairButton);
+  }
   const ssIssues=[];
   if(item.status!=='excluded'&&item.status!=='confirmed'&&item.videoDecision==='kept'){
    const validation=validateGoal(item);
@@ -266,10 +289,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     else if(!fixture)ssIssues.push('SSの第'+(item.matchSeq||'?')+'試合を特定できません');
     else{
      
-     if(!analysisFixtureAgrees(item,fixture))
-      ssIssues.push('動画の対戦カードとSS第'+item.matchSeq+'試合のチームが一致しません');
-     else if(!officialFixturePeople(snap,item.matchSeq).length)
-      ssIssues.push('SS第'+item.matchSeq+'試合の正式選手名簿を取得できません（試合状態・所属チームを確認）');
+     if(!officialFixturePeople(snap,item.matchSeq,item).length)
+      ssIssues.push('SS第'+item.matchSeq+'試合の対戦チームと正式選手名簿を確認してください');
      else if(snap.rosterSource!=='official-current-event-teams')
       ssIssues.push('SSの正式なイベント選手名簿を取得できません');
      else{
@@ -337,9 +358,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    box.append(make('span','',label));select.setAttribute('aria-label',label);
    select.append(new Option('選手を選択',''));
    const snapshot=state.ssNameContext?.snapshot;
-   // Editing is event-wide; only SS registration is restricted to a verified fixture.
-   // Do not hide an identified player just because the match has no result/card yet.
-   let names=(snapshot?.players||[]).filter(name=>snapshot?.memberIds?.has(name));
+   // Keep selection within the confirmed fixture; an unrelated team's player
+   // must not become a valid scorer merely by being in the event roster.
+   let names=fixturePeople(snapshot,item.matchSeq,item);
    if(field==='assist')names=names.filter(name=>name!==item.scorer);
    const suggestions=phoneticCandidates(field==='scorer'?item.rawScorer:item.rawAssist,
     state.ssNameContext?.aliases||[],snapshot,item.matchSeq);
@@ -395,7 +416,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
      const eventId=context?.snapshot?.eventId;
      const password=document.getElementById('ssAnalysisToken')?.value.trim();
      if(!spoken||!official||!memberId||!team||!eventId||!password||
-        !fixturePeople(context.snapshot,current.matchSeq).includes(official)){
+        !fixturePeople(context.snapshot,current.matchSeq,current).includes(official)){
       say('SS接続と選手の確定を確認してください。');return;
      }
      learn.disabled=true;learn.textContent='記憶中…';
@@ -421,7 +442,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   if(state.ssNameEnabled&&!item.ssIdentity?.scorer){
    const snapshot=state.ssNameContext?.snapshot;
    const message=!snapshot?'SS未接続：最初の動画登録画面でTESTイベントに接続してください。':
-    !fixturePeople(snapshot,item.matchSeq).length?'SS名簿に該当する試合・選手がありません。TESTイベントと試合番号を確認してください。':
+    !fixturePeople(snapshot,item.matchSeq,item).length?'SS名簿に該当する試合・選手がありません。TESTイベントと試合番号を確認してください。':
     !item.rawScorer?'音声から得点者名を検出できませんでした。':
     '「'+String(item.rawScorer).slice(0,50)+'」をSSの正式名・別名辞書と照合できませんでした。';
    fields.append(make('p','fine-print',message));
