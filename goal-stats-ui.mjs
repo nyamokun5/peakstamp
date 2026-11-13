@@ -361,6 +361,17 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    // Keep selection within the confirmed fixture; an unrelated team's player
    // must not become a valid scorer merely by being in the event roster.
    let names=fixtureRosterNames(snapshot,item.matchSeq,item);
+   if(!names.length){
+    const rosterCount=snapshot?.players?.length||0;
+    const teams=[...new Set(snapshot?.playerTeam?.values?.()||[])].join(', ')||'なし';
+    const fixture=snapshot?.matches?.find(m=>Number(m.seq)===Number(item.matchSeq));
+    const diagnostic='名簿 '+rosterCount+'人 / 方式 '+(snapshot?.rosterSource||'未取得')+
+     ' / チーム '+teams+' / 第'+(item.matchSeq||'?')+'試合 '+
+     (fixture?((fixture.leftTeam||'未定')+' vs '+(fixture.rightTeam||'未定')):'なし')+
+     ' / 動画 '+(item.teamA||'?')+' vs '+(item.teamB||'?')+
+     ' / 確認 '+(item.matchupConfirmed===true?'済':'未');
+    box.append(make('span','goal-review-hint',diagnostic));
+   }
    if(field==='assist')names=names.filter(name=>name!==item.scorer);
    const suggestions=phoneticCandidates(field==='scorer'?item.rawScorer:item.rawAssist,
     state.ssNameContext?.aliases||[],snapshot,item.matchSeq);
