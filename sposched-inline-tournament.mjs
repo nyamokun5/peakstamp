@@ -12,9 +12,17 @@ export function projectFourMatchTournament(snapshot,rows){
  if(!bracket.ready)return {...bracket,knockout:null,complete:false};
  const pairs=new Map([[3,bracket.thirdPlace],[4,bracket.final]]);
  const totals=new Map([[3,[0,0]],[4,[0,0]]]);
+ const seen=new Set();
  for(const [index,row] of rows.entries()){
   if(row.include===false||![3,4].includes(Number(row.seq)))continue;
   const seq=Number(row.seq),pair=pairs.get(seq);
+  const sourceName=String(row.goal?.source?.name||'');
+  const goalId=String(row.goal?.id||'');
+  if(sourceName&&goalId){
+   const key=sourceName+'::'+goalId;
+   if(seen.has(key))throw Error('同じ動画ゴールが重複しています');
+   seen.add(key);
+  }
   if(!row.scorer||!snapshot.playerTeam?.has(row.scorer))
    throw Error('ゴール'+(index+1)+'：得点者がSS名簿にありません');
   if(!['named','none'].includes(row.assistMode)||
