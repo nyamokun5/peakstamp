@@ -1951,7 +1951,24 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    try{storedJob=localStorage.getItem('peakstamp:test:worker-batch:'+snapshot.eventId);}
    catch{throw Error('Safariの端末保存が利用できません。プライベートブラウズ・サイトデータの設定を確認してください');}
    try{localJob=storedJob?JSON.parse(storedJob):null;}
-   catch{throw Error('端末の登録履歴が破損しています。再送せずSS登録状況を確認してください');}
+   catch{
+    if(workerJob!==null)
+     throw Error('端末の登録履歴が破損しています。Worker側に登録履歴があります。SS登録状況を確認してください');
+    const recover=document.createElement('button');
+    recover.type='button';recover.className='whisper-run';
+    recover.textContent='端末の登録履歴を修復';
+    recover.addEventListener('click',()=>{
+     try{
+      // Only clear this TEST event's malformed marker after the authoritative
+      // Worker inspection returned no job. Never clear other event history.
+      localStorage.removeItem('peakstamp:test:worker-batch:'+snapshot.eventId);
+      status.textContent='端末の履歴を修復しました。「SS登録内容を確認」を押してください';
+      recover.disabled=true;
+     }catch(error){status.textContent='端末の保存領域を修復できません：'+(error.message||String(error));}
+    });
+    matches.append(recover);
+    throw Error('端末の履歴が破損しています。Workerにジョブがないことを確認済みです。修復後に再確認してください');
+   }
    const admission=decideInlineBatchAdmission({eventId:snapshot.eventId,workerJob,localJob});
    if(!admission.allowed)throw Error(admission.reason);
    const startFirst=document.createElement('button');
