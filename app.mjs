@@ -1953,7 +1953,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    if(!admission.allowed)throw Error(admission.reason);
    const startFirst=document.createElement('button');
    startFirst.type='button';startFirst.className='whisper-run';
-   startFirst.textContent='TEST前半2試合を登録';
+   startFirst.textContent='TESTに4試合を登録';
    startFirst.addEventListener('click',async()=>{
     startFirst.disabled=true;
     try{
@@ -1965,17 +1965,33 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
      const {startInlineBatchOnce}=await import('./sposched-inline-dispatch.mjs');
      const {plan}=buildInlineFirstRoundPlan({snapshot,rows,requestId:crypto.randomUUID()});
      status.textContent='TEST準決勝を送信中。再送しないでください';
-     const result=await startInlineBatchOnce({
-      plan,storage:window.localStorage,
+     const {runOneClickKnockout}=await import('./sposched-inline-one-click.mjs');
+     const result=await runOneClickKnockout({
+      start:()=>startInlineBatchOnce({
+       plan,storage:window.localStorage,
+       inspect:eventId=>ssNames.inspectBatch(eventId),
+       send:payload=>ssNames.startBatch(payload),
+       verifyCurrent:()=>{
+        assertCurrentInlineEvent(snapshot,state.ssNameContext);
+        if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage))!==JSON.stringify(goals))
+         throw Error('ゴールが変更されました。再確認してください');
+       }
+      }),
       inspect:eventId=>ssNames.inspectBatch(eventId),
-      send:payload=>ssNames.startBatch(payload),
+      refreshOfficial:eventId=>ssNames.refreshOfficial(eventId),
+      buildSecond:async(fresh,job)=>{
+       const {buildInlineSecondRoundPlan}=await import('./sposched-inline-plan.mjs');
+       return buildInlineSecondRoundPlan({snapshot:fresh,rows,workerJob:job});
+      },
+      append:payload=>ssNames.appendSecondRound(payload),
       verifyCurrent:()=>{
        assertCurrentInlineEvent(snapshot,state.ssNameContext);
        if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage))!==JSON.stringify(goals))
         throw Error('ゴールが変更されました。再確認してください');
-      }
+      },
+      onStatus:message=>{status.textContent=message;}
      });
-     status.textContent='準決勝登録ジョブを受け付けました（'+result.status+'）。完了確認が必要です';
+     status.textContent='4試合の登録ジョブを受け付けました（'+result.status+'）。完了確認が必要です';
     }catch(e){status.textContent=e.message||String(e);}
    });
    matches.append(startFirst);
