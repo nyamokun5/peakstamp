@@ -31,3 +31,12 @@ test('storage failure prevents any write',async()=>{
   inspect:async()=>null,send:async()=>{sends++}}),/保存できません/);
  assert.equal(sends,0);
 });
+
+test('event change during Worker inspect stops before persistence or write',async()=>{
+ const storage=makeStorage();let sends=0;
+ await assert.rejects(startInlineBatchOnce({plan,storage,inspect:async()=>null,
+  verifyCurrent:()=>{throw Error('event changed')},
+  send:async()=>{sends++}}),/event changed/);
+ assert.equal(sends,0);
+ assert.equal(storage.getItem('peakstamp:test:worker-batch:'+event_id),null);
+});
