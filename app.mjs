@@ -1853,24 +1853,16 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
     (round?' ／ '+round.left+'−'+round.right:'');
    matches.append(item);
   }
-  // Show derived bracket without mutating SS. Waiting knockout fixtures may
-  // have no official opponents until first-round finishes are committed.
-  for(const round of bracket.firstRound){
-   const item=document.createElement('p');
-   item.textContent='第'+round.seq+'試合：'+round.left+'−'+round.right+
-    (round.requiresDecision?' ／ 引き分け・勝者の指定が必要':' ／ 勝者 '+round.winner);
-   matches.append(item);
-  }
-  const pairing=document.createElement('p');
-  pairing.textContent=bracket.ready
-   ?'3位決定戦：'+bracket.thirdPlace.join(' vs ')+' ／ 決勝：'+bracket.final.join(' vs ')
-   :'第1・第2試合に引き分けがあります。勝者確定後に対戦カードを算出します。';
-  matches.append(pairing);
-  if(bracket.knockout)for(const match of bracket.knockout){
-   const item=document.createElement('p');
-   item.textContent='第'+match.seq+'試合：'+match.leftTeam+' '+match.left+'−'+match.right+
-    ' '+match.rightTeam+(match.requiresDecision?' ／ 引き分け・勝者指定が必要':' ／ 勝者 '+match.winner);
-   matches.append(item);
+  // Keep the mobile preview compact: the four scored rows above are the
+  // single source of truth. Only show unresolved decisions separately.
+  if(!bracket.ready){
+   const note=document.createElement('p');
+   note.textContent='第1・第2試合：引き分けの勝者を指定してください';
+   matches.append(note);
+  }else if(!bracket.complete){
+   const note=document.createElement('p');
+   note.textContent='第3・第4試合：引き分けの勝者を指定してください';
+   matches.append(note);
   }
   matches.hidden=false;
   summary.textContent='SS：'+(snapshot.eventName||'選択中イベント')+' ／ '+rows.length+'ゴール';
