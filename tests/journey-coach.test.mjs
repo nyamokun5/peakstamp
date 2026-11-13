@@ -121,13 +121,13 @@ test('actual app wires analysis callbacks, missed-goal registration and final sa
  assert.match(montage,/onComplete\(\)/);
  assert.match(montage,/hsJsonReminder/);
 });
-test('goal review combines score validation and video Keep, with automatic next',()=>{
+test('goal review keeps video independent of SS validation and advances sequentially',()=>{
  const goal=readFileSync(new URL('../goal-stats-ui.mjs',import.meta.url),'utf8');
  assert.match(goal,/editor\.append\(scoreDetails,videoActions,actions,videoStatus\)/);
  assert.match(goal,/動画をキープ・次へ/);
- assert.match(goal,/const error=validateGoal\(current\)/);
+ assert.match(goal,/const valid=validateGoal\(current\)/);
  assert.match(goal,/current\.status='confirmed'/);
- assert.match(goal,/nextUnreviewedGoalVideo\(queue\(\),entry\.key\)/);
+ assert.match(goal,/nextGoalAfterDecision\(rows,entry\.key/);
 });
 
 test('highlight completion is offered again only after re-judging the last fully-reviewed scene',()=>{
