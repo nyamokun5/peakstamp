@@ -5,7 +5,7 @@
 import {decideInlineBatchAdmission} from './sposched-inline-admission.mjs';
 import {workerBatchStorageKey} from './sposched-worker-batch.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
-export async function startInlineBatchOnce({plan,inspect,send,storage}={}){
+export async function startInlineBatchOnce({plan,inspect,send,storage,verifyCurrent}={}){
  if(!UUID.test(plan?.event_id||'')||!UUID.test(plan?.request_id||'')||
     plan.confirm!=='TEST-ONLY BATCH WRITE'||!Array.isArray(plan.operations)||
     typeof inspect!=='function'||typeof send!=='function'||!storage)
@@ -18,6 +18,9 @@ export async function startInlineBatchOnce({plan,inspect,send,storage}={}){
  const workerJob=await inspect(plan.event_id);
  const admission=decideInlineBatchAdmission({eventId:plan.event_id,workerJob,localJob:existing});
  if(!admission.allowed)throw Error(admission.reason);
+ // Event/roster may change while the authoritative inspect is pending.
+ // Recheck immediately before recording intent or sending a mutation.
+ if(verifyCurrent)await verifyCurrent();
  // Persist the same request ID before any network call. If the response is
  // lost, the next click MUST stop and inspect instead of issuing a new ID.
  const marker={event_id:plan.event_id,request_id:plan.request_id,status:'sending'};
