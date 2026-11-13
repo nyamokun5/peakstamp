@@ -21,3 +21,9 @@ test('tied final requires human decision',()=>{
  const result=projectFourMatchTournament(ss(),[g(1,'A','1'),g(2,'D','2'),g(4,'A','3'),g(4,'D','4'),g(3,'B','5')]);
  assert.equal(result.complete,false);assert.equal(result.knockout[1].requiresDecision,true);
 });
+
+test('rejects duplicate knockout source goal before any registration',()=>{
+ assert.throws(()=>projectFourMatchTournament(ss(),[
+  g(1,'A','1'),g(2,'D','2'),g(3,'B','3'),g(3,'B','3'),g(4,'A','4')
+ ]),/重複/);
+});
