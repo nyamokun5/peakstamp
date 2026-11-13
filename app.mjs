@@ -1840,8 +1840,17 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   const {validateInlineBatchReadiness}=await import('./sposched-inline-batch-gate.mjs');
   const bracket=projectFourMatchTournament(snapshot,rows);
   let registrationGate='';
-  try{validateInlineBatchReadiness(snapshot,rows);}
-  catch(error){registrationGate=error.message||String(error);}
+  try{
+   validateInlineBatchReadiness(snapshot,rows);
+   const {decideInlineBatchAdmission}=await import('./sposched-inline-admission.mjs');
+   const workerJob=await ssNames.inspectBatch(snapshot.eventId);
+   const localKey='peakstamp:test:worker-batch:'+snapshot.eventId;
+   let localJob=null;
+   try{localJob=JSON.parse(localStorage.getItem(localKey)||'null');}
+   catch{throw Error('端末の登録履歴を確認できません。再送せず確認してください');}
+   const admission=decideInlineBatchAdmission({eventId:snapshot.eventId,workerJob,localJob});
+   if(!admission.allowed)throw Error(admission.reason);
+  }catch(error){registrationGate=error.message||String(error);}
   // Read-only preview: no job or write is created here.
   for(const fixture of snapshot.matches){
    const item=document.createElement('p');
