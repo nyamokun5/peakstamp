@@ -59,17 +59,18 @@ const romaji=value=>{
  }
  return out;
 };
-export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
+export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq,selectedTeams=null){
  const keys=spokenKeys(raw);
  const key=keys[0];
  if(!key||!Array.isArray(entries)||!snapshot?.memberIds||!snapshot?.playerTeam)return null;
  const names=new Set();
  const match=snapshot.matches?.find(m=>Number(m.seq)===Number(fixtureSeq));
  if(!match)return null;
+ const teams=Array.isArray(selectedTeams)&&selectedTeams.length===2?selectedTeams:[match.leftTeam,match.rightTeam];
  // Prefer an exact official roster name over an alias; never create a duplicate alias.
  const direct=(snapshot.players||[]).filter(name=>keys.includes(normalize(name)));
  if(direct.length===1)return snapshot.memberIds.has(direct[0])&&
-  [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam.get(direct[0]))?direct[0]:null;
+  teams.includes(snapshot.playerTeam.get(direct[0]))?direct[0]:null;
  if(direct.length>1)return null;
  // Shared aliases remain ambiguous even when one member is outside this fixture.
  const targets=new Set(entries.filter(e=>keys.includes(normalize(e.alias))).map(e=>String(e.member_id).toLowerCase()));
@@ -81,7 +82,7 @@ export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
  if(targets.size===0&&normalize(raw).replace(/さん$/,'')==='足川'){
   const candidates=(snapshot.players||[]).filter(name=>normalize(name)==='ashikawa');
   if(candidates.length===1&&snapshot.memberIds.has(candidates[0])&&
-     [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam.get(candidates[0])))return candidates[0];
+     teams.includes(snapshot.playerTeam.get(candidates[0])))return candidates[0];
  }
  // Phonetic match is a suggestion only if exactly one verified official
  // participant has this romanized reading and no stored alias conflicts.
@@ -90,7 +91,7 @@ export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
   if(reading){
    const candidates=(snapshot.players||[]).filter(name=>normalize(name).replace(/[^a-z]/g,'')===reading);
    if(candidates.length===1&&snapshot.memberIds.has(candidates[0])&&
-      [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam.get(candidates[0])))return candidates[0];
+      teams.includes(snapshot.playerTeam.get(candidates[0])))return candidates[0];
   }
  }
  // Phonetic matching is allowed only for a unique official roster member
@@ -100,7 +101,7 @@ export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
   if(phonetic){
    const all=(snapshot.players||[]).filter(name=>romaji(name)===phonetic);
    if(all.length===1&&snapshot.memberIds.has(all[0])&&
-      [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam.get(all[0])))return all[0];
+      teams.includes(snapshot.playerTeam.get(all[0])))return all[0];
   }
  }
  if(targets.size!==1)return null;
@@ -110,7 +111,7 @@ export function matchOfficialAlias(raw,entries,snapshot,fixtureSeq){
   for(const [name] of official){
    if(!snapshot.players.includes(name))continue;
    const team=snapshot.playerTeam.get(name);
-   if(!team||!match||![match.leftTeam,match.rightTeam].includes(team))continue;
+   if(!team||!match||!teams.includes(team))continue;
    names.add(name);
   }
  }
