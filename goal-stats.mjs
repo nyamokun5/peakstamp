@@ -302,8 +302,19 @@ export function createGoalDrafts(source,storage){
    const m=clip(x.match_label||x.quote).normalize('NFKC').match(/(?:チーム\\s*)?([1-9][0-9]?)\\s*(?:対|vs?\\.?|と)\\s*(?:チーム\\s*)?([1-9][0-9]?)/i);
    return m?{teamA:m[1],teamB:m[2],time:Number(x.time_seconds)}:null;
   }).filter(Boolean);
- const opening=calls.filter(x=>x.time>=0&&x.time<=30);
- const candidates=opening.length?opening:calls;
+ // Fall back to the transcript used by the video matchup review when the
+ // primary Gemini cache has no match_start rows (common with older caches).
+ const transcriptCalls=(transcript?.data?.utterances||[])
+  .filter(x=>x?.kind==='match_start').map(x=>{
+   const a=clip(x.team_a),b=clip(x.team_b);
+   if(a&&b)return {teamA:a,teamB:b,time:Number(x.time_seconds)};
+   const m=clip(x.match_label||x.quote).normalize('NFKC')
+    .match(/(?:チーム\\s*)?([1-9][0-9]?)\\s*(?:対|vs?\\.?|と)\\s*(?:チーム\\s*)?([1-9][0-9]?)/i);
+   return m?{teamA:m[1],teamB:m[2],time:Number(x.time_seconds)}:null;
+  }).filter(Boolean);
+ const available=calls.length?calls:transcriptCalls;
+ const opening=available.filter(x=>x.time>=0&&x.time<=30);
+ const candidates=opening.length?opening:available;
  const unique=[...new Set(candidates.map(x=>x.teamA+'|'+x.teamB))];
  const resolved=manual||(unique.length===1?candidates[0]:null);
  if(resolved)for(const item of items){
