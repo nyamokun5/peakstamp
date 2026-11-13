@@ -1890,6 +1890,44 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    note.textContent='第1・第2試合の確認：'+(e.message||String(e));
    matches.append(note);
   }
+  // Existing staged jobs may only be continued after a passive Worker
+  // inspection. Never auto-append or silently replay a submitted phase.
+  try{
+   const existing=await ssNames.inspectBatch(snapshot.eventId);
+   if(existing?.layout_mode==='four-knockout-staged-v1'&&
+      existing.status==='awaiting_second_round'){
+    const {buildInlineSecondRoundPlan}=await import('./sposched-inline-plan.mjs');
+    const continuation=buildInlineSecondRoundPlan({snapshot,rows,workerJob:existing});
+    const continueButton=document.createElement('button');
+    continueButton.type='button';continueButton.className='whisper-run';
+    continueButton.textContent='TEST後半2試合を登録';
+    continueButton.addEventListener('click',async()=>{
+     continueButton.disabled=true;
+     try{
+      const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
+      assertCurrentInlineEvent(snapshot,state.ssNameContext);
+      if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage))!==JSON.stringify(goals))
+       throw Error('ゴールが変更されました。再確認してください');
+      const current=await ssNames.inspectBatch(snapshot.eventId);
+      if(current?.request_id!==existing.request_id||current?.status!=='awaiting_second_round'||
+         current.cursor!==existing.cursor)
+       throw Error('Workerの状態が変わりました。再取得してください');
+      status.textContent='TEST後半登録を送信しています。再送しないでください';
+      const result=await ssNames.appendSecondRound(continuation);
+      status.textContent='後半登録を受け付けました（'+result.status+'）。完了確認が必要です';
+     }catch(e){
+      status.textContent=e.message||String(e);
+      // The request may have reached Worker. Never allow a blind retry.
+     }
+    });
+    matches.append(continueButton);
+   }
+  }catch(e){
+   // Do not present continuation controls without validated official data.
+   const note=document.createElement('p');
+   note.textContent='後半登録の確認：'+(e.message||String(e));
+   matches.append(note);
+  }
   const bracket=projectFourMatchTournament(snapshot,rows);
   let registrationGate='';
   try{
