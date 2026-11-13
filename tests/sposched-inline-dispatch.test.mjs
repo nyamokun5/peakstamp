@@ -15,7 +15,7 @@ test('lost response prevents another write',async()=>{
  const storage=makeStorage();let sends=0;
  const args={plan,storage,inspect:async()=>null,send:async()=>{sends++;throw Error('timeout')}};
  await assert.rejects(startInlineBatchOnce(args),/再送せず/);
- await assert.rejects(startInlineBatchOnce(args),/再送せず|登録ジョブ/);
+ await assert.rejects(startInlineBatchOnce(args),/再送せず|再送できません|登録ジョブ/);
  assert.equal(sends,1);
 });
 test('existing Worker job blocks a send',async()=>{
