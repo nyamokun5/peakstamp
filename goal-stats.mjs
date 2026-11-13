@@ -316,7 +316,18 @@ export function createGoalDrafts(source,storage){
  const opening=available.filter(x=>x.time>=0&&x.time<=30);
  const candidates=opening.length?opening:available;
  const unique=[...new Set(candidates.map(x=>x.teamA+'|'+x.teamB))];
- const resolved=manual||(unique.length===1?candidates[0]:null);
+ // A manually corrected goal card can also identify the whole recording
+ // when the old video-level cache was never saved. Only accept one unique pair.
+ const cardPairs=items.filter(x=>x.status!=='excluded').map(x=>{
+  const a=clip(x.teamA),b=clip(x.teamB);
+  if(a&&b)return {teamA:a,teamB:b};
+  const m=clip(x.matchLabel).normalize('NFKC')
+   .match(/([1-9][0-9]?)\\s*(?:対|vs?\\.?)\\s*([1-9][0-9]?)/i);
+  return m?{teamA:m[1],teamB:m[2]}:null;
+ }).filter(Boolean);
+ const distinctCards=[...new Set(cardPairs.map(x=>x.teamA+'|'+x.teamB))];
+ const fromCard=distinctCards.length===1?cardPairs[0]:null;
+ const resolved=manual||(unique.length===1?candidates[0]:null)||fromCard;
  if(resolved)for(const item of items){
   // A confirmed goal still needs the video's manually corrected matchup.
   // Excluded goals remain untouched; individual field edits take precedence.
