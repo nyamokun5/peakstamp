@@ -13,23 +13,41 @@ export function analysisFixtureAgrees(goal,match){
  }
  return !pair||pair.sort().join('|')===[team(match.leftTeam),team(match.rightTeam)].sort().join('|');
 }
-export function fixturePeople(snapshot,seq){
+// A confirmed video matchup may identify the participants before SpoSched
+// fills the waiting placement fixture. Never infer a team from the scorer.
+export function selectedFixtureTeams(goal,snapshot,seq){
+ const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
+ if(!match)return [];
+ const teamName=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/\\s/g,'')
+  .replace(/^チーム/,'team').replace(/^(?:team)?(\\d{1,2})$/,'team$1');
+ const rosterTeams=[...new Set(snapshot?.playerTeam?.values?.()||[])];
+ const selected=[goal?.teamA,goal?.teamB];
+ if(selected.every(Boolean)){
+  const resolved=selected.map(v=>rosterTeams.filter(t=>teamName(t)===teamName(v)));
+  if(resolved.every(a=>a.length===1)&&resolved[0][0]!==resolved[1][0])
+   return resolved.map(a=>a[0]);
+ }
+ return [match.leftTeam,match.rightTeam].filter(Boolean);
+}
+export function fixturePeople(snapshot,seq,goal=null){
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
  // A fixture can be awaiting its result (notably placement matches) while its
  // teams and players are already assigned. Result status is not identity status.
  // Keep requiring a real match ID and both assigned teams; registration checks
  // remain separate and must not be relaxed by this read-only lookup.
- if(!match?.matchId||!match.leftTeam||!match.rightTeam)return [];
+ if(!match?.matchId)return [];
+ const teams=selectedFixtureTeams(goal,snapshot,seq);
+ if(teams.length!==2)return [];
  return (snapshot.players||[]).filter(name=>uuid.test(snapshot.memberIds?.get(name)||'')&&
   uuid.test(snapshot.playerIds?.get(name)||'')&&
-  [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam?.get(name)));
+  teams.includes(snapshot.playerTeam?.get(name)));
 }
 export function resolveAnalysisGoal(item,context){
  const result={...item,rawScorer:item.rawScorer??item.scorer??'',rawAssist:item.rawAssist??item.assist??''};
  const previous=item.ssIdentity;
  const snapshot=context?.snapshot,entries=context?.aliases||[];
  const seq=Number(item.matchSeq),match=snapshot?.matches?.find(m=>Number(m.seq)===seq);
- const people=analysisFixtureAgrees(item,match)?fixturePeople(snapshot,seq):[];
+ const people=fixturePeople(snapshot,seq,item);
  const edits=new Set(item.userEditedGoalFields||[]);
  const identity={environment:'staging',eventId:snapshot?.eventId||'',matchId:match?.matchId||'',seq,scorer:null,assist:null};
  for(const field of ['scorer','assist']){
@@ -46,7 +64,7 @@ export function resolveAnalysisGoal(item,context){
   // fixture even when the spoken alias cannot be resolved again. Do not
   // require a second manual selection of an unchanged dropdown value.
   const name=manual?(people.includes(item[field])?item[field]:null):
-   (matchOfficialAlias(raw,entries,snapshot,seq)||
+   (matchOfficialAlias(raw,entries,snapshot,seq,selectedFixtureTeams(item,snapshot,seq))||
     (people.includes(result[field])?result[field]:null));
   if(!name||!people.includes(name))continue;
   if(field==='assist'&&(!identity.scorer||name===identity.scorer.name||
@@ -70,8 +88,8 @@ export function verifiedAnalysisPerson(goal,snapshot,seq,field){
  const identity=goal?.ssIdentity,p=identity?.[field];
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
  if(identity?.environment!=='staging'||identity.eventId!==snapshot?.eventId||
-    identity.matchId!==match?.matchId||identity.seq!==Number(seq)||!analysisFixtureAgrees(goal,match)||!p||
-    p.name!==goal[field]||!fixturePeople(snapshot,seq).includes(p.name)||
+    identity.matchId!==match?.matchId||identity.seq!==Number(seq)||!p||
+    p.name!==goal[field]||!fixturePeople(snapshot,seq,goal).includes(p.name)||
     snapshot.memberIds.get(p.name)!==p.memberId||snapshot.playerIds.get(p.name)!==p.playerId||
     snapshot.playerTeam.get(p.name)!==p.team)return null;
  return p;
