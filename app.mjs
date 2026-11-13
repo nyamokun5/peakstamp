@@ -1817,9 +1817,23 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   const snapshot=state.ssNameContext?.snapshot;
   if(!snapshot)throw Error('最初の画面でSSイベントに接続してください。パスコードの再入力は不要です。');
   const goals=confirmedGoalExport(state.sources,window.localStorage);
-  const unresolved=state.sources.flatMap(src=>createGoalDrafts(src,window.localStorage).items)
-   .filter(g=>g.status!=='excluded'&&g.status!=='confirmed');
-  if(unresolved.length)throw Error('未確定のゴールが'+unresolved.length+'件あります。先に確認してください。');
+  const unresolved=state.sources.flatMap(src=>createGoalDrafts(src,window.localStorage).items
+   .filter(g=>g.status!=='excluded'&&g.status!=='confirmed').map(g=>({src,g})));
+  if(unresolved.length){
+   const fix=document.createElement('button');
+   fix.type='button';fix.className='whisper-run';
+   fix.textContent='未確定の'+unresolved.length+'件を確認する';
+   fix.addEventListener('click',()=>{
+    goalReview.refresh();
+    const first=unresolved[0];
+    const rows=[...document.querySelectorAll('#goalStatsList .goal-queue-row')];
+    const target=rows.find(row=>row.dataset.goalKey?.endsWith('::'+first.g.id));
+    if(target){target.click();document.getElementById('goalStatsPanel')?.scrollIntoView({behavior:'smooth',block:'start'});}
+    else{document.getElementById('goalStatsPanel')?.scrollIntoView({behavior:'smooth',block:'start'});}
+   });
+   matches.append(fix);matches.hidden=false;
+   throw Error('未確定のゴールが'+unresolved.length+'件あります。上のボタンから該当ゴールを開けます。');
+  }
   if(!goals.goals.length)throw Error('SS登録対象の確定済みゴールがありません。');
   const rows=prepareGoalRows(goals,snapshot);
   const errors=[];
