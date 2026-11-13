@@ -1,3 +1,4 @@
+import * as identity from '../sposched-analysis-identity.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -761,4 +762,26 @@ test('pending fixture gives an actionable message and keeps original row number 
   error.rowNumber===2 && error.message.startsWith('2件目：'));
  snapshot.matches[0].leftTeam='Team2';snapshot.matches[0].rightTeam='Team4';
  assert.match(validateGoalRow(row,snapshot),/Team1.*#3.*Team2 vs Team4/);
+});
+
+// The first three fixtures and the placement fixture can have different
+// lifecycle states. A waiting result must not erase an assigned player.
+test('SS identity: waiting fixture resolves players but missing fixture IDs do not',()=>{
+ const {fixturePeople,resolveAnalysisGoal,verifiedAnalysisPerson}=identity;
+ const snap={eventId:'event-1',rosterSource:'official-current-event-teams',
+  matches:[{seq:3,matchId:'match-3',status:'waiting',leftTeam:'Team2',rightTeam:'Team4'}],
+  players:['Yohei Tyler Takasaki'],memberIds:new Map([['Yohei Tyler Takasaki','11111111-1111-4111-8111-111111111111']]),
+  playerIds:new Map([['Yohei Tyler Takasaki','22222222-2222-4222-8222-222222222222']]),
+  playerTeam:new Map([['Yohei Tyler Takasaki','Team4']])};
+ assert.deepEqual(fixturePeople(snap,3),['Yohei Tyler Takasaki']);
+ const goal={id:'g5',matchSeq:3,matchLabel:'2 vs 4',scorer:'Yohei Tyler Takasaki',
+  rawScorer:'たけざき',assistStatus:'none',videoDecision:'kept',status:'draft',
+  userEditedGoalFields:['scorer']};
+ const resolved=resolveAnalysisGoal(goal,{snapshot:snap,aliases:[]});
+ assert.equal(resolved.status,'confirmed');
+ assert.equal(resolved.ssIdentity.scorer.name,'Yohei Tyler Takasaki');
+ assert.ok(verifiedAnalysisPerson(resolved,snap,3,'scorer'));
+ snap.matches[0]={...snap.matches[0],matchId:''};
+ assert.deepEqual(fixturePeople(snap,3),[]);
+ assert.equal(resolveAnalysisGoal(goal,{snapshot:snap,aliases:[]}).status,'draft');
 });
