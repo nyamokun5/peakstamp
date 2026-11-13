@@ -1837,34 +1837,20 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   if(!goals.goals.length)throw Error('SS登録対象の確定済みゴールがありません。');
   const rows=prepareGoalRows(goals,snapshot);
   const {projectFourMatchTournament}=await import('./sposched-inline-tournament.mjs');
+  const {validateInlineBatchReadiness}=await import('./sposched-inline-batch-gate.mjs');
   const bracket=projectFourMatchTournament(snapshot,rows);
-  const errors=[];
-  const counts=new Map();
-  const computedScores=new Map();
-  const normalizedTeam=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/\\s/g,'').replace(/^チーム/,'team').replace(/^(?:team)?(\\d+)$/,'team$1');
-  for(const [i,row] of rows.entries()){
-   if(!row.seq||!snapshot.matches.some(m=>m.seq===row.seq))errors.push('ゴール'+(i+1)+'：試合を特定できません');
-   if(!row.scorer)errors.push('ゴール'+(i+1)+'：得点者が未照合です');
-   if(!['named','none'].includes(row.assistMode)||(row.assistMode==='named'&&!row.assist))
-    errors.push('ゴール'+(i+1)+'：アシストを確認してください');
-   if(row.seq)counts.set(row.seq,(counts.get(row.seq)||0)+1);
-   // Count only roster-verified goals against an official, known fixture.
-   const fixture=snapshot.matches.find(m=>m.seq===row.seq);
-   const team=row.scorer?snapshot.playerTeam?.get(row.scorer):'';
-   if(fixture?.leftTeam&&fixture?.rightTeam&&team){
-    const side=normalizedTeam(team)===normalizedTeam(fixture.leftTeam)?'left':
-     normalizedTeam(team)===normalizedTeam(fixture.rightTeam)?'right':'';
-    if(side){const score=computedScores.get(row.seq)||{left:0,right:0};score[side]++;computedScores.set(row.seq,score);}
-    else errors.push('ゴール'+(i+1)+'：所属チームが対戦カードと一致しません');
-   }
-   else if(row.scorer&&fixture?.leftTeam&&fixture?.rightTeam)
-    errors.push('ゴール'+(i+1)+'：所属チームを確認できません');
-  }
+  let registrationGate='';
+  try{validateInlineBatchReadiness(snapshot,rows);}
+  catch(error){registrationGate=error.message||String(error);}
+  // Read-only preview: no job or write is created here.
   for(const fixture of snapshot.matches){
    const item=document.createElement('p');
-   item.textContent='第'+fixture.seq+'試合 '+(fixture.leftTeam||'?')+' vs '+(fixture.rightTeam||'?')+
-    '　'+(counts.get(fixture.seq)||0)+'ゴール'+
-    (computedScores.has(fixture.seq)?' ／ 推定 '+computedScores.get(fixture.seq).left+'−'+computedScores.get(fixture.seq).right:'');
+   const round=bracket.firstRound.find(m=>m.seq===fixture.seq)||
+    bracket.knockout?.find(m=>m.seq===fixture.seq);
+   item.textContent='第'+fixture.seq+'試合：'+
+    (round?.leftTeam||fixture.leftTeam||'?')+' vs '+
+    (round?.rightTeam||fixture.rightTeam||'?')+
+    (round?' ／ '+round.left+'−'+round.right:'');
    matches.append(item);
   }
   // Show derived bracket without mutating SS. Waiting knockout fixtures may
@@ -1888,8 +1874,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   }
   matches.hidden=false;
   summary.textContent='SS：'+(snapshot.eventName||'選択中イベント')+' ／ '+rows.length+'ゴール';
-  status.textContent=errors.length?errors.slice(0,4).join(' ／ ')+(errors.length>4?' ほか'+(errors.length-4)+'件':''):
-   (bracket.complete?'4試合のスコア・勝敗を算出しました。':bracket.ready?'第3・第4試合に引き分けがあります。勝者指定が必要です。':'第1・第2試合に引き分けがあります。勝者指定が必要です。')+' SSへの書き込みは未実施です。重複・正式試合IDの最終照合は未実装です。';
+  status.textContent=(registrationGate||'4試合の登録前チェックに合格しました。')+' ／ SSへの書き込みは未実施です。';
  }catch(error){status.textContent=error.message||String(error)}
  finally{button.disabled=false}
 });
