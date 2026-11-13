@@ -494,7 +494,6 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const ssReady=state.ssNameEnabled!==true ||
      (Boolean(current.ssIdentity?.scorer) &&
       (current.assistStatus!=='named'||Boolean(current.ssIdentity?.assist)));
-   if(!valid||!ssReady){scoreDetailsOpen=true;say(!valid?'得点情報を修正してからキープしてください。':'得点者・アシストをSS名簿から選択してください。');render();return;}
     if(valid&&ssReady){
     current.status='confirmed';
     current.ssAutoConfirmed=false;
