@@ -15,7 +15,11 @@ export function analysisFixtureAgrees(goal,match){
 }
 export function fixturePeople(snapshot,seq){
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
- if(!match?.matchId||match.status==='waiting'||!match.leftTeam||!match.rightTeam)return [];
+ // A fixture can be awaiting its result (notably placement matches) while its
+ // teams and players are already assigned. Result status is not identity status.
+ // Keep requiring a real match ID and both assigned teams; registration checks
+ // remain separate and must not be relaxed by this read-only lookup.
+ if(!match?.matchId||!match.leftTeam||!match.rightTeam)return [];
  return (snapshot.players||[]).filter(name=>uuid.test(snapshot.memberIds?.get(name)||'')&&
   uuid.test(snapshot.playerIds?.get(name)||'')&&
   [match.leftTeam,match.rightTeam].includes(snapshot.playerTeam?.get(name)));
