@@ -4,6 +4,14 @@ const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 // Commentary team labels must agree with the selected numbered fixture.
 export function analysisFixtureAgrees(goal,match){
  if(!match)return false;
+ // Knockout placements have a numbered official slot before SS publishes
+ // opponents. Unknown official sides are not a contradictory pairing.
+ // Only the explicitly confirmed video pairing may be used at this stage;
+ // the Worker still verifies the official opponents after semifinals finish.
+ if(match.status==='waiting'&&[3,4].includes(Number(match.seq))&&
+    !match.leftTeam&&!match.rightTeam)
+  return (goal?.matchupConfirmed===true||goal?.userConfirmedMatchup===true)&&
+   Boolean(goal?.teamA&&goal?.teamB);
  const team=v=>String(v||'').normalize('NFKC').toLowerCase().replace(/\s/g,'')
   .replace(/^チーム/,'team').replace(/(番|組|チーム)$/g,'').replace(/^(?:team|第)?(\d{1,2})$/,'team$1');
  let pair=goal.teamA&&goal.teamB?[team(goal.teamA),team(goal.teamB)]:null;
