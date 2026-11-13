@@ -62,6 +62,22 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
   if(!response.ok)throw Error(data?.error?.message||'Worker登録エラー '+response.status+'。再送しないでください');
   return data;
  };
+ const appendSecondRound=async plan=>{
+  const password=token.value.trim();
+  if(!password||plan?.confirm!=='TEST-ONLY BATCH APPEND')
+   throw Error('後半登録の認証と確認が必要です');
+  // Never retry. A lost response must be reconciled by inspect.
+  const response=await fetch(gateway+'/staging/batch/append-second-round',{
+   method:'POST',headers:{'X-SS-Bridge-Token':password,'Content-Type':'application/json'},
+   body:JSON.stringify(plan),mode:'cors',cache:'no-store',
+   signal:AbortSignal.timeout(30000)});
+  let data;
+  try{data=await response.json();}catch{throw Error('後半登録の応答が不明です。再送せずWorkerを確認してください');}
+  if(!response.ok)throw Error(data?.error?.message||'後半登録エラー '+response.status);
+  if(data.request_id!==plan.request_id||data.event_id!==plan.event_id)
+   throw Error('後半登録の応答IDが一致しません。再送しないでください');
+  return data;
+ };
  const read=async path=>{
   const password=token.value.trim();if(!password)throw Error('SS連携パスワードを入力してください。');
   let response;
@@ -121,5 +137,5 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  connect.addEventListener('click',load);
  retry.addEventListener('click',()=>refresh());
  if(token.value)load();
- return {refresh,inspectBatch,startBatch};
+ return {refresh,inspectBatch,startBatch,appendSecondRound};
 }
