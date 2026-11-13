@@ -37,7 +37,7 @@ export function resolveAnalysisGoal(item,context){
   const manual=edits.has(field);
   // Recompute every automatic display label from the current event context.
   // Display-only matches have no ssIdentity, so checking previous identity is insufficient.
-  if(!manual)result[field]=raw;
+  if(!manual&&!people.includes(result[field]))result[field]=raw;
   if(field==='assist'&&item.assistStatus!=='named')continue;
   if(!snapshot||snapshot.rosterSource!=='official-current-event-teams')continue;
   const displayName=manual?null:matchEventPerson(raw,entries,snapshot);
