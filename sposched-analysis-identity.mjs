@@ -21,7 +21,13 @@ export function selectedFixtureTeams(goal,snapshot,seq){
  const teamName=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/\s/g,'')
   .replace(/^チーム/,'team').replace(/^(?:team)?(\d{1,2})$/,'team$1');
  const rosterTeams=[...new Set(snapshot?.playerTeam?.values?.()||[])];
- const selected=[goal?.teamA,goal?.teamB];
+ const edits=new Set(goal?.userEditedGoalFields||[]);
+ // Video transcription is a suggestion, not a user-confirmed matchup.
+ // Only use video sides while SS is waiting when the organizer has explicitly
+ // reviewed the pairing; otherwise keep identity unresolved.
+ const confirmed=goal?.matchupConfirmed===true||goal?.userConfirmedMatchup===true||
+  (edits.has('teamA')&&edits.has('teamB'));
+ const selected=confirmed?[goal?.teamA,goal?.teamB]:[];
  if(selected.some(Boolean)){
   if(!selected.every(Boolean))return [];
   const resolved=selected.map(v=>rosterTeams.filter(t=>teamName(t)===teamName(v)));
