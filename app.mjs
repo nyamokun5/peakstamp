@@ -95,11 +95,14 @@ function showMatchupReview(){
   next.addEventListener('click',()=>{
    // Source edits are saved and goal drafts are rebuilt before navigation.
    syncSources();
+   document.getElementById('matchupReviewNext').hidden=true;
    workflow.setStage('edit',{scroll:false});
    $('goalStatsPanel').scrollIntoView({behavior:'smooth',block:'start'});
    coaching.showGoalIntro();
   });
-  list.after(next);
+  list.before(next);
+  next.className='workflow-next-btn';
+  next.style.cssText='display:block;width:100%;min-height:52px;margin:12px 0;font-size:17px;font-weight:700';
  }
  next.hidden=false;
  list.scrollIntoView({behavior:'smooth',block:'start'});
@@ -315,7 +318,7 @@ function renderSourceList() {
     matchupInput.value=matchup.teamA&&matchup.teamB?matchup.teamA+' vs '+matchup.teamB:'';
     matchupInput.setAttribute('aria-label','対戦チーム');
     matchupInput.addEventListener('change',()=>{
-      const parts=matchupInput.value.split(/\\s+(?:vs?\\.?|対)\\s+|\\s*対\\s*/i);
+      const parts=matchupInput.value.split(/\s*(?:vs?\.?|対)\s*/i);
       if(parts.length!==2||!parts[0].trim()||!parts[1].trim()){
         error('loadError','対戦チームは「1 vs 2」の形式で入力してください。');return;
       }
