@@ -34,3 +34,14 @@ export function nextUnreviewedGoalVideo(rows,currentKey){
  return list.find((row,index)=>index>position&&goalNeedsVideoReview(row.item))||
    list.find((row,index)=>index<=position&&goalNeedsVideoReview(row.item))||null;
 }
+
+/** Revisiting a judged goal still advances to the next goal in sequence.
+ * Pending videos always take priority; never loop back to the same row. */
+export function nextGoalAfterDecision(rows,currentKey,{wasUnjudged=false}={}){
+ const pending=nextUnreviewedGoalVideo(rows,currentKey);
+ if(pending)return pending;
+ if(wasUnjudged)return null;
+ const list=(rows||[]).filter(row=>row?.item?.status!=='excluded');
+ const index=list.findIndex(row=>row.key===currentKey);
+ return index>=0&&index<list.length-1?list[index+1]:null;
+}
