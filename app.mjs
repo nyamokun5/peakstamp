@@ -2003,8 +2003,16 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    });
    matches.append(startFirst);
   }catch(e){
+   // Always show the intended action, but never enable an unsafe write.
+   // A failed Worker inspection or corrupt local marker must not be bypassed.
+   const blockedButton=document.createElement('button');
+   blockedButton.type='button';
+   blockedButton.className='whisper-run';
+   blockedButton.textContent='TESTに4試合を登録';
+   blockedButton.disabled=true;
+   matches.append(blockedButton);
    const note=document.createElement('p');
-   note.textContent='準決勝登録の確認：'+(e.message||String(e));
+   note.textContent='登録できません：'+(e.message||String(e));
    matches.append(note);
   }
   // Read-only preview: no job or write is created here.
