@@ -21,3 +21,14 @@ test('rejects malformed successful Worker response',async()=>{
  const eventId='11111111-1111-4111-8111-111111111111';
  await assert.rejects(inspectInlineBatchJob({eventId,postInspect:async()=>({status:200,body:{inspection_only:true,event_id:eventId,request_id:'bad',status:'running'}})}),/検証できません/);
 });
+
+test('accepts verified staged semifinal completion for automatic continuation',async()=>{
+ const eventId='11111111-1111-4111-8111-111111111111';
+ const job=await inspectInlineBatchJob({eventId,postInspect:async()=>({
+  status:200,body:{inspection_only:true,event_id:eventId,
+   request_id:'22222222-2222-4222-8222-222222222222',
+   layout_mode:'four-knockout-staged-v1',status:'awaiting_second_round',
+   phase:'preparing',cursor:2,total:2,completed:2}
+ })});
+ assert.equal(job.status,'awaiting_second_round');
+});
