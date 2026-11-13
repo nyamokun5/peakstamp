@@ -26,12 +26,9 @@ export function buildInlineFirstRoundPlan({snapshot,rows,requestId}={}){
  const decisions=quickGoalDecisions(snapshot,firstRows);
  const invalid=decisions.find(d=>!['ready','skipped'].includes(d.state));
  if(invalid)throw Error('準決勝ゴール'+(invalid.index+1)+'：'+invalid.reason);
- const {plan}=(()=>{ 
-  // Canonical planner still requires four fixtures. Give it only the
-  // verified semifinal goals and discard the synthetic later finishes.
-  const p=prepareWorkerTournament({snapshot,rows:firstRows,decisions,requestId});
-  return {plan:p};
- })();
+ // Canonical planner still requires four fixtures. Supply only verified
+ // semifinal goals and discard the later finish operations.
+ const plan=prepareWorkerTournament({snapshot,rows:firstRows,decisions,requestId});
  const operations=plan.operations.filter(op=>op.seq<=2);
  if(operations.filter(op=>op.action==='finish').length!==2)
   throw Error('準決勝2試合の終了操作がありません');
