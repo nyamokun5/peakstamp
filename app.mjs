@@ -1879,12 +1879,11 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   // The first round is independently verifiable even if the later
   // waiting knockout goals still require roster/fixture confirmation.
   try{
-   const {inferFirstRoundBracket}=await import('./sposched-inline-bracket.mjs');
-   const firstRound=inferFirstRoundBracket(snapshot,rows.filter(r=>[1,2].includes(Number(r.seq))));
+   const {inspectFirstRound}=await import('./sposched-inline-first-round.mjs');
+   const firstRound=inspectFirstRound(snapshot,rows);
    const note=document.createElement('p');
-   note.textContent='第1・第2試合：'+(firstRound.ready?
-    '得点・勝敗の計算完了（先行登録機能は準備中）':
-    '勝者の確定が必要です');
+   note.textContent='第1・第2試合：'+firstRound.firstRows.length+
+    'ゴールの登録前チェック完了（先行送信は未実装）';
    matches.append(note);
   }catch(e){
    const note=document.createElement('p');
