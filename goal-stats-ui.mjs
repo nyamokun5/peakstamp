@@ -1,4 +1,4 @@
-import {analysisFixtureAgrees,fixturePeople as officialFixturePeople} from './sposched-analysis-identity.mjs';
+import {fixturePeople as officialFixturePeople} from './sposched-analysis-identity.mjs';
 import {phoneticCandidates} from './sposched-alias-auto-match.mjs';
 import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
@@ -266,10 +266,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     else if(!fixture)ssIssues.push('SSの第'+(item.matchSeq||'?')+'試合を特定できません');
     else{
      
-     if(!analysisFixtureAgrees(item,fixture))
-      ssIssues.push('動画の対戦カードとSS第'+item.matchSeq+'試合のチームが一致しません');
-     else if(!officialFixturePeople(snap,item.matchSeq).length)
-      ssIssues.push('SS第'+item.matchSeq+'試合の正式選手名簿を取得できません（試合状態・所属チームを確認）');
+     if(!officialFixturePeople(snap,item.matchSeq,item).length)
+      ssIssues.push('SS第'+item.matchSeq+'試合の対戦チームと正式選手名簿を確認してください');
      else if(snap.rosterSource!=='official-current-event-teams')
       ssIssues.push('SSの正式なイベント選手名簿を取得できません');
      else{
@@ -395,7 +393,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
      const eventId=context?.snapshot?.eventId;
      const password=document.getElementById('ssAnalysisToken')?.value.trim();
      if(!spoken||!official||!memberId||!team||!eventId||!password||
-        !fixturePeople(context.snapshot,current.matchSeq).includes(official)){
+        !fixturePeople(context.snapshot,current.matchSeq,current).includes(official)){
       say('SS接続と選手の確定を確認してください。');return;
      }
      learn.disabled=true;learn.textContent='記憶中…';
@@ -421,7 +419,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   if(state.ssNameEnabled&&!item.ssIdentity?.scorer){
    const snapshot=state.ssNameContext?.snapshot;
    const message=!snapshot?'SS未接続：最初の動画登録画面でTESTイベントに接続してください。':
-    !fixturePeople(snapshot,item.matchSeq).length?'SS名簿に該当する試合・選手がありません。TESTイベントと試合番号を確認してください。':
+    !fixturePeople(snapshot,item.matchSeq,item).length?'SS名簿に該当する試合・選手がありません。TESTイベントと試合番号を確認してください。':
     !item.rawScorer?'音声から得点者名を検出できませんでした。':
     '「'+String(item.rawScorer).slice(0,50)+'」をSSの正式名・別名辞書と照合できませんでした。';
    fields.append(make('p','fine-print',message));
