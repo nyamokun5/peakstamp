@@ -120,7 +120,7 @@ function find(node,cls){
  }
  return null;
 }
-test('one-tap keep requires resolving a missing scorer before advancing',async()=>{
+test('one-tap keep saves clip while leaving unresolved scorer as draft',async()=>{
  const {dom,one,storage,restore}=setup();
  try{
   const goal=createGoalDrafts(one,storage).items[0];
@@ -132,7 +132,7 @@ test('one-tap keep requires resolving a missing scorer before advancing',async()
    onKeepClip:()=>{keeps++;return true;}
   });
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
-  assert.equal(keeps,0,'unresolved scorer must block goal confirmation and advancement');
+  assert.equal(keeps,1,'unresolved scorer must not block video keep');
   assert.notEqual(createGoalDrafts(one,storage).items[0].status,'confirmed');
  }finally{await restore()}
 });
