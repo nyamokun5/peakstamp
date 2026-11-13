@@ -18,8 +18,8 @@ export function analysisFixtureAgrees(goal,match){
 export function selectedFixtureTeams(goal,snapshot,seq){
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
  if(!match)return [];
- const teamName=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/\\s/g,'')
-  .replace(/^チーム/,'team').replace(/^(?:team)?(\\d{1,2})$/,'team$1');
+ const teamName=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/\s/g,'')
+  .replace(/^チーム/,'team').replace(/^(?:team)?(\d{1,2})$/,'team$1');
  const rosterTeams=[...new Set(snapshot?.playerTeam?.values?.()||[])];
  const selected=[goal?.teamA,goal?.teamB];
  if(selected.some(Boolean)){
