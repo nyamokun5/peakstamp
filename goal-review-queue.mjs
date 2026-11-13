@@ -31,8 +31,8 @@ export function goalNeedsVideoReview(item){
 }
 export function nextUnreviewedGoalVideo(rows,currentKey){
  const list=rows||[],position=list.findIndex(row=>row.key===currentKey);
- return list.find((row,index)=>index>position&&goalNeedsVideoReview(row.item))||
-   list.find((row,index)=>index<=position&&goalNeedsVideoReview(row.item))||null;
+ return list.find((row,index)=>index>position&&row.key!==currentKey&&goalNeedsVideoReview(row.item))||
+   list.find((row,index)=>index<position&&row.key!==currentKey&&goalNeedsVideoReview(row.item))||null;
 }
 
 /** Revisiting a judged goal still advances to the next goal in sequence.
