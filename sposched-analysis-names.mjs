@@ -90,6 +90,17 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
    throw Error('再作成の応答IDが一致しません。再送せず照合してください');
   return data;
  };
+ const decideBatch=async plan=>{
+  const password=token.value.trim();
+  if(!password||event.value!==plan?.event_id||plan?.confirm!=='TEST-ONLY BATCH DECISION')
+   throw Error('TESTイベントと認証を確認してください');
+  const response=await fetch(gateway+'/staging/batch/decision',{
+   method:'POST',headers:{'X-SS-Bridge-Token':password,'Content-Type':'application/json'},
+   body:JSON.stringify(plan),mode:'cors',cache:'no-store',signal:AbortSignal.timeout(30000)});
+  const data=await response.json();
+  if(!response.ok)throw Error(data?.error?.message||'結果確定の応答が不明です。再送せず登録状況を確認してください');
+  return data;
+ };
  const appendSecondRound=async plan=>{
   const password=token.value.trim();
   if(!password||plan?.confirm!=='TEST-ONLY BATCH APPEND')
@@ -165,5 +176,5 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  connect.addEventListener('click',load);
  retry.addEventListener('click',()=>refresh());
  if(token.value)load();
- return {refresh,inspectBatch,startBatch,recreateBatch,appendSecondRound,refreshOfficial};
+ return {refresh,inspectBatch,startBatch,recreateBatch,appendSecondRound,refreshOfficial,decideBatch};
 }

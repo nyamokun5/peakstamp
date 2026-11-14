@@ -1,5 +1,5 @@
 import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=5';
-import {initAnalysisNames} from './sposched-analysis-names.mjs?v=ss-network3';
+import {initAnalysisNames} from './sposched-analysis-names.mjs?v=ss-decision1';
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=peak52';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
@@ -1843,6 +1843,7 @@ $('ssInlineHistory')?.addEventListener('click',()=>$('ssInlineInspect')?.click()
 $('ssInlineInspect')?.addEventListener('click',async()=>{
  const button=$('ssInlineInspect'),status=$('ssInlineStatus');
  button.disabled=true;
+ document.getElementById('ssInlineDecision')?.remove();
  status.textContent='Workerの登録状況を確認中…';
  try{
   const eventId=state.ssNameContext?.snapshot?.eventId;
@@ -1886,6 +1887,27 @@ $('ssInlineInspect')?.addEventListener('click',async()=>{
     '\nWorker得点登録証跡：'+(receiptText||'なし')+
     '\n※上記はSS TESTの公式データを再取得した結果です。';
    status.style.whiteSpace='pre-wrap';
+   if(job.status==='needs_decision'){
+    const {drawDecisionPlan,sendDrawDecisionOnce}=await import('./sposched-inline-decision.mjs');
+    drawDecisionPlan(job,official);
+    const controls=document.createElement('div');controls.id='ssInlineDecision';
+    const decide=document.createElement('button');decide.type='button';decide.className='whisper-run';
+    decide.textContent='第'+job.decision.seq+'試合を引き分けで確定';
+    const feedback=document.createElement('p');feedback.setAttribute('role','status');
+    decide.addEventListener('click',async()=>{
+     decide.disabled=true;
+     try{
+      await sendDrawDecisionOnce({job,snapshot:official,storage:localStorage,
+       inspect:id=>ssNames.inspectBatch(id),refreshOfficial:id=>ssNames.refreshOfficial(id),
+       send:plan=>ssNames.decideBatch(plan),verifyCurrent:()=>{
+        if(state.ssNameContext?.snapshot?.eventId!==eventId)throw Error('TESTイベントが変更されました');
+       }});
+      feedback.textContent='引き分けの確定を受け付けました。「SS登録状況を確認」で次の試合・完了状態を確認してください';
+     }catch(e){feedback.textContent=e.message||'送信結果が不明です。再送せず登録状況を確認してください';}
+    });
+    controls.append(decide,feedback);status.after(controls);
+   }
+
   }
  }catch(e){status.textContent='登録状況の取得に失敗：'+(e.message||String(e));}
  finally{button.disabled=false;}
