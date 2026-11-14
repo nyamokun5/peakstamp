@@ -91,10 +91,15 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
  const saveArea=el('div');saveArea.id='simpleSaveArea';saveArea.hidden=true;
  const save=el('button','保存','primary quick-main');save.type='button';save.id='simpleSave';
  const help=el('p','','small');help.id='simpleSaveHelp';help.setAttribute('role','status');help.setAttribute('aria-live','polite');
+ const recovery=el('button','登録履歴を確認','quick-exception');recovery.type='button';recovery.hidden=true;
+ recovery.addEventListener('click',()=>{
+  d.body.classList.add('simple-advanced');advanced.textContent='その他の操作を閉じる';
+  $('workerBatchArea')?.scrollIntoView({behavior:'smooth',block:'start'});
+ });
  const advanced=el('button','その他の操作','quick-exception');advanced.type='button';
  advanced.addEventListener('click',()=>{const open=d.body.classList.toggle('simple-advanced');advanced.textContent=open?'その他の操作を閉じる':'その他の操作'});
  save.addEventListener('click',()=>{if(!save.disabled)onSave()});
- saveArea.append(save,help,advanced);$('autoPanel').before(saveArea);
+ saveArea.append(save,help,recovery,advanced);$('autoPanel').before(saveArea);
  const button=(label,fn,cls='quick-exception')=>{const b=el('button',label,cls);b.type='button';b.addEventListener('click',fn);return b};
  function select(row,field,label,options,value){
   const wrap=el('label','','quick-field');wrap.append(el('span',label));
@@ -276,6 +281,12 @@ export function installSimpleResults({document:d,getState,onEdit,onInclude,onWin
   const remaining=s.snapshot.matches.filter(m=>m.status!=='finished').length;
   save.textContent=remaining?(remaining===4?'4試合を保存':'残り'+remaining+'試合を保存'):'保存済み';
   save.disabled=s.busy||!s.canSave||Boolean(tie)||!remaining;
+  const historyBlocked=Boolean(s.blockReason&&/登録履歴|旧ジョブ|試合ID|送信記録/.test(s.blockReason));
+  const recoveryAvailable=['workerBatchRecreate','workerBatchReconnect','workerBatchRefresh','workerGateAudit'].some(id=>{
+   const control=$(id);return control&&!control.hidden;
+  });
+  recovery.hidden=!historyBlocked&&!recoveryAvailable;
+  if(!recovery.hidden&&historyBlocked)save.disabled=true;
   help.textContent=tie?'第'+tie[0]+'試合の同点時の結果を選んでください。':s.canSave?'':remaining?s.blockReason:'';
   root.inert=s.busy;
  }
