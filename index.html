@@ -45,6 +45,12 @@
         <span>1本につき試合番号を指定</span>
         <small>元動画は送信されません</small>
       </label>
+      <div class="compact-details" id="testVideoCachePanel">
+        <button id="testVideoSave" type="button" class="whisper-run">テスト動画を端末に保存</button>
+        <button id="testVideoRestore" type="button" class="whisper-run">前回のテスト動画を復元</button>
+        <button id="testVideoClear" type="button" class="whisper-run">テスト動画の保存を削除</button>
+        <p id="testVideoCacheStatus" class="fine-print" role="status" aria-live="polite">TEST専用。動画はサーバーに送信されません。</p>
+      </div>
       <details class="compact-details">
         <summary>このiPhoneに保存したゴール判定・編集データを消す</summary>
         <p class="fine-print">動画ごとにゴールのキープ／不採用・得点／アシスト確認・切り取り・画角の保存情報だけを削除できます。別の動画やGemini解析結果は残ります。</p>
