@@ -2032,7 +2032,15 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    let storedJob;
    try{storedJob=localStorage.getItem('peakstamp:test:worker-batch:'+snapshot.eventId);}
    catch{throw Error('Safariの端末保存が利用できません。プライベートブラウズ・サイトデータの設定を確認してください');}
-   try{localJob=storedJob?JSON.parse(storedJob):null;}
+   try{
+    // Legacy and current Worker helpers store a bare request UUID, not JSON.
+    // Accept that exact format without clearing or rewriting the journal.
+    const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+    localJob=storedJob?(uuid.test(storedJob)?{request_id:storedJob}:JSON.parse(storedJob)):null;
+    if(localJob!==null&&(!localJob||typeof localJob!=='object'||
+       typeof localJob.request_id!=='string'||!uuid.test(localJob.request_id)))
+     throw Error('invalid local job');
+   }
    catch{
     if(workerJob!==null)
      throw Error('端末の登録履歴が破損しています。Worker側に登録履歴があります。SS登録状況を確認してください');
