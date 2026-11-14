@@ -1857,6 +1857,28 @@ $('ssInlineInspect')?.addEventListener('click',async()=>{
     ' ／ '+(job.completed??'?')+'/'+(job.total??'?')+'操作'+
     ' ／ ジョブ：'+job.request_id+
     (job.blocked_reason?' ／ '+job.blocked_reason:'');
+   // Independent official TEST readback: do not infer success from job.completed.
+   const official=await ssNames.refreshOfficial(eventId);
+   const expected=job.fixture_ids||{};
+   const rows=(official.matches||[]).map(m=>{
+    const matchId=m.matchId||'';
+    const expectedId=expected[String(m.seq)]||'';
+    const idMatch=!expectedId?'ID未記録':expectedId.toLowerCase()===matchId.toLowerCase()?'ID一致':'ID不一致';
+    return '#'+m.seq+' '+idMatch+' '+(m.leftTeam||'?')+' vs '+(m.rightTeam||'?')+
+     ' '+(m.leftScore??'-')+'-'+(m.rightScore??'-')+
+     ' 得点'+(m.existingGoals?.length||0)+'件'+
+     ' match_id='+matchId;
+   });
+   const receipts=Array.isArray(job.goal_receipts)?job.goal_receipts:[];
+   const receiptText=receipts.map(r=>'goal_id='+(r.official_goal_id||r.goal_id||'不明')+
+    ' match_id='+(r.official_match_id||r.match_id||'不明')).join(' / ');
+   status.textContent+='\n照合イベントID：'+eventId+
+    '\nWorkerイベントID：'+job.event_id+
+    '\nWorker記録の試合ID：'+JSON.stringify(expected)+
+    '\nSS TESTの最新試合：\n'+(rows.join('\n')||'試合なし')+
+    '\nWorker得点登録証跡：'+(receiptText||'なし')+
+    '\n※上記はSS TESTの公式データを再取得した結果です。';
+   status.style.whiteSpace='pre-wrap';
   }
  }catch(e){status.textContent='登録状況の取得に失敗：'+(e.message||String(e));}
  finally{button.disabled=false;}
