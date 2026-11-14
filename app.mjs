@@ -2059,6 +2059,55 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
     matches.append(recover);
     throw Error('端末の履歴が破損しています。Workerにジョブがないことを確認済みです。修復後に再確認してください');
    }
+   // An old completed generation may only be replaced through the Worker
+   // recreation gate. Never silently treat the old completed job as empty.
+   if(workerJob?.status==='completed'&&
+      workerJob.event_id===snapshot.eventId&&
+      workerJob.request_id===localJob?.request_id&&
+      [1,2,3,4].every(seq=>workerJob.fixture_ids?.[String(seq)]&&
+       snapshot.matches.some(m=>Number(m.seq)===seq&&m.matchId&&
+        m.matchId!==workerJob.fixture_ids[String(seq)]))){
+    const recreate=document.createElement('button');
+    recreate.type='button';recreate.className='whisper-run';
+    recreate.textContent='新しい4試合に安全に登録（TEST）';
+    recreate.addEventListener('click',async()=>{
+     recreate.disabled=true;
+     const pendingKey='peakstamp:test:inline-recreate-pending:'+snapshot.eventId;
+     try{
+      if(localStorage.getItem(pendingKey))
+       throw Error('前回の再作成送信を確認できていません。再送せず履歴を確認してください');
+      const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
+      assertCurrentInlineEvent(snapshot,state.ssNameContext);
+      if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage))!==JSON.stringify(goals))
+       throw Error('ゴールの内容が変わりました。登録内容を再確認してください');
+      const current=await ssNames.inspectBatch(snapshot.eventId);
+      if(current?.request_id!==workerJob.request_id||current?.status!=='completed')
+       throw Error('旧Workerジョブが変化しました。再確認してください');
+      const fresh=await ssNames.refreshOfficial(snapshot.eventId);
+      if(JSON.stringify(fresh.matches.map(m=>[m.seq,m.matchId,m.status,m.leftScore,m.rightScore,m.existingGoals?.length]))!==
+         JSON.stringify(snapshot.matches.map(m=>[m.seq,m.matchId,m.status,m.leftScore,m.rightScore,m.existingGoals?.length])))
+       throw Error('SSの試合状態が変化しました。登録内容を再確認してください');
+      const {buildInlineFirstRoundPlan}=await import('./sposched-inline-plan.mjs');
+      const requestId=crypto.randomUUID();
+      const {plan}=buildInlineFirstRoundPlan({snapshot:fresh,rows,requestId});
+      if(!window.confirm('SS TESTの新しい4試合に準決勝から登録します。旧ジョブは保存し、Workerが旧試合の削除と新試合の未登録状態を検証します。続けますか？')){
+       recreate.disabled=false;return;
+      }
+      const payload={...plan,previous_request_id:workerJob.request_id,
+       confirm_recreation:'TEST-ONLY RECREATE DELETED FIXTURES'};
+      localStorage.setItem(pendingKey,JSON.stringify({request_id:requestId,previous_request_id:workerJob.request_id}));
+      status.textContent='TESTの旧試合と新試合を照合しています。再送しないでください';
+      const result=await ssNames.recreateBatch(payload);
+      localStorage.setItem('peakstamp:test:worker-batch:'+snapshot.eventId,requestId);
+      localStorage.removeItem(pendingKey);
+      status.textContent='新しいTESTジョブを受け付けました（'+result.status+'）。「SS登録状況を確認」で進捗を確認してください';
+     }catch(error){
+      status.textContent='再作成を停止：'+(error.message||String(error))+
+       '。送信結果が不明な場合は再送せず履歴を確認してください';
+     }
+    });
+    matches.append(recreate);
+   }
    const admission=decideInlineBatchAdmission({eventId:snapshot.eventId,workerJob,localJob});
    if(!admission.allowed)throw Error(admission.reason);
    const startFirst=document.createElement('button');
