@@ -1,0 +1,14 @@
+import {chromium} from 'playwright';import fs from 'node:fs';import assert from 'node:assert/strict';import {fileURLToPath} from 'node:url';
+(async()=>{const root=fileURLToPath(new URL('..',import.meta.url)).replace(/\/$/,'');const app=fs.readFileSync(root+'/app.mjs','utf8');const handler=app.slice(app.indexOf("$('ssInlineHistory')?.addEventListener"),app.indexOf("$('ssInlinePreview')?.addEventListener"));
+const browser=await chromium.launch({headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+await page.route('**/*',async route=>{const u=new URL(route.request().url());assert.equal(u.host,'peakstamp.local');if(u.pathname==='/')return route.fulfill({contentType:'text/html',body:'<button id="ssInlineInspect">SS登録状況を確認</button><button id="ssInlineHistory">履歴</button><p id="ssInlineStatus"></p>'});return route.fulfill({contentType:'text/javascript',body:fs.readFileSync(root+u.pathname)});});
+await page.goto('http://peakstamp.local/');await page.evaluate(handler=>{
+ const snapshot={eventId:'event',matches:[1,2,3,4].map(seq=>({seq,matchId:'m'+seq,status:seq<3?'finished':'scheduled',leftScore:seq===3?1:0,rightScore:seq===3?1:0,existingGoals:[]}))};
+ let job={event_id:'event',request_id:'job',status:'needs_decision',phase:'preparing',cursor:6,total:8,completed:6,fixture_ids:{1:'m1',2:'m2',3:'m3',4:'m4'},decision:{seq:3,match_id:'m3',left_score:1,right_score:1,choices:['left','right','draw']}};
+ window.sent=[];const state={ssNameContext:{snapshot}};
+ const ssNames={inspectBatch:async()=>structuredClone(job),refreshOfficial:async()=>structuredClone(snapshot),decideBatch:async plan=>{window.sent.push(plan);snapshot.matches[plan.seq-1].status='finished';job.cursor++;job.completed++;if(plan.seq===3)job.decision={seq:4,match_id:'m4',left_score:0,right_score:0,choices:['draw']};else job.status='completed';return structuredClone(job);}};
+ new Function('$','state','ssNames',handler)(id=>document.getElementById(id),state,ssNames);
+},handler);
+await page.click('#ssInlineInspect');await page.getByRole('button',{name:'第3試合を引き分けで確定'}).click();await page.getByText('引き分けの確定を受け付けました。',{exact:false}).waitFor();
+await page.click('#ssInlineInspect');await page.getByRole('button',{name:'第4試合を引き分けで確定'}).click();await page.getByText('引き分けの確定を受け付けました。',{exact:false}).waitFor();await page.click('#ssInlineInspect');await page.waitForFunction(()=>document.getElementById('ssInlineStatus').textContent.includes('8/8'));
+assert.equal(await page.locator('#ssInlineDecision').count(),0);assert.deepEqual((await page.evaluate(()=>sent)).map(x=>[x.seq,x.winner]),[[3,'draw'],[4,'draw']]);console.log('PASS iPhone viewport: inspect -> third draw -> fourth draw -> 8/8; only two decision payloads, no goal replay');await browser.close();})();
