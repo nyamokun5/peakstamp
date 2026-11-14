@@ -2070,8 +2070,14 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
     const recreate=document.createElement('button');
     recreate.type='button';recreate.className='whisper-run';
     recreate.textContent='新しい4試合に安全に登録（TEST）';
+    const recreateFeedback=document.createElement('p');
+    recreateFeedback.className='fine-print';
+    recreateFeedback.setAttribute('role','alert');
+    recreateFeedback.setAttribute('aria-live','assertive');
+    recreateFeedback.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0';
     recreate.addEventListener('click',async()=>{
      recreate.disabled=true;
+     recreateFeedback.textContent='安全確認中です…';
      const pendingKey='peakstamp:test:inline-recreate-pending:'+snapshot.eventId;
      try{
       if(localStorage.getItem(pendingKey))
@@ -2097,16 +2103,19 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
        confirm_recreation:'TEST-ONLY RECREATE DELETED FIXTURES'};
       localStorage.setItem(pendingKey,JSON.stringify({request_id:requestId,previous_request_id:workerJob.request_id}));
       status.textContent='TESTの旧試合と新試合を照合しています。再送しないでください';
+      recreateFeedback.textContent='Workerへ安全な再作成を送信しています。再送しないでください';
       const result=await ssNames.recreateBatch(payload);
       localStorage.setItem('peakstamp:test:worker-batch:'+snapshot.eventId,requestId);
       localStorage.removeItem(pendingKey);
       status.textContent='新しいTESTジョブを受け付けました（'+result.status+'）。「SS登録状況を確認」で進捗を確認してください';
+      recreateFeedback.textContent=status.textContent;
      }catch(error){
       status.textContent='再作成を停止：'+(error.message||String(error))+
        '。送信結果が不明な場合は再送せず履歴を確認してください';
+      recreateFeedback.textContent=status.textContent;
      }
     });
-    matches.append(recreate);
+    matches.append(recreate,recreateFeedback);
    }
    const admission=decideInlineBatchAdmission({eventId:snapshot.eventId,workerJob,localJob});
    if(!admission.allowed)throw Error(admission.reason);
