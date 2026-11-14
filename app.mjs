@@ -2084,8 +2084,17 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
        throw Error('前回の再作成送信を確認できていません。再送せず履歴を確認してください');
       const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
       assertCurrentInlineEvent(snapshot,state.ssNameContext);
-      if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage).goals)!==JSON.stringify(goals.goals))
-       throw Error('ゴールの内容が変わりました。登録内容を再確認してください');
+      // The goal draft exporter can refresh non-registration metadata while
+      // the preview is open. Recheck the actual first-round Worker operations
+      // rather than comparing whole exported draft objects.
+      const {prepareGoalRows:prepareCurrentRows}=await import('./sposched-review-core.mjs');
+      const currentGoals=confirmedGoalExport(state.sources,window.localStorage);
+      const currentRows=prepareCurrentRows(currentGoals,snapshot);
+      const {buildInlineFirstRoundPlan:buildCurrentPlan}=await import('./sposched-inline-plan.mjs');
+      const originalPlan=buildCurrentPlan({snapshot,rows,requestId:'00000000-0000-4000-8000-000000000001'}).plan;
+      const updatedPlan=buildCurrentPlan({snapshot,rows:currentRows,requestId:'00000000-0000-4000-8000-000000000001'}).plan;
+      if(JSON.stringify(originalPlan.operations)!==JSON.stringify(updatedPlan.operations))
+       throw Error('準決勝の登録内容が変更されました。登録内容を再確認してください');
       const current=await ssNames.inspectBatch(snapshot.eventId);
       if(current?.request_id!==workerJob.request_id||current?.status!=='completed')
        throw Error('旧Workerジョブが変化しました。再確認してください');
