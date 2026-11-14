@@ -1872,6 +1872,10 @@ $('ssInlineInspect')?.addEventListener('click',async()=>{
    const receipts=Array.isArray(job.goal_receipts)?job.goal_receipts:[];
    const receiptText=receipts.map(r=>'goal_id='+(r.official_goal_id||r.goal_id||'不明')+
     ' match_id='+(r.official_match_id||r.match_id||'不明')).join(' / ');
+   const mismatched=(official.matches||[]).filter(m=>expected[String(m.seq)]&&expected[String(m.seq)].toLowerCase()!==(m.matchId||'').toLowerCase());
+   if(mismatched.length){
+    status.textContent='【登録先の試合IDが変更されています】 '+mismatched.length+'試合で不一致。現在のSS TESTへの登録は未確認です。再送信はせず、旧ジョブと新試合の安全な照合・復旧が必要です。\\n'+status.textContent;
+   }
    status.textContent+='\n照合イベントID：'+eventId+
     '\nWorkerイベントID：'+job.event_id+
     '\nWorker記録の試合ID：'+JSON.stringify(expected)+
