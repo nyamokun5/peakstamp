@@ -26,3 +26,11 @@ test('successful acknowledgment and mismatched response are distinguished',async
  for(const match of [true,false]){const x=fixture(),saved=storage();const args={...x,storage:saved,inspect:async()=>x.job,refreshOfficial:async()=>x.snapshot,verifyCurrent:()=>{},send:async()=>({event_id:'event',request_id:match?'job':'other'})};
  if(match){await sendDrawDecisionOnce(args);assert.equal(saved.getItem('peakstamp:test:decision-pending:job:3'),undefined);}else{await assert.rejects(sendDrawDecisionOnce(args));assert.ok(saved.getItem('peakstamp:test:decision-pending:job:3'));}}
 });
+
+test('semifinal ties require an explicit winner, never a draw',async()=>{
+ const {decisionPlan}=await import('../sposched-inline-decision.mjs');
+ const {job,snapshot}=fixture(1);job.decision.choices=['left','right'];
+ assert.equal(decisionPlan(job,snapshot,'left').winner,'left');
+ assert.equal(decisionPlan(job,snapshot,'right').winner,'right');
+ assert.throws(()=>decisionPlan(job,snapshot,'draw'));
+});

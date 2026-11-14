@@ -1839,78 +1839,74 @@ const ssNames=initAnalysisNames(state,{onChange:()=>goalReview.refresh()});
 // verification flow is integrated into this page.
 // The visible history action reuses the existing read-only Worker/official SS audit.
 // Never start or resume a batch from this control.
+let ssProgressActive=false;
+async function followSSRegistration(initial,{continueSecond=null,verifyInputs=()=>{}}={}){
+ if(ssProgressActive)throw Error('登録結果を確認中です');
+ ssProgressActive=true;
+ const status=$('ssInlineStatus'),inspectButton=$('ssInlineInspect');
+ const eventId=initial.event_id;
+ const verifyCurrent=()=>{
+  if(state.ssNameContext?.snapshot?.eventId!==eventId)throw Error('TESTイベントが変更されました');
+  verifyInputs();
+ };
+ document.getElementById('ssInlineDecision')?.remove();
+ document.getElementById('ssInlineDebug')?.remove();
+ if(inspectButton)inspectButton.disabled=true;
+ try{
+  const {followInlineRegistration}=await import('./sposched-inline-progress.mjs');
+  return await followInlineRegistration({initial,
+   inspect:id=>ssNames.inspectBatch(id),refreshOfficial:id=>ssNames.refreshOfficial(id),verifyCurrent,continueSecond,
+   onStatus:message=>{status.textContent=message;},
+   onComplete:(job,official)=>{
+    status.style.whiteSpace='pre-wrap';
+    status.textContent='TESTへの登録が完了しました（4試合）\n'+official.matches.map(m=>
+     '第'+m.seq+'試合：'+m.leftTeam+' '+m.leftScore+'–'+m.rightScore+' '+m.rightTeam+' ✓').join('\n');
+    if($('ssInlineMatches'))$('ssInlineMatches').hidden=true;
+    const detail=document.createElement('details');detail.id='ssInlineDebug';
+    const summary=document.createElement('summary');summary.textContent='照合の詳細';
+    const text=document.createElement('pre');text.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';
+    text.textContent=JSON.stringify({job:job.request_id,event:job.event_id,completed:job.completed,total:job.total,
+     fixtures:job.fixture_ids,receipts:job.goal_receipts,official:official.matches},null,2);
+    detail.append(summary,text);status.after(detail);
+   },
+   onDecision:async(job,official)=>{
+    const {decisionPlan,sendDrawDecisionOnce}=await import('./sposched-inline-decision.mjs');
+    const d=job.decision;
+    status.textContent='第'+d.seq+'試合は '+d.left_score+'–'+d.right_score+' です。結果を選んでください';
+    const controls=document.createElement('div');controls.id='ssInlineDecision';
+    const feedback=document.createElement('p');feedback.setAttribute('role','status');
+    for(const winner of d.choices||[]){
+     decisionPlan(job,official,winner);
+     const decide=document.createElement('button');decide.type='button';decide.className='whisper-run';
+     decide.textContent=winner==='draw'?'第'+d.seq+'試合を引き分けで確定':
+      (winner==='left'?d.left_team:d.right_team)+'の勝ち';
+     decide.addEventListener('click',async()=>{
+      for(const b of controls.querySelectorAll('button'))b.disabled=true;
+      try{
+       const next=await sendDrawDecisionOnce({job,snapshot:official,winner,storage:localStorage,
+        inspect:id=>ssNames.inspectBatch(id),refreshOfficial:id=>ssNames.refreshOfficial(id),
+        send:plan=>ssNames.decideBatch(plan),verifyCurrent});
+       await followSSRegistration(next,{continueSecond,verifyInputs});
+      }catch(e){status.textContent=e.message||'結果が不明です。登録結果を確認してください';}
+     });controls.append(decide);
+    }
+    controls.append(feedback);status.after(controls);
+   }
+  });
+ }finally{ssProgressActive=false;if(inspectButton)inspectButton.disabled=false;}
+}
 $('ssInlineHistory')?.addEventListener('click',()=>$('ssInlineInspect')?.click());
 $('ssInlineInspect')?.addEventListener('click',async()=>{
- const button=$('ssInlineInspect'),status=$('ssInlineStatus');
- button.disabled=true;
- document.getElementById('ssInlineDecision')?.remove();
- status.textContent='Workerの登録状況を確認中…';
+ const status=$('ssInlineStatus');
+ if(ssProgressActive)return;
  try{
   const eventId=state.ssNameContext?.snapshot?.eventId;
   if(!eventId)throw Error('先にSSのTESTイベントを選択してください');
+  status.textContent='登録結果を確認中…';
   const job=await ssNames.inspectBatch(eventId);
-  if(!job){
-   status.textContent='Workerにこのイベントの登録ジョブはありません。端末履歴の確認が必要です';
-  }else{
-   const labels={
-    running:'登録処理中',awaiting_second_round:'準決勝完了・後半登録待ち',
-    paused:'一時停止',needs_decision:'確認待ち',blocked:'登録停止',
-    completed:'Worker処理完了（SS正式結果は別途照合）',failed:'登録失敗'
-   };
-   status.textContent='Worker：'+(labels[job.status]||job.status)+
-    ' ／ '+(job.completed??'?')+'/'+(job.total??'?')+'操作'+
-    ' ／ ジョブ：'+job.request_id+
-    (job.blocked_reason?' ／ '+job.blocked_reason:'');
-   // Independent official TEST readback: do not infer success from job.completed.
-   const official=await ssNames.refreshOfficial(eventId);
-   const expected=job.fixture_ids||{};
-   const rows=(official.matches||[]).map(m=>{
-    const matchId=m.matchId||'';
-    const expectedId=expected[String(m.seq)]||'';
-    const idMatch=!expectedId?'ID未記録':expectedId.toLowerCase()===matchId.toLowerCase()?'ID一致':'ID不一致';
-    return '#'+m.seq+' '+idMatch+' '+(m.leftTeam||'?')+' vs '+(m.rightTeam||'?')+
-     ' '+(m.leftScore??'-')+'-'+(m.rightScore??'-')+
-     ' 得点'+(m.existingGoals?.length||0)+'件 ／ 状態：'+(m.status||'不明')+
-     ' match_id='+matchId;
-   });
-   const receipts=Array.isArray(job.goal_receipts)?job.goal_receipts:[];
-   const receiptText=receipts.map(r=>'goal_id='+(r.official_goal_id||r.goal_id||'不明')+
-    ' match_id='+(r.official_match_id||r.match_id||'不明')).join(' / ');
-   const mismatched=(official.matches||[]).filter(m=>expected[String(m.seq)]&&expected[String(m.seq)].toLowerCase()!==(m.matchId||'').toLowerCase());
-   if(mismatched.length){
-    status.textContent='【登録先の試合IDが変更されています】 '+mismatched.length+'試合で不一致。現在のSS TESTへの登録は未確認です。再送信はせず、旧ジョブと新試合の安全な照合・復旧が必要です。\\n'+status.textContent;
-   }
-   status.textContent+='\n照合イベントID：'+eventId+
-    '\nWorkerイベントID：'+job.event_id+
-    '\nWorker記録の試合ID：'+JSON.stringify(expected)+
-    '\nSS TESTの最新試合：\n'+(rows.join('\n')||'試合なし')+
-    '\nWorker得点登録証跡：'+(receiptText||'なし')+
-    '\n※上記はSS TESTの公式データを再取得した結果です。';
-   status.style.whiteSpace='pre-wrap';
-   if(job.status==='needs_decision'){
-    const {drawDecisionPlan,sendDrawDecisionOnce}=await import('./sposched-inline-decision.mjs');
-    drawDecisionPlan(job,official);
-    const controls=document.createElement('div');controls.id='ssInlineDecision';
-    const decide=document.createElement('button');decide.type='button';decide.className='whisper-run';
-    decide.textContent='第'+job.decision.seq+'試合を引き分けで確定';
-    const feedback=document.createElement('p');feedback.setAttribute('role','status');
-    decide.addEventListener('click',async()=>{
-     decide.disabled=true;
-     try{
-      await sendDrawDecisionOnce({job,snapshot:official,storage:localStorage,
-       inspect:id=>ssNames.inspectBatch(id),refreshOfficial:id=>ssNames.refreshOfficial(id),
-       send:plan=>ssNames.decideBatch(plan),verifyCurrent:()=>{
-        if(state.ssNameContext?.snapshot?.eventId!==eventId)throw Error('TESTイベントが変更されました');
-       }});
-      feedback.textContent='引き分けの確定を受け付けました。「SS登録状況を確認」で次の試合・完了状態を確認してください';
-     }catch(e){feedback.textContent=e.message||'送信結果が不明です。再送せず登録状況を確認してください';}
-    });
-    controls.append(decide,feedback);status.after(controls);
-   }
-
-  }
- }catch(e){status.textContent='登録状況の取得に失敗：'+(e.message||String(e));}
- finally{button.disabled=false;}
+  if(!job){status.textContent='このイベントには登録履歴がありません';return;}
+  await followSSRegistration(job);
+ }catch(e){status.textContent=e.message||'登録結果を確認できません';}
 });
 $('ssInlinePreview')?.addEventListener('click',async()=>{
  const button=$('ssInlinePreview'),status=$('ssInlineStatus'),summary=$('ssInlineSummary'),matches=$('ssInlineMatches');
@@ -1940,14 +1936,31 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   }
   if(!goals.goals.length)throw Error('SS登録対象の確定済みゴールがありません。');
   const rows=prepareGoalRows(goals,snapshot);
+  const registrationFields=list=>JSON.stringify(list.map(r=>({include:r.include,seq:r.seq,team:r.team,
+   scorer:r.scorer,assist:r.assist,assistMode:r.assistMode,guest:r.guest,updateGoalId:r.updateGoalId,
+   fixtureIdentityChanged:r.fixtureIdentityChanged,goal:{id:r.goal?.id,manual:r.goal?.manual,source:r.goal?.source?.name}})));
+  const initialInputs=registrationFields(rows);
+  const verifyInputs=()=>{
+   if(state.ssNameContext?.snapshot?.eventId!==snapshot.eventId)throw Error('TESTイベントが変更されました');
+   const currentRows=prepareGoalRows(confirmedGoalExport(state.sources,window.localStorage),snapshot);
+   if(registrationFields(currentRows)!==initialInputs)throw Error('登録内容が変わりました。処理状況を確認してください');
+  };
+  const continueSecond=async(job,fresh)=>{
+   verifyInputs();
+   const {buildInlineSecondRoundPlan}=await import('./sposched-inline-plan.mjs');
+   const {appendInlineOnce}=await import('./sposched-inline-progress.mjs');
+   const plan=buildInlineSecondRoundPlan({snapshot:fresh,rows,workerJob:job});
+   return appendInlineOnce({plan,storage:localStorage,send:payload=>ssNames.appendSecondRound(payload)});
+  };
+
   const {projectFourMatchTournament}=await import('./sposched-inline-tournament.mjs');
   const {validateInlineBatchReadiness}=await import('./sposched-inline-batch-gate.mjs');
   // Show the actual registration inputs BEFORE any bracket validation. This
   // read-only list must remain visible when a scorer or matchup check fails.
   const detail=document.createElement('details');
-  detail.open=true;
+  detail.open=false;
   const heading=document.createElement('summary');
-  heading.textContent='Worker送信予定の内容（確認用・未送信）';
+  heading.textContent='登録内容の詳細';
   detail.append(heading);
   const meta=document.createElement('p');
   meta.textContent='SSイベントID：'+snapshot.eventId+' ／ ゴール：'+rows.length+'件';
@@ -2010,15 +2023,13 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
      try{
       const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
       assertCurrentInlineEvent(snapshot,state.ssNameContext);
-      if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage).goals)!==JSON.stringify(goals.goals))
-       throw Error('ゴールが変更されました。再確認してください');
+      verifyInputs();
       const current=await ssNames.inspectBatch(snapshot.eventId);
       if(current?.request_id!==existing.request_id||current?.status!=='awaiting_second_round'||
          current.cursor!==existing.cursor)
        throw Error('Workerの状態が変わりました。再取得してください');
       status.textContent='TEST後半登録を送信しています。再送しないでください';
-      const result=await ssNames.appendSecondRound(continuation);
-      status.textContent='後半登録を受け付けました（'+result.status+'）。完了確認が必要です';
+      await followSSRegistration(current,{continueSecond,verifyInputs});
      }catch(e){
       status.textContent=e.message||String(e);
       // The request may have reached Worker. Never allow a blind retry.
@@ -2140,6 +2151,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
       localStorage.removeItem(pendingKey);
       status.textContent='新しいTESTジョブを受け付けました（'+result.status+'）。「SS登録状況を確認」で進捗を確認してください';
       recreateFeedback.textContent=status.textContent;
+      await followSSRegistration(result,{continueSecond,verifyInputs});
      }catch(error){
       status.textContent='再作成を停止：'+(error.message||String(error))+
        '。送信結果が不明な場合は再送せず履歴を確認してください';
@@ -2158,43 +2170,15 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
     try{
      const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
      assertCurrentInlineEvent(snapshot,state.ssNameContext);
-     if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage).goals)!==JSON.stringify(goals.goals))
-      throw Error('ゴールが変更されました。再確認してください');
+     verifyInputs();
      const {buildInlineFirstRoundPlan}=await import('./sposched-inline-plan.mjs');
      const {startInlineBatchOnce}=await import('./sposched-inline-dispatch.mjs');
      const {plan}=buildInlineFirstRoundPlan({snapshot,rows,requestId:crypto.randomUUID()});
      status.textContent='TEST準決勝を送信中。再送しないでください';
-     const {runOneClickKnockout}=await import('./sposched-inline-one-click.mjs');
-     const result=await runOneClickKnockout({
-      start:()=>startInlineBatchOnce({
-       plan,storage:window.localStorage,
-       inspect:eventId=>ssNames.inspectBatch(eventId),
-       send:payload=>ssNames.startBatch(payload),
-       verifyCurrent:()=>{
-        assertCurrentInlineEvent(snapshot,state.ssNameContext);
-        if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage).goals)!==JSON.stringify(goals.goals))
-         throw Error('ゴールが変更されました。再確認してください');
-       }
-      }),
-      inspect:eventId=>ssNames.inspectBatch(eventId),
-      refreshOfficial:eventId=>ssNames.refreshOfficial(eventId),
-      buildSecond:async(fresh,job)=>{
-       const {buildInlineSecondRoundPlan}=await import('./sposched-inline-plan.mjs');
-       return buildInlineSecondRoundPlan({snapshot:fresh,rows,workerJob:job});
-      },
-      append:payload=>ssNames.appendSecondRound(payload),
-      verifyFinished:async(job,fresh,previous)=>{
-       const {verifyCompletedWorkerSnapshot}=await import('./sposched-worker-batch.mjs');
-       verifyCompletedWorkerSnapshot(job,fresh,previous);
-      },
-      verifyCurrent:()=>{
-       assertCurrentInlineEvent(snapshot,state.ssNameContext);
-       if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage).goals)!==JSON.stringify(goals.goals))
-        throw Error('ゴールが変更されました。再確認してください');
-      },
-      onStatus:message=>{status.textContent=message;}
-     });
-     status.textContent='TESTの4試合登録が完了しました';
+     const result=await startInlineBatchOnce({plan,storage:localStorage,
+      inspect:id=>ssNames.inspectBatch(id),send:payload=>ssNames.startBatch(payload),
+      verifyCurrent:verifyInputs});
+     await followSSRegistration(result,{continueSecond,verifyInputs});
     }catch(e){status.textContent=e.message||String(e);}
    });
    matches.append(startFirst);

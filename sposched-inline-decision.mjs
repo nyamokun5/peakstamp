@@ -1,8 +1,9 @@
 // Finish only the existing paused TEST step; never create or replay goals.
-export function drawDecisionPlan(job, snapshot) {
+export function decisionPlan(job, snapshot, winner='draw') {
  if (!job || job.event_id !== snapshot?.eventId || job.status !== 'needs_decision' ||
-     job.phase !== 'preparing' || ![3,4].includes(job.decision?.seq) ||
-     !job.decision.choices?.includes('draw') || !job.request_id)
+     job.phase !== 'preparing' || ![1,2,3,4].includes(job.decision?.seq) ||
+     !['left','right','draw'].includes(winner) ||
+     (winner==='draw'&&job.decision?.seq<3) || !job.decision.choices?.includes(winner) || !job.request_id)
   throw Error('引き分けの確認待ちではありません。登録状況を再確認してください');
  for (const seq of [1,2,3,4]) {
   const matches = snapshot.matches.filter(m => Number(m.seq) === seq);
@@ -15,15 +16,16 @@ export function drawDecisionPlan(job, snapshot) {
      d.left_score !== m.leftScore || d.right_score !== m.rightScore)
   throw Error('SSの得点・試合状態が変わりました。登録状況を再確認してください');
  return {event_id:job.event_id,request_id:job.request_id,seq:d.seq,
-  winner:'draw',confirm:'TEST-ONLY BATCH DECISION'};
+  winner,confirm:'TEST-ONLY BATCH DECISION'};
 }
-export async function sendDrawDecisionOnce({job,snapshot,inspect,refreshOfficial,send,storage,verifyCurrent}) {
- const plan = drawDecisionPlan(job,snapshot);
+export const drawDecisionPlan=(job,snapshot)=>decisionPlan(job,snapshot,'draw');
+export async function sendDrawDecisionOnce({job,snapshot,inspect,refreshOfficial,send,storage,verifyCurrent,winner='draw'}) {
+ const plan = decisionPlan(job,snapshot,winner);
  const key = 'peakstamp:test:decision-pending:'+plan.request_id+':'+plan.seq;
  if(storage.getItem(key))throw Error('前回の送信結果が不明です。再送せず登録状況を確認してください');
  const current = await inspect(plan.event_id);
  const fresh = await refreshOfficial(plan.event_id);
- const checked = drawDecisionPlan(current,fresh);
+ const checked = decisionPlan(current,fresh,winner);
  if(JSON.stringify(checked)!==JSON.stringify(plan) || current.cursor!==job.cursor ||
     current.decision.left_score!==job.decision.left_score || current.decision.right_score!==job.decision.right_score)
   throw Error('確認待ちの内容が変わりました。登録状況を再確認してください');
