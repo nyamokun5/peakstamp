@@ -70,6 +70,26 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
    throw Error('SSの正式な最新試合情報を確認できません');
   return snapshot;
  };
+ const recreateBatch=async plan=>{
+  const password=token.value.trim();
+  if(!password||plan?.confirm!=='TEST-ONLY BATCH WRITE'||
+     plan?.confirm_recreation!=='TEST-ONLY RECREATE DELETED FIXTURES'||
+     !uuid.test(plan?.request_id||'')||!uuid.test(plan?.previous_request_id||''))
+   throw Error('TEST再作成の認証・確認が不足しています');
+  // One write attempt only. On an ambiguous response the caller must inspect.
+  const response=await fetch(gateway+'/staging/batch/recreate',{
+   method:'POST',headers:{'X-SS-Bridge-Token':password,'Content-Type':'application/json'},
+   body:JSON.stringify(plan),mode:'cors',cache:'no-store',
+   signal:AbortSignal.timeout(30000)});
+  let data;
+  try{data=await response.json();}catch{
+   throw Error('再作成の応答が不明です。再送せずWorker履歴を確認してください');
+  }
+  if(!response.ok)throw Error(data?.error?.message||'再作成エラー '+response.status);
+  if(data.request_id!==plan.request_id||data.event_id!==plan.event_id)
+   throw Error('再作成の応答IDが一致しません。再送せず照合してください');
+  return data;
+ };
  const appendSecondRound=async plan=>{
   const password=token.value.trim();
   if(!password||plan?.confirm!=='TEST-ONLY BATCH APPEND')
@@ -145,5 +165,5 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  connect.addEventListener('click',load);
  retry.addEventListener('click',()=>refresh());
  if(token.value)load();
- return {refresh,inspectBatch,startBatch,appendSecondRound,refreshOfficial};
+ return {refresh,inspectBatch,startBatch,recreateBatch,appendSecondRound,refreshOfficial};
 }
