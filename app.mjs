@@ -1808,6 +1808,30 @@ const ssNames=initAnalysisNames(state,{onChange:()=>goalReview.refresh()});
 // Read-only in-place SS preflight. No credential prompt, navigation or writes.
 // Batch mutation will only be enabled after the official fixture/duplicate
 // verification flow is integrated into this page.
+$('ssInlineInspect')?.addEventListener('click',async()=>{
+ const button=$('ssInlineInspect'),status=$('ssInlineStatus');
+ button.disabled=true;
+ status.textContent='Workerの登録状況を確認中…';
+ try{
+  const eventId=state.ssNameContext?.snapshot?.eventId;
+  if(!eventId)throw Error('先にSSのTESTイベントを選択してください');
+  const job=await ssNames.inspectBatch(eventId);
+  if(!job){
+   status.textContent='Workerにこのイベントの登録ジョブはありません。端末履歴の確認が必要です';
+  }else{
+   const labels={
+    running:'登録処理中',awaiting_second_round:'準決勝完了・後半登録待ち',
+    paused:'一時停止',needs_decision:'確認待ち',blocked:'登録停止',
+    completed:'Worker処理完了（SS正式結果は別途照合）',failed:'登録失敗'
+   };
+   status.textContent='Worker：'+(labels[job.status]||job.status)+
+    ' ／ '+(job.completed??'?')+'/'+(job.total??'?')+'操作'+
+    ' ／ ジョブ：'+job.request_id+
+    (job.blocked_reason?' ／ '+job.blocked_reason:'');
+  }
+ }catch(e){status.textContent='登録状況の取得に失敗：'+(e.message||String(e));}
+ finally{button.disabled=false;}
+});
 $('ssInlinePreview')?.addEventListener('click',async()=>{
  const button=$('ssInlinePreview'),status=$('ssInlineStatus'),summary=$('ssInlineSummary'),matches=$('ssInlineMatches');
  button.disabled=true;matches.hidden=true;matches.replaceChildren();
