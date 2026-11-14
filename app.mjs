@@ -1988,7 +1988,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
      try{
       const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
       assertCurrentInlineEvent(snapshot,state.ssNameContext);
-      if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage))!==JSON.stringify(goals))
+      if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage).goals)!==JSON.stringify(goals.goals))
        throw Error('ゴールが変更されました。再確認してください');
       const current=await ssNames.inspectBatch(snapshot.eventId);
       if(current?.request_id!==existing.request_id||current?.status!=='awaiting_second_round'||
@@ -2084,7 +2084,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
        throw Error('前回の再作成送信を確認できていません。再送せず履歴を確認してください');
       const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
       assertCurrentInlineEvent(snapshot,state.ssNameContext);
-      if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage))!==JSON.stringify(goals))
+      if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage).goals)!==JSON.stringify(goals.goals))
        throw Error('ゴールの内容が変わりました。登録内容を再確認してください');
       const current=await ssNames.inspectBatch(snapshot.eventId);
       if(current?.request_id!==workerJob.request_id||current?.status!=='completed')
@@ -2127,7 +2127,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
     try{
      const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
      assertCurrentInlineEvent(snapshot,state.ssNameContext);
-     if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage))!==JSON.stringify(goals))
+     if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage).goals)!==JSON.stringify(goals.goals))
       throw Error('ゴールが変更されました。再確認してください');
      const {buildInlineFirstRoundPlan}=await import('./sposched-inline-plan.mjs');
      const {startInlineBatchOnce}=await import('./sposched-inline-dispatch.mjs');
@@ -2141,7 +2141,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
        send:payload=>ssNames.startBatch(payload),
        verifyCurrent:()=>{
         assertCurrentInlineEvent(snapshot,state.ssNameContext);
-        if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage))!==JSON.stringify(goals))
+        if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage).goals)!==JSON.stringify(goals.goals))
          throw Error('ゴールが変更されました。再確認してください');
        }
       }),
@@ -2158,7 +2158,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
       },
       verifyCurrent:()=>{
        assertCurrentInlineEvent(snapshot,state.ssNameContext);
-       if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage))!==JSON.stringify(goals))
+       if(JSON.stringify(confirmedGoalExport(state.sources,window.localStorage).goals)!==JSON.stringify(goals.goals))
         throw Error('ゴールが変更されました。再確認してください');
       },
       onStatus:message=>{status.textContent=message;}
