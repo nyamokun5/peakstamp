@@ -1837,6 +1837,9 @@ const ssNames=initAnalysisNames(state,{onChange:()=>goalReview.refresh()});
 // Read-only in-place SS preflight. No credential prompt, navigation or writes.
 // Batch mutation will only be enabled after the official fixture/duplicate
 // verification flow is integrated into this page.
+// The visible history action reuses the existing read-only Worker/official SS audit.
+// Never start or resume a batch from this control.
+$('ssInlineHistory')?.addEventListener('click',()=>$('ssInlineInspect')?.click());
 $('ssInlineInspect')?.addEventListener('click',async()=>{
  const button=$('ssInlineInspect'),status=$('ssInlineStatus');
  button.disabled=true;
