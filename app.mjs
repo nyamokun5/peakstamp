@@ -419,6 +419,35 @@ function chooseFiles(files, append = false) {
   error('analysisError','');
   syncSources();
 }
+// Temporary TEST-only cache. Never automatically overwrite the saved set.
+for(const [id,action] of [
+ ['testVideoSave',async cache=>{
+  if(state.working||state.exporting||state.geminiProcessing)throw Error('処理完了後に保存してください');
+  const n=await cache.saveTestVideos(state.sources.map(src=>src.file));
+  return n+'本の動画をこの端末に保存しました';
+ }],
+ ['testVideoRestore',async cache=>{
+  if(state.working||state.exporting||state.geminiProcessing)throw Error('処理完了後に復元してください');
+  const files=await cache.restoreTestVideos();
+  if(!files.length)throw Error('保存済みの動画がありません');
+  chooseFiles(files,false);
+  return files.length+'本の動画を復元しました';
+ }],
+ ['testVideoClear',async cache=>{
+  await cache.clearTestVideos();
+  return '保存したテスト動画を削除しました（現在の動画はそのままです）';
+ }]
+]){
+ $(id)?.addEventListener('click',async()=>{
+  const button=$(id),status=$('testVideoCacheStatus');
+  button.disabled=true;status.textContent='端末内の動画を処理中…';
+  try{
+   const cache=await import('./test-video-cache.mjs');
+   status.textContent=await action(cache);
+  }catch(e){status.textContent=e.message||String(e);}
+  finally{button.disabled=false;}
+ });
+}
 $('sortFilesByName')?.addEventListener('click',()=>{
   if(state.working||state.exporting||state.geminiProcessing)return;
   // Intentional reset: clears only manually assigned match display numbers,
