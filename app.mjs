@@ -1914,8 +1914,15 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
  try{
   const {confirmedGoalExport,createGoalDrafts}=await import('./goal-stats.mjs?v=source-matchup5');
   const {prepareGoalRows}=await import('./sposched-review-core.mjs');
+  await ssNames.refresh(); // Reload official fixtures and revalidate saved identities first.
   const snapshot=state.ssNameContext?.snapshot;
   if(!snapshot)throw Error('最初の画面でSSイベントに接続してください。パスコードの再入力は不要です。');
+  const knownJob=await ssNames.inspectBatch(snapshot.eventId);
+  if(knownJob&&['running','needs_decision','completed'].includes(knownJob.status)&&
+     [1,2,3,4].every(seq=>snapshot.matches.some(m=>Number(m.seq)===seq&&m.matchId===knownJob.fixture_ids?.[seq]))){
+   await followSSRegistration(knownJob);return;
+  }
+
   const goals=confirmedGoalExport(state.sources,window.localStorage);
   const unresolved=state.sources.flatMap(src=>createGoalDrafts(src,window.localStorage).items
    .filter(g=>g.status!=='excluded'&&g.status!=='confirmed').map(g=>({src,g})));
@@ -1947,9 +1954,9 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   };
   const continueSecond=async(job,fresh)=>{
    verifyInputs();
-   const {buildInlineSecondRoundPlan}=await import('./sposched-inline-plan.mjs');
+   const {prepareInlineContinuation}=await import('./sposched-inline-continuation.mjs');
    const {appendInlineOnce}=await import('./sposched-inline-progress.mjs');
-   const plan=buildInlineSecondRoundPlan({snapshot:fresh,rows,workerJob:job});
+   const plan=prepareInlineContinuation({snapshot:fresh,goals,workerJob:job});
    return appendInlineOnce({plan,storage:localStorage,send:payload=>ssNames.appendSecondRound(payload)});
   };
 
@@ -1995,7 +2002,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   matches.hidden=false;
   // The first round is independently verifiable even if the later
   // waiting knockout goals still require roster/fixture confirmation.
-  try{
+  if(!snapshot.matches.filter(m=>[1,2].includes(Number(m.seq))).every(m=>m.status==='finished'))try{
    const {inspectFirstRound}=await import('./sposched-inline-first-round.mjs');
    const firstRound=inspectFirstRound(snapshot,rows);
    const note=document.createElement('p');
@@ -2007,14 +2014,16 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
    note.textContent='第1・第2試合の確認：'+(e.message||String(e));
    matches.append(note);
   }
+  let continuingExisting=false;
   // Existing staged jobs may only be continued after a passive Worker
   // inspection. Never auto-append or silently replay a submitted phase.
   try{
    const existing=await ssNames.inspectBatch(snapshot.eventId);
    if(existing?.layout_mode==='four-knockout-staged-v1'&&
       existing.status==='awaiting_second_round'){
-    const {buildInlineSecondRoundPlan}=await import('./sposched-inline-plan.mjs');
-    const continuation=buildInlineSecondRoundPlan({snapshot,rows,workerJob:existing});
+    const {prepareInlineContinuation}=await import('./sposched-inline-continuation.mjs');
+    prepareInlineContinuation({snapshot,goals,workerJob:existing});
+    continuingExisting=true;
     const continueButton=document.createElement('button');
     continueButton.type='button';continueButton.className='whisper-run';
     continueButton.textContent='TEST登録を再開';
@@ -2054,7 +2063,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   }
   // Stage-one admission is separate from the full four-match gate.
   // A previous or uncertain job must never be silently overwritten.
-  try{
+  if(!continuingExisting)try{
    const {inspectFirstRound}=await import('./sposched-inline-first-round.mjs');
    inspectFirstRound(snapshot,rows);
    const {buildInlineFirstRoundPlan}=await import('./sposched-inline-plan.mjs');
@@ -2219,7 +2228,8 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
   }
   matches.hidden=false;
   summary.textContent='SS：'+(snapshot.eventName||'選択中イベント')+' ／ '+rows.length+'ゴール';
-  status.textContent='登録前の確認画面です。SSへの書き込みは未実施です。';
+  status.textContent=continuingExisting?'準決勝は登録済みです。「TEST登録を再開」で後半2試合を登録します':
+   '登録前の確認画面です。';
  }catch(error){status.textContent=error.message||String(error)}
  finally{button.disabled=false}
 });
