@@ -1870,7 +1870,7 @@ $('ssInlineInspect')?.addEventListener('click',async()=>{
     const idMatch=!expectedId?'ID未記録':expectedId.toLowerCase()===matchId.toLowerCase()?'ID一致':'ID不一致';
     return '#'+m.seq+' '+idMatch+' '+(m.leftTeam||'?')+' vs '+(m.rightTeam||'?')+
      ' '+(m.leftScore??'-')+'-'+(m.rightScore??'-')+
-     ' 得点'+(m.existingGoals?.length||0)+'件'+
+     ' 得点'+(m.existingGoals?.length||0)+'件 ／ 状態：'+(m.status||'不明')+
      ' match_id='+matchId;
    });
    const receipts=Array.isArray(job.goal_receipts)?job.goal_receipts:[];
