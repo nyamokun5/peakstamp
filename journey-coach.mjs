@@ -43,7 +43,10 @@ export function initJourneyCoach({
   };
   wire(primary,main);wire(secondary,other);
   const register=$('journeyDialogRegister');
-  if(register)register.hidden=title!=='ゴール確認完了';
+  if(register){
+   register.hidden=title!=='ゴール確認完了';
+   register.onclick=()=>{close();actions.registerGoals?.();};
+  }
   root.hidden=false;
   primary.focus?.();
   pending={title,body};

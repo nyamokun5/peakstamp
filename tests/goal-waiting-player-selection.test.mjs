@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {applyCard,inheritVideoMatchupConfirmation} from '../match-review.mjs';
 import {saveVideoMatchup} from '../video-matchup.mjs';
 import {matchStorageKey} from '../match-label.mjs';
+import {saveGoalDrafts,confirmedGoalExport} from '../goal-stats.mjs';
+import {prepareGoalRows} from '../sposched-review-core.mjs';
 import {fixturePeople,resolveAnalysisGoal,verifiedAnalysisPerson} from '../sposched-analysis-identity.mjs';
 const uuid=n=>String(n).repeat(8)+'-1111-4111-8111-111111111111';
 const source={file:{name:'third.mov',size:1,lastModified:1},matchNumber:3};
@@ -50,4 +52,15 @@ test('previously saved match-review cards also unlock existing goal drafts witho
  assert.equal(inheritVideoMatchupConfirmation(item,source,store).matchupConfirmed,true);
  store.setItem('peakstamp_card_v1:'+matchStorageKey(source),JSON.stringify({seq:4,a:'2',b:'4'}));
  assert.equal(inheritVideoMatchupConfirmation(item,source,store),item);
+});
+test('same-page registration export preserves reviewed waiting matchup and official player identity',()=>{
+ const store=storage(),ss=snapshot();
+ const item=resolveAnalysisGoal({...goal(),id:'g3',origin:'audio',timeSeconds:30,goalTimeSeconds:20,
+  videoDecision:'kept',matchupConfirmed:true,scorer:'選手2',userEditedGoalFields:['scorer']},
+  {environment:'production',snapshot:ss,aliases:[]});
+ saveGoalDrafts(source,store,[item]);
+ const exported=confirmedGoalExport([source],store);
+ assert.equal(exported.goals.length,1);
+ assert.equal(exported.goals[0].matchupConfirmed,true);
+ assert.equal(prepareGoalRows(exported,ss)[0].scorer,'選手2');
 });

@@ -5,13 +5,17 @@ export const ANALYSIS_EVENT_KEY='peakstamp_ss_analysis_event_staging_v1';
 const productionGateway='https://shoot-sunday-sync.yomax1979.workers.dev';
 const stagingGateway='https://shoot-sunday-sync-staging.yomax1979.workers.dev';
 const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+const normalizeAnalysisSnapshot=(raw,environment)=>{
+ const snapshot=normalizeSpoSnapshot(raw);
+ return {...snapshot,environment,officialFormat:snapshot.matchFormat};
+};
 // GET-only, bounded, no retries. A failed dictionary still permits direct names.
 export async function readAnalysisContext({eventId,read,environment='staging'}){
  if(!uuid.test(eventId))throw Error('イベントを選んでください。');
  const [roster,aliases]=await Promise.allSettled([
   read('/snapshot?event_id='+encodeURIComponent(eventId)),read('/'+environment+'/alias/list')]);
  if(roster.status!=='fulfilled')throw Error('SS名簿を取得できません。接続を確認してください。');
- const snapshot={...normalizeSpoSnapshot(roster.value),environment};
+ const snapshot=normalizeAnalysisSnapshot(roster.value,environment);
  if(snapshot.eventId!==eventId||snapshot.rosterSource!=='official-current-event-teams')
   throw Error('SSの正式名簿を取得できません。イベントを確認してください。');
  let entries=[],aliasError=false,aliasErrorReason='';
@@ -38,42 +42,64 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  const saveDevice=()=>{try{if(remember.checked&&token.value.trim())localStorage.setItem(persistentKey,token.value.trim());else localStorage.removeItem(persistentKey)}catch{}};
  token.value=restoreBridgeSession(sessionStorage,environment)||readSaved();remember.checked=Boolean(readSaved());
  const invalidate=()=>{revision++;state.ssNameContext=null;onChange();};
+ // Bind mutations to the current production credential/event context. The
+ // coordinator independently validates the official target before sending.
+ const assertProductionSelection=plan=>{
+  if(environment!=='production')return;
+  if(!uuid.test(plan?.event_id||'')||!uuid.test(plan?.request_id||'')||
+     event.value!==plan.event_id||state.ssNameContext?.environment!=='production'||
+     state.ssNameContext?.snapshot?.environment!=='production'||
+     state.ssNameContext.snapshot.eventId!==plan.event_id)
+   throw Error('本番の接続・イベントが変更されました。再送せず登録結果を確認してください');
+ };
+ const verifyProductionResponse=(plan,data)=>{
+  if(environment==='production'&&(data?.environment!=='PRODUCTION'||
+     data.event_id!==plan.event_id||data.request_id!==plan.request_id))
+   throw Error('本番の登録応答が一致しません。再送せず登録結果を確認してください');
+ };
+ const unknownProductionResponse=error=>{
+  if(environment==='production')throw Error('登録の送信結果を確認できません。再送せず「登録結果を確認」を押してください');
+  throw error;
+ };
  const inspectBatch=async eventId=>{
-  requireTest();
   const password=token.value.trim();
   if(!password)throw Error('SS連携パスワードを確認してください');
   // Read-only POST: do not retry a failed inspection and never treat it
   // as proof that a write can safely start.
   const {inspectInlineBatchJob}=await import('./sposched-inline-inspect.mjs');
-  return inspectInlineBatchJob({eventId,postInspect:async body=>{
-   const response=await fetch(gateway+'/staging/batch/inspect',{
+  const job=await inspectInlineBatchJob({eventId,postInspect:async body=>{
+   const response=await fetch(gateway+'/'+environment+'/batch/inspect',{
     method:'POST',headers:{'X-SS-Bridge-Token':password,'Content-Type':'application/json'},
-    body:JSON.stringify(body),mode:'cors',cache:'no-store',signal:AbortSignal.timeout(20000)});
+    body:JSON.stringify(body),mode:'cors',cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000)});
    let data;
    try{data=await response.json();}catch{throw Error('Workerの応答を解析できません');}
    return {status:response.status,body:data};
   }});
+  if(environment==='production'&&job&&(job.environment!=='PRODUCTION'||job.inspection_contract!=='event-inspect-v1'||job.scope!=='event'))
+   throw Error('本番の登録履歴を検証できません。再送しないでください');
+  return job;
  };
  const startBatch=async plan=>{
-  requireTest();
+  assertProductionSelection(plan);
   const password=token.value.trim();
-  if(!password||!plan||plan.confirm!=='TEST-ONLY BATCH WRITE')
-   throw Error('TEST登録の認証と確認が必要です');
+  if(!password||!plan||plan.confirm!==(environment==='production'?'PRODUCTION EVENT BATCH WRITE':'TEST-ONLY BATCH WRITE'))
+   throw Error('登録の認証と確認が必要です');
   // Never retry a write request. An uncertain response is reconciled
   // through /staging/batch/inspect using the persisted request ID.
-  const response=await fetch(gateway+'/staging/batch/start',{
+  const response=await fetch(gateway+'/'+environment+'/batch/start',{
    method:'POST',headers:{'X-SS-Bridge-Token':password,'Content-Type':'application/json'},
-   body:JSON.stringify(plan),mode:'cors',cache:'no-store',
-   signal:AbortSignal.timeout(30000)});
+   body:JSON.stringify(plan),mode:'cors',cache:'no-store',redirect:'error',
+   signal:AbortSignal.timeout(30000)}).catch(unknownProductionResponse);
   let data;
   try{data=await response.json();}catch{throw Error('Workerの登録応答を読み取れません。再送しないでください');}
   if(!response.ok)throw Error(data?.error?.message||'Worker登録エラー '+response.status+'。再送しないでください');
+  verifyProductionResponse(plan,data);
   return data;
  };
  const refreshOfficial=async eventId=>{
   if(!uuid.test(eventId)||event.value!==eventId)
    throw Error('SSイベントが変更されました');
-  const snapshot=normalizeSpoSnapshot(await read('/snapshot?event_id='+encodeURIComponent(eventId)));
+  const snapshot=normalizeAnalysisSnapshot(await read('/snapshot?event_id='+encodeURIComponent(eventId)),environment);
   if(snapshot.eventId!==eventId||snapshot.rosterSource!=='official-current-event-teams')
    throw Error('SSの正式な最新試合情報を確認できません');
   return snapshot;
@@ -88,8 +114,8 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
   // One write attempt only. On an ambiguous response the caller must inspect.
   const response=await fetch(gateway+'/staging/batch/recreate',{
    method:'POST',headers:{'X-SS-Bridge-Token':password,'Content-Type':'application/json'},
-   body:JSON.stringify(plan),mode:'cors',cache:'no-store',
-   signal:AbortSignal.timeout(30000)});
+   body:JSON.stringify(plan),mode:'cors',cache:'no-store',redirect:'error',
+   signal:AbortSignal.timeout(30000)}).catch(unknownProductionResponse);
   let data;
   try{data=await response.json();}catch{
    throw Error('再作成の応答が不明です。再送せずWorker履歴を確認してください');
@@ -100,32 +126,34 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
   return data;
  };
  const decideBatch=async plan=>{
-  requireTest();
+  assertProductionSelection(plan);
   const password=token.value.trim();
-  if(!password||event.value!==plan?.event_id||plan?.confirm!=='TEST-ONLY BATCH DECISION')
-   throw Error('TESTイベントと認証を確認してください');
-  const response=await fetch(gateway+'/staging/batch/decision',{
+  if(!password||event.value!==plan?.event_id||plan?.confirm!==(environment==='production'?'PRODUCTION EVENT BATCH DECISION':'TEST-ONLY BATCH DECISION'))
+   throw Error('選択中のイベントと認証を確認してください');
+  const response=await fetch(gateway+'/'+environment+'/batch/decision',{
    method:'POST',headers:{'X-SS-Bridge-Token':password,'Content-Type':'application/json'},
-   body:JSON.stringify(plan),mode:'cors',cache:'no-store',signal:AbortSignal.timeout(30000)});
+   body:JSON.stringify(plan),mode:'cors',cache:'no-store',redirect:'error',signal:AbortSignal.timeout(30000)}).catch(unknownProductionResponse);
   const data=await response.json();
   if(!response.ok)throw Error(data?.error?.message||'結果確定の応答が不明です。再送せず登録状況を確認してください');
+  verifyProductionResponse(plan,data);
   return data;
  };
  const appendSecondRound=async plan=>{
-  requireTest();
+  assertProductionSelection(plan);
   const password=token.value.trim();
-  if(!password||plan?.confirm!=='TEST-ONLY BATCH APPEND')
+  if(!password||plan?.confirm!==(environment==='production'?'PRODUCTION EVENT BATCH APPEND':'TEST-ONLY BATCH APPEND'))
    throw Error('後半登録の認証と確認が必要です');
   // Never retry. A lost response must be reconciled by inspect.
-  const response=await fetch(gateway+'/staging/batch/append-second-round',{
+  const response=await fetch(gateway+'/'+environment+'/batch/append-second-round',{
    method:'POST',headers:{'X-SS-Bridge-Token':password,'Content-Type':'application/json'},
-   body:JSON.stringify(plan),mode:'cors',cache:'no-store',
-   signal:AbortSignal.timeout(30000)});
+   body:JSON.stringify(plan),mode:'cors',cache:'no-store',redirect:'error',
+   signal:AbortSignal.timeout(30000)}).catch(unknownProductionResponse);
   let data;
   try{data=await response.json();}catch{throw Error('後半登録の応答が不明です。再送せずWorkerを確認してください');}
   if(!response.ok)throw Error(data?.error?.message||'後半登録エラー '+response.status);
   if(data.request_id!==plan.request_id||data.event_id!==plan.event_id)
    throw Error('後半登録の応答IDが一致しません。再送しないでください');
+  verifyProductionResponse(plan,data);
   return data;
  };
  const read=async path=>{
@@ -134,7 +162,7 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
   for(let attempt=0;attempt<2;attempt++){
    try{
     response=await fetch(gateway+path,{method:'GET',headers:{'X-SS-Bridge-Token':password},
-     mode:'cors',cache:'no-store',signal:AbortSignal.timeout(20000)});
+     mode:'cors',cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000)});
     break;
    }catch(error){
     if(attempt===0)continue; // One bounded retry for transient iPhone network failures.
@@ -187,5 +215,5 @@ export function initAnalysisNames(state,{onChange=()=>{}}={}){
  connect.addEventListener('click',load);
  retry.addEventListener('click',()=>refresh());
  if(token.value)load();
- return {refresh,inspectBatch,startBatch,recreateBatch,appendSecondRound,refreshOfficial,decideBatch};
+ return {refresh,inspectBatch,startBatch,recreateBatch,appendSecondRound,refreshOfficial,decideBatch,readOfficial:read};
 }

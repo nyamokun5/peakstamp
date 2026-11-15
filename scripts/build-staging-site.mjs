@@ -45,7 +45,7 @@ export async function buildStagingSite(destination=path.join(root,'dist')){
  for(const entry of files){
   if(!entry.isFile()||!/(?:\.mjs|\.html|\.css)$/.test(entry.name))continue;
   // TEST output does not include the production-only request adapter or policy.
-  if(['sposched-production-ui.mjs','sposched-production-release.mjs'].includes(entry.name))continue;
+  if(['sposched-production-ui.mjs','sposched-production-release.mjs','sposched-production-inline.mjs'].includes(entry.name))continue;
   const source=path.join(root,entry.name);
   const target=path.join(destination,entry.name);
   if(entry.name==='sposched-review.html'){

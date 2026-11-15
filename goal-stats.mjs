@@ -405,6 +405,8 @@ export function confirmedGoalExport(sources,storage){
     assist:x.assistStatus==='named'?clip(x.assist):null,
     matchSeq:clip(String(x.matchSeq||''))?Number(x.matchSeq):null,
     matchLabel:clip(x.matchLabel),teamA:clip(x.teamA),teamB:clip(x.teamB),
+    ...(x.matchupConfirmed===true?{matchupConfirmed:true}:{}),
+    ...(x.userConfirmedMatchup===true?{userConfirmedMatchup:true}:{}),
     confirmedAt:x.confirmedAt||null,note:clip(x.note,400)});
   }
  }
