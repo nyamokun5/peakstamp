@@ -11,7 +11,7 @@ try{
   if(u.host==='peakstamp.local'){const path=u.pathname==='/'?'index.html':u.pathname.slice(1);try{return route.fulfill({body:await readFile(new URL('../'+path,import.meta.url)),contentType:path.endsWith('.html')?'text/html':path.endsWith('.css')?'text/css':'text/javascript'})}catch{return route.fulfill({status:404,body:''})}}
   calls.push({host:u.host,path:u.pathname,method:req.method()});
   if(u.pathname==='/youtube/title')return route.fulfill({json:{title:'2026-11-15 第1試合 チーム1 vs チーム2'}});
-  if(u.pathname==='/api/gemini-youtube'){assert.equal(req.headers()['x-peakstamp-access'],'mock-access');assert.equal(req.headers()['x-goog-api-key'],undefined);const body=req.postDataJSON();return route.fulfill({json:body.mode==='duration'?{duration:120}:raw})}
+  if(u.pathname==='/api/gemini-youtube'){if(req.method()==='GET')return route.fulfill({json:{service:'peakstamp-gemini-youtube'}});assert.equal(req.headers()['x-peakstamp-access'],'mock-access');assert.equal(req.headers()['x-goog-api-key'],undefined);const body=req.postDataJSON();return route.fulfill({json:body.mode==='duration'?{duration:120}:raw})}
   if(u.pathname==='/iframe_api')return route.fulfill({body:'window.YT={Player:function(frame,opts){this.getCurrentTime=()=>32;this.getDuration=()=>120;this.getPlayerState=()=>2;this.seekTo=()=>{};this.playVideo=()=>{};this.pauseVideo=()=>{};this.destroy=()=>{};this.isMuted=()=>false;this.mute=()=>{};this.unMute=()=>{};setTimeout(()=>opts.events.onReady({target:this}),0)}};window.onYouTubeIframeAPIReady?.();',contentType:'text/javascript'});
   if(u.host==='www.youtube.com')return route.fulfill({body:'<html></html>',contentType:'text/html'});
   assert.equal(req.method(),'GET');return route.fulfill({status:404,json:{error:'mock unavailable'}});
@@ -43,6 +43,9 @@ try{
  await page.locator('[data-journey-step="1"]').click();await page.locator('#goalStatsPanel').waitFor({state:'visible'});assert.equal(calls.filter(c=>c.path==='/api/gemini-youtube').length,paid);
  assert.deepEqual(errors,[]);
  assert.equal(calls.some(c=>c.host==='generativelanguage.googleapis.com'),false);
+ await page.locator('[data-journey-step="0"]').click();await page.locator('#geminiAdvancedTools > summary').click();await page.getByRole('button',{name:'接続を確認',exact:true}).click();await page.waitForFunction(()=>document.getElementById('geminiMainStatus').textContent.includes('接続を確認しました'));
+ assert.equal(calls.filter(c=>c.path==='/api/gemini-youtube'&&c.method==='POST').length,paid);
+ page.once('dialog',dialog=>dialog.dismiss());await page.getByRole('button',{name:'Geminiで再解析',exact:true}).click();assert.equal(calls.filter(c=>c.path==='/api/gemini-youtube'&&c.method==='POST').length,paid);
  console.log(JSON.stringify({pass:true,paidRequestsMocked:paid,sharedSteps:true,sharedGoalEditor:true,sharedRegistration:true,errors}));
  await page.close();
 }finally{await browser.close()}

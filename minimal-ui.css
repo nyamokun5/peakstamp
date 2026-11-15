@@ -70,7 +70,6 @@ body[data-source-mode="youtube"] #fileDetails,
 body[data-source-mode="youtube"] #videoWrapper,
 body[data-source-mode="youtube"] #sourceList .source-original-filename,
 body[data-source-mode="youtube"] #waveCanvas,
-body[data-source-mode="youtube"] #geminiAdvancedTools,
 body[data-source-mode="youtube"] #advancedTools,
 body[data-source-mode="youtube"] .legacy-audio-details,
 body[data-source-mode="youtube"] #geminiCalloutPanel {display:none!important}

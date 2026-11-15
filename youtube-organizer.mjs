@@ -61,13 +61,13 @@ export function mountOrganizer({state,syncSources,ssNames,analysisCompleted,work
  async function api(s,mode){const r=await fetch(endpoint,{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json','X-PeakStamp-Access':access.value.trim()},body:JSON.stringify({videoId:s.id,mode,...(mode==='highlights'?{durationSeconds:s.duration}:{})})});
   let data;try{data=await r.json()}catch{}
   if(!r.ok)throw Error(data?.error||'解析サーバーの応答を確認できませんでした。HTTP '+r.status);return data;}
- async function scan(s){if(s.analyzed)return;
+ async function scan(s,force=false){if(s.analyzed&&!force)return;
   status(matchName(s)+' を解析中…');
   try{if(!(s.duration>0)){s.duration=Number((await api(s,'duration')).duration);save()}
    if(!(s.duration>0&&s.duration<=1800))throw Error('解析できる動画は30分以内です。');
    const parsed=await api(s,'highlights');storeYouTubeAnalysis(s,parsed,localStorage);save();await ssNames.refresh();syncSources();
   }catch(e){s.error=e.message;save();throw e}}
- async function analyze(list){
+ async function analyze(list,force=false){
   if(!access.value.trim()){access.focus();throw Error('アクセスコードを入力してください。')}
   if(!consent.checked){consent.focus();throw Error('動画送信への同意をチェックしてください。')}
   const targets=list.filter(s=>!s.info.drone);if(!targets.length)throw Error('解析する動画を登録してください。');
@@ -75,13 +75,20 @@ export function mountOrganizer({state,syncSources,ssNames,analysisCompleted,work
   for(const [i,s] of targets.entries()){
    if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
    status((i+1)+' / '+targets.length+' 本目を解析中…');
-   try{await scan(s);success++;progressUI.segments(i+1,targets.length);get('geminiProgressLabel').textContent='動画を解析中 · '+(i+1)+' / '+targets.length+' 本';}catch(e){if(controller.signal.aborted)throw e;failures.push(e.message);if(/アクセスコード|認証|401|403/.test(e.message))break}
+   try{await scan(s,force);success++;progressUI.segments(i+1,targets.length);get('geminiProgressLabel').textContent='動画を解析中 · '+(i+1)+' / '+targets.length+' 本';}catch(e){if(controller.signal.aborted)throw e;failures.push(e.message);if(/アクセスコード|認証|401|403/.test(e.message))break}
   }
   status(failures.length?'解析できない動画があります：'+failures.join(' ／ '):'解析が完了しました。動画で確認してからキープしてください。');
   if(failures.length)progressUI.fail('解析できない動画があります');else progressUI.complete();
   analysisCompleted({success:success>0,failures:failures.length,error:failures[0]||''});
  }
  single.onclick=()=>run(()=>analyze(state.sources.filter(s=>s.id===picker.value)));batch.onclick=()=>run(()=>analyze(state.sources));
+ const advanced=get('geminiAdvancedTools');
+ const advancedSummary=el('summary','詳細設定・再解析・接続診断');
+ const check=button('接続を確認',()=>run(async()=>{const r=await fetch(endpoint);const data=await r.json();if(!r.ok||data.service!=='peakstamp-gemini-youtube')throw Error('解析サーバーへの接続を確認できませんでした。');status('解析サーバーへの接続を確認しました。');}));
+ const rescan=button('Geminiで再解析',()=>{if(busy||!state.sources.length)return;if(!confirm('保存済みの結果を使わず再解析します。追加料金が発生する場合があります。続けますか？'))return;void run(()=>analyze(state.sources,true));});
+ const localAdvanced=el('div');localAdvanced.hidden=true;localAdvanced.append(...advanced.children);
+ advanced.append(advancedSummary,el('p','通常の解析は保存済みの結果を再利用します。再解析は追加料金が発生する場合があります。','fine-print'),check,rescan,localAdvanced);
+
  get('choosePanel').querySelector('details:last-of-type').classList.add('local-file-help');
  if(new URLSearchParams(location.search).has('sample'))urls.value=sampleIds.map(id=>'https://youtu.be/'+id).join('\n');
  const exportRoot=el('div',undefined,'youtube-output');exportRoot.id='youtubeOutput';
