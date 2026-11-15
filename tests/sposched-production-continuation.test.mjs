@@ -39,3 +39,10 @@ test('rejects an append if the saved job is incomplete or fixture IDs change',()
  assert.throws(()=>buildProductionSecondRoundAppend({snapshot,workerJob:{...workerJob,fixture_ids:{1:ids[1],2:ids[0]}},operations}));
  assert.throws(()=>buildProductionSecondRoundAppend({snapshot,workerJob,operations:[operations[1],operations[0]]}));
 });
+
+test('refuses second-round writes until both fixtures are scheduled and not finished',()=>{
+ for(const status of ['waiting','finished','running']){
+  const changed={...snapshot,matches:snapshot.matches.map(m=>m.seq===3?{...m,status}:m)};
+  assert.throws(()=>buildProductionSecondRoundAppend({snapshot:changed,workerJob,operations}));
+ }
+});
