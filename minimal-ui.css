@@ -5,7 +5,7 @@
 .goal-review-video-status,.goal-native-playback,.range-legend,
 .pinch-overlay-tip,.scene-pinch-value,.inline-caption,.scene-volume-note,
 .highlight-item .score,.list-help,.result-summary,#fileImportHelp,
-.goal-review-external-sync>strong,.goal-review-external-sync>p,
+.goal-review-external-sync>strong,.goal-review-external-sync>p:not(#ssInlineStatus),
 #goalStatsDone>strong,#goalStatsDone>p,.goal-review-library-head,
 .gemini-brief,#geminiMainFileHelp,.upload>span:not(.upload-icon),.upload>small{
  display:none!important;
@@ -38,6 +38,8 @@
 .exact-times[open] .range-inputs{margin-top:6px}
 .goal-review-external-sync{margin:8px 0!important;padding:0!important;border:0!important}
 .goal-review-external-sync>a{font-size:13px;min-height:44px;box-sizing:border-box}
+#ssInlineStatus{font-size:13px;color:var(--text,#e6f2f6);white-space:pre-wrap;margin:8px 0;overflow-wrap:anywhere}
+#ssInlineStatus:empty{display:none}
 #journeyDialogBody:empty{display:none}
 #journeyDialogRegister{display:block;text-align:center;box-sizing:border-box;text-decoration:none;padding:13px;font-weight:800}
 #journeyDialogRegister[hidden]{display:none}
