@@ -4,12 +4,13 @@ import {readFile} from 'node:fs/promises';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const browser=await chromium.launch({headless:true,
  ...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+const simple=process.env.TEST_SIMPLE_PRODUCTION==='1';
 const E='11111111-1111-4111-8111-111111111111';
 const T='22222222-2222-4222-8222-222222222222';
 const ids=[1,2,3,4].map(n=>'33333333-3333-4333-8333-33333333333'+n);
 const snapshot={event_id:E,
  event:{date:'2026-11-01',name:'Sunday',status:'target'},
- matches:ids.map((match_id,i)=>({seq:i+1,match_id,
+ matches:ids.map((match_id,i)=>({seq:i+1,match_id,...(simple?{title:i<2?'準決勝':i===2?'3位決定戦':'決勝'}:{}),
   status:i<2?'scheduled':'waiting',left_team:i<2?'Team '+(i*2+1):'',
   right_team:i<2?'Team '+(i*2+2):'',
   left_score:0,right_score:0,goals:[]})),
@@ -51,6 +52,7 @@ await page.route('**/*',async route=>{
  let response;
  if(url.pathname==='/events')response={events:[{event_id:E,date:'2026-11-01',name:'Sunday',status:'target'}]};
  else if(url.pathname==='/snapshot')response=snapshot;
+ else if(url.pathname==='/production/alias/list')response={aliases:[]};
  else if(url.pathname==='/production/release-state'){
   checks++;response={environment:'PRODUCTION',event_id:E,target_event_id:E,
    scope:'current-target',release_ready:releaseReady};
@@ -71,6 +73,15 @@ try{
  await page.locator('#productionPanel').waitFor({state:'visible'});
  await page.locator('#quickPanel').waitFor({state:'visible'});
  await page.locator('#quickGoals .quick-goal').first().waitFor({state:'visible'});
+ if(simple){
+  assert.equal(await page.locator('.simple-match').count(),4);
+  assert.equal(await page.locator('#simpleSaveArea').isVisible(),false,'production never exposes the TEST submit path');
+  assert.match(await page.getByLabel(/ゴール 1 得点者/).innerText(),/Taro Sato/);
+  await page.getByLabel(/ゴール 1 得点者/).selectOption('Taro Sato');
+  await page.getByLabel(/ゴール 2 得点者/).selectOption('達夫');
+  assert.equal(await page.locator('#productionStart').isDisabled(),true,'name edits invalidate production approval evidence');
+  assert.match(await page.locator('.simple-match').first().innerText(),/Taro Sato/);
+ }else{
  const review=await page.locator('#quickGoals .quick-goal').first().innerText();
  assert.match(review,/AI候補/);
  assert.match(review,/登録予定/);
@@ -91,6 +102,7 @@ try{
   'technical source details start collapsed');
  await page.locator('#quickGoals .quick-trace summary').first().click();
  assert.match(await page.locator('#quickGoals .quick-trace').first().innerText(),/MATCH_1.MOV/);
+ }
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+2),
   'mobile page must not overflow the screen horizontally');
  assert.equal(await page.locator('#quickTestHelp').isVisible(),false);
@@ -108,11 +120,11 @@ try{
  assert.equal(await page.locator('#productionStart').isDisabled(),false,
   'current target is standing-authorized after fresh official preflight');
  assert.equal(await page.locator('#productionPlan').isVisible(),true);
- assert.match(await page.locator('#productionPlan').innerText(),/ゴール\d+件、4試合の結果/);
+ assert.match(await page.locator('#productionPlan').innerText(),/ゴール\d+件、2試合の結果/);
  assert.equal(await page.locator('#productionAudit').getAttribute('open'),null,
   'technical event and fixture IDs remain collapsed by default');
  assert.match(await page.locator('#productionCheck').innerText(),/① 登録内容を確認/);
- assert.match(await page.locator('#productionStart').innerText(),/② 4試合を本番登録/);
+ assert.match(await page.locator('#productionStart').innerText(),/② 準決勝2試合を本番登録/);
  assert.ok(checks>=2);
  assert.equal(productionWrites,0);
  assert.equal(otherReads,0);

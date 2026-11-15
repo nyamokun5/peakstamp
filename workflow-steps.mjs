@@ -51,15 +51,9 @@ export function initWorkflowSteps({document:doc=globalThis.document,onChange=()=
   }
   return true;
  };
- const autoAdvance=({busy=false}={})=>{
-  const ready=visible().edit;
-  if(ready&&!seenReview&&!busy&&current==='analysis'){
-   seenReview=true;
-   setStage('edit',{scroll:false});
-  }else if(ready&&!busy)seenReview=true;
-  if(!ready)seenReview=false;
-  refresh();
- };
+ // Never navigate to editing merely because cached goal results exist.
+ // The organizer must confirm video matchups before opening goal review.
+ const autoAdvance=()=>{refresh();};
  buttons.forEach((button,index)=>button.addEventListener('click',()=>setStage(STAGES[index])));
  for(const button of doc.querySelectorAll('[data-editor-jump]')){
   button.addEventListener('click',()=>{

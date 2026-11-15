@@ -1,9 +1,10 @@
+import * as identity from '../sposched-analysis-identity.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {normalizePerson,normalizeTeam,normalizeSpoSnapshot,prepareGoalRows,preserveReviewRows,
- selectPlayerCandidates,findPotentialDuplicate,existingGoalsForMatch,matchingExistingGoals,
+ selectPlayerCandidates,fixturePlayerOptions,findPotentialDuplicate,existingGoalsForMatch,matchingExistingGoals,
  inferMatchFromCommentary,spokenNameTokens,scoredPlayerCandidates,suggestedPlayer,
  validateGoalRow,buildReviewPayload}
  from '../sposched-review-core.mjs';
@@ -696,4 +697,118 @@ test('related spellings do not auto-select when two different roster entries mat
  assert.equal(suggestedPlayer('全然別の人',snap).name,'');
  assert.equal(suggestedPlayer('小野',snap).name,'',
   'unlisted kanji readings are never guessed as another surname');
+});
+
+test('current SS roster excludes stale event teams, unrelated team and historical goal scorers from manual selections',()=>{
+ const raw={event_id:'eeaed234-e9f0-4999-b05e-ec01c7b656fc',
+  roster_source:'official-current-event-teams',
+  roster:{Team1:['New A','New B'],Team2:['Current C'],Team3:['Other D']},
+  matches:[
+   {seq:1,match_id:'2d4cf942-11a2-48ba-a23f-92db892f02e1',
+    left_team:'Team1',right_team:'Team2',status:'scheduled',goals:[
+     {goal_id:'2d4cf942-11a2-48ba-a23f-92db892f02e2',
+      scorer:'Old Player',team:'Team1'}]},
+   {seq:2,match_id:'2d4cf942-11a2-48ba-a23f-92db892f02e3',
+    left_team:'Team2',right_team:'Team3',status:'scheduled',goals:[]}
+  ]};
+ const ss=normalizeSpoSnapshot(raw);
+ assert.equal(ss.rosterSource,'official-current-event-teams');
+ assert.equal(ss.players.includes('Old Player'),false,
+  'historical goal scorer cannot appear in the current assignment');
+ assert.deepEqual(fixturePlayerOptions(ss,1),['Current C','New A','New B']);
+ assert.deepEqual(fixturePlayerOptions(ss,1,'Team1'),['New A','New B']);
+ assert.deepEqual(fixturePlayerOptions(ss,2),['Current C','Other D']);
+ assert.deepEqual(fixturePlayerOptions(ss,99),[]);
+ assert.deepEqual(fixturePlayerOptions(ss,1,'Team3'),[]);
+ const manualGoal={manual:true};
+ const valid={goal:manualGoal,include:true,confirmed:true,seq:1,scorer:'New A',
+  team:'Team1',assistMode:'named',assist:'New B'};
+ assert.equal(validateGoalRow(valid,ss),null);
+ assert.match(validateGoalRow({...valid,scorer:'Other D'},ss),/現在の試合チーム/);
+ assert.match(validateGoalRow({...valid,assist:'Current C'},ss),/アシスト者.*得点チーム/);
+ assert.match(validateGoalRow({...valid,team:'Team2'},ss),/得点者と.*SS得点チーム/);
+ assert.throws(()=>normalizeSpoSnapshot({...raw,roster:{
+  Team1:['Duplicated'],Team2:['Duplicated']}}),/同名選手/);
+});
+
+test('same-event reload clears stale manual scorer/assist and team after SS reassigns players',()=>{
+ const eventId='eeaed234-e9f0-4999-b05e-ec01c7b656fc';
+ const mk=(roster)=>normalizeSpoSnapshot({event_id:eventId,
+  roster_source:'official-current-event-teams',roster,
+  matches:[{seq:1,match_id:'2d4cf942-11a2-48ba-a23f-92db892f02e1',
+    status:'scheduled',left_team:'Team1',right_team:'Team2',goals:[]}]});
+ const old=mk({Team1:['Scorer','Helper'],Team2:['Other']});
+ const now=mk({Team1:['Other'],Team2:['Scorer','Helper']});
+ const g={id:'2d4cf942-11a2-48ba-a23f-92db892f02e5',
+  manual:true,source:{name:'SS手動入力'},scorer:'',assist:''};
+ const earlier={...prepareGoalRows({goals:[g]},old)[0],seq:1,scorer:'Scorer',
+  assist:'Helper',team:'Team1',assistMode:'named',include:true,confirmed:true};
+ const updated=prepareGoalRows({goals:[g]},now);
+ const [row]=preserveReviewRows(updated,[earlier],{sameEvent:true,snapshot:now});
+ assert.equal(row.scorer,'');
+ assert.equal(row.assist,'');
+ assert.equal(row.team,'');
+ assert.equal(row.confirmed,false);
+});
+
+
+test('pending fixture gives an actionable message and keeps original row number after excluded goals',()=>{
+ const snapshot=normalizeSpoSnapshot({event_id:'test-event',matches:[
+  {seq:3,match_id:'third-place',left_team:null,right_team:null}
+ ],roster:{Team1:['Scorer']}});
+ const row={include:true,confirmed:true,seq:3,scorer:'Scorer',assistMode:'none',team:'Team1'};
+ assert.match(validateGoalRow(row,snapshot),/対戦チームが未確定/);
+ assert.throws(()=>buildReviewPayload(snapshot,[{include:false},row]),error=>
+  error.rowNumber===2 && error.message.startsWith('2件目：'));
+ snapshot.matches[0].leftTeam='Team2';snapshot.matches[0].rightTeam='Team4';
+ assert.match(validateGoalRow(row,snapshot),/Team1.*#3.*Team2 vs Team4/);
+});
+
+// The first three fixtures and the placement fixture can have different
+// lifecycle states. A waiting result must not erase an assigned player.
+test('SS identity: waiting fixture resolves roster without match ID but write identity must refresh',()=>{
+ const {fixturePeople,resolveAnalysisGoal,verifiedAnalysisPerson}=identity;
+ const snap={eventId:'event-1',rosterSource:'official-current-event-teams',
+  matches:[{seq:3,matchId:'match-3',status:'waiting',leftTeam:'Team2',rightTeam:'Team4'}],
+  players:['Yohei Tyler Takasaki'],memberIds:new Map([['Yohei Tyler Takasaki','11111111-1111-4111-8111-111111111111']]),
+  playerIds:new Map([['Yohei Tyler Takasaki','22222222-2222-4222-8222-222222222222']]),
+  playerTeam:new Map([['Yohei Tyler Takasaki','Team4']])};
+ assert.deepEqual(fixturePeople(snap,3),['Yohei Tyler Takasaki']);
+ const goal={id:'g5',matchSeq:3,matchLabel:'2 vs 4',scorer:'Yohei Tyler Takasaki',
+  rawScorer:'たけざき',assistStatus:'none',videoDecision:'kept',status:'draft',
+  userEditedGoalFields:['scorer']};
+ const resolved=resolveAnalysisGoal(goal,{snapshot:snap,aliases:[]});
+ assert.equal(resolved.status,'confirmed');
+ assert.equal(resolved.ssIdentity.scorer.name,'Yohei Tyler Takasaki');
+ assert.equal(verifiedAnalysisPerson(resolved,snap,3,'scorer'),null);
+ const alreadyOfficial={...goal,rawScorer:'たけざき',userEditedGoalFields:[]};
+ const fromDisplayed=resolveAnalysisGoal(alreadyOfficial,{snapshot:snap,aliases:[]});
+ // An official name already in the goal field is not a reason to force
+ // another dropdown selection merely because the spoken alias was unknown.
+ assert.equal(fromDisplayed.ssIdentity.scorer?.name,'Yohei Tyler Takasaki');
+ snap.matches[0]={...snap.matches[0],matchId:''};
+ assert.deepEqual(fixturePeople(snap,3),['Yohei Tyler Takasaki']);
+ const waiting=resolveAnalysisGoal(goal,{snapshot:snap,aliases:[]});
+ assert.equal(waiting.status,'confirmed');
+ // Read-only pre-resolution is allowed; a newly assigned official match ID
+ // invalidates the cached identity until it is refreshed.
+ snap.matches[0]={...snap.matches[0],matchId:'match-3-new'};
+ assert.equal(verifiedAnalysisPerson(waiting,snap,3,'scorer'),null);
+});
+
+test('pending placement goal keeps official roster name as unconfirmed review draft',()=>{
+ const raw=event();
+ raw.matches.push({seq:3,title:'#3 third place',left_team:'Team1',right_team:'Team3',status:'waiting'});
+ const snap=normalizeSpoSnapshot(raw);
+ snap.rosterSource='official-current-event-teams';
+ snap.memberIds=new Map([['Hiroyuki Kawata','00000001-0000-4000-8000-000000000001']]);
+ snap.playerIds=new Map([['Hiroyuki Kawata','00000002-0000-4000-8000-000000000002']]);
+ const goal={id:'placement-1',source:{name:'third.mov'},matchSeq:3,
+  teamA:'2',teamB:'4',matchupConfirmed:true,scorer:'Hiroyuki Kawata',
+  assistStatus:'none',ssIdentity:{environment:'staging',eventId:snap.eventId,
+   matchId:'',seq:3,scorer:{name:'Hiroyuki Kawata',memberId:snap.memberIds.get('Hiroyuki Kawata'),playerId:snap.playerIds.get('Hiroyuki Kawata')}}};
+ const row=prepareGoalRows({goals:[goal]},snap)[0];
+ assert.equal(row.scorer,'Hiroyuki Kawata');
+ assert.equal(row.confirmed,false);
+ assert.equal(validateGoalRow({...row,confirmed:true,team:'チーム4'},snap)?.includes('異なります'),true);
 });

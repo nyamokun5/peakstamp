@@ -21,7 +21,8 @@ try{for(const fromVideo of [false,true]){
   assert.equal(u.hostname,'shoot-sunday-sync-staging.yomax1979.workers.dev');
   let data;
   if(u.pathname==='/events')data={events:[{event_id:E,name:'Manual TEST',date:'2026-11-06'}]};
-  else if(u.pathname==='/snapshot')data={event_id:E,roster:{Team1:['Alice'],Team2:['Bob']},matches:[{seq:1,match_id:M,status:'scheduled',left_team:'Team1',right_team:'Team2',left_score:writes,right_score:0,goals:goals()}]};
+  else if(u.pathname==='/staging/alias/list')data={aliases:[]};
+  else if(u.pathname==='/snapshot')data={event_id:E,roster_source:'official-current-event-teams',roster_players:[{name:'Alice',team:'Team1',player_id:P,user_id:P},{name:'Bob',team:'Team2',player_id:Q,user_id:Q}],roster:{Team1:['Alice'],Team2:['Bob']},matches:[{seq:1,match_id:M,status:'scheduled',left_team:'Team1',right_team:'Team2',left_score:writes,right_score:0,goals:goals()}]};
   else if(u.pathname==='/match')data={match_id:M,event_id:E,status:'scheduled',goals:goals(),left:{name:'Team1',players:[{name:'Alice',player_id:P}],helpers:[]},right:{name:'Team2',players:[{name:'Bob',player_id:Q}],helpers:[]}};
   else if(u.pathname==='/staging/preview'){
    assert.equal(method,'POST');previews++;const a=route.request().postDataJSON();

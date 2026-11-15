@@ -20,7 +20,7 @@ function setup(values={goals:3,highlights:5}){
  };
  const called=[];
  const callbacks=Object.fromEntries([
-  'goAnalysis','goGoals','showGoalList','goHighlights','reviewAllHighlights',
+  'goAnalysis','goGoals','reviewMatchups','showGoalList','goHighlights','reviewAllHighlights',
   'goExport','showExportPreview','saveHSJson'
  ].map(name=>[name,()=>called.push(name)]));
  const coach=initJourneyCoach({document:doc,counts:()=>values,actions:callbacks});
@@ -115,7 +115,7 @@ test('actual app wires analysis callbacks, missed-goal registration and final sa
  assert.match(montage,/onComplete\(\)/);
  assert.match(montage,/hsJsonReminder/);
 });
-test('goal review places scoring confirmation ahead of clip Keep and keeps automatic next',()=>{
+test('goal review keeps video independent of SS validation and advances sequentially',()=>{
  const goal=readFileSync(new URL('../goal-stats-ui.mjs',import.meta.url),'utf8');
  assert.match(goal,/editor\.append\(scoreDetails,actions,videoStatus,videoActions\)/);
  assert.match(goal,/動画を採用・次へ/);

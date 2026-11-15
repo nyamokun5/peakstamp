@@ -46,7 +46,7 @@ test('cross-team ASSIST is automatically enrolled before goal, preserving offici
  ]);
  assert.deepEqual(job.operations.find(op=>op.action==='create'),
   {seq:2,action:'create',team:'チーム3',scorer:'Hiroyuki Kawata',
-   assist:'橋本 泰成',expected_match_id:IDS[1]});
+   assist:'橋本 泰成',source_goal_key:'IMG_0287.MOV::g1',expected_match_id:IDS[1]});
  assert.throws(()=>plan(snapshot,rows,[{...decisions[0],helperPlan:null}]),
   /助っ人の登録計画/);
 });

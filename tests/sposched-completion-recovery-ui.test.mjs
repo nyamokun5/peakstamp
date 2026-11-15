@@ -19,7 +19,9 @@ async function run({replacement=false,networkError=false}={}){
   postStaging:async route=>{calls.push(route);assert.equal(route,'/staging/batch/inspect');return state;},
   fetchSS:async route=>{calls.push(route);if(networkError)throw Error('network unavailable');return snapshot;},
   normalizeSpoSnapshot:x=>x,verifyCompletedIndependentSnapshot,hasRecreatedIndependentFixtures,
-  hasRecreatedBracket:()=>false,hideCompletionPanel:()=>{},
+  hasRecreatedBracket:()=>false,hasDifferentIndependentGeneration:()=>false,hideCompletionPanel:()=>{},
+  workerCompletionVerified:()=>false,workerFixtureFingerprint:()=>'',
+  workerCompletionProof:null,
   showWorkerBatchState:()=>shown++,rebuild:()=>{},setBatchBusy:()=>{}};
  vm.createContext(ctx);await vm.runInContext(fn+';refreshWorkerBatch({passive:true})',ctx);
  return {ctx,nodes,saved,calls,shown};

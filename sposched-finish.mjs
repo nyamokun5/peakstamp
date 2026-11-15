@@ -1,6 +1,6 @@
 import {assertCurrentNumberedFixture} from './sposched-staging-client.mjs?v=ss-live-map1';
 const fail=message=>{throw Error(message)};
-export function finishAction(loaded,latest,seq,winner){
+export function finishAction(loaded,latest,seq,winner,{drawAllowed=null}={}){
  const matchId=assertCurrentNumberedFixture(loaded,latest,seq);
  const m=latest.matches.find(x=>x.seq===Number(seq));
  if(m.status!=='scheduled')fail('未終了の試合を選んでください。終了済みの結果は変更しません');
@@ -9,8 +9,10 @@ export function finishAction(loaded,latest,seq,winner){
  const automatic=m.leftScore>m.rightScore?'left':m.leftScore<m.rightScore?'right':null;
  if(!automatic&&!['left','right','draw'].includes(winner))
   fail('同点です。PKなどで決めた勝者、または引き分けを選択してください');
- if(!automatic&&winner==='draw'&&Number(seq)<=2)
-  fail('準決勝は勝ち上がりチームを選択してください。引き分け終了は3位決定戦・決勝のみです');
+ if(!automatic&&winner==='draw'&&!(drawAllowed===null?Number(seq)>=3:drawAllowed===true))
+  fail(drawAllowed===null&&Number(seq)<=2
+   ?'準決勝は勝ち上がりチームを選択してください。引き分け終了は3位決定戦・決勝のみです'
+   :'この試合では勝ち上がりチームを指定してください。引き分け終了はできません');
  if(automatic&&winner&&winner!==automatic)fail('勝者がスコアと一致しません');
  return {action:'finish',match_id:matchId,event_id:latest.eventId,seq:Number(seq),
   left_score:m.leftScore,right_score:m.rightScore,winner:automatic||winner};

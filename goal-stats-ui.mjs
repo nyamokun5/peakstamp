@@ -1,4 +1,7 @@
 import { confirmedCard, applyCard } from './match-review.mjs';
+import {fixtureRosterNames} from './sposched-analysis-identity.mjs?v=ss-roster-readonly-2156';
+import {phoneticCandidates} from './sposched-alias-auto-match.mjs';
+import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs?v=ss-roster-readonly-2156';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
 /**
  * Unified, goal-first video review. All source files appear in one ordered
@@ -6,11 +9,11 @@ import {sourceDisplayName} from './match-label.mjs?v=match1';
  * gets reset merely because a card, field or summary rerenders.
  */
 import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
- confirmedGoalExport,goalSourceKey,actualGoalTime,matchContext} from './goal-stats.mjs?v=matchrecover2';
+ confirmedGoalExport,goalSourceKey,actualGoalTime,matchContext,suspectedDuplicateGoalIds} from './goal-stats.mjs?v=video-source14';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
-import {collectGoalQueue,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=unifiedga1';
-import {createGoalPlaybackController} from './goal-playback.mjs?v=decoder-recovery3';
-import {createGoalSceneControls} from './goal-scene-editor.mjs?v=minimalmobile1';
+import {collectGoalQueue,nextGoalAfterDecision,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=sequential2';
+import {createGoalPlaybackController} from './goal-playback.mjs?v=firsttap1';
+import {createGoalSceneControls} from './goal-scene-editor.mjs?v=goalnative2';
 
 const $=id=>document.getElementById(id);
 const make=(tag,cls,text)=>{
@@ -53,11 +56,26 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  const textBox=$('goalStatsJsonArea'),textArea=$('goalStatsJson');
  const cache=()=>window.localStorage;
  const sources=()=>state.sources.filter(s=>s?.file&&s?.objectUrl);
- const goalData=s=>createGoalDrafts(s,cache());
- const queue=()=>collectGoalQueue(sources(),cache());
+ const goalData=s=>{
+  const data=createGoalDrafts(s,cache());
+  if(state.ssNameEnabled){
+   // Matchup comes from video registration via createGoalDrafts, never SS fixtures.
+   const items=data.items.map(item=>resolveAnalysisGoal(item,state.ssNameContext));
+   if(JSON.stringify(items)!==JSON.stringify(data.items))saveGoalDrafts(s,cache(),items);
+   data.items=items;
+  }
+  return data;
+ };
+ const queue=()=>{
+  if(state.ssNameEnabled)for(const src of sources())goalData(src);
+  return collectGoalQueue(sources(),cache());
+ };
  let activeKey='',displayedKey='',hadGoalCandidates=false,liveEntry=null;
- let queueFilter='all',scoreDetailsOpen=false;
- // UI-only review cursor; saved judgments and export data are unchanged.
+ let queueFilter='all',showExcluded=false,scoreDetailsOpen=false;
+ const excludedToggle=make('button','goal-review-excluded-toggle','除外した動画を表示');
+ excludedToggle.type='button';excludedToggle.hidden=true;
+ excludedToggle.addEventListener('click',()=>{showExcluded=!showExcluded;render();});
+ list.parentElement?.append(excludedToggle);
  let reviewAgain=false;
  const say=s=>{status.textContent=s;};
  const player=createGoalPlaybackController(video,{
@@ -154,6 +172,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const source=entry.source,item=latestGoal(entry);
   if(String(item[name]??'')===String(value??''))return;
   item[name]=value;
+  // A changed fixture or side invalidates previously resolved SS player IDs.
+  // Never carry identities from an earlier pairing into a different match.
+  if(['matchSeq','teamA','teamB'].includes(name)){
+   item.ssIdentity=null;
+   item.matchupConfirmed=false;
+   item.userConfirmedMatchup=false;
+  }
   // Clearing a name or choosing an assist state is also a deliberate edit.
   // Do not let subsequent Gemini refresh silently refill it.
   if(['scorer','assist','assistStatus','matchLabel','teamA','teamB','matchSeq'].includes(name)){
@@ -194,14 +219,14 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const lastGoal=rows.filter(row=>row.item.status!=='excluded').at(-1);
   const next=reviewAgain
    ?rows.slice(rows.findIndex(row=>row.key===entry.key)+1).find(row=>row.item.status!=='excluded')
-   :nextUnreviewedGoalVideo(rows,entry.key);
+   :nextGoalAfterDecision(rows,entry.key,{wasUnjudged});
   if(next){
    // Switching is performed within the original Keep/Reject tap so iOS
    // can authorize playback of the next MOV. The main app no longer
    // synchronously refreshes this editor during the decision callback.
    focusActive(next,{autoplay:true,scroll:true});
    say((decision==='kept'?'動画をキープ':'動画を不採用')+
-    'にしました。次の未判断ゴールへ進みました。');
+    'にしました。次のゴールへ進みました。');
   }else{
    // Distinguish a completed one-goal queue from a broken auto-advance:
    // no new candidate exists until the user adds or detects another goal.
@@ -239,14 +264,65 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const fields=make('div','goal-review-fields');
   // Primary controls: movie, trim/zoom, Keep/Reject.
   // Detailed scorer/assist and official match inputs stay one tap away.
+  const matchup=make('div','goal-review-matchup');
+  matchup.textContent=item.matchLabel||((item.teamA&&item.teamB)?item.teamA+' vs '+item.teamB:'対戦カード未設定');
+  editor.append(matchup);
+  // The AI pairing is not authoritative. One explicit organizer tap allows
+  // read-only roster resolution while SS's placement fixture is still waiting.
+  if(state.ssNameEnabled&&item.teamA&&item.teamB){
+   const pairButton=make('button','goal-review-mark-button',
+    item.matchupConfirmed===true?'✓ 対戦カード確認済み':'対戦カードを確認');
+   pairButton.type='button';pairButton.disabled=item.matchupConfirmed===true;
+   pairButton.addEventListener('click',()=>{
+    const current=latestGoal(entry);
+    if(!current.teamA||!current.teamB)return;
+    current.matchupConfirmed=true;
+    current.ssIdentity=null;
+    write(entry.source,goalData(entry.source).items.map(x=>x.id===current.id?current:x));
+    render();
+   });
+   editor.append(pairButton);
+  }
+  const ssIssues=[];
+  if(item.status!=='excluded'&&item.status!=='confirmed'&&item.videoDecision==='kept'){
+   const validation=validateGoal(item);
+   if(validation)ssIssues.push(validation);
+   if(state.ssNameEnabled){
+    const snap=state.ssNameContext?.snapshot;
+    const fixture=snap?.matches?.find(m=>Number(m.seq)===Number(item.matchSeq));
+    if(!snap)ssIssues.push('SSイベントが未接続');
+    else if(!fixture)ssIssues.push('SSの第'+(item.matchSeq||'?')+'試合を特定できません');
+    else{
+
+     if(!fixtureRosterNames(snap,item.matchSeq,item).length)
+      ssIssues.push('SS第'+item.matchSeq+'試合の対戦チームと正式選手名簿を確認してください');
+     else if(snap.rosterSource!=='official-current-event-teams')
+      ssIssues.push('SSの正式なイベント選手名簿を取得できません');
+     else{
+      if(!item.ssIdentity?.scorer)
+       ssIssues.push('得点者「'+(item.scorer||'未入力')+'」は表示されていますが、この試合の選手IDを確認できません');
+      if(item.assistStatus==='named'&&!item.ssIdentity?.assist)
+       ssIssues.push('アシスト「'+(item.assist||'未入力')+'」の選手IDを確認できません');
+     }
+    }
+   }
+  }
+  if(ssIssues.length){
+   const alert=make('div','goal-ss-unresolved');
+   alert.setAttribute('role','status');
+   alert.style.cssText='padding:10px;margin:8px 0;border:1px solid #e6a24c;border-radius:8px';
+   alert.append(make('strong','','SS未確定：'+ssIssues.join(' ／ ')));
+   alert.append(make('p','fine-print','動画はキープ済みです。呼び名の登録とSS試合への選手照合は別です。'));
+   editor.append(alert);
+  }
   const scoreDetails=make('details','goal-score-details');
-  scoreDetails.open=scoreDetailsOpen;
+  scoreDetails.open=scoreDetailsOpen || ssIssues.length>0 || !item.scorer || (item.assistStatus==='named'&&!item.assist) || (state.ssNameEnabled===true&&!item.ssIdentity?.scorer);
   scoreDetails.addEventListener('toggle',()=>{scoreDetailsOpen=Boolean(scoreDetails.open);});
-  const summaryNames=(item.scorer||'得点者未入力')+' ／ '+
-   (item.assistStatus==='named'?(item.assist||'アシスト者未入力'):
+  const summaryNames=(state.ssNameEnabled&&!item.ssIdentity?.scorer?'得点者を選択':item.scorer||'得点者未入力')+' ／ '+
+   (item.assistStatus==='named'?(state.ssNameEnabled&&!item.ssIdentity?.assist?'アシスト者を選択':item.assist||'アシスト者未入力'):
     item.assistStatus==='none'?'アシストなし':'アシスト未確認');
   scoreDetails.append(make('summary','',
-   '得点者・アシスト　'+summaryNames));
+   summaryNames+'　✎ 修正'));
   const timing=make('details','goal-review-time-adjust');
   timing.append(make('summary','','⏱ ゴール時刻を修正（切り抜きとは別）'));
   const timingTools=make('div','goal-review-time-tools');
@@ -281,7 +357,131 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   });
   timingTools.append(earlier,stamp,later,useVideo);
   timing.append(timingTools);
-  inputRow(fields,'得点者（ゴール）',item.scorer,v=>edit(entry,'scorer',v),{placeholder:'例：若さん'});
+  const personInput=(field,label)=>{
+   if(!state.ssNameEnabled){inputRow(fields,label,item[field],v=>edit(entry,field,v),{placeholder:'選手名'});return;}
+   const box=make('label','goal-review-field'),select=make('select','');
+   box.append(make('span','',label));select.setAttribute('aria-label',label);
+   select.append(new Option('選手を選択',''));
+   const snapshot=state.ssNameContext?.snapshot;
+   // Keep selection within the confirmed fixture; an unrelated team's player
+   // must not become a valid scorer merely by being in the event roster.
+   let names=fixtureRosterNames(snapshot,item.matchSeq,item);
+   if(!names.length){
+    const rosterCount=snapshot?.players?.length||0;
+    const teams=[...new Set(snapshot?.playerTeam?.values?.()||[])].join(', ')||'なし';
+    const fixture=snapshot?.matches?.find(m=>Number(m.seq)===Number(item.matchSeq));
+    const diagnostic='名簿 '+rosterCount+'人 / 方式 '+(snapshot?.rosterSource||'未取得')+
+     ' / チーム '+teams+' / 第'+(item.matchSeq||'?')+'試合 '+
+     (fixture?((fixture.leftTeam||'未定')+' vs '+(fixture.rightTeam||'未定')):'なし')+
+     ' / 動画 '+(item.teamA||'?')+' vs '+(item.teamB||'?')+
+     ' / 確認 '+(item.matchupConfirmed===true?'済':'未');
+    box.append(make('span','goal-review-hint',diagnostic));
+   }
+   if(field==='assist')names=names.filter(name=>name!==item.scorer);
+   const suggestions=phoneticCandidates(field==='scorer'?item.rawScorer:item.rawAssist,
+    state.ssNameContext?.aliases||[],snapshot,item.matchSeq);
+   const ranked=[...new Set([...suggestions.map(x=>x.name),...names])].filter(n=>names.includes(n));
+   for(const name of ranked){
+    const suggested=suggestions.find(x=>x.name===name);
+    select.append(new Option(suggested?name+'（'+suggested.reason+'）':name,name));
+   }
+   select.value=ranked.includes(item[field])?item[field]:'';
+   select.addEventListener('change',()=>edit(entry,field,select.value));
+   box.append(select);fields.append(box);
+   // Explicit TEST-only learning: never persist an AI suggestion or a passive prefill.
+   const spokenName=String((field==='scorer'?item.rawScorer:item.rawAssist)||'').trim();
+   const officialName=String(select.value||'').trim();
+   const memberId=state.ssNameContext?.snapshot?.memberIds?.get(officialName);
+   const normalizeName=s=>String(s||'').normalize('NFKC').trim().toLocaleLowerCase('ja-JP')
+    .replace(/[ァ-ヶ]/g,x=>String.fromCharCode(x.charCodeAt(0)-0x60));
+   const existing=(state.ssNameContext?.aliases||[]).filter(a=>normalizeName(a.alias)===normalizeName(spokenName));
+   const registered=existing.some(a=>a.member_id===memberId);
+   const conflict=existing.length>0&&!registered;
+   if(officialName&&spokenName&&normalizeName(spokenName)!==normalizeName(officialName)&&memberId){
+    if(registered){
+     box.append(make('span','fine-print','✓ この呼び名は登録済み'));
+     return;
+    }
+    if(conflict){
+     box.append(make('span','fine-print','別の選手の呼び名として登録済み。自動登録はしません。'));
+     return;
+    }
+    // Per-goal, per-role opt-out. This affects alias learning only,
+    // never the selected official scorer/assist or the video decision.
+    const skipKey=field==='scorer'?'scorer':'assist';
+    const skipped=Boolean(item.aliasLearningSkipped?.[skipKey]);
+    const skip=make('button','quick-exception',skipped?'✓ 覚えない':'覚えない');
+    skip.type='button';skip.setAttribute('aria-pressed',String(skipped));
+    skip.addEventListener('click',()=>{
+     const current=latestGoal(entry);
+     current.aliasLearningSkipped={...(current.aliasLearningSkipped||{}),[skipKey]:!current.aliasLearningSkipped?.[skipKey]};
+     write(entry.source,goalData(entry.source).items.map(x=>x.id===current.id?current:x));
+     render();
+     say(current.aliasLearningSkipped[skipKey]?'この呼び名は覚えません。選手の選択と動画キープは維持します。':'この呼び名を覚えられるようにしました。');
+    });
+    const learn=make('button','','覚える');learn.type='button';
+    learn.hidden=skipped;
+    learn.addEventListener('click',async()=>{
+     const current=latestGoal(entry);
+     if(current.aliasLearningSkipped?.[skipKey]){say('この呼び名は覚えない設定です。');return;}
+     const spoken=String(field==='scorer'?current.rawScorer:current.rawAssist||'').trim();
+     const official=String(current[field]||'');
+     const context=state.ssNameContext;
+     const memberId=context?.snapshot?.memberIds?.get(official);
+     const team=context?.snapshot?.playerTeam?.get(official);
+     const eventId=context?.snapshot?.eventId;
+     const password=document.getElementById('ssAnalysisToken')?.value.trim();
+     if(!spoken||!official||!memberId||!team||!eventId||!password||
+        !fixturePeople(context.snapshot,current.matchSeq,current).includes(official)){
+      say('SS接続と選手の確定を確認してください。');return;
+     }
+     learn.disabled=true;learn.textContent='記憶中…';
+     try{
+      const response=await fetch((state.ssNameEnvironment==='production'?'https://shoot-sunday-sync.yomax1979.workers.dev/production/alias/confirm':'https://shoot-sunday-sync-staging.yomax1979.workers.dev/staging/alias/confirm'),{
+       method:'POST',headers:{'Content-Type':'application/json','X-SS-Bridge-Token':password},
+       body:JSON.stringify({event_id:eventId,member_id:memberId,name:official,team,
+        alias:spoken,source:'local-video',confirmed:true}),signal:AbortSignal.timeout(15000)
+      });
+      const result=await response.json();
+      if(!response.ok||result.ok!==true||result.saved!==true||
+         result.user_id!==memberId||String(result.alias).normalize('NFKC')!==spoken.normalize('NFKC'))
+       throw Error('登録を確認できません。SSの別名一覧を確認してください。');
+      context.aliases=[...(context.aliases||[]),{alias:spoken,member_id:memberId,name:official}];
+      say('「'+spoken+'」を'+official+'の呼び名として登録しました。');
+      learn.textContent='✓ 覚えた';
+     }catch(error){say(error.message||'登録結果を確認できません。再送せずSSを確認してください。');learn.textContent='登録結果を確認';}
+     // Do not automatically retry a potentially completed alias write.
+    });
+    const aliasTools=make('details','goal-alias-tools');aliasTools.append(make('summary','','呼び名を管理'));aliasTools.append(skip,learn);box.append(aliasTools);
+   }
+  };
+  if(state.ssNameEnabled&&!item.ssIdentity?.scorer){
+   const snapshot=state.ssNameContext?.snapshot;
+   const message=!snapshot?'SS未接続：最初の動画登録画面でSSイベントに接続してください。':
+    !fixtureRosterNames(snapshot,item.matchSeq,item).length?'SS名簿に該当する試合・選手がありません。SSイベントと試合番号を確認してください。':
+    !item.rawScorer?'音声から得点者名を検出できませんでした。':
+    '「'+String(item.rawScorer).slice(0,50)+'」をSSの正式名・別名辞書と照合できませんでした。';
+   const teams=[...new Set(snapshot?.playerTeam?.values?.()||[])];
+   const fixture=snapshot?.matches?.find(m=>Number(m.seq)===Number(item.matchSeq));
+   const diagnostics='診断：名簿 '+(snapshot?.players?.length||0)+'人 / '+
+    (snapshot?.rosterSource||'名簿未取得')+' / SS第'+(item.matchSeq||'?')+'試合 '+
+    (fixture?((fixture.leftTeam||'未定')+' vs '+(fixture.rightTeam||'未定')):'枠なし')+
+    ' / SSチーム ['+teams.join(', ')+'] / 動画 '+(item.teamA||'?')+' vs '+(item.teamB||'?')+
+    ' / 確認 '+(item.matchupConfirmed===true?'済':'未');
+   fields.append(make('p','fine-print',message));
+   fields.append(make('p','fine-print',diagnostics));
+  }
+  if(state.ssNameEnabled){
+   const decision=(field,label)=>{
+    const person=item.ssIdentity?.[field];
+    if(person)return label+'：'+person.name+(person.manual?'（手動選択）':'（SS照合済み）');
+    return label+'：未照合';
+   };
+   fields.append(make('p','fine-print',decision('scorer','得点者')));
+   if(item.assistStatus==='named')
+    fields.append(make('p','fine-print',decision('assist','アシスト')));
+  }
+  personInput('scorer','得点者（ゴール）');
   const assistBox=make('label','goal-review-field');
   assistBox.append(make('span','','アシスト'));
   const assistChoice=make('select','');
@@ -294,7 +494,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   assistChoice.addEventListener('change',()=>edit(entry,'assistStatus',assistChoice.value));
   assistBox.append(assistChoice);fields.append(assistBox);
   if(item.assistStatus==='named')
-   inputRow(fields,'アシスト者',item.assist,v=>edit(entry,'assist',v),{placeholder:'例：野田さん'});
+   personInput('assist','アシスト者');
   const card=confirmedCard(source,cache());
   viewer.querySelector?.('.goal-match-card')?.remove();
   if(card){
@@ -314,7 +514,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    }
   }
 
-  inputRow(fields,'SS試合番号（任意）',item.matchSeq||'',v=>edit(entry,'matchSeq',v),{type:'number',placeholder:'例：3'});
+  // The video registration already owns the numbered fixture; keep one source of truth.
   }
   const optional=make('details','goal-optional-fields');
   optional.append(make('summary','','詳細：チーム番号・メモ'));
@@ -331,6 +531,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const error=validateGoal(item);
    if(error){say('確定できません：'+error);return;}
    item.status='confirmed';item.goalTimeVerified=true;
+   item.ssAutoConfirmed=false; // Explicit organizer confirmation survives SS re-matching.
    item.confirmedAt=new Date().toISOString();
    write(source,goalData(source).items.map(x=>x.id===item.id?item:x));
    // Confirming scorer/assist must not silently skip the video decision.
@@ -341,10 +542,15 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     :'得点情報を確定しました。動画をキープ／不採用にすると次のゴールへ進みます。');
    onUpdate();
   });
+  const possibleDuplicate=suspectedDuplicateGoalIds(goalData(source).items).has(item.id);
   const reject=make('button','goal-review-exclude',
-   item.status==='excluded'?'除外を取り消す':'✕ ゴールではない');
+   item.status==='excluded'?'除外を取り消す':
+    possibleDuplicate?'重複を除外':'✕ ゴールではない');
   reject.type='button';
   reject.addEventListener('click',()=>{
+   // Never silently remove a real goal or an already-confirmed record.
+   if(possibleDuplicate&&item.status!=='excluded'&&
+      !window.confirm('動画で同じゴールと確認しましたか？ この候補のみ除外します（取り消し可能）。'))return;
    const now=item.status==='excluded'?'draft':'excluded';
    item.status=now;item.confirmedAt=null;
    write(source,goalData(source).items.map(x=>x.id===item.id?item:x));
@@ -377,15 +583,67 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   videoKeep.className='goal-review-video-keep'+(decision==='kept'?' is-active':'');
   videoReject.className='goal-review-video-reject'+(decision==='rejected'?' is-active':'');
   videoStatus.textContent=decision==='kept'
-   ?'✓ キープ済み'
-   :decision==='rejected'?'不採用':'動画を確認して選択';
-  videoKeep.addEventListener('click',()=>setVideoDecision(entry,'kept'));
+   ?'✓ 確認済み'
+   :decision==='rejected'?'動画は不採用':'';
+  videoKeep.addEventListener('click',()=>{
+   // One explicit review action: persist valid scorer/assist metadata and
+   // keep the clip. Never send data to SpoSched from this action.
+   const current=latestGoal(entry);
+   // Video Keep is a video-only decision. SS scorer/assist verification
+   // must never block navigation to the next goal; registration validates later.
+   const priorStatus=current.status,priorVerified=current.goalTimeVerified,priorConfirmed=current.confirmedAt;
+   const priorAutoConfirmed=current.ssAutoConfirmed;
+   const valid=validateGoal(current)===null || validateGoal(current)==='';
+   const ssReady=state.ssNameEnabled!==true ||
+     (Boolean(current.ssIdentity?.scorer) &&
+      (current.assistStatus!=='named'||Boolean(current.ssIdentity?.assist)));
+    if(valid&&ssReady){
+    current.status='confirmed';
+    current.ssAutoConfirmed=false;
+    current.goalTimeVerified=true;
+    current.confirmedAt=current.confirmedAt||new Date().toISOString();
+   }
+   write(source,goalData(source).items.map(x=>x.id===current.id?current:x));
+   setVideoDecision(entry,'kept');
+   const updated=latestGoal(entry);
+   if(updated.videoDecision!=='kept'){
+    updated.status=priorStatus;
+    updated.goalTimeVerified=priorVerified;
+    updated.confirmedAt=priorConfirmed;
+    write(source,goalData(source).items.map(x=>x.id===updated.id?updated:x));
+    render();
+   }else onUpdate();
+  });
   videoReject.addEventListener('click',()=>setVideoDecision(entry,'rejected'));
   videoActions.append(videoKeep,videoReject);
   editor.append(scoreDetails,actions,videoStatus,videoActions);
  }
  function render(){
   const all=sources(),entries=queue();
+  // A reviewed/kept video with fully resolved SS identities needs no second
+  // explicit goal confirmation. Do not auto-approve an unreviewed video.
+  const snapshot=state.ssNameContext?.snapshot;
+  if(state.ssNameEnabled===true&&snapshot?.eventId){
+   const changed=new Map();
+   for(const {source,item} of entries){
+    if(item.status!=='draft'||item.videoDecision!=='kept'||
+       item.ssIdentity?.environment!=='staging'||
+       item.ssIdentity?.eventId!==snapshot.eventId||
+       !item.ssIdentity?.scorer||
+       (item.assistStatus==='named'&&!item.ssIdentity?.assist)||
+       !['none','named'].includes(item.assistStatus)||
+       validateGoal(item)||item.goalTimeVerified===false)continue;
+    // The official scorer/assist must still be on the event roster.
+    const people=[item.ssIdentity.scorer,...(item.assistStatus==='named'?[item.ssIdentity.assist]:[])];
+    if(!people.every(p=>p?.name&&snapshot.memberIds?.get(p.name)===p.memberId&&
+      snapshot.playerIds?.get(p.name)===p.playerId&&
+      snapshot.playerTeam?.get(p.name)))continue;
+    item.status='confirmed';item.ssAutoConfirmed=true;
+    item.confirmedAt=item.confirmedAt||new Date().toISOString();
+    if(!changed.has(source))changed.set(source,goalData(source).items);
+   }
+   for(const [source,items] of changed)write(source,items);
+  }
   // This standalone priority panel appears as soon as there are actual
   // goals, transcript results, or a completed waveform analysis.
   panel.hidden=all.length===0 || (!entries.length &&
@@ -402,12 +660,13 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   summary.textContent='ゴール '+entries.length+'件 · キープ '+videoKept+'件 · 未確認 '+
    entries.filter(row=>goalNeedsVideoReview(row.item)).length+'件';
   exportButton.disabled=copyButton.disabled=showButton.disabled=confirmed===0;
-  const previous=entries.find(row=>row.key===activeKey);
+  const visibleEntries=entries.filter(row=>showExcluded||row.item.status!=='excluded');
+  const previous=visibleEntries.find(row=>row.key===activeKey);
   if(!previous){
-   const firstToReview=entries.find(row=>goalNeedsVideoReview(row.item));
-   activeKey=(firstToReview||entries[0])?.key||'';
+   const firstToReview=visibleEntries.find(row=>goalNeedsVideoReview(row.item));
+   activeKey=(firstToReview||visibleEntries[0])?.key||'';
   }
-  const active=entries.find(row=>row.key===activeKey);
+  const active=visibleEntries.find(row=>row.key===activeKey);
   liveEntry=active||null;
   if(!active){viewer.hidden=true;displayedKey='';player.pause();}
   if(active)scene.activate(active.source,active.item);
@@ -438,8 +697,10 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    button.classList.toggle('is-active',activeFilter);
    button.setAttribute('aria-pressed',String(activeFilter));
   }
-  const filtered=entries.filter(({item})=>queueFilter==='all'||
+  const filtered=visibleEntries.filter(({item})=>queueFilter==='all'||
    (queueFilter==='kept'?item.videoDecision==='kept':goalNeedsVideoReview(item)));
+  excludedToggle.hidden=excluded===0;
+  excludedToggle.textContent=showExcluded?'除外した動画を隠す':'除外した動画を表示（'+excluded+'）';
   if(libraryEmpty){
    libraryEmpty.hidden=filtered.length>0;
    libraryEmpty.textContent=queueFilter==='pending'
@@ -447,6 +708,11 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     :queueFilter==='kept'
      ?'まだキープしたゴールはありません。すべてから確認できます。'
      :'ゴール候補はまだありません。解析後にここへ表示されます。';
+  }
+  const duplicatesBySource=new Map();
+  for(const entry of entries){
+   const key=goalSourceKey(entry.source);
+   if(key&&!duplicatesBySource.has(key))duplicatesBySource.set(key,suspectedDuplicateGoalIds(goalData(entry.source).items));
   }
   const cards=[];
   for(const entry of filtered){
@@ -463,8 +729,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
       :item.assistStatus==='none'?'アシストなし':'アシスト未確認')+
       (item.matchLabel?'　·　'+item.matchLabel:'')+
       (item.videoDecision==='kept'?'　·　🎬 動画キープ':item.videoDecision==='rejected'?'　·　動画不採用':''));
+   const possibleDuplicate=duplicatesBySource.get(goalSourceKey(source))?.has(item.id);
    const badge=make('span','goal-queue-badge '+item.status,
-    item.status==='confirmed'?'確定済み':item.status==='excluded'?'除外':'未確定');
+    possibleDuplicate?'重複の可能性':item.status==='confirmed'?'確定済み':item.status==='excluded'?'除外':'未確定');
    row.append(main,names,badge);
    row.addEventListener('click',()=>focusActive(entry,{autoplay:true}));
    cards.push(row);
@@ -552,6 +819,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  });
  function refresh(){
   const all=sources();
+  if(state.ssNameEnabled)for(const src of all)goalData(src);
   const old=manualSource.value;
   manualSource.replaceChildren();
   for(const src of all){

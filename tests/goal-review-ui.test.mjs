@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initGoalStatsReview} from '../goal-stats-ui.mjs';
-import {createGoalDrafts,goalSourceKey,confirmedGoalExport} from '../goal-stats.mjs';
+import {createGoalDrafts,goalSourceKey,confirmedGoalExport,saveGoalDrafts} from '../goal-stats.mjs';
 import {keepGoalClip,rejectGoalClip} from '../goal-video-clip.mjs';
 import {buildMultiClipPlan} from '../multi-plan.mjs';
 
@@ -120,6 +120,23 @@ function find(node,cls){
  }
  return null;
 }
+test('one-tap keep saves clip while leaving unresolved scorer as draft',async()=>{
+ const {dom,one,storage,restore}=setup();
+ try{
+  const goal=createGoalDrafts(one,storage).items[0];
+  goal.scorer='';
+  goal.userEditedGoalFields=['scorer']; // Preserve an intentional blank human edit against transcript prefill.
+  saveGoalDrafts(one,storage,[goal]);
+  let keeps=0;
+  initGoalStatsReview({sources:[one]},{
+   onKeepClip:()=>{keeps++;return true;}
+  });
+  find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  assert.equal(keeps,1,'unresolved scorer must not block video keep');
+  assert.notEqual(createGoalDrafts(one,storage).items[0].status,'confirmed');
+ }finally{await restore()}
+});
+
 test('first goal is immediately visible; score confirmation stays put; video judgment advances one decoder',async()=>{
  const {dom,storage,one,two,stats,restore}=setup();
  try{
@@ -147,12 +164,11 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   await settleMedia();
   assert.equal(stats.loads,1,'Replay must not reload the same source');
   assert.equal(stats.plays,1);
-  find(dom.goalStatsEditor,'goal-review-confirm').events.click();
-  assert.equal(createGoalDrafts(one,storage).items[0].status,'confirmed');
-  assert.equal(stats.loads,1,'scorer confirmation must not skip unjudged video');
+  assert.equal(stats.loads,1,'review must not skip unjudged video');
   assert.match(dom.goalStatsStep.textContent,/1 \/ 2/);
 
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();
+  assert.equal(createGoalDrafts(one,storage).items[0].status,'confirmed');
   await settleMedia();
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
   assert.equal(stats.loads,2,'next goal loads only when its source changes');
@@ -161,9 +177,9 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.match(dom.goalStatsStep.textContent,/ゴール 2 \/ 2/);
   assert.match(dom.goalStatsPlayingLabel.textContent,/第2試合/);
 
-  find(dom.goalStatsEditor,'goal-review-confirm').events.click();
-  assert.equal(createGoalDrafts(two,storage).items[0].status,'confirmed');
   find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
+  assert.equal(createGoalDrafts(two,storage).items[0].status,'draft',
+   'rejecting only the video does not silently confirm its score');
   await settleMedia();
   assert.equal(createGoalDrafts(two,storage).items[0].videoDecision,'rejected');
   assert.equal(dom.goalStatsViewer.hidden,false,'after last goal the editor stays available for replay');
@@ -171,7 +187,7 @@ test('first goal is immediately visible; score confirmation stays put; video jud
   assert.match(dom.goalStatsStatus.textContent,/全件判定済み/);
   assert.equal(dom.goalStatsDone.hidden,false);
   assert.match(dom.goalStatsDoneText.textContent,/2件の判定が完了/);
-  assert.equal(confirmedGoalExport([one,two],storage).goals.length,2);
+  assert.equal(confirmedGoalExport([one,two],storage).goals.length,1);
   assert.equal(stats.competingPaused,2);
  }finally{await restore()}
 });
@@ -225,8 +241,8 @@ test('goal preview has shared replay, pinch controls and colored trim/playhead i
   const labels=allLabels(dom.goalStatsEditor);
   assert.ok(labels.includes('得点者（ゴール）'));
   assert.ok(labels.includes('アシスト'));
-  assert.ok(labels.includes('対戦カード'));
-  assert.ok(labels.includes('SS試合番号（任意）'));
+  assert.ok(find(dom.goalStatsEditor,'goal-review-matchup'));
+  assert.ok(!labels.includes('SS試合番号（任意）'));
  }finally{await restore()}
 });
 function allLabels(root){
@@ -304,8 +320,8 @@ test('video can be kept or rejected inside goal editor without second review',as
   assert.equal(one.candidates.length,1);
   assert.equal(one.candidates[0].enabled,true);
   assert.equal(createGoalDrafts(one,storage).items[0].videoDecision,'kept');
-  assert.equal(createGoalDrafts(one,storage).items[0].status,'draft',
-   'scoring confirmation is independent of video acceptance');
+  assert.equal(createGoalDrafts(one,storage).items[0].status,'confirmed',
+   'one review action confirms valid scorer data and keeps the video');
   assert.equal(find(dom.goalStatsEditor,'goal-review-video-keep').className.includes('is-active'),true);
   find(dom.goalStatsEditor,'goal-review-video-reject').events.click();
   assert.equal(calls.rejected,1);
@@ -702,7 +718,7 @@ test('existing generic goal review displays names and teams recognized by Gemini
   const field=label=>fields.find(row=>row.children[0]?.textContent===label);
   assert.equal(field('得点者（ゴール）')?.children[1]?.value,'若さん');
   assert.equal(field('アシスト者')?.children[1]?.value,'野田さん');
-  assert.equal(field('対戦カード')?.children[1]?.value,'チーム3対4');
+  assert.equal(find(dom.goalStatsEditor,'goal-review-matchup')?.textContent,'チーム3対4');
   assert.equal(dom.goalStatsList.children.length,1);
  }finally{await restore()}
 });
@@ -797,7 +813,7 @@ test('last video decision calls completion once and preserves automatic Keep nav
   await settleMedia();
   assert.equal(completed.length,1);
   assert.equal(completed[0].total,2);
-  assert.equal(completed[0].unconfirmed,2,'do not imply unconfirmed AI scorer data is official');
+  assert.equal(completed[0].unconfirmed,1,'only the rejected-video goal remains unconfirmed');
   dom.goalQueueKept.events.click();
   dom.goalStatsList.children[0].events.click();
   find(dom.goalStatsEditor,'goal-review-video-keep').events.click();

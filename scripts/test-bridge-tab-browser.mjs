@@ -10,6 +10,8 @@ const errors=[],calls=[];
 page.on('pageerror',error=>errors.push(error.message));
 await page.route('**/*',async route=>{
  const url=new URL(route.request().url());
+ if(url.host==='shoot-sunday-sync-staging.yomax1979.workers.dev'&&url.pathname==='/staging/alias/list'&&route.request().method()==='GET')
+  return route.fulfill({json:{aliases:[]}});
  if(url.hostname==='peakstamp.local'){
   const path=url.pathname==='/'?'sposched-review.html':url.pathname.slice(1);
   try{return route.fulfill({

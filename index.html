@@ -22,6 +22,7 @@
       <p>試合動画を選ぶだけ。AIで見どころを探して、好きなシーンを1本に。</p>
       <p><a class="plain-link" href="./guide.html" target="_blank" rel="noopener noreferrer">詳しい使い方・困ったときはこちら ↗</a></p>
     </section>
+    <p><a href="?youtube=1">YouTubeからハイライトを作る</a></p>
     <nav id="journeyNav" class="journey-nav workflow-nav" aria-label="PeakStampの作業ステップ">
       <button type="button" data-journey-step="0" class="current" aria-current="step">1 <span>解析</span></button>
       <button type="button" data-journey-step="1" disabled>2 <span>編集</span></button>
@@ -29,7 +30,16 @@
     </nav>
     <p id="workflowStageNotice" class="workflow-stage-notice" role="status" aria-live="polite">動画を選び、AIで見どころを検出します。</p>
     <section class="panel choose-panel" id="choosePanel">
-      <div class="panel-label"><span class="number">01</span><h2>動画を選ぶ</h2></div>
+      <div class="panel-label"><span class="number">01</span><h2>試合動画を登録</h2></div>
+      <details id="ssAnalysisNames" class="compact-details" hidden open>
+        <summary id="ssAnalysisLabel">SSの選手名を使う</summary>
+        <label for="ssAnalysisToken">SS連携パスワード</label>
+        <input id="ssAnalysisToken" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false">
+        <label><input id="ssAnalysisRemember" type="checkbox">この端末に保存（共有端末では使用しない）</label>
+        <button id="ssAnalysisConnect" type="button">SSに接続</button>
+        <select id="ssAnalysisEvent" aria-label="SSイベント" hidden><option value="">イベントを選択</option></select>
+        <p id="ssAnalysisStatus" role="status"></p>
+      </details>
       <label class="upload" id="uploadZone">
         <input id="fileInput" type="file" multiple accept="video/*,.mov,.mp4,.m4v" />
         <span class="upload-icon" aria-hidden="true">＋</span>
@@ -37,6 +47,12 @@
         <span>1本につき試合番号を指定</span>
         <small>元動画は送信されません</small>
       </label>
+      <div class="compact-details" id="testVideoCachePanel" hidden>
+        <button id="testVideoSave" type="button" class="whisper-run">テスト動画を端末に保存</button>
+        <button id="testVideoRestore" type="button" class="whisper-run">前回のテスト動画を復元</button>
+        <button id="testVideoClear" type="button" class="whisper-run">テスト動画の保存を削除</button>
+        <p id="testVideoCacheStatus" class="fine-print" role="status" aria-live="polite">TEST専用。動画はサーバーに送信されません。</p>
+      </div>
       <details class="compact-details">
         <summary>このiPhoneに保存したゴール判定・編集データを消す</summary>
         <p class="fine-print">動画ごとにゴールのキープ／不採用・得点／アシスト確認・切り取り・画角の保存情報だけを削除できます。別の動画やGemini解析結果は残ります。</p>
@@ -66,12 +82,14 @@
     <section class="panel gemini-primary-panel" id="geminiPrimaryPanel" aria-label="Geminiで音声を解析" hidden>
       <div class="panel-label"><span class="number">02</span><h2>AIでシーンを検出</h2></div>
       <p class="gemini-brief">ゴール・見どころ・選手名をまとめて検出。動画で確認してからキープします。</p>
+
       <label id="geminiSourceLabel" for="geminiMainSource">解析する動画</label>
       <select id="geminiMainSource" disabled aria-label="Geminiで解析する動画"></select>
       <p id="geminiMainFileHelp" class="fine-print">上からMOV/MP4を選択してください。</p>
       <label for="geminiMainAccess">アクセスコード</label>
       <input id="geminiMainAccess" type="password" autocomplete="off" autocapitalize="off"
              spellcheck="false" placeholder="アクセスコードを入力" />
+      <label class="gemini-consent"><input id="geminiRememberDevice" type="checkbox" />この端末にコードを保存（共有端末では使用しない）</label>
       <details class="compact-details gemini-diagnostics">
         <summary>接続できないとき・詳細設定</summary>
         <button id="geminiMainCheck" class="whisper-run gemini-check-button" type="button">接続テスト（課金なし）</button>
@@ -87,6 +105,8 @@
           <p id="geminiStayDescription">LINEなど他のアプリへ切り替えたり、画面をロックすると解析が止まる場合があります。</p>
         </div>
       </div>
+      <fieldset class="gemini-batch-mode" aria-label="解析範囲"><legend>解析する範囲</legend><label><input type="radio" name="geminiBatchMode" value="pending" checked> 未解析動画のみ</label><label><input type="radio" name="geminiBatchMode" value="all"> 全動画を再解析</label></fieldset>
+      <details class="compact-details"><summary>詳細設定・初期化</summary><p class="fine-print">このiPhoneの全解析キャッシュとゴール確認情報を削除。元動画とSS登録済みデータは保持します。</p><button id="geminiResetAllCache" type="button" class="whisper-run">全キャッシュとゴール情報を削除</button></details>
       <button id="geminiMainBatch" class="main-button gemini-batch-run" type="button" disabled hidden>選んだ動画をまとめて解析 →</button>
       <button id="geminiMainRun" class="main-button gemini-main-run" type="button" disabled>Geminiで音声解析する →</button>
       <div id="geminiBatchProgress" class="gemini-batch-progress" role="progressbar" aria-label="動画一括解析の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
@@ -166,11 +186,21 @@
       </div>
       <div id="goalStatsEditor" class="goal-review-editor"></div>
 
-      <div class="goal-review-external-sync" style="margin:15px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
+      <div id="ssProductionLink" class="goal-review-external-sync" style="margin:15px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
         <strong>⚽ Shoot Sundayアプリとの照合</strong>
-        <p class="fine-print">今回読み込んだ全動画の確定済みゴールを自動でまとめ、SSの試合・選手名簿と一括照合します。曖昧な候補だけ修正し、TESTへの登録は最終一覧から一度承認します。本番SSは読み取り専用です。</p>
+        <p class="fine-print">正式な試合・選手を確認して登録します。</p>
         <a href="./sposched-review.html?v=composite-tatsuo1&returnTab=1" target="_blank" rel="noopener noreferrer" class="whisper-run" style="display:inline-block;text-decoration:none">ゴールをSSに登録</a>
       </div>
+      <section class="goal-review-external-sync" aria-label="SS登録確認" style="margin:12px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
+        <strong>⚽ SS登録（TEST）</strong>
+        <p id="ssInlineSummary" class="fine-print" role="status">ゴール確認後、ここで登録内容を確認できます。</p>
+        <button id="ssInlinePreview" type="button" class="main-button">登録内容を確認</button>
+        <div id="ssInlineMatches" class="fine-print" hidden></div>
+        <button id="ssInlineInspect" type="button" class="whisper-run">登録結果を確認</button>
+        <button id="ssInlineHistory" type="button" class="whisper-run">登録履歴を確認（書き込みなし）</button>
+        <p id="ssInlineStatus" class="fine-print" role="status" aria-live="polite"></p>
+        <div hidden aria-hidden="true"><a href="./sposched-review.html?v=composite-tatsuo1&returnTab=1" target="_blank" rel="noopener noreferrer" tabindex="-1">旧画面（非表示の互換リンク）</a></div>
+      </section>
       <details class="goal-review-export">
         <summary>確定データを共有・保存</summary>
         <p class="fine-print">確定したゴール・アシストを保存できます。</p>
@@ -573,7 +603,7 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=matchexport1"></script>
+  <script type="module" src="app.mjs?v=ss-registration-link-2216"></script>
 <dialog id="matchReview" aria-labelledby="matchReviewTitle" style="max-width:94vw;color:inherit;background:#112c3b;border:1px solid #59828a;border-radius:14px"><form><h2 id="matchReviewTitle">試合を確認</h2><fieldset style="border:0;padding:0"></fieldset><output role="status"></output><button class="main-button" type="submit">確定して次へ</button></form></dialog>
 <style>#matchReview strong{display:block;margin-top:.8em}#matchReview input{width:40%;padding:.65em}#matchReview button{margin-top:1em}#matchReview::backdrop{background:#071321cc}</style></body>
 </html>
