@@ -107,3 +107,21 @@ media restoration, legacy drafts and server auth/input bounds. All Google/SS
 writes in tests are mocks. Rollback: revert this PR to main
 `be922beb4bcf3e2cebe395908f4e883707363b2d`; previous Vercel production deployment
 `dpl_J8Nz5hWbbcxb92e2qeRNAdjDLsWC`. Code rollback does not revert user data.
+
+## Local highlights → matching YouTube share
+
+Local montage export now offers “同じ範囲でYouTubeハイライトも作る”.
+Assign a public YouTube URL to each selected original and confirm the videos have
+the same content and starting point. The final `buildMultiClipPlan` supplies the
+exact source-local start/end values, merged overlaps and source order; no AI or
+video re-import is involved. Title overlays, picture crop and transition effects
+remain MP4-only. The shared access code and existing environment-specific
+YouTube share endpoint/player are reused; SS records are not changed.
+
+A per-payload local journal is persisted before POST. Successful payloads reuse
+their link. Unknown responses are inspected by GET on subsequent clicks and are
+never automatically resubmitted. Range or URL changes invalidate the displayed
+link. Tests cover multi-source decimal ranges, merged overlaps, duplicate clicks,
+unknown response/readback and edits after publication, with all writes mocked.
+Rollback is reverting this frontend change to main86f18e3; shared links already
+created by users are not deleted.
