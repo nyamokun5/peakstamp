@@ -1,9 +1,9 @@
 import { holdExportScreen } from './export-screen.mjs';
 import { createEditTransfer } from './edit-transfer.mjs';
-import { montageSeconds, exportMontage, estimateMontageMB, formatExportFailure } from './exporter.mjs?v=exportstage1';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=goal54';
+import { montageSeconds, exportMontage, estimateMontageMB, formatExportFailure } from './exporter.mjs?v=youtube-unified1';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=youtube-unified1';
 import { formatTime } from './detector.mjs';
-import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=title62';
+import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=youtube-unified1';
 
 const $ = id => document.getElementById(id);
 function clipOptions(){return {mode:'peak'};}
@@ -37,7 +37,7 @@ function interruptedMessage() {
 
 function editSignature(state, plan) {
   return JSON.stringify({
-    sources:(state?.sources||[]).map(s=>[s.id,s.file?.name,s.file?.size,s.file?.lastModified]),
+    sources:(state?.sources||[]).map(s=>[s.id,s.file?.name,s.file?.size,s.file?.lastModified,...(s.youtubeId?[s.mediaFile?.name,s.mediaFile?.size,s.mediaFile?.lastModified]:[])]),
     clips:plan.map(c=>[c.sourceId,c.start,c.end,c.zoom || 1,c.zoomX ?? .5,c.zoomY ?? .5]),
     title:$('montageTitle').value,
     font:$('titleFont').value,
@@ -102,7 +102,7 @@ export function updateMontageEditor(state) {
   activeState = state;
   const visible = Boolean(state?.file && (state?.bins ||
     state.sources?.some(source=>Number(source.duration)>0 &&
-      (source.candidates||[]).some(c=>c.enabled===true&&c.goalRecordId))));
+      (source.candidates||[]).some(c=>c.enabled===true&&(c.goalRecordId||source.youtubeId&&source.analyzed)))));
   $('montagePanel').hidden = !visible;
   if (!state?.sources?.length && lastFile) { revokeOutput(); completedSignature = null; }
   lastFile = state?.file || null;
@@ -196,6 +196,10 @@ export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{},onTr
   $('montageExport').addEventListener('click', async () => {
     if (working || activeState?.geminiProcessing || !activeState?.file) return;
     const plan = buildMultiClipPlan(activeState.sources, clipOptions());
+    if(activeState.sources.some(s=>s.youtubeId&&!s.mediaFile&&plan.some(c=>c.sourceId===s.id))){
+      displayError('MP4を書き出すには、下の「MP4用の元動画」でYouTubeと同じ元動画を指定してください。共有リンクは元動画なしで作成できます。');
+      return;
+    }
     const signature = editSignature(activeState, plan);
     if (lastBlob && signature === completedSignature) {
       ($('montageShare').hidden ? $('montageDownload') : $('montageShare')).click();
@@ -211,7 +215,7 @@ export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{},onTr
     }
     const quality = document.querySelector('input[name="exportQuality"]:checked')?.value || 'high';
     revokeOutput();
-    const file = activeState.file;
+    const file = activeState.sources[0]?.mediaFile || activeState.file;
     cancelRequested = false;
     displayError('');
     setWorking(true);
@@ -224,7 +228,7 @@ export function initMontageEditor(state,{onComplete=()=>{},onFailure=()=>{},onTr
     const release = holdExportScreen(() => { warning.hidden = false; });
     let transfer;
     let transferError='';
-    try { transfer = createEditTransfer(activeState.sources, plan); }
+    try { transfer = createEditTransfer(activeState.sources.map(s=>s.mediaFile?{...s,file:s.mediaFile}:s), plan); }
     catch (error) { transferError=error.message; }
     try {
       const blob = await exportMontage({

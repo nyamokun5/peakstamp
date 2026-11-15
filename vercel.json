@@ -3,6 +3,9 @@
   "functions": {
     "api/gemini-audio.js": {
       "maxDuration": 180
+    },
+    "api/gemini-youtube.js": {
+      "maxDuration": 180
     }
   }
 }

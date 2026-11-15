@@ -1,5 +1,5 @@
 import {sourceDisplayName} from './match-label.mjs?v=match1';
-import { INTRO_SECONDS } from './exporter.mjs?v=pinch18';
+import { INTRO_SECONDS } from './exporter.mjs?v=youtube-unified1';
 import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
 import { prepareIntroPlan } from './intro-layout.mjs?v=scene15';
 
@@ -20,7 +20,7 @@ export function buildMultiClipPlan(sources, options = {}) {
     const selected=(source.candidates||[]).filter(c=>c.enabled===true &&
       // Regular analysis is required for ordinary candidates. The goal editor
       // can accept a video straight from its own verified transcript/player.
-      (Boolean(source.bins)||Boolean(c.goalRecordId)));
+      (Boolean(source.bins)||Boolean(source.youtubeId&&source.analyzed)||Boolean(c.goalRecordId)));
     const spans = mergeAdaptive(selected.map(candidate => ({
       start: Math.max(0, Math.min(source.duration, Number(candidate.time) || 0)),
       end: getCandidateEnd(source, candidate, cfg),

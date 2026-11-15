@@ -12,6 +12,7 @@ import {createGoalDrafts,saveGoalDrafts,makeManualGoal,validateGoal,
  confirmedGoalExport,goalSourceKey,actualGoalTime,matchContext,suspectedDuplicateGoalIds} from './goal-stats.mjs?v=video-source14';
 import {shareCalloutJson,copyCalloutJson} from './callout-export.mjs?v=37';
 import {collectGoalQueue,nextGoalAfterDecision,nextUnreviewedGoalVideo,goalNeedsVideoReview} from './goal-review-queue.mjs?v=sequential2';
+import {createGoalYouTubePlayback} from './goal-youtube-playback.mjs';
 import {createGoalPlaybackController} from './goal-playback.mjs?v=firsttap1';
 import {createGoalSceneControls} from './goal-scene-editor.mjs?v=goalnative2';
 
@@ -39,7 +40,7 @@ function inputRow(parent,label,value,commit,{type='text',placeholder='',maxLengt
  return input;
 }
 
-export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},onKeepClip=()=>false,onRejectClip=()=>false,onClipEdit=()=>{},onBeforePlay=()=>{},onEditMatch=()=>{},onVideoReviewCompleted=()=>{}}={}){
+export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},onKeepClip=()=>false,onRejectClip=()=>false,onClipEdit=()=>{},onBeforePlay=()=>{},onEditMatch=()=>{},onVideoReviewCompleted=()=>{},loadYouTubeAPI}={}){
  const panel=$('goalStatsPanel');
  if(!panel)return {refresh:()=>{},nearby:()=>[],openAt:()=>{},hasRecords:()=>false,pausePlayback:()=>{}};
  const list=$('goalStatsList'),editor=$('goalStatsEditor'),video=$('goalStatsPreview');
@@ -55,7 +56,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  const exportButton=$('goalStatsExport'),copyButton=$('goalStatsCopy'),showButton=$('goalStatsShow');
  const textBox=$('goalStatsJsonArea'),textArea=$('goalStatsJson');
  const cache=()=>window.localStorage;
- const sources=()=>state.sources.filter(s=>s?.file&&s?.objectUrl);
+ const sources=()=>state.sources.filter(s=>s?.file&&(s?.objectUrl||s?.youtubeId));
  const goalData=s=>{
   const data=createGoalDrafts(s,cache());
   if(state.ssNameEnabled){
@@ -79,10 +80,19 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
  list.parentElement?.append(excludedToggle);
  let reviewAgain=false;
  const say=s=>{status.textContent=s;};
- const player=createGoalPlaybackController(video,{
+ const localPlayer=createGoalPlaybackController(video,{
   notify:s=>{$('goalStatsVideoStatus').textContent=s;},
   beforePlay:onBeforePlay
  });
+ const youtubePlayer=createGoalYouTubePlayback({video,viewer,
+  notify:s=>{$('goalStatsVideoStatus').textContent=s;},beforePlay:onBeforePlay,
+  ...(loadYouTubeAPI?{loadAPI:loadYouTubeAPI}:{})});
+ const player={
+  open:options=>(youtubePlayer.active()?youtubePlayer:localPlayer).open(options),
+  pause:()=>(youtubePlayer.active()?youtubePlayer:localPlayer).pause(),
+  currentSourceKey:()=>(youtubePlayer.active()?youtubePlayer:localPlayer).currentSourceKey(),
+  dispose:()=>{youtubePlayer.deactivate();localPlayer.dispose();}
+ };
  const scene=createGoalSceneControls({
   viewer,video,label,status:$('goalStatsVideoStatus'),
   onChange:(src,record)=>{
@@ -97,6 +107,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const entry=liveEntry||locate(activeKey);
    if(!entry)return;
    const {source,item}=entry;
+   if(source.youtubeId){seekTo(entry,{autoplay:true});return;}
    scene.setNativePlayback(true);
    scene.activate(source,item);
    const bounds=scene.clipBounds();
@@ -113,16 +124,30 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   // Obtain duration from the shared video so the clip can be kept directly.
   const active=liveEntry||locate(activeKey);
   if(active&&player.currentSourceKey()===goalSourceKey(active.source)&&
-    !(Number(active.source.duration)>0)&&Number.isFinite(video.duration)&&video.duration>0){
+    (!(Number(active.source.duration)>0)||
+     (active.source.youtubeId&&Math.abs(Number(active.source.duration)-video.duration)>.1))&&
+     Number.isFinite(video.duration)&&video.duration>0){
    active.source.duration=video.duration;
    // A returning user may have saved video decisions but no waveform.
    // Reconcile them as soon as the original MOV reports its duration.
    onSourceReady(active.source);
-   scene.activate(active.source,active.item);
+   activateScene(active.source,active.item);
    render();
    scene.redraw();
   }
  });
+ function activateScene(source,item){
+  if(source.youtubeId){
+   if(!youtubePlayer.active())localPlayer.dispose();
+   youtubePlayer.activate(source);
+   // YouTube owns its picture/fullscreen controls. Disable crop gestures on
+   // the iframe while keeping the shared timeline and goal editor intact.
+   scene.setNativePlayback(true);
+  }else if(youtubePlayer.active()){
+   youtubePlayer.deactivate();scene.setNativePlayback(false);
+  }
+  scene.activate(source,item);
+ }
  function pausePlayback(){player.pause();}
  function disposeVideo(){player.dispose();viewer.hidden=true;displayedKey='';liveEntry=null;}
  function seekTo(entry,{autoplay=false,at=null}={}){
@@ -135,10 +160,10 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   // when Replay is tapped, exactly like normal highlight cards.
   viewer.hidden=false;
   viewer.classList?.remove('goal-native-player');
-  scene.setNativePlayback(false);
+  scene.setNativePlayback(Boolean(source.youtubeId));
   scene.showVideo(autoplay);
   label.textContent=sourceDisplayName(source)+' · ゴール '+fmt(actualGoalTime(item));
-  scene.activate(source,item);
+  activateScene(source,item);
   const bounds=scene.clipBounds();
   player.open({
    sourceKey:goalSourceKey(source),sourceUrl:source.objectUrl,
@@ -670,7 +695,7 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const active=visibleEntries.find(row=>row.key===activeKey);
   liveEntry=active||null;
   if(!active){viewer.hidden=true;displayedKey='';player.pause();}
-  if(active)scene.activate(active.source,active.item);
+  if(active)activateScene(active.source,active.item);
   const index=active?entries.findIndex(row=>row.key===active.key):-1;
   const waiting=entries.filter(row=>goalNeedsVideoReview(row.item)).length;
   const complete=entries.length>0&&waiting===0;

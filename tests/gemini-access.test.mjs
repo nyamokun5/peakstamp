@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {initGeminiAccess} from '../gemini-access.mjs';
+const store=()=>{const m=new Map();return {getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)}};
+const field=()=>({value:'',checked:false,listeners:{},addEventListener(k,f){this.listeners[k]=f}});
+test('source modes share tab credentials and device persistence requires explicit opt in',()=>{const session=store(),device=store(),now=()=>100;
+ const local=field(),remember=field();initGeminiAccess(local,remember,{session,device,now});local.value='mock-code';local.listeners.change();assert.equal(device.getItem('peakstamp_gemini_access_device_v1'),null);
+ const youtube=field(),ytRemember=field();initGeminiAccess(youtube,ytRemember,{session,device,now});assert.equal(youtube.value,'mock-code');assert.equal(ytRemember.checked,false);
+ ytRemember.checked=true;ytRemember.listeners.change();assert.equal(device.getItem('peakstamp_gemini_access_device_v1'),'mock-code');
+ ytRemember.checked=false;ytRemember.listeners.change();assert.equal(device.getItem('peakstamp_gemini_access_device_v1'),null);
+ const expired=field();initGeminiAccess(expired,field(),{session,device,now:()=>4*60*60*1000+101});assert.equal(expired.value,'');
+});
