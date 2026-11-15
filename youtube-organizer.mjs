@@ -3,7 +3,7 @@ import {youtubeApi,youtubeWorker,youtubeTestMode,youtubeEnvironment} from './you
 import {registrationEvents,resolveRegistrationMatch} from './youtube-video-registration.mjs?v=event-match3';
 import {restoreBridgeSession} from './sposched-bridge-session.mjs';
 import {sampleIds,videoId,matchInfo,matchName} from './youtube-session.mjs';
-import {hydrateYouTubeSource,storeYouTubeAnalysis,selectedYouTubeClips,confirmedYouTubePair,youtubeDisplayName} from './youtube-shared-project.mjs?v=youtube-unified1';
+import {hydrateYouTubeSource,storeYouTubeAnalysis,selectedYouTubeClips,confirmedYouTubePair,youtubeDisplayName} from './youtube-shared-project.mjs?v=history1';
 import {initGeminiAccess} from './gemini-access.mjs?v=youtube-unified1';
 import {createEditTransfer} from './edit-transfer.mjs';
 const storageKey=youtubeTestMode?'peakstamp-youtube-test-project-v1':'peakstamp-youtube-production-project-v1';

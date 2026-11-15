@@ -20,7 +20,7 @@ export function buildMultiClipPlan(sources, options = {}) {
     const selected=(source.candidates||[]).filter(c=>c.enabled===true &&
       // Regular analysis is required for ordinary candidates. The goal editor
       // can accept a video straight from its own verified transcript/player.
-      (Boolean(source.bins)||Boolean(source.youtubeId&&source.analyzed)||Boolean(c.goalRecordId)));
+      (Boolean(source.bins)||Boolean(source.highlightHistoryLoaded)||Boolean(source.youtubeId&&source.analyzed)||Boolean(c.goalRecordId)));
     const spans = mergeAdaptive(selected.map(candidate => ({
       start: Math.max(0, Math.min(source.duration, Number(candidate.time) || 0)),
       end: getCandidateEnd(source, candidate, cfg),

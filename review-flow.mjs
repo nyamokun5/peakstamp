@@ -13,7 +13,7 @@ export function undecided(item) {
 }
 
 export function orderedScenes(sources) {
-  return (sources || []).filter(source => source.bins)
+  return (sources || []).filter(source => source.bins||source.highlightHistoryLoaded||source.youtubeId&&source.analyzed)
     .flatMap(source => (source.candidates || []).map(item => ({ source, item })));
 }
 

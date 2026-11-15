@@ -144,3 +144,27 @@ Validation: 946 unit tests and mobile browser recovery through actual watch-page
 initialization/replay with a mocked YouTube player; empty credentials and a
 pre-existing pending journal, zero external API requests/writes. Rollback baseline
 is mainc1a0d2c; preserve pending journals when reverting.
+
+## Highlight edit history and named YouTube scenes
+
+Ordinary highlight decisions now persist per full source-file fingerprint
+(name, byte size, lastModified), independently of goal records and AI caches.
+Reimport restores the saved duration, Keep/Reject, title, trim and crop immediately;
+no waveform is invented and no analysis request is needed. Reanalysis matches
+nearby unambiguous scenes, retains reviewed scenes missing from the new scan and
+rebases temporary source IDs. Goal-owned clips and SS identity data are excluded
+from this store. Changes save on actual edit/review updates, and the restored
+scenes remain eligible for the existing export plan.
+
+Mirrored YouTube ranges now include names from confirmed goals only, displayed
+as `ゴール(西村)/アシスト(高崎)`. Member buttons filter the scene list and jump
+to the person's first scene. Merged ranges preserve all distinct participant
+names (including names containing a middle dot) in an optional validated inline
+payload field. Existing seven-field links remain readable. Existing links without
+names must be regenerated to include them; previously discarded, never-saved
+ordinary decisions cannot be reconstructed retroactively.
+
+Validation: 951 unit tests, real app Keep/Reject → reload/reimport browser, and
+mirror → actual watch-page labels/person-filter/replay browser, all with no paid
+analysis or SS/KV write requests. Rollback baseline main369813de71f9be2f6fb82b5b6b63b3690ef5e092;
+leave saved history in place when reverting.

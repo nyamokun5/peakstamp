@@ -1,5 +1,5 @@
-import {mirrorClips} from './youtube-mirror.mjs';
-import {inlineShareUrl} from './youtube-inline-share.mjs?v=inline1';
+import {mirrorClips} from './youtube-mirror.mjs?v=history1';
+import {inlineShareUrl} from './youtube-inline-share.mjs?v=history1';
 import {youtubeEnvironment} from './youtube-api.mjs';
 import {goalSourceKey} from './goal-stats.mjs';
 import {sourceDisplayName} from './match-label.mjs';
@@ -20,7 +20,7 @@ export function initYouTubeMirror(state,{getPlan,document:doc=globalThis.documen
  result.append(open,copy);root.append(fields,summary,label,note,button,status,result);doc.getElementById('montageExport').after(root);
  let busy=false,signature='',planStamp='';const inputs=new Map();
  const refresh=()=>{
-  const plan=getPlan();const stamp=JSON.stringify(plan);if(stamp!==planStamp){planStamp=stamp;open.hidden=copy.hidden=true;status.textContent='';button.textContent='同じ範囲でYouTubeハイライトを作る';}root.hidden=Boolean(new URLSearchParams(location.search).has('youtube'))||!plan.length;
+  const plan=getPlan();let stamp;try{stamp=JSON.stringify(mirrorClips(state.sources,plan,record.urls))}catch{stamp=JSON.stringify(plan)};if(stamp!==planStamp){const hadLink=!open.hidden;planStamp=stamp;open.hidden=copy.hidden=true;if(hadLink)status.textContent='切り取り・得点情報が変わりました。リンクを作成し直してください。';button.textContent='同じ範囲でYouTubeハイライトを作る';}root.hidden=Boolean(new URLSearchParams(location.search).has('youtube'))||!plan.length;
   const sources=state.sources.filter(s=>plan.some(c=>c.sourceId===s.id));const next=sources.map(goalSourceKey).join('|');
   if(next!==signature){signature=next;fields.replaceChildren();inputs.clear();aligned.checked=false;
    for(const source of sources){const k=goalSourceKey(source),box=el('label',sourceDisplayName(source)+'（'+source.file.name+'）：YouTube URL'),input=el('input');input.type='url';input.placeholder='https://youtu.be/…';input.setAttribute('aria-label',sourceDisplayName(source)+'のYouTube URL');input.value=record.urls[k]||'';

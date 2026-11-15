@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+try{const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});page.setDefaultTimeout(15000);const errors=[],api=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',async route=>{const r=route.request(),u=new URL(r.url());assert.equal(r.method(),'GET');if(u.host!=='peakstamp.local'){api.push(u.pathname);return route.fulfill({status:404,json:{}})}const file=u.pathname==='/'?'index.html':u.pathname.slice(1);return route.fulfill({body:await readFile(new URL('../'+file,import.meta.url)),contentType:file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'text/javascript'})});
+ await page.goto('https://peakstamp.local/');await page.waitForFunction(()=>document.getElementById('ssInlinePreview')?.textContent==='ゴールをSSに登録');
+ await page.evaluate(async()=>{const {saveHighlightHistory}=await import('/highlight-history.mjs');const source={file:new File(['abcdefgh'],'history.mov',{lastModified:1}),duration:120,analysisEngine:'gemini',candidates:[{id:'first',origin:'gemini',peakSeconds:40,time:30.2,manualEnd:49.8,zoom:2,zoomX:.3,zoomY:.6,enabled:false,title:'ナイスプレイ！'},{id:'second',origin:'gemini',peakSeconds:80,time:76,manualEnd:84,enabled:false,title:'惜しい！'}]};saveHighlightHistory(source,localStorage)});
+ const upload=()=>page.evaluate(()=>{const data=new DataTransfer();data.items.add(new File(['abcdefgh'],'history.mov',{lastModified:1}));const input=document.getElementById('fileInput');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}))});
+ await upload();await page.getByText('履歴を復元 · キープ 0件',{exact:true}).waitFor();await page.locator('[data-journey-step="1"]').click();
+ await page.locator('.review-keep').first().click();await page.locator('.review-reject').first().click();if(await page.locator('#journeyDialogDismiss').isVisible())await page.locator('#journeyDialogDismiss').click();
+ await page.reload();await page.waitForFunction(()=>document.getElementById('ssInlinePreview')?.textContent==='ゴールをSSに登録');await upload();await page.getByText('履歴を復元 · キープ 1件',{exact:true}).waitFor();
+ await page.locator('[data-journey-step="1"]').click();await page.locator('[data-review-tab="kept"]').click();assert.equal(await page.locator('#highlightList .highlight-entry').count(),1);
+ const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('peakstamp_highlight_history_v1:history.mov::8::1')));assert.equal(saved.items[0].enabled,true);assert.equal(saved.items[0].time,30.2);assert.equal(saved.items[0].manualEnd,49.8);assert.equal(saved.items[0].zoom,2);assert.equal(saved.items[1].rejected,true);
+ assert.deepEqual(errors,[]);assert.equal(api.some(p=>p.includes('gemini')),false);console.log('PASS actual app: Keep/Reject → reload → reselect same video → restored edits and export-ready clips, no analysis');
+}finally{await browser.close()}

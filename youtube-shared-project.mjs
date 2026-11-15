@@ -1,3 +1,4 @@
+import {saveHighlightHistory,restoreHighlightHistory} from './highlight-history.mjs?v=history1';
 import {confirmedCard} from './match-review.mjs';
 import {videoMatchup} from './video-matchup.mjs';
 import {GOAL_STORE_PREFIX,goalSourceKey,createGoalDrafts,saveGoalDrafts} from './goal-stats.mjs';
@@ -19,9 +20,11 @@ export function storeYouTubeAnalysis(source,parsed,storage){
  const key='peakstamp_gemini_primary_json_v1';
  const cache=JSON.parse(storage.getItem(key)||'{}');cache[goalSourceKey(source)]=parsed;
  storage.setItem(key,JSON.stringify(cache));
+ saveHighlightHistory(source,storage);
  const conversion=geminiEventsToCandidates(parsed.events.map(e=>({...e,timeSeconds:e.reaction_time_seconds,clipStartSeconds:e.suggested_clip_start_seconds,clipEndSeconds:e.suggested_clip_end_seconds,audibleClue:e.audible_clue})),source.id,duration,source.candidates);
  const preserved=(source.candidates||[]).filter(c=>(c.enabled||c.rejected)&&!conversion.items.some(x=>Math.abs(x.peakSeconds-c.peakSeconds)<=4));
  Object.assign(source,{duration,candidates:[...conversion.items,...preserved].sort((a,b)=>a.peakSeconds-b.peakSeconds),analyzed:true,analysisEngine:'gemini',error:''});
+ source.candidates=restoreHighlightHistory(source,source.candidates,storage);
  const match=parsed.utterances.find(u=>u.kind==='match_start');
  for(const [k,field] of [['teamA','team_a'],['teamB','team_b']])if(!source.info[k]&&match?.[field])source.info[k]=match[field];
  return source;
