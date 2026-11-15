@@ -26,6 +26,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
  const active=()=>{const x=current();return x?.active&&x.snapshot?.eventId?x:null;};
  const status=v=>{$('productionStatus').textContent=v;};
  const key=id=>productionBatchStorageKey(id);
+ const appendKey=(id,requestId)=>key(id)+':append:'+requestId;
  async function post(path,body){
   if(!active()||body.event_id!==active().snapshot.eventId)throw Error('本番のイベントを正式に読み込んでください');
   const token=$('ssBridgeToken').value.trim();
@@ -165,7 +166,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
     // The continuation button is available only for the exact persisted job.
     $('productionStart').disabled=true;
     $('productionDecision').hidden=true;
-    $('productionAppend').hidden=result.execution_active!==false||result.inspection_only!==true;
+    $('productionAppend').hidden=result.execution_active!==false||result.inspection_only!==true||
+     localStorage.getItem(appendKey(id,requestId))!==null;
     status('準決勝2試合は登録済みです。後半2試合の内容を確認して登録してください。');
    }
    if(result.status==='running'&&result.execution_active!==true)
@@ -234,6 +236,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
   if(!x||job?.status!=='awaiting_second_round')throw Error('準決勝完了ジョブを確認してください');
   const eventId=x.snapshot.eventId,startedRevision=revision,requestId=localStorage.getItem(key(eventId));
   if(requestId!==job.request_id)throw Error('保存済みジョブIDが異なります');
+  if(localStorage.getItem(appendKey(eventId,requestId))!==null)
+   throw Error('後半登録は送信済みの可能性があります。進捗を確認してください');
   const [release,official,raw,confirmed]=await Promise.all([
    read('/production/release-state?event_id='+encodeURIComponent(eventId)),
    read('/production/inspect?event_id='+encodeURIComponent(eventId)),
@@ -277,6 +281,9 @@ export function installProductionUI({current,read,normalize,onComplete}){
    if(JSON.stringify(prepared)!==JSON.stringify(again))
     throw Error('後半登録内容が変わりました。再確認してください');
    // Never retry on an ambiguous transport result; inspect the persisted job.
+   // Persist before network I/O: unknown responses must never trigger a second write.
+   localStorage.setItem(appendKey(prepared.event_id,prepared.request_id),JSON.stringify({
+    operation_count:prepared.operations.length,attempted_at:Date.now()}));
    sendAttempted=true;
    await post('/production/batch/append-second-round',prepared);
    await refresh();
