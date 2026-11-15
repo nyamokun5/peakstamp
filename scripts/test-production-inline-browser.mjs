@@ -4,7 +4,8 @@ import {readFile} from 'node:fs/promises';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
 try{
- for(const uncertain of [false,true]){
+ for(const scenario of ['success','lost-append','unconfirmed']){
+  const uncertain=scenario==='lost-append',unconfirmed=scenario==='unconfirmed';
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',async route=>{
@@ -15,7 +16,7 @@ try{
    await route.fulfill({body,contentType:path.endsWith('.html')?'text/html':path.endsWith('.css')?'text/css':'text/javascript'});
   });
   await page.goto('https://peakstamp.local/');
-  await page.evaluate(async uncertain=>{
+  await page.evaluate(async({uncertain,unconfirmed})=>{
    const {initAnalysisNames}=await import('/sposched-analysis-names.mjs');
    const {initGoalStatsReview}=await import('/goal-stats-ui.mjs');
    const {installProductionInline}=await import('/sposched-production-inline.mjs');
@@ -26,7 +27,7 @@ try{
     roster_players:[1,2,3,4].map(n=>({name:'選手'+n,team:'チーム'+n,player_id:id(n),user_id:id(n)})),
     matches:ids.map((match_id,i)=>({seq:i+1,match_id:i<2?match_id:'',status:i<2?'scheduled':'waiting',
      left_team:i<2?'チーム'+pair[i][0]:'',right_team:i<2?'チーム'+pair[i][1]:'',left_score:0,right_score:0,goals:[]}))};
-   let job=null;window.sends=[];window.apiCalls=[];
+   let job=null;window.sends=[];window.apiCalls=[];window.holdInspection=true;
    const official=()=>({environment:'PRODUCTION',mode:'read-only',event_id:E,team_id:T,team_pinned:true,
     write_allowed:false,release_approved:false,event_date:'2026-11-15',matches:raw.matches});
    const response=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
@@ -38,7 +39,10 @@ try{
     if(path==='/production/alias/list')return response({aliases:[]});
     if(path==='/production/inspect')return response(official());
     if(path==='/production/release-state')return response({environment:'PRODUCTION',event_id:E,target_event_id:E,scope:'current-target',release_ready:true});
-    if(path==='/production/batch/inspect')return job?response(structuredClone(job)):response({error:{code:'not_found'}},404);
+    if(path==='/production/batch/inspect'){
+     if(window.holdInspection){window.holdInspection=false;await new Promise(resolve=>window.releaseInspection=resolve);}
+     return job?response(structuredClone(job)):response({error:{code:'not_found'}},404);
+    }
     if(!['/production/batch/start','/production/batch/append-second-round'].includes(path))throw Error('Unexpected route '+path);
     window.sends.push({path,body});
     if(path.endsWith('/append-second-round')&&uncertain)throw Error('mock lost reply');
@@ -60,25 +64,44 @@ try{
    const sources=[1,2,3,4].map(seq=>{
     const file=new File(['x'],'game'+seq+'.mov',{lastModified:1});
     const source={id:'s'+seq,file,objectUrl:'blob:mock'+seq,duration:60,matchNumber:seq,candidates:[]};
-    const scorer='選手'+pair[seq-1][0];
+    const scorer=unconfirmed&&seq===1?'未確認の呼び名':'選手'+pair[seq-1][0];
     localStorage.setItem('peakstamp_confirmed_goals_v1:'+file.name+'::1::1',JSON.stringify({items:[{
      id:'g'+seq,origin:'audio',timeSeconds:30,goalTimeSeconds:20,scorer,rawScorer:scorer,assist:'',assistStatus:'none',
      matchSeq:String(seq),teamA:'チーム'+pair[seq-1][0],teamB:'チーム'+pair[seq-1][1],matchupConfirmed:true,
-     matchLabel:pair[seq-1].join(' vs '),status:'confirmed',videoDecision:'kept'}]}));return source;
+     matchLabel:pair[seq-1].join(' vs '),status:unconfirmed&&seq===1?'draft':'confirmed',videoDecision:'kept'}]}));return source;
    });
    const state={sources};const review=initGoalStatsReview(state);
    const names=initAnalysisNames(state,{onChange:()=>review.refresh()});
    window.controller=installProductionInline({state,ssNames:names,goalReview:review,wait:async()=>{},maxChecks:5});
    document.getElementById('geminiPrimaryPanel').hidden=false;
    window.eventId=E;
-  },uncertain);
+  },{uncertain,unconfirmed});
   await page.fill('#ssAnalysisToken','mock-only');await page.click('#ssAnalysisConnect');
   await page.selectOption('#ssAnalysisEvent',await page.evaluate(()=>window.eventId));
   await page.waitForFunction(()=>document.getElementById('ssAnalysisLabel').textContent.includes('mock event'));
   await page.click('#ssInlinePreview');
+  if(unconfirmed){
+   assert.equal(await page.locator('#ssInlineStatus').isVisible(),true);
+   assert.match(await page.locator('#ssInlineStatus').innerText(),/未確定のゴールが1件/);
+   assert.equal(await page.evaluate(()=>sends.length),0);
+   assert.equal(await page.locator('#ssInlinePreview').isEnabled(),true);
+   assert.deepEqual(errors,[]);await page.close();
+   console.log('PASS unconfirmed goal error is visible beside registration button; no batch requests');continue;
+  }
+  await page.waitForFunction(()=>typeof window.releaseInspection==='function');
+  assert.equal(await page.locator('#ssInlineStatus').isVisible(),true);
+  assert.match(await page.locator('#ssInlineStatus').innerText(),/登録履歴を確認中/);
+  assert.equal(await page.locator('#ssInlinePreview').innerText(),'確認中…');
+  assert.equal(await page.locator('#ssInlinePreview').isDisabled(),true);
+  assert.equal(await page.locator('#ssInlinePreview').getAttribute('aria-busy'),'true');
+  assert.equal(await page.evaluate(()=>sends.length),0,'no mutation while initial inspection is pending');
+  await page.evaluate(()=>window.releaseInspection());
   await page.waitForFunction(()=>!window.controller.isBusy());
   const status=await page.locator('#ssInlineStatus').innerText();
+  assert.equal(await page.locator('#ssInlineStatus').isVisible(),true,'registration feedback must actually be visible on iPhone');
   assert.match(status,uncertain?/再送せず/:/登録完了/);
+  assert.equal(await page.locator('#ssInlinePreview').innerText(),'ゴールをSSに登録');
+  assert.equal(await page.locator('#ssInlinePreview').getAttribute('aria-busy'),null);
   assert.deepEqual(await page.evaluate(()=>sends.map(x=>x.path)),['/production/batch/start','/production/batch/append-second-round']);
   await page.click('#ssInlinePreview');await page.waitForFunction(()=>!window.controller.isBusy());
   assert.equal(await page.evaluate(()=>sends.length),2,'second click must never replay a phase');

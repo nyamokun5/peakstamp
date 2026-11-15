@@ -7,7 +7,7 @@
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
   <link rel="stylesheet" href="styles.css?v=goalwide2" />
-  <link rel="stylesheet" href="minimal-ui.css?v=mobile1" />
+  <link rel="stylesheet" href="minimal-ui.css?v=registration-feedback1" />
 </head>
 <body>
   <header class="topbar">
@@ -194,11 +194,11 @@
       <section class="goal-review-external-sync" aria-label="SS登録確認" style="margin:12px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
         <strong id="ssInlineHeading">⚽ SS登録</strong>
         <p id="ssInlineSummary" class="fine-print" role="status">ゴール確認後、ここで登録内容を確認できます。</p>
+        <p id="ssInlineStatus" class="fine-print" role="status" aria-live="polite"></p>
         <button id="ssInlinePreview" type="button" class="main-button">登録内容を確認</button>
         <div id="ssInlineMatches" class="fine-print" hidden></div>
         <button id="ssInlineInspect" type="button" class="whisper-run">登録結果を確認</button>
         <button id="ssInlineHistory" type="button" class="whisper-run">登録履歴を確認（書き込みなし）</button>
-        <p id="ssInlineStatus" class="fine-print" role="status" aria-live="polite"></p>
         <div hidden aria-hidden="true"><a href="./sposched-review.html?v=composite-tatsuo1&returnTab=1" target="_blank" rel="noopener noreferrer" tabindex="-1">旧画面（非表示の互換リンク）</a></div>
       </section>
       <details class="goal-review-export">
@@ -603,7 +603,7 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=ss-registration-link-2216"></script>
+  <script type="module" src="app.mjs?v=registration-feedback1"></script>
 <dialog id="matchReview" aria-labelledby="matchReviewTitle" style="max-width:94vw;color:inherit;background:#112c3b;border:1px solid #59828a;border-radius:14px"><form><h2 id="matchReviewTitle">試合を確認</h2><fieldset style="border:0;padding:0"></fieldset><output role="status"></output><button class="main-button" type="submit">確定して次へ</button></form></dialog>
 <style>#matchReview strong{display:block;margin-top:.8em}#matchReview input{width:40%;padding:.65em}#matchReview button{margin-top:1em}#matchReview::backdrop{background:#071321cc}</style></body>
 </html>

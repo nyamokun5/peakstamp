@@ -147,6 +147,7 @@ export function createProductionInlineController({getSnapshot,getGoals,refreshCo
    const initial=getSnapshot(),id=initial?.eventId;
    if(initial?.environment!=='production'||!UUID.test(id||''))fail('最初の画面で本番SSイベントに接続してください');
    const signature=semanticGoals(getGoals());verify(id,signature);
+   onStatus('登録履歴を確認中…');
    const known=await inspectBatch(id);verify(id,signature);
    const local=storage.getItem(key(id));
    if(known){
@@ -181,6 +182,7 @@ export function createProductionInlineController({getSnapshot,getGoals,refreshCo
    pendingDecision=null;
    const initial=getSnapshot(),id=initial?.eventId;
    if(initial?.environment!=='production'||!UUID.test(id||''))fail('本番SSイベントを選択してください');
+   onStatus('登録結果を確認中…');
    const signature=semanticGoals(getGoals()),job=await inspectBatch(id);verify(id,signature);
    if(!job){onStatus(storage.getItem(key(id))?'送信履歴がありますが結果を確認できません。再送しないでください':'登録履歴がありません');return null;}
    assertJob(job,id,storage.getItem(key(id))||null);
@@ -219,7 +221,11 @@ export function installProductionInline({state,ssNames,goalReview,document=globa
  const showError=e=>{status.textContent=e?.message||'登録結果を確認できません。再送せず進捗を確認してください';};
  const invoke=async task=>{
   if(controller.isBusy())return;button.disabled=true;
-  try{await task();}catch(e){showError(e);}finally{button.disabled=false;}
+  button.textContent='確認中…';button.setAttribute('aria-busy','true');
+  status.textContent='登録状況を確認中…';
+  try{await task();}catch(e){showError(e);}finally{
+   button.disabled=false;button.textContent='ゴールをSSに登録';button.removeAttribute('aria-busy');
+  }
  };
  const controller=createProductionInlineController({
   getSnapshot:()=>state.ssNameContext?.snapshot,
