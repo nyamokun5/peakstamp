@@ -125,3 +125,22 @@ link. Tests cover multi-source decimal ranges, merged overlaps, duplicate clicks
 unknown response/readback and edits after publication, with all writes mocked.
 Rollback is reverting this frontend change to main86f18e3; shared links already
 created by users are not deleted.
+
+### Inline mirror recovery
+
+The local mirror now creates a self-contained `youtube-watch.html#clips=…` link
+on the device. It no longer needs KV publication, an access code or a network
+round trip. Existing pending publication journals remain intact and are never
+resubmitted or labelled as completed by this flow. URL mappings keep their
+existing storage key, so users can reuse them after updating the page.
+
+The watch page validates version, length, clip count, video IDs, finite ranges and
+text lengths before loading the standard YouTube player. Legacy `?id=…` links
+still use their existing read-only endpoint. Invalid inline payloads fail closed.
+The link includes the selected ranges and display labels, so share the full URL;
+no access code or edit key is embedded. Large payloads are rejected locally.
+
+Validation: 946 unit tests and mobile browser recovery through actual watch-page
+initialization/replay with a mocked YouTube player; empty credentials and a
+pre-existing pending journal, zero external API requests/writes. Rollback baseline
+is mainc1a0d2c; preserve pending journals when reverting.

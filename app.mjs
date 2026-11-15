@@ -1,4 +1,4 @@
-import {initYouTubeMirror} from './youtube-mirror-ui.mjs?v=mirror1';
+import {initYouTubeMirror} from './youtube-mirror-ui.mjs?v=inline1';
 import { confirmedCard, showMatchReview } from './match-review.mjs';
 import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=5';
 import {initAnalysisNames} from './sposched-analysis-names.mjs?v=official-guest1';
