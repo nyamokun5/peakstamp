@@ -1,12 +1,12 @@
-import {inlineShareClips} from './youtube-inline-share.mjs?v=inline1';
+import {clipPeople,clipDisplayLabel} from './highlight-goal-labels.mjs?v=history1';
+import {inlineShareClips} from './youtube-inline-share.mjs?v=history1';
 import {youtubeApi} from './youtube-api.mjs';
-import {forMember} from './youtube-session.mjs';
-const showMemberFilter=false;
+const showMemberFilter=true;
 const $=id=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
 const id=params.get('id');
 let clips=[],queue=[],index=0,player,active=false,seeking=false,ready=false;
-const label=c=>[c.label,c.scorer&&'得点 '+c.scorer,c.assist&&'アシスト '+c.assist].filter(Boolean).join('　');
+const label=clipDisplayLabel;
 function statusClip(){
  const c=queue[index];$('status').textContent=(index+1)+' / '+queue.length+'　'+c.match+'　'+label(c);
 }
@@ -25,7 +25,7 @@ function button(text,action){
  const b=document.createElement('button');b.textContent=text;b.onclick=action;return b;
 }
 function selectMember(name){
- queue=forMember(clips,name);renderList();if(ready&&queue.length)jump(0);
+ queue=name?clips.filter(c=>clipPeople(c).includes(name)):clips;renderList();if(ready&&queue.length)jump(0);
 }
 function renderList(){
  const list=$('list');list.replaceChildren();let d,last;
@@ -47,7 +47,7 @@ async function init(){
  if(!queue?.length)throw Error('公開された場面がありません。');
  renderList();
  if(showMemberFilter){
-  const names=new Set(clips.flatMap(c=>[c.scorer,c.assist]).filter(Boolean));
+  const names=new Set(clips.flatMap(clipPeople));
   $('members').append(button('全員',()=>selectMember('')));
   for(const name of names)$('members').append(button(name,()=>selectMember(name)));
   $('members').hidden=false;

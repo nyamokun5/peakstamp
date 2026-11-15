@@ -1,7 +1,7 @@
 import { holdExportScreen } from './export-screen.mjs';
 import { createEditTransfer } from './edit-transfer.mjs';
 import { montageSeconds, exportMontage, estimateMontageMB, formatExportFailure } from './exporter.mjs?v=youtube-unified1';
-import { buildMultiClipPlan } from './multi-plan.mjs?v=youtube-unified1';
+import { buildMultiClipPlan } from './multi-plan.mjs?v=history1';
 import { formatTime } from './detector.mjs';
 import { initIntroEditor, renderIntroPreview, refreshIntroAspect, getIntroConfiguration, getIntroSignature, setIntroWorking } from './intro-ui.mjs?v=youtube-unified1';
 
@@ -102,7 +102,7 @@ export function updateMontageEditor(state) {
   activeState = state;
   const visible = Boolean(state?.file && (state?.bins ||
     state.sources?.some(source=>Number(source.duration)>0 &&
-      (source.candidates||[]).some(c=>c.enabled===true&&(c.goalRecordId||source.youtubeId&&source.analyzed)))));
+      (source.candidates||[]).some(c=>c.enabled===true&&(c.goalRecordId||source.highlightHistoryLoaded||source.youtubeId&&source.analyzed)))));
   $('montagePanel').hidden = !visible;
   if (!state?.sources?.length && lastFile) { revokeOutput(); completedSignature = null; }
   lastFile = state?.file || null;

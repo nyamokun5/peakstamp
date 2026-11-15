@@ -10,18 +10,20 @@ try{const page=await browser.newPage({viewport:{width:390,height:844},isMobile:t
  });
  await page.goto('https://peakstamp.local/');await page.evaluate(async()=>{
  const {initYouTubeMirror}=await import('/youtube-mirror-ui.mjs');const {buildMultiClipPlan}=await import('/multi-plan.mjs');
- const source={id:'local1',file:new File(['x'],'match.mp4',{lastModified:1}),duration:90,matchNumber:1,bins:[{}],candidates:[{enabled:true,time:10.3,manualEnd:18.6,peakSeconds:14}]};
+ const {saveGoalDrafts}=await import('/goal-stats.mjs');
+ const source={id:'local1',file:new File(['x'],'match.mp4',{lastModified:1}),duration:90,matchNumber:1,bins:[{}],candidates:[{enabled:true,time:10.3,manualEnd:18.6,peakSeconds:14},{enabled:true,time:40.1,manualEnd:49.8,peakSeconds:46}]};
+ saveGoalDrafts(source,localStorage,[{id:'g1',origin:'manual',timeSeconds:14,goalTimeSeconds:14,scorer:'西村',assist:'高崎',assistStatus:'named',status:'confirmed'},{id:'g2',origin:'manual',timeSeconds:46,goalTimeSeconds:46,scorer:'東',assist:'山田',assistStatus:'named',status:'confirmed'}]);
  const state={sources:[source]};document.getElementById('montagePanel').hidden=false;document.body.dataset.psStage='export';document.getElementById('geminiMainAccess').value='';
  localStorage.setItem('peakstamp-youtube-mirror-production-v1',JSON.stringify({urls:{},jobs:{old:{status:'pending',id:'a'.repeat(64)}}}));
  window.mirrorTest={source,ui:initYouTubeMirror(state,{getPlan:()=>buildMultiClipPlan(state.sources)})};});
  await page.locator('#youtubeMirror > summary').click();await page.locator('#youtubeMirror input[type=url]').fill('https://youtu.be/-sEOeqqTyuw');
  await page.locator('#youtubeMirrorCreate').click();assert.equal(writes.length,0);assert.match(await page.locator('#youtubeMirrorStatus').innerText(),/開始位置/);
  await page.locator('#youtubeMirror input[type=checkbox]').check();await page.locator('#youtubeMirrorCreate').click();await page.locator('#youtubeMirror a').waitFor({state:'visible'});
- const first=await page.locator('#youtubeMirror a').getAttribute('href');const parsed=await page.evaluate(async u=>(await import('/youtube-inline-share.mjs')).inlineShareClips(new URL(u).hash),first);assert.equal(parsed[0].start,10.3);assert.equal(parsed[0].end,18.6);assert.equal(writes.length,0);
+ const first=await page.locator('#youtubeMirror a').getAttribute('href');const parsed=await page.evaluate(async u=>(await import('/youtube-inline-share.mjs')).inlineShareClips(new URL(u).hash),first);assert.equal(parsed[0].start,10.3);assert.equal(parsed[0].end,18.6);assert.equal(parsed[0].scorer,'西村');assert.equal(parsed[0].assist,'高崎');assert.equal(writes.length,0);
  await page.locator('#youtubeMirrorCreate').click();assert.equal(await page.locator('#youtubeMirror a').getAttribute('href'),first);
  await page.evaluate(()=>{window.mirrorTest.source.candidates[0].manualEnd=21.2;window.mirrorTest.ui.refresh()});assert.equal(await page.locator('#youtubeMirror a').isVisible(),false);
  await page.locator('#youtubeMirrorCreate').click();await page.locator('#youtubeMirror a').waitFor({state:'visible'});const changed=await page.locator('#youtubeMirror a').getAttribute('href');assert.notEqual(changed,first);assert.equal((await page.evaluate(async u=>(await import('/youtube-inline-share.mjs')).inlineShareClips(new URL(u).hash),changed))[0].end,21.2);assert.equal(writes.length,0);
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('peakstamp-youtube-mirror-production-v1')).jobs.old.status),'pending');
- await page.goto(changed);await page.locator('#play').waitFor({state:'visible'});await page.locator('#play').click();assert.equal(await page.evaluate(()=>window.lastSeek),10.3);assert.match(await page.locator('#status').innerText(),/1 \/ 1/);
+ await page.goto(changed);await page.locator('#play').waitFor({state:'visible'});await page.locator('#play').click();assert.equal(await page.evaluate(()=>window.lastSeek),10.3);assert.match(await page.locator('#list').textContent(),/ゴール\(西村\)\/アシスト\(高崎\)/);await page.getByRole('button',{name:'山田',exact:true}).click();assert.equal(await page.evaluate(()=>window.lastSeek),40.1);assert.match(await page.locator('#status').innerText(),/1 \/ 1/);
  assert.deepEqual(errors,[]);console.log('PASS local montage → exact YouTube ranges, one click, inline link, edited range invalidation, legacy pending preserved; zero network writes');
 }finally{await browser.close()}

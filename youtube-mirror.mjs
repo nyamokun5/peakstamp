@@ -1,15 +1,16 @@
+import {goalLabelsForRange} from './highlight-goal-labels.mjs?v=history1';
 import {videoId} from './youtube-session.mjs';
 import {goalSourceKey} from './goal-stats.mjs';
 import {sourceDisplayName} from './match-label.mjs';
 // Consume the FINAL montage plan. Never recalculate candidate ranges or use cumulative offsets.
-export function mirrorClips(sources,plan,urls){
+export function mirrorClips(sources,plan,urls,storage=globalThis.localStorage){
  if(plan.length>1000)throw Error('共有できる場面は1000件までです。');
  if(!plan.length)throw Error('先にハイライトをキープしてください。');
  return plan.map(clip=>{
   const source=sources.find(s=>s.id===clip.sourceId),id=source&&videoId(urls[goalSourceKey(source)]||'');
   if(!id)throw Error((source?sourceDisplayName(source):'動画')+' のYouTube URLを入力してください。');
   if(!Number.isFinite(clip.start)||!Number.isFinite(clip.end)||clip.start<0||clip.end-clip.start<.29||clip.end>source.duration)throw Error('切り取り範囲を確認してください。');
-  return {video:id,match:sourceDisplayName(source).slice(0,512),start:clip.start,end:clip.end,label:'ハイライト',scorer:'',assist:''};
+  return {video:id,match:sourceDisplayName(source).slice(0,512),start:clip.start,end:clip.end,...goalLabelsForRange(source,clip.start,clip.end,storage)};
  });
 }
 export async function mirrorDigest(value){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),x=>x.toString(16).padStart(2,'0')).join('')}
