@@ -148,10 +148,17 @@ export function installProductionUI({current,read,normalize,onComplete}){
    lastJob=result;
    try{productionResumePayload(result,id,requestId);$('productionResume').hidden=false;}
    catch{$('productionResume').hidden=true;}
-   const stateLabel={running:'登録中',completed:'登録完了',blocked:'要確認',
+   const stateLabel={running:'登録中',completed:'登録完了',awaiting_second_round:'準決勝2試合の登録完了・後半登録待ち',blocked:'要確認',
     needs_decision:'勝者の指定が必要',paused:'一時停止'}[result.status]||result.status;
    status(stateLabel+'：'+result.completed+'/'+result.total+'件'+
     (result.status==='blocked'?'。送信済みの可能性があります。SSの試合・ゴールを照合してください。試合の削除・作り直しや再登録は行わないでください。':''));
+   if(result.status==='awaiting_second_round'){
+    // Never start a new job or replay semifinal writes to continue a staged job.
+    // Continuation remains disabled until the production goal planner is integrated.
+    $('productionStart').disabled=true;
+    $('productionDecision').hidden=true;
+    status('準決勝2試合は登録済みです。後半2試合の本番登録は準備中です。再登録しないでください。');
+   }
    if(result.status==='running'&&result.execution_active!==true)
     status('処理の実行を確認できません：'+result.completed+'/'+result.total+'件。状態確認では処理を再開しません。再登録せず、SSの試合・ゴールと保存済みジョブを照合してください。');
    if(result.status==='paused')
