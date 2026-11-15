@@ -15,3 +15,9 @@ test('production stage one excludes second-round operations without changing leg
  assert.match(ui,/post\('\/production\/batch\/start'/);
  assert.match(ui,/post\('\/production\/batch\/inspect'/);
 });
+
+test('production continuation records an append attempt before sending and never blindly retries',()=>{
+ assert.match(ui,/localStorage\.setItem\(appendKey\(prepared\.event_id,prepared\.request_id\)/);
+ assert.match(ui,/sendAttempted=true;\s*await post\('\/production\/batch\/append-second-round'/);
+ assert.match(ui,/localStorage\.getItem\(appendKey\(eventId,requestId\)\)!==null/);
+});
