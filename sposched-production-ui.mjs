@@ -273,6 +273,11 @@ export function installProductionUI({current,read,normalize,onComplete}){
    const again=await prepareContinuation();
    if(JSON.stringify(prepared)!==JSON.stringify(again))
     throw Error('後半登録内容が変わりました。再確認してください');
+   const goals=prepared.operations.filter(op=>op.action==='create').length;
+   const matches=[3,4].map(seq=>prepared.operations.find(op=>op.seq===seq)?.expected_match_id);
+   if(!window.confirm('本番SSに後半2試合を登録します。\\nゴール：'+goals+
+      '件\\n第3試合：'+matches[0]+'\\n第4試合：'+matches[1]+
+      '\\n\\n内容を確認して登録しますか？'))return;
    // Never retry on an ambiguous transport result; inspect the persisted job.
    await post('/production/batch/append-second-round',prepared);
    await refresh();
