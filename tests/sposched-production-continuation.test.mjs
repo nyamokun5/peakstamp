@@ -27,3 +27,15 @@ test('rejects stale or actively executing production inspection',()=>{
  assert.throws(()=>buildProductionSecondRoundAppend({snapshot,workerJob:{...workerJob,execution_active:true},operations}));
  assert.throws(()=>buildProductionSecondRoundAppend({snapshot,workerJob:{...workerJob,inspection_contract:'unexpected'},operations}));
 });
+
+test('accepts a goal followed by the two official second-round finishes',()=>{
+ const withGoal=[{seq:3,action:'create',team:'A',scorer:'Player A',assist:'',expected_match_id:ids[2]},...operations];
+ const result=buildProductionSecondRoundAppend({snapshot,workerJob,operations:withGoal});
+ assert.deepEqual(result.operations,withGoal);
+ assert.equal(result.operations.some(op=>op.seq<=2),false);
+});
+test('rejects an append if the saved job is incomplete or fixture IDs change',()=>{
+ assert.throws(()=>buildProductionSecondRoundAppend({snapshot,workerJob:{...workerJob,completed:1},operations}));
+ assert.throws(()=>buildProductionSecondRoundAppend({snapshot,workerJob:{...workerJob,fixture_ids:{1:ids[1],2:ids[0]}},operations}));
+ assert.throws(()=>buildProductionSecondRoundAppend({snapshot,workerJob,operations:[operations[1],operations[0]]}));
+});
