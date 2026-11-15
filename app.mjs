@@ -2327,7 +2327,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
 });
 
 }else{
- const {installProductionInline}=await import('./sposched-production-inline.mjs');
+ const {installProductionInline}=await import('./sposched-production-inline.mjs?v=visible-feedback1');
  installProductionInline({state,ssNames,goalReview});
 }
 
