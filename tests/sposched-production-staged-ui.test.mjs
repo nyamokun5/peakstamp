@@ -44,3 +44,10 @@ test('planner and continuation compose across two completed semifinal fixtures',
  assert.deepEqual(appended.operations.map(op=>op.seq),[3,4]);
  assert.equal(appended.confirm,'PRODUCTION EVENT BATCH APPEND');
 });
+
+test('second-round production append rechecks the exact inspected semifinal job',()=>{
+ assert.match(ui,/confirmed\.event_id!==job\.event_id/);
+ assert.match(ui,/confirmed\.cursor!==job\.cursor/);
+ assert.match(ui,/JSON\.stringify\(confirmed\.fixture_ids\)!==JSON\.stringify\(job\.fixture_ids\)/);
+ assert.match(ui,/進捗を再取得してください/);
+});
