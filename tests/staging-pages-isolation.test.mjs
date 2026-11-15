@@ -41,6 +41,8 @@ test('TEST deployment produces static assets but excludes production-only writin
    assert.ok(names.includes(name),name+' missing');
   assert.ok(!names.includes('sposched-production-ui.mjs'));
   assert.ok(!names.includes('sposched-production-release.mjs'));
+  const watch=await readFile(path.join(dir,'youtube-watch.html'),'utf8');
+  assert.match(watch,/<body data-ss-analysis="staging">/,'TEST shared playback must read TEST storage');
   const disabled=await readFile(path.join(dir,'staging-production-disabled.mjs'),'utf8');
   assert.ok(!disabled.includes(productionHost));
   const marker=JSON.parse(await readFile(path.join(dir,'staging-build.json'),'utf8'));

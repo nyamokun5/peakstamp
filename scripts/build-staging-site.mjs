@@ -50,7 +50,7 @@ export async function buildStagingSite(destination=path.join(root,'dist')){
   const target=path.join(destination,entry.name);
   if(entry.name==='sposched-review.html'){
    await writeFile(target,buildStagingReviewHtml(await readFile(source,'utf8')));
-  }else if(entry.name==='index.html'){
+  }else if(['index.html','youtube-watch.html'].includes(entry.name)){
    const html=await readFile(source,'utf8');
    await writeFile(target,requireOnce(html,'<body>','<body data-ss-analysis="staging">','analysis staging gate'));
   }else await copyFile(source,target);
