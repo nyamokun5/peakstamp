@@ -63,3 +63,18 @@
  .highlight-entry.preview-active .inline-preview{padding-bottom:0;margin-bottom:0}
  .highlight-entry.preview-active .zoom-video-viewport{border-radius:0}
 }
+
+/* YouTube uses the same three steps, roster editor and registration controls. */
+body[data-source-mode="youtube"] #uploadZone,
+body[data-source-mode="youtube"] #fileDetails,
+body[data-source-mode="youtube"] #videoWrapper,
+body[data-source-mode="youtube"] #sourceList .source-original-filename,
+body[data-source-mode="youtube"] #waveCanvas,
+body[data-source-mode="youtube"] #geminiAdvancedTools,
+body[data-source-mode="youtube"] #advancedTools,
+body[data-source-mode="youtube"] .legacy-audio-details,
+body[data-source-mode="youtube"] #geminiCalloutPanel {display:none!important}
+.youtube-source-controls textarea{width:100%;box-sizing:border-box;margin:12px 0}
+.youtube-output{margin-top:20px;border-top:1px solid #466577;padding-top:16px}
+.youtube-output label{display:grid;gap:6px;margin:12px 0}
+body[data-source-mode="youtube"] .local-file-help{display:none!important}

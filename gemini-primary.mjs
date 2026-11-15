@@ -1,3 +1,4 @@
+import {initGeminiAccess} from './gemini-access.mjs?v=youtube-unified1';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
 /**
  * Primary Gemini-only workflow: local MOV -> streamed PCM WAV -> authenticated API
@@ -121,6 +122,7 @@ function blobToBase64(blob) {
  });
 }
 export function refreshGeminiPrimary(state) {
+ if(document.body.dataset.sourceMode==='youtube')return;
  const picker=$('geminiMainSource'),button=$('geminiMainRun');
  const second=$('geminiMainForce');
  if(!picker||!button||!second)return;
@@ -204,35 +206,11 @@ async function callApi(audio,duration,access,signal,format='m4a') {
   throw Error('Geminiからの候補データを読み取れませんでした。');
  return result;
 }
-const ACCESS_SESSION_KEY='peakstamp_gemini_access_tab_v1';
-const ACCESS_DEVICE_KEY='peakstamp_gemini_access_device_v1';
-const ACCESS_TTL_MS=4*60*60*1000;
-function restoreAccess(){
- try{
-  const value=JSON.parse(sessionStorage.getItem(ACCESS_SESSION_KEY)||'null');
-  if(value&&typeof value.code==='string'&&value.code&&value.expiresAt>Date.now()&&value.expiresAt<=Date.now()+ACCESS_TTL_MS)return value.code;
-  sessionStorage.removeItem(ACCESS_SESSION_KEY);
- }catch{}
- return '';
-}
-function saveAccess(code){
- try{if(code)sessionStorage.setItem(ACCESS_SESSION_KEY,JSON.stringify({code,expiresAt:Date.now()+ACCESS_TTL_MS}));
- else sessionStorage.removeItem(ACCESS_SESSION_KEY);}catch{}
-}
 export function initGeminiPrimary(state,{decodeAudio,commitResults,onComplete=()=>{}}) {
  if(!$('geminiMainRun')||typeof decodeAudio!=='function'||typeof commitResults!=='function')return;
  const accessField=$('geminiMainAccess');
  const deviceSave=$('geminiRememberDevice');
- let savedDevice='';try{savedDevice=localStorage.getItem(ACCESS_DEVICE_KEY)||''}catch{}
- accessField.value=savedDevice||restoreAccess();
- if(deviceSave)deviceSave.checked=Boolean(savedDevice);
- const persistAccess=()=>{
-  const value=accessField.value.trim();saveAccess(value);
-  try{if(deviceSave?.checked&&value)localStorage.setItem(ACCESS_DEVICE_KEY,value);
-   else localStorage.removeItem(ACCESS_DEVICE_KEY)}catch{}
- };
- accessField.addEventListener('change',persistAccess);
- deviceSave?.addEventListener('change',persistAccess);
+ initGeminiAccess(accessField,deviceSave);
  const progressUI=createGeminiProgressUI();
  const eta=createGeminiEta();
  let inBatch=false;

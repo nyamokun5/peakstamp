@@ -88,7 +88,7 @@ function applyAspect(width,height){
 export function refreshIntroAspect(activeState,plan){
   const id=plan?.[0]?.sourceId;
   const selected=activeState?.sources?.find(s=>s.id===id);
-  const url=selected?.objectUrl||null;
+  const url=selected?.youtubeId?(selected.mediaObjectUrl||null):(selected?.objectUrl||null);
   const prepared=prepareIntroPlan(plan,{presentation:'overlay'});
   const first=prepared.clips[0];
   const firstStart=first?.start??0;

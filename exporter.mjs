@@ -163,7 +163,7 @@ export async function exportMontage({
   }
   // Backwards compatible with the original single-file editor.
   const items = sources?.length
-    ? sources.map(s => ({ id: s.id, file: s.file }))
+    ? sources.map(s => ({ id: s.id, file: s.mediaFile || s.file }))
     : file ? [{ id: '__single__', file }] : [];
   const fileMap = new Map(items.map(s => [s.id, s.file]));
   const prepared=prepareIntroPlan(plan,intro);

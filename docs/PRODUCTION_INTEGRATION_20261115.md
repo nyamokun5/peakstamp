@@ -77,3 +77,33 @@ An official SS guest may have a valid event-scoped player_id without a registere
 Guest identities remain bound to environment/event/fixture sequence, team, type and event player UUID. When later match UUIDs appear, fresh official opponents and identities must still agree. Changed/reused/missing IDs or changed type/team invalidate the identity. Official-roster guests are distinct from unregistered free-text guest entry and never become shared member aliases. The UI marks an otherwise locally confirmed goal as roster-unverified when its current identity is invalid.
 
 Validation includes a fourth-goal guest on Team 4 through the real in-page UI/production transport with mocked HTTP, semifinal and later-round registration, no member alias writes, 920 unit tests, and the existing production analysis browser. No real SS goal/result writes are used as tests. Rollback baseline: main 091ab3ecb0907bedad4fbd08d8b0bdda7d3c2bdd.
+
+## YouTube and local source workflow parity
+
+The former `?youtube=1` standalone organizer now mounts URL entry into the same
+three-step page. Both modes use the same access-code persistence, match-card
+confirmation, goal editor and official SS identity verification, goal clip
+Keep/Reject, highlight rows, journey dialogs and production inline registration.
+Only the media source and YouTube picture controls use adapters. Existing
+YouTube candidates and confirmed drafts migrate without overwriting shared edits;
+no waveform samples are invented for URL sources.
+
+YouTube Gemini requests go through `/api/gemini-youtube` in the existing Vercel
+project with `X-PeakStamp-Access`; Google credentials and fixed prompts remain on
+the server. A saved analysis is reused on reopen or normal Analyze; no automatic
+paid retries occur. Duration inquiry and analysis each make at most one provider
+request, with the existing 30-minute video limit. Public GET and OPTIONS can
+verify deployment/CORS without paying for analysis.
+
+MP4 uses the same montage controls/exporter, after selecting a matching local
+original (duration checked). The URL alone cannot supply a browser-readable MP4;
+without an original the existing YouTube share player remains available. Original
+File objects are never persisted to JSON; goal identity stays keyed to the stable
+YouTube source, separate from the optional export File.
+
+Validation includes real entry-point iPhone DOM flow, cached reload without more
+provider requests, shared goal replay/roster/time/trim/Keep/export identity, native
+media restoration, legacy drafts and server auth/input bounds. All Google/SS
+writes in tests are mocks. Rollback: revert this PR to main
+`be922beb4bcf3e2cebe395908f4e883707363b2d`; previous Vercel production deployment
+`dpl_J8Nz5hWbbcxb92e2qeRNAdjDLsWC`. Code rollback does not revert user data.
