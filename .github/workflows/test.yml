@@ -44,6 +44,7 @@ jobs:
           node scripts/test-analysis-names-browser.mjs
           TEST_PRODUCTION_ANALYSIS=1 node scripts/test-analysis-names-browser.mjs
           node scripts/test-waiting-goal-player-browser.mjs
+          node scripts/test-production-inline-browser.mjs
           node scripts/test-inline-decision-browser.mjs
           node scripts/test-minimal-ui-browser.mjs
           node scripts/test-manual-direct-browser.mjs

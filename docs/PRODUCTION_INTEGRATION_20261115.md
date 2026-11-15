@@ -59,3 +59,13 @@ Keep production baseline SHA above as the frontend rollback point. Revert the in
 - Browser test fixtures that represent AI observations use `origin: audio`; main manual-origin semantics (`manual: true`) remain intact and are verified separately by direct manual tests.
 
 Real iPhone Safari, paid Gemini media calls and real SS writes are not reproduced by mocked browser tests. Chromium on this environment cannot encode AAC with the real encoder; the browser export regression uses real video decoding and a deterministic encoding mock. No claim of live MP4 success on iPhone is made before device acceptance.
+
+## Same-page production registration
+
+The production goal-review action and the goal-completion dialog now both run registration in the editor. They do not open `sposched-review.html` or create a new tab. Normal registration needs one explicit click: fresh production target/tenant/fixture checks, existing-job inspection, start, progress polling, staged second-round append and official completion readback. Tied results are chosen on the same page.
+
+`sposched-production-inline.mjs` uses the same production batch key as the previous page so an old or uncertain submission cannot become a fresh job. Start, append and decision intent markers are written before I/O. A passive inspection never appends or restarts a job; unknown responses do not retry. Input/event/member identity changes stop the active sequence. Human matchup confirmation survives the goal export so waiting third/fourth-game identities remain usable before their official match UUIDs are issued. The Worker still verifies actual fixture UUIDs before each mutation.
+
+The TEST inline handlers stay in their TEST-only branch; production transports require production confirmation strings, matching selected event/context and production response identity. Bracket recreation remains TEST-only. Both environments reject credential-bearing redirects. The production-only coordinator is excluded from the TEST build.
+
+Validation: 913 unit tests passed before the final transport redirect setting; the new real-DOM browser regression covers one-click start-to-append-to-completion and an uncertain append with no replay, using the real analysis transport against mocked responses. Production and TEST analysis browsers and the legacy inline decision browser also passed. CI reruns the required full suite for the release SHA. No real SS write is used as a test. Rollback is a revert to pre-change main `0ca0e7828359e58db1db389943bd12a6a1d5ab03`.

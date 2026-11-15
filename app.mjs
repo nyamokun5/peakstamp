@@ -135,6 +135,11 @@ const coaching=initJourneyCoach({
   createGoalDrafts(src,window.localStorage).items.map(item=>({item})))),
  actions:{
   reviewMatchups:()=>showMatchupReview(),
+  registerGoals:()=>{
+   workflow.setStage('edit',{scroll:false});
+   $('ssInlinePreview')?.closest('section')?.scrollIntoView({behavior:'smooth',block:'start'});
+   $('ssInlinePreview')?.click();
+  },
   goAnalysis:()=>{workflow.setStage('analysis',{scroll:false});$('geminiPrimaryPanel').scrollIntoView({behavior:'smooth',block:'start'});},
   goGoals:()=>{workflow.setStage('edit',{scroll:false});$('goalStatsPanel').scrollIntoView({behavior:'smooth',block:'start'});},
   showGoalList:()=>{goalReview.reviewAll();},
@@ -1915,9 +1920,11 @@ const goalReview=initGoalStatsReview(state,{
 });
 const ssNames=initAnalysisNames(state,{onChange:()=>goalReview.refresh()});
 const analysisTestMode=document.body.dataset.ssAnalysis==='staging';
-if($('ssProductionLink'))$('ssProductionLink').hidden=analysisTestMode;
+if($('ssProductionLink'))$('ssProductionLink').hidden=true;
 const inlineSection=$('ssInlinePreview')?.closest('section');
-if(inlineSection)inlineSection.hidden=!analysisTestMode;
+if(inlineSection)inlineSection.hidden=false;
+if($('ssInlineHeading'))$('ssInlineHeading').textContent=analysisTestMode?'⚽ SS登録（TEST）':'⚽ SS登録';
+if(analysisTestMode){
 // Read-only in-place SS preflight. No credential prompt, navigation or writes.
 // Batch mutation will only be enabled after the official fixture/duplicate
 // verification flow is integrated into this page.
@@ -2318,6 +2325,11 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
  }catch(error){status.textContent=error.message||String(error)}
  finally{button.disabled=false}
 });
+
+}else{
+ const {installProductionInline}=await import('./sposched-production-inline.mjs');
+ installProductionInline({state,ssNames,goalReview});
+}
 
 const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
   onResultsChange:()=>{

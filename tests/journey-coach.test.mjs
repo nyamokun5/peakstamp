@@ -21,7 +21,7 @@ function setup(values={goals:3,highlights:5}){
  const called=[];
  const callbacks=Object.fromEntries([
   'goAnalysis','goGoals','reviewMatchups','showGoalList','goHighlights','reviewAllHighlights',
-  'goExport','showExportPreview','saveHSJson'
+  'goExport','showExportPreview','saveHSJson','registerGoals'
  ].map(name=>[name,()=>called.push(name)]));
  const coach=initJourneyCoach({document:doc,counts:()=>values,actions:callbacks});
  return {coach,ids,called,doc};
@@ -152,6 +152,10 @@ test('goal completion has exactly three actions and hides registration elsewhere
  assert.equal(x.ids.journeyDialogPrimary.textContent,'ハイライトを確認');
  assert.equal(x.ids.journeyDialogSecondary.textContent,'ゴールを再確認');
  assert.equal(x.ids.journeyDialogRegister.hidden,false);
+ x.ids.journeyDialogRegister.click();
+ assert.deepEqual(x.called,['registerGoals']);
+ assert.equal(x.ids.journeyDialog.hidden,true);
+ assert.match(readFileSync(new URL('../index.html',import.meta.url),'utf8'),/<button id="journeyDialogRegister"/);
  x.coach.highlightReviewFinished({total:1,kept:1});
  assert.equal(x.ids.journeyDialogRegister.hidden,true);
 });

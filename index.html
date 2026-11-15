@@ -186,13 +186,13 @@
       </div>
       <div id="goalStatsEditor" class="goal-review-editor"></div>
 
-      <div id="ssProductionLink" class="goal-review-external-sync" style="margin:15px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
+      <div id="ssProductionLink" hidden class="goal-review-external-sync" style="margin:15px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
         <strong>⚽ Shoot Sundayアプリとの照合</strong>
         <p class="fine-print">正式な試合・選手を確認して登録します。</p>
         <a href="./sposched-review.html?v=composite-tatsuo1&returnTab=1" target="_blank" rel="noopener noreferrer" class="whisper-run" style="display:inline-block;text-decoration:none">ゴールをSSに登録</a>
       </div>
       <section class="goal-review-external-sync" aria-label="SS登録確認" style="margin:12px 0;padding:12px;border:1px solid #508e83;border-radius:11px">
-        <strong>⚽ SS登録（TEST）</strong>
+        <strong id="ssInlineHeading">⚽ SS登録</strong>
         <p id="ssInlineSummary" class="fine-print" role="status">ゴール確認後、ここで登録内容を確認できます。</p>
         <button id="ssInlinePreview" type="button" class="main-button">登録内容を確認</button>
         <div id="ssInlineMatches" class="fine-print" hidden></div>
@@ -587,7 +587,7 @@
       <div class="journey-dialog-actions">
         <button id="journeyDialogPrimary" class="main-button" type="button"></button>
         <button id="journeyDialogSecondary" class="whisper-run" type="button" hidden></button>
-        <a id="journeyDialogRegister" class="whisper-run" href="./sposched-review.html?v=composite-tatsuo1&returnTab=1" target="_blank" rel="noopener noreferrer" hidden>ゴールをSSに登録</a>
+        <button id="journeyDialogRegister" type="button" class="whisper-run" hidden>ゴールをSSに登録</button>
       </div>
     </div>
   </div>
