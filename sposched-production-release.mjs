@@ -42,8 +42,8 @@ export function validateProductionReleaseEvidence(snapshot,inspect,release){
  return {event_id:snapshot.eventId,team_id:inspect.team_id,
   fixture_ids:slots,date:inspect.event_date};
 }
-export function prepareProductionBatch({snapshot,rows,decisions,requestId}){
- const plan=prepareWorkerTournament({snapshot,rows,decisions,requestId});
+export function prepareProductionBatch({snapshot,rows,decisions,requestId,winnerFor}){
+ const plan=prepareWorkerTournament({snapshot,rows,decisions,requestId,winnerFor});
  return {...plan,confirm:'PRODUCTION EVENT BATCH WRITE'};
 }
 

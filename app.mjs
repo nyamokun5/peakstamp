@@ -1,14 +1,16 @@
 import { confirmedCard, showMatchReview } from './match-review.mjs';
+import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=5';
+import {initAnalysisNames} from './sposched-analysis-names.mjs?v=ss-decision1';
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=peak52';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
 import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
-import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=recovery2';
+import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=batch-diagnostic3';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=matchexport1';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=ss-roster-readonly-2156';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
-import {createGoalDrafts} from './goal-stats.mjs?v=matchrecover2';
+import {createGoalDrafts} from './goal-stats.mjs?v=source-matchup5';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
@@ -104,10 +106,35 @@ function openPendingHighlights() {
     coaching.highlightReviewFinished({kept:0});
   }
 }
+function showMatchupReview(){
+ workflow.setStage('analysis',{scroll:false});
+ const list=$('sourceList');
+ let next=document.getElementById('matchupReviewNext');
+ if(!next){
+  next=document.createElement('button');next.id='matchupReviewNext';
+  next.type='button';next.textContent='ゴールを確認';
+  next.addEventListener('click',()=>{
+   // Source edits are saved and goal drafts are rebuilt before navigation.
+   syncSources();
+   document.getElementById('matchupReviewNext').hidden=true;
+   workflow.setStage('edit',{scroll:false});
+   $('goalStatsPanel').scrollIntoView({behavior:'smooth',block:'start'});
+   coaching.showGoalIntro();
+  });
+  list.before(next);
+  next.className='workflow-next-btn';
+  next.style.cssText='display:block;width:100%;min-height:52px;margin:12px 0;font-size:17px;font-weight:700';
+ }
+ next.hidden=false;
+ list.scrollIntoView({behavior:'smooth',block:'start'});
+ const blank=state.sources.filter(s=>{const m=videoMatchup(s,window.localStorage);return !m.teamA||!m.teamB;}).length;
+ next.textContent=blank?'ゴールを確認（未入力 '+blank+'試合）':'ゴールを確認';
+}
 const coaching=initJourneyCoach({
  counts:()=>analysisCounts(state.sources,state.sources.flatMap(src=>
   createGoalDrafts(src,window.localStorage).items.map(item=>({item})))),
  actions:{
+  reviewMatchups:()=>showMatchupReview(),
   goAnalysis:()=>{workflow.setStage('analysis',{scroll:false});$('geminiPrimaryPanel').scrollIntoView({behavior:'smooth',block:'start'});},
   goGoals:()=>{workflow.setStage('edit',{scroll:false});$('goalStatsPanel').scrollIntoView({behavior:'smooth',block:'start'});},
   showGoalList:()=>{goalReview.reviewAll();},
@@ -240,7 +267,7 @@ function syncSources({skipGoalReviewRefresh=false}={}) {
   if (state.bins) drawResults();
   else updateMontageEditor(state);
   renderSourceList();
-  workflow.autoAdvance({busy:state.geminiProcessing||state.working||state.exporting});
+  workflow.autoAdvance({busy:state.geminiProcessing||state.working||state.exporting||Boolean(document.getElementById('matchupReviewNext')&&!document.getElementById('matchupReviewNext').hidden)});
   guide.update({hasVideo:state.sources.length>0,hasResults:!!state.bins});
 }
 function renderSourceList() {
@@ -305,12 +332,39 @@ function renderSourceList() {
       syncSources();
     });
     label.append(input);
+    const matchup=videoMatchup(source,window.localStorage);
+    const matchupLabel=make('label','source-match-editor','対戦チーム');
+    const matchupInput=make('input','source-match-number');
+    matchupInput.type='text';matchupInput.maxLength=120;
+    matchupInput.placeholder='例：1 vs 2';
+    matchupInput.value=matchup.teamA&&matchup.teamB?matchup.teamA+' vs '+matchup.teamB:'';
+    matchupInput.setAttribute('aria-label','対戦チーム');
+    // Save as soon as a complete pair is typed, before the user taps Next.
+    // iPhone Safari may not fire change/blur before navigation.
+    matchupInput.addEventListener('input',()=>{
+      const parts=matchupInput.value.split(/\\s*(?:vs?\\.?|対)\\s*/i);
+      if(parts.length===2&&parts[0].trim()&&parts[1].trim())
+       saveVideoMatchup(source,window.localStorage,parts[0],parts[1]);
+    });
+    matchupInput.addEventListener('change',()=>{
+      const parts=matchupInput.value.split(/\s*(?:vs?\.?|対)\s*/i);
+      if(parts.length!==2||!parts[0].trim()||!parts[1].trim()){
+        error('loadError','対戦チームは「1 vs 2」の形式で入力してください。');return;
+      }
+      if(!saveVideoMatchup(source,window.localStorage,parts[0],parts[1])){
+        error('loadError','対戦チームを保存できませんでした。');return;
+      }
+      error('loadError','');syncSources();
+      const next=document.getElementById('matchupReviewNext');
+      if(next&&!next.hidden){const blank=state.sources.filter(s=>{const m=videoMatchup(s,window.localStorage);return !m.teamA||!m.teamB;}).length;next.textContent=blank?'ゴールを確認（未入力 '+blank+'試合）':'ゴールを確認';}
+    });
+    matchupLabel.append(matchupInput);
     // At import the organizer needs to match the clip to its match. Show the
     // ORIGINAL filename directly, rather than hiding it behind a disclosure.
     const original=make('small','source-original-filename',source.file.name);
     original.title=source.file.name;
     info.append(filename,original,make('small','source-state',status));
-    card.append(num,info,label);
+    card.append(num,info,label,matchupLabel);
     const controls = make('div','source-controls');
     const move = (label,diff) => {
       const button = make('button','source-control',label);
@@ -415,6 +469,36 @@ function chooseFiles(files, append = false) {
   $('progressArea').hidden = true;
   error('analysisError','');
   syncSources();
+}
+// Temporary TEST-only cache. Never automatically overwrite the saved set.
+if($('testVideoCachePanel'))$('testVideoCachePanel').hidden=document.body.dataset.ssAnalysis!=='staging';
+for(const [id,action] of [
+ ['testVideoSave',async cache=>{
+  if(state.working||state.exporting||state.geminiProcessing)throw Error('処理完了後に保存してください');
+  const n=await cache.saveTestVideos(state.sources.map(src=>src.file));
+  return n+'本の動画をこの端末に保存しました';
+ }],
+ ['testVideoRestore',async cache=>{
+  if(state.working||state.exporting||state.geminiProcessing)throw Error('処理完了後に復元してください');
+  const files=await cache.restoreTestVideos();
+  if(!files.length)throw Error('保存済みの動画がありません');
+  chooseFiles(files,false);
+  return files.length+'本の動画を復元しました';
+ }],
+ ['testVideoClear',async cache=>{
+  await cache.clearTestVideos();
+  return '保存したテスト動画を削除しました（現在の動画はそのままです）';
+ }]
+]){
+ $(id)?.addEventListener('click',async()=>{
+  const button=$(id),status=$('testVideoCacheStatus');
+  button.disabled=true;status.textContent='端末内の動画を処理中…';
+  try{
+   const cache=await import('./test-video-cache.mjs');
+   status.textContent=await action(cache);
+  }catch(e){status.textContent=e.message||String(e);}
+  finally{button.disabled=false;}
+ });
 }
 $('sortFilesByName')?.addEventListener('click',()=>{
   if(state.working||state.exporting||state.geminiProcessing)return;
@@ -558,6 +642,7 @@ async function commitGeminiResults({source,parsed,audio,decoded,batch=false}) {
     .sort((a,b)=>a.peakSeconds-b.peakSeconds);
   source.analysisEngine='gemini';
   source.error='';
+  await ssNames.refresh();
   syncSources();
   $('resultsPanel').hidden=false;
   if(!batch)$('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
@@ -763,8 +848,38 @@ $('undoReviewButton').addEventListener('click',()=>{
   });
 });
 
-function row(item, index) {
-  const source = state.sources.find(s => s.id === item.sourceId);
+let youtubeEditorApi;
+function loadYoutubeEditorApi(){
+  if(window.YT?.Player)return Promise.resolve(window.YT);
+  if(youtubeEditorApi)return youtubeEditorApi;
+  youtubeEditorApi=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    const previous=window.onYouTubeIframeAPIReady;
+    const finish=()=>{
+      clearTimeout(timeout);
+      window.onYouTubeIframeAPIReady=previous;
+    };
+    const fail=()=>{
+      finish();
+      script.remove();
+      youtubeEditorApi=null;
+      reject(new Error('YouTubeを読み込めません。リプレイで再試行してください。'));
+    };
+    const timeout=setTimeout(fail,20000);
+    window.onYouTubeIframeAPIReady=()=>{
+      finish();
+      resolve(window.YT);
+      previous?.();
+    };
+    script.onerror=fail;
+    script.src='https://www.youtube.com/iframe_api';
+    document.head.append(script);
+  });
+  return youtubeEditorApi;
+}
+
+function row(item, index, youtube=null) {
+  const source = youtube?.source || state.sources.find(s => s.id === item.sourceId);
   if (!source) return make('div','', '動画が見つかりません');
   const entry = make('div', 'highlight-entry');
   entry.dataset.sourceId=source.id;
@@ -784,7 +899,11 @@ function row(item, index) {
   const play = make('button','play-btn','▶ リプレイ');
   play.type = 'button';
   play.title = '切り取り範囲をもう一度再生';
+  const changed=youtube?.save || refreshComment;
   let replayVideo=null;
+  let youtubeFrame=null;
+  let youtubePlayer=null;
+  let youtubeTimer=null;
   let frameWatchId=null;
   let teardownZoom=null;
   let replayStatus=null;
@@ -800,6 +919,14 @@ function row(item, index) {
     replayStatus.hidden=!message;
   };
   const close=()=>{
+    if(youtube){
+      clearInterval(youtubeTimer);
+      youtubeFrame=null;
+      youtubePlayer?.destroy();
+      youtubePlayer=null;
+      replayVideo=null;
+      playhead.hidden=true;
+    }
     teardownZoom?.();
     teardownZoom=null;
     if(replayVideo){
@@ -880,6 +1007,81 @@ function row(item, index) {
     }
   };
   play.addEventListener('click',()=>{
+    if(youtube){
+      if(replayVideo){
+        replayVideo.currentTime=item.time;
+        replayVideo.play();
+        return;
+      }
+      closeInlinePreview();
+      const frame=document.createElement('iframe');
+      youtubeFrame=frame;
+      const params=new URLSearchParams({start:Math.floor(item.time),autoplay:1,
+        playsinline:1,enablejsapi:1,origin:location.origin});
+      frame.title=item.title || 'シーンを再生';
+      frame.allow='autoplay; fullscreen';
+      frame.allowFullscreen=true;
+      frame.style.cssText='display:block;width:100%;height:auto;aspect-ratio:16/9;border:0';
+      frame.src='https://www.youtube.com/embed/'+source.id+'?'+params;
+      replayStatus=make('p','inline-caption','');
+      replayStatus.setAttribute('role','status');
+      const controls=make('div','scene-playback-controls');
+      pauseResumeButton=make('button','scene-pause-button','▶ 再生');
+      const mute=make('button','scene-mute-button','🔊');
+      for(const button of [pauseResumeButton,mute]){
+        button.type='button';
+        button.disabled=true;
+        controls.append(button);
+      }
+      mute.setAttribute('aria-label','音声のミュート切替');
+      pauseResumeButton.onclick=()=>{
+        if(!replayVideo)return;
+        if(!replayVideo.paused){replayVideo.pause();return;}
+        const end=getCandidateEnd(source,item,currentClipOptions());
+        if(replayVideo.currentTime>=end-.1 || replayVideo.currentTime<item.time)replayVideo.currentTime=item.time;
+        replayVideo.play();
+      };
+      mute.onclick=()=>{
+        if(youtubePlayer.isMuted())youtubePlayer.unMute();
+        else youtubePlayer.mute();
+        mute.textContent=youtubePlayer.isMuted()?'🔇':'🔊';
+      };
+      inline.replaceChildren(frame,controls,replayStatus);
+      inline.hidden=false;
+      entry.classList.add('preview-active');
+      activeInlineClose=close;
+      loadYoutubeEditorApi().then(YT=>{
+        if(youtubeFrame!==frame || !frame.isConnected)return;
+        youtubePlayer=new YT.Player(frame,{events:{
+          onReady:({target})=>{
+            if(youtubeFrame!==frame)return;
+            replayVideo={
+              get duration(){return target.getDuration() || source.duration;},
+              get paused(){return target.getPlayerState()!==1;},
+              get currentTime(){return target.getCurrentTime();},
+              set currentTime(time){target.seekTo(time,true);},
+              readyState:1,
+              play(){target.playVideo();},
+              pause(){target.pauseVideo();}
+            };
+            replayVideo.currentTime=item.time;
+            replayVideo.play();
+            updatePlayhead();
+            pauseResumeButton.disabled=mute.disabled=false;
+            youtubeTimer=setInterval(()=>{
+              if(!frame.isConnected){close();return;}
+              if(!seekDrag && !replayVideo.paused && replayVideo.currentTime>=getCandidateEnd(source,item,currentClipOptions())){
+                replayVideo.pause();
+              }
+              updatePauseResume();
+              updatePlayhead();
+            },100);
+          },
+          onError:()=>{if(youtubeFrame===frame)setReplayStatus('YouTube動画を再生できません。公開設定と埋め込み設定を確認してください。');}
+        }});
+      }).catch(error=>{if(youtubeFrame===frame)setReplayStatus(error.message);});
+      return;
+    }
     if(activeInlineClose===close && replayVideo){
       restartReplay();
       return;
@@ -1058,7 +1260,7 @@ function row(item, index) {
     } else {
       item.time = seconds;
       renderRange();
-      refreshComment();
+      changed();
     }
   });
   timeRow.append(number, badge);
@@ -1095,12 +1297,12 @@ function row(item, index) {
       title.hidden=true;
       item.title=titleSelect.value;
       title.value=item.title;
-      refreshComment();
+      changed();
     }
   });
   title.addEventListener('input',()=>{
     item.title=title.value;
-    refreshComment();
+    changed();
   });
   titleGroup.append(titleLabel,titleSelect,title);
   // Keep metadata/editor logic for compatibility; play classification is unused
@@ -1155,7 +1357,8 @@ function row(item, index) {
   rangeInputs.append(startBox,endBox);
   const exactTimes=make('details','exact-times');
   exactTimes.append(make('summary','','時刻を入力'),rangeInputs);
-  rangeEditor.append(rangeHeading,markerLegend,track,rangeHint,exactTimes);
+  if(youtube)rangeEditor.append(rangeHeading,track,rangeHint);
+  else rangeEditor.append(rangeHeading,markerLegend,track,rangeHint,exactTimes);
   let dragging=null;
   let fineTimer=null;
   const clearFineTimer=()=>{
@@ -1223,7 +1426,7 @@ function row(item, index) {
     track.classList.remove('is-fine');
     rangeHint.textContent='緑・紫＝切り抜き ／ 白＝再生位置（左右にドラッグ）';
     renderRange();
-    refreshComment();
+    changed();
   };
   for(const [edge,handle] of [['start',startDot],['end',endDot]]){
     handle.addEventListener('pointerdown',event=>startDrag(edge,handle,event));
@@ -1236,7 +1439,7 @@ function row(item, index) {
       const diff=(event.key==='ArrowRight'?1:-1)*(event.shiftKey?0.1:0.25);
       const current=edge==='start'?item.time:getCandidateEnd(source,item,currentClipOptions());
       applyBoundary(edge,Math.round((current+diff)*100)/100);
-      refreshComment();
+      changed();
     });
   }
   // One timeline: green/purple change export boundaries, white/playhead or
@@ -1252,6 +1455,12 @@ function row(item, index) {
     if(!replayVideo || replayVideo.readyState<1)return;
     const bounds=replayBounds(source,item,(src,c)=>getCandidateEnd(src,c,currentClipOptions()));
     const player=replayVideo;
+    if(youtube){
+      player.currentTime=Math.max(bounds.start,Math.min(bounds.end,seconds));
+      player.play();
+      updatePlayhead();
+      return;
+    }
     const at=seekScenePreview(player,seconds,bounds,{
       autoPlay:true,
       onBeforePlay:()=>{void scenePreviewAudio.wake();},
@@ -1353,7 +1562,7 @@ function row(item, index) {
     }
     item.manualEnd=seconds;
     renderRange();
-    refreshComment();
+    changed();
   });
   renderRange();
 
@@ -1372,18 +1581,18 @@ function row(item, index) {
    workflow.setStage('edit',{scroll:false});
    goalReview.addFromScene(source,Number.isFinite(item.peakSeconds)?item.peakSeconds:item.time);
   });
-  wrap.append(missedGoal);
+  if(!youtube)wrap.append(missedGoal);
   const actions=make('div','review-decision-actions');
   const keep=make('button','review-keep','✓ キープ');
   keep.type='button';
   const reject=make('button','review-reject','✕ 不採用');
   reject.type='button';
-  keep.addEventListener('click',()=>decideReview(source,item,'kept'));
-  reject.addEventListener('click',()=>decideReview(source,item,'rejected'));
+  keep.addEventListener('click',()=>youtube?youtube.decide(item,'kept'):decideReview(source,item,'kept'));
+  reject.addEventListener('click',()=>youtube?youtube.decide(item,'rejected'):decideReview(source,item,'rejected'));
   actions.append(play,keep,reject);
-  timeRow.append(remove);
+  if(!youtube)timeRow.append(remove);
   wrap.append(fields,actions);
-  const nearbyGoals=goalReview?.nearby(source,item.peakSeconds,item.time,
+  const nearbyGoals=youtube?[]:goalReview?.nearby(source,item.peakSeconds,item.time,
     getCandidateEnd(source,item,currentClipOptions()))||[];
   if(nearbyGoals.length){
     const annotated=nearbyGoals.filter(goal=>goal.origin==='audio'||goal.origin==='manual');
@@ -1396,6 +1605,10 @@ function row(item, index) {
   }
   // Three review actions share one row immediately above the inline video.
   entry.append(wrap,inline,rangeEditor);
+  if(youtube){
+    rangeEditor.hidden=false;
+    rangeHint.textContent='緑と紫で切り取り範囲を調整。リプレイ中は白で再生位置を移動';
+  }
   applySelection();
   return entry;
 }
@@ -1700,6 +1913,412 @@ const goalReview=initGoalStatsReview(state,{
     }
   }
 });
+const ssNames=initAnalysisNames(state,{onChange:()=>goalReview.refresh()});
+const analysisTestMode=document.body.dataset.ssAnalysis==='staging';
+if($('ssProductionLink'))$('ssProductionLink').hidden=analysisTestMode;
+const inlineSection=$('ssInlinePreview')?.closest('section');
+if(inlineSection)inlineSection.hidden=!analysisTestMode;
+// Read-only in-place SS preflight. No credential prompt, navigation or writes.
+// Batch mutation will only be enabled after the official fixture/duplicate
+// verification flow is integrated into this page.
+// The visible history action reuses the existing read-only Worker/official SS audit.
+// Never start or resume a batch from this control.
+let ssProgressActive=false;
+async function followSSRegistration(initial,{continueSecond=null,verifyInputs=()=>{}}={}){
+ if(ssProgressActive)throw Error('登録結果を確認中です');
+ ssProgressActive=true;
+ const status=$('ssInlineStatus'),inspectButton=$('ssInlineInspect');
+ const eventId=initial.event_id;
+ const verifyCurrent=()=>{
+  if(state.ssNameContext?.snapshot?.eventId!==eventId)throw Error('TESTイベントが変更されました');
+  verifyInputs();
+ };
+ document.getElementById('ssInlineDecision')?.remove();
+ document.getElementById('ssInlineDebug')?.remove();
+ if(inspectButton)inspectButton.disabled=true;
+ try{
+  const {followInlineRegistration}=await import('./sposched-inline-progress.mjs');
+  return await followInlineRegistration({initial,
+   inspect:id=>ssNames.inspectBatch(id),refreshOfficial:id=>ssNames.refreshOfficial(id),verifyCurrent,continueSecond,
+   onStatus:message=>{status.textContent=message;},
+   onComplete:(job,official)=>{
+    status.style.whiteSpace='pre-wrap';
+    status.textContent='TESTへの登録が完了しました（4試合）\n'+official.matches.map(m=>
+     '第'+m.seq+'試合：'+m.leftTeam+' '+m.leftScore+'–'+m.rightScore+' '+m.rightTeam+' ✓').join('\n');
+    if($('ssInlineMatches'))$('ssInlineMatches').hidden=true;
+    const detail=document.createElement('details');detail.id='ssInlineDebug';
+    const summary=document.createElement('summary');summary.textContent='照合の詳細';
+    const text=document.createElement('pre');text.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';
+    text.textContent=JSON.stringify({job:job.request_id,event:job.event_id,completed:job.completed,total:job.total,
+     fixtures:job.fixture_ids,receipts:job.goal_receipts,official:official.matches},null,2);
+    detail.append(summary,text);status.after(detail);
+   },
+   onDecision:async(job,official)=>{
+    const {decisionPlan,sendDrawDecisionOnce}=await import('./sposched-inline-decision.mjs');
+    const d=job.decision;
+    status.textContent='第'+d.seq+'試合は '+d.left_score+'–'+d.right_score+' です。結果を選んでください';
+    const controls=document.createElement('div');controls.id='ssInlineDecision';
+    const feedback=document.createElement('p');feedback.setAttribute('role','status');
+    for(const winner of d.choices||[]){
+     decisionPlan(job,official,winner);
+     const decide=document.createElement('button');decide.type='button';decide.className='whisper-run';
+     decide.textContent=winner==='draw'?'第'+d.seq+'試合を引き分けで確定':
+      (winner==='left'?d.left_team:d.right_team)+'の勝ち';
+     decide.addEventListener('click',async()=>{
+      for(const b of controls.querySelectorAll('button'))b.disabled=true;
+      try{
+       const next=await sendDrawDecisionOnce({job,snapshot:official,winner,storage:localStorage,
+        inspect:id=>ssNames.inspectBatch(id),refreshOfficial:id=>ssNames.refreshOfficial(id),
+        send:plan=>ssNames.decideBatch(plan),verifyCurrent});
+       await followSSRegistration(next,{continueSecond,verifyInputs});
+      }catch(e){status.textContent=e.message||'結果が不明です。登録結果を確認してください';}
+     });controls.append(decide);
+    }
+    controls.append(feedback);status.after(controls);
+   }
+  });
+ }finally{ssProgressActive=false;if(inspectButton)inspectButton.disabled=false;}
+}
+$('ssInlineHistory')?.addEventListener('click',()=>$('ssInlineInspect')?.click());
+$('ssInlineInspect')?.addEventListener('click',async()=>{
+ const status=$('ssInlineStatus');
+ if(ssProgressActive)return;
+ try{
+  const eventId=state.ssNameContext?.snapshot?.eventId;
+  if(!eventId)throw Error('先にSSのTESTイベントを選択してください');
+  status.textContent='登録結果を確認中…';
+  const job=await ssNames.inspectBatch(eventId);
+  if(!job){status.textContent='このイベントには登録履歴がありません';return;}
+  await followSSRegistration(job);
+ }catch(e){status.textContent=e.message||'登録結果を確認できません';}
+});
+$('ssInlinePreview')?.addEventListener('click',async()=>{
+ if(!analysisTestMode)return;
+ const button=$('ssInlinePreview'),status=$('ssInlineStatus'),summary=$('ssInlineSummary'),matches=$('ssInlineMatches');
+ button.disabled=true;matches.hidden=true;matches.replaceChildren();
+ try{
+  const {confirmedGoalExport,createGoalDrafts}=await import('./goal-stats.mjs?v=source-matchup5');
+  const {prepareGoalRows}=await import('./sposched-review-core.mjs');
+  await ssNames.refresh(); // Reload official fixtures and revalidate saved identities first.
+  const snapshot=state.ssNameContext?.snapshot;
+  if(!snapshot)throw Error('最初の画面でSSイベントに接続してください。パスコードの再入力は不要です。');
+  const knownJob=await ssNames.inspectBatch(snapshot.eventId);
+  if(knownJob&&['running','needs_decision','completed'].includes(knownJob.status)&&
+     [1,2,3,4].every(seq=>snapshot.matches.some(m=>Number(m.seq)===seq&&m.matchId===knownJob.fixture_ids?.[seq]))){
+   await followSSRegistration(knownJob);return;
+  }
+
+  const goals=confirmedGoalExport(state.sources,window.localStorage);
+  const unresolved=state.sources.flatMap(src=>createGoalDrafts(src,window.localStorage).items
+   .filter(g=>g.status!=='excluded'&&g.status!=='confirmed').map(g=>({src,g})));
+  if(unresolved.length){
+   const fix=document.createElement('button');
+   fix.type='button';fix.className='whisper-run';
+   fix.textContent='未確定の'+unresolved.length+'件を確認する';
+   fix.addEventListener('click',()=>{
+    goalReview.refresh();
+    const first=unresolved[0];
+    const rows=[...document.querySelectorAll('#goalStatsList .goal-queue-row')];
+    const target=rows.find(row=>row.dataset.goalKey?.endsWith('::'+first.g.id));
+    if(target){target.click();document.getElementById('goalStatsPanel')?.scrollIntoView({behavior:'smooth',block:'start'});}
+    else{document.getElementById('goalStatsPanel')?.scrollIntoView({behavior:'smooth',block:'start'});}
+   });
+   matches.append(fix);matches.hidden=false;
+   throw Error('未確定のゴールが'+unresolved.length+'件あります。上のボタンから該当ゴールを開けます。');
+  }
+  if(!goals.goals.length)throw Error('SS登録対象の確定済みゴールがありません。');
+  const rows=prepareGoalRows(goals,snapshot);
+  const registrationFields=list=>JSON.stringify(list.map(r=>({include:r.include,seq:r.seq,team:r.team,
+   scorer:r.scorer,assist:r.assist,assistMode:r.assistMode,guest:r.guest,updateGoalId:r.updateGoalId,
+   fixtureIdentityChanged:r.fixtureIdentityChanged,goal:{id:r.goal?.id,manual:r.goal?.manual,source:r.goal?.source?.name}})));
+  const initialInputs=registrationFields(rows);
+  const verifyInputs=()=>{
+   if(state.ssNameContext?.snapshot?.eventId!==snapshot.eventId)throw Error('TESTイベントが変更されました');
+   const currentRows=prepareGoalRows(confirmedGoalExport(state.sources,window.localStorage),snapshot);
+   if(registrationFields(currentRows)!==initialInputs)throw Error('登録内容が変わりました。処理状況を確認してください');
+  };
+  const continueSecond=async(job,fresh)=>{
+   verifyInputs();
+   const {prepareInlineContinuation}=await import('./sposched-inline-continuation.mjs');
+   const {appendInlineOnce}=await import('./sposched-inline-progress.mjs');
+   const plan=prepareInlineContinuation({snapshot:fresh,goals,workerJob:job});
+   return appendInlineOnce({plan,storage:localStorage,send:payload=>ssNames.appendSecondRound(payload)});
+  };
+
+  const {projectFourMatchTournament}=await import('./sposched-inline-tournament.mjs');
+  const {validateInlineBatchReadiness}=await import('./sposched-inline-batch-gate.mjs');
+  // Show the actual registration inputs BEFORE any bracket validation. This
+  // read-only list must remain visible when a scorer or matchup check fails.
+  const detail=document.createElement('details');
+  detail.open=false;
+  const heading=document.createElement('summary');
+  heading.textContent='登録内容の詳細';
+  detail.append(heading);
+  const meta=document.createElement('p');
+  meta.textContent='SSイベントID：'+snapshot.eventId+' ／ ゴール：'+rows.length+'件';
+  detail.append(meta);
+  const formatPair=(a,b)=>a&&b?a+' vs '+b:'未確定';
+  for(const [index,row] of rows.entries()){
+   const goal=row.goal||goals.goals[index]||{};
+   const fixture=snapshot.matches.find(m=>Number(m.seq)===Number(row.seq));
+   const entry=document.createElement('div');
+   entry.style.cssText='border-top:1px solid #508e83;padding:9px 0;white-space:pre-wrap;overflow-wrap:anywhere';
+   const original=goal.rawScorer||goal.scorer||'未取得';
+   const identity=goal.ssIdentity?.scorer;
+   const videoPair=formatPair(goal.teamA,goal.teamB);
+   const ssPair=fixture?formatPair(fixture.leftTeam,fixture.rightTeam):'該当なし';
+   const {analysisFixtureAgrees}=await import('./sposched-analysis-identity.mjs');
+   const {scorerRosterError}=await import('./sposched-inline-scorer-diagnostic.mjs');
+   const issue=scorerRosterError(row,snapshot,index);
+   const lines=[
+    'ゴール'+(index+1)+' ／ 第'+(row.seq||'?')+'試合'+(row.include===false?'（除外）':''),
+    '動画：'+String(goal.source?.name||'不明')+' ／ 時刻：'+String(goal.time??goal.timestamp??goal.start??'不明'),
+    '得点者：'+(row.scorer||'未確定')+'（解析：'+original+'）',
+    'アシスト：'+(row.assistMode==='none'?'なし':row.assist||'未確定'),
+    '動画の対戦：'+videoPair+' ／ SSの対戦：'+ssPair,
+    'SS試合ID：'+(fixture?.matchId||'未確定')+' ／ 状態：'+(fixture?.status||'不明'),
+    '照合ID：'+(identity?.playerId||'未確定'),
+    '判定：'+(issue||(!fixture?'SS試合なし':!analysisFixtureAgrees(goal,fixture)?'動画とSSの対戦カードに差異あり':'入力照合済み（登録可否は別途検証）'))
+   ];
+   entry.textContent=lines.join('\n');
+   detail.append(entry);
+  }
+  matches.append(detail);
+  matches.hidden=false;
+  // The first round is independently verifiable even if the later
+  // waiting knockout goals still require roster/fixture confirmation.
+  if(!snapshot.matches.filter(m=>[1,2].includes(Number(m.seq))).every(m=>m.status==='finished'))try{
+   const {inspectFirstRound}=await import('./sposched-inline-first-round.mjs');
+   const firstRound=inspectFirstRound(snapshot,rows);
+   const note=document.createElement('p');
+   note.textContent='第1・第2試合：'+firstRound.firstRows.length+
+    'ゴールの登録前チェック完了';
+   matches.append(note);
+  }catch(e){
+   const note=document.createElement('p');
+   note.textContent='第1・第2試合の確認：'+(e.message||String(e));
+   matches.append(note);
+  }
+  let continuingExisting=false;
+  // Existing staged jobs may only be continued after a passive Worker
+  // inspection. Never auto-append or silently replay a submitted phase.
+  try{
+   const existing=await ssNames.inspectBatch(snapshot.eventId);
+   if(existing?.layout_mode==='four-knockout-staged-v1'&&
+      existing.status==='awaiting_second_round'){
+    const {prepareInlineContinuation}=await import('./sposched-inline-continuation.mjs');
+    prepareInlineContinuation({snapshot,goals,workerJob:existing});
+    continuingExisting=true;
+    const continueButton=document.createElement('button');
+    continueButton.type='button';continueButton.className='whisper-run';
+    continueButton.textContent='TEST登録を再開';
+    continueButton.addEventListener('click',async()=>{
+     continueButton.disabled=true;
+     try{
+      const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
+      assertCurrentInlineEvent(snapshot,state.ssNameContext);
+      verifyInputs();
+      const current=await ssNames.inspectBatch(snapshot.eventId);
+      if(current?.request_id!==existing.request_id||current?.status!=='awaiting_second_round'||
+         current.cursor!==existing.cursor)
+       throw Error('Workerの状態が変わりました。再取得してください');
+      status.textContent='TEST後半登録を送信しています。再送しないでください';
+      await followSSRegistration(current,{continueSecond,verifyInputs});
+     }catch(e){
+      status.textContent=e.message||String(e);
+      // The request may have reached Worker. Never allow a blind retry.
+     }
+    });
+    matches.append(continueButton);
+   }
+  }catch(e){
+   // Do not present continuation controls without validated official data.
+   const note=document.createElement('p');
+   note.textContent='後半登録の確認：'+(e.message||String(e));
+   matches.append(note);
+  }
+  // Later goals may be unresolved; this must not hide the semifinal UI.
+  let bracket;
+  let knockoutIssue='';
+  try{bracket=projectFourMatchTournament(snapshot,rows);}
+  catch(e){
+   knockoutIssue=e.message||String(e);
+   const {inferFirstRoundBracket}=await import('./sposched-inline-bracket.mjs');
+   bracket={...inferFirstRoundBracket(snapshot,rows),knockout:null,complete:false};
+  }
+  // Stage-one admission is separate from the full four-match gate.
+  // A previous or uncertain job must never be silently overwritten.
+  if(!continuingExisting)try{
+   const {inspectFirstRound}=await import('./sposched-inline-first-round.mjs');
+   inspectFirstRound(snapshot,rows);
+   const {buildInlineFirstRoundPlan}=await import('./sposched-inline-plan.mjs');
+   buildInlineFirstRoundPlan({snapshot,rows,requestId:crypto.randomUUID()});
+   const {decideInlineBatchAdmission}=await import('./sposched-inline-admission.mjs');
+   const workerJob=await ssNames.inspectBatch(snapshot.eventId);
+   let localJob;
+   let storedJob;
+   try{storedJob=localStorage.getItem('peakstamp:test:worker-batch:'+snapshot.eventId);}
+   catch{throw Error('Safariの端末保存が利用できません。プライベートブラウズ・サイトデータの設定を確認してください');}
+   try{
+    // Legacy and current Worker helpers store a bare request UUID, not JSON.
+    // Accept that exact format without clearing or rewriting the journal.
+    const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+    localJob=storedJob?(uuid.test(storedJob)?{request_id:storedJob}:JSON.parse(storedJob)):null;
+    if(localJob!==null&&(!localJob||typeof localJob!=='object'||
+       typeof localJob.request_id!=='string'||!uuid.test(localJob.request_id)))
+     throw Error('invalid local job');
+   }
+   catch{
+    if(workerJob!==null)
+     throw Error('端末の登録履歴が破損しています。Worker側に登録履歴があります。SS登録状況を確認してください');
+    const recover=document.createElement('button');
+    recover.type='button';recover.className='whisper-run';
+    recover.textContent='端末の登録履歴を修復';
+    recover.addEventListener('click',()=>{
+     try{
+      // Only clear this TEST event's malformed marker after the authoritative
+      // Worker inspection returned no job. Never clear other event history.
+      localStorage.removeItem('peakstamp:test:worker-batch:'+snapshot.eventId);
+      status.textContent='端末の履歴を修復しました。「SS登録内容を確認」を押してください';
+      recover.disabled=true;
+     }catch(error){status.textContent='端末の保存領域を修復できません：'+(error.message||String(error));}
+    });
+    matches.append(recover);
+    throw Error('端末の履歴が破損しています。Workerにジョブがないことを確認済みです。修復後に再確認してください');
+   }
+   // An old completed generation may only be replaced through the Worker
+   // recreation gate. Never silently treat the old completed job as empty.
+   if(workerJob?.status==='completed'&&
+      workerJob.event_id===snapshot.eventId&&
+      workerJob.request_id===localJob?.request_id&&
+      [1,2,3,4].every(seq=>workerJob.fixture_ids?.[String(seq)]&&
+       snapshot.matches.some(m=>Number(m.seq)===seq&&m.matchId&&
+        m.matchId!==workerJob.fixture_ids[String(seq)]))){
+    const recreate=document.createElement('button');
+    recreate.type='button';recreate.className='whisper-run';
+    recreate.textContent='新しい4試合に安全に登録（TEST）';
+    const recreateFeedback=document.createElement('p');
+    recreateFeedback.className='fine-print';
+    recreateFeedback.setAttribute('role','alert');
+    recreateFeedback.setAttribute('aria-live','assertive');
+    recreateFeedback.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0';
+    recreate.addEventListener('click',async()=>{
+     recreate.disabled=true;
+     recreateFeedback.textContent='安全確認中です…';
+     const pendingKey='peakstamp:test:inline-recreate-pending:'+snapshot.eventId;
+     try{
+      if(localStorage.getItem(pendingKey))
+       throw Error('前回の再作成送信を確認できていません。再送せず履歴を確認してください');
+      const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
+      assertCurrentInlineEvent(snapshot,state.ssNameContext);
+      // The goal draft exporter can refresh non-registration metadata while
+      // the preview is open. Recheck the actual first-round Worker operations
+      // rather than comparing whole exported draft objects.
+      const {prepareGoalRows:prepareCurrentRows}=await import('./sposched-review-core.mjs');
+      const currentGoals=confirmedGoalExport(state.sources,window.localStorage);
+      const currentRows=prepareCurrentRows(currentGoals,snapshot);
+      const {buildInlineFirstRoundPlan:buildCurrentPlan}=await import('./sposched-inline-plan.mjs');
+      const originalPlan=buildCurrentPlan({snapshot,rows,requestId:'00000000-0000-4000-8000-000000000001'}).plan;
+      const updatedPlan=buildCurrentPlan({snapshot,rows:currentRows,requestId:'00000000-0000-4000-8000-000000000001'}).plan;
+      if(JSON.stringify(originalPlan.operations)!==JSON.stringify(updatedPlan.operations))
+       throw Error('準決勝の登録内容が変更されました。登録内容を再確認してください');
+      const current=await ssNames.inspectBatch(snapshot.eventId);
+      if(current?.request_id!==workerJob.request_id||current?.status!=='completed')
+       throw Error('旧Workerジョブが変化しました。再確認してください');
+      const fresh=await ssNames.refreshOfficial(snapshot.eventId);
+      if(JSON.stringify(fresh.matches.map(m=>[m.seq,m.matchId,m.status,m.leftScore,m.rightScore,m.existingGoals?.length]))!==
+         JSON.stringify(snapshot.matches.map(m=>[m.seq,m.matchId,m.status,m.leftScore,m.rightScore,m.existingGoals?.length])))
+       throw Error('SSの試合状態が変化しました。登録内容を再確認してください');
+      const {buildInlineFirstRoundPlan}=await import('./sposched-inline-plan.mjs');
+      const requestId=crypto.randomUUID();
+      const {plan}=buildInlineFirstRoundPlan({snapshot:fresh,rows,requestId});
+      if(!window.confirm('SS TESTの新しい4試合に準決勝から登録します。旧ジョブは保存し、Workerが旧試合の削除と新試合の未登録状態を検証します。続けますか？')){
+       recreate.disabled=false;return;
+      }
+      const payload={...plan,previous_request_id:workerJob.request_id,
+       confirm_recreation:'TEST-ONLY RECREATE DELETED FIXTURES'};
+      localStorage.setItem(pendingKey,JSON.stringify({request_id:requestId,previous_request_id:workerJob.request_id}));
+      status.textContent='TESTの旧試合と新試合を照合しています。再送しないでください';
+      recreateFeedback.textContent='Workerへ安全な再作成を送信しています。再送しないでください';
+      const result=await ssNames.recreateBatch(payload);
+      localStorage.setItem('peakstamp:test:worker-batch:'+snapshot.eventId,requestId);
+      localStorage.removeItem(pendingKey);
+      status.textContent='新しいTESTジョブを受け付けました（'+result.status+'）。「SS登録状況を確認」で進捗を確認してください';
+      recreateFeedback.textContent=status.textContent;
+      await followSSRegistration(result,{continueSecond,verifyInputs});
+     }catch(error){
+      status.textContent='再作成を停止：'+(error.message||String(error))+
+       '。送信結果が不明な場合は再送せず履歴を確認してください';
+      recreateFeedback.textContent=status.textContent;
+     }
+    });
+    matches.append(recreate,recreateFeedback);
+   }
+   const admission=decideInlineBatchAdmission({eventId:snapshot.eventId,workerJob,localJob});
+   if(!admission.allowed)throw Error(admission.reason);
+   const startFirst=document.createElement('button');
+   startFirst.type='button';startFirst.className='whisper-run';
+   startFirst.textContent='TESTに4試合を登録';
+   startFirst.addEventListener('click',async()=>{
+    startFirst.disabled=true;
+    try{
+     const {assertCurrentInlineEvent}=await import('./sposched-inline-event-guard.mjs');
+     assertCurrentInlineEvent(snapshot,state.ssNameContext);
+     verifyInputs();
+     const {buildInlineFirstRoundPlan}=await import('./sposched-inline-plan.mjs');
+     const {startInlineBatchOnce}=await import('./sposched-inline-dispatch.mjs');
+     const {plan}=buildInlineFirstRoundPlan({snapshot,rows,requestId:crypto.randomUUID()});
+     status.textContent='TEST準決勝を送信中。再送しないでください';
+     const result=await startInlineBatchOnce({plan,storage:localStorage,
+      inspect:id=>ssNames.inspectBatch(id),send:payload=>ssNames.startBatch(payload),
+      verifyCurrent:verifyInputs});
+     await followSSRegistration(result,{continueSecond,verifyInputs});
+    }catch(e){status.textContent=e.message||String(e);}
+   });
+   matches.append(startFirst);
+  }catch(e){
+   // Always show the intended action, but never enable an unsafe write.
+   // A failed Worker inspection or corrupt local marker must not be bypassed.
+   const blockedButton=document.createElement('button');
+   blockedButton.type='button';
+   blockedButton.className='whisper-run';
+   blockedButton.textContent='TESTに4試合を登録';
+   blockedButton.disabled=true;
+   matches.append(blockedButton);
+   const note=document.createElement('p');
+   note.textContent='登録できません：'+(e.message||String(e));
+   matches.append(note);
+  }
+  // Read-only preview: no job or write is created here.
+  for(const fixture of snapshot.matches){
+   const item=document.createElement('p');
+   const round=bracket.firstRound.find(m=>m.seq===fixture.seq)||
+    bracket.knockout?.find(m=>m.seq===fixture.seq);
+   item.textContent='第'+fixture.seq+'試合：'+
+    (round?.leftTeam||fixture.leftTeam||'?')+' vs '+
+    (round?.rightTeam||fixture.rightTeam||'?')+
+    (round?' ／ '+round.left+'−'+round.right:'');
+   matches.append(item);
+  }
+  // Keep the mobile preview compact: the four scored rows above are the
+  // single source of truth. Only show unresolved decisions separately.
+  if(!bracket.ready){
+   const note=document.createElement('p');
+   note.textContent='第1・第2試合：引き分けの勝者を指定してください';
+   matches.append(note);
+  }else if(!bracket.complete){
+   const note=document.createElement('p');
+   note.textContent='第3・第4試合：引き分けの勝者を指定してください';
+   matches.append(note);
+  }
+  matches.hidden=false;
+  summary.textContent='SS：'+(snapshot.eventName||'選択中イベント')+' ／ '+rows.length+'ゴール';
+  status.textContent=continuingExisting?'準決勝は登録済みです。「TEST登録を再開」で後半2試合を登録します':
+   '登録前の確認画面です。';
+ }catch(error){status.textContent=error.message||String(error)}
+ finally{button.disabled=false}
+});
+
 const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
   onResultsChange:()=>{
     goalReview.refresh();
@@ -1725,3 +2344,12 @@ const settingsNavigation=initSettingsNavigation({
   if(page==='reset-goals.html')goalReview.refresh();
  }
 });
+
+
+if(new URLSearchParams(location.search).has('youtube')){
+ import('./youtube-organizer.mjs').then(({mountOrganizer})=>mountOrganizer({row,closePreview:closeInlinePreview})).catch(error=>{
+  const notice=document.createElement('p');
+  notice.textContent='YouTubeテスト画面を開けませんでした。'+error.message;
+  document.body.prepend(notice);
+ });
+}

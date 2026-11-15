@@ -4,6 +4,7 @@
 import {readFile,readdir,mkdir,writeFile,rm,copyFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {prompt as peakStampPrompt} from '../api/gemini-audio.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const prodHost='https://shoot-sunday-sync.yomax1979.workers.dev';
@@ -16,7 +17,7 @@ const requireOnce=(source,before,after,label)=>{
 export function buildStagingReviewHtml(html){
  let out=html;
  out=requireOnce(out,'<body><main>',
-  '<body><main><div id="stagingBuildBanner" role="status" style="background:#174d43;color:#fff;padding:12px;border:2px solid #55c5a0;border-radius:10px;font-weight:700;margin-bottom:14px">🧪 PeakStamp TEST — テスト用SSだけに接続します。本番SSには送信できません。</div>',
+  '<body data-simple-results="true"><main><div id="stagingBuildBanner" role="status" style="background:#174d43;color:#fff;padding:12px;border:2px solid #55c5a0;border-radius:10px;font-weight:700;margin-bottom:14px">🧪 PeakStamp TEST — テスト用SSだけに接続します。本番SSには送信できません。</div>',
   'TEST banner placement');
  out=requireOnce(out,'id="ssModeBadge" class="step">本番SS','id="ssModeBadge" class="step">テストSS','TEST header');
  out=requireOnce(out,'<select id="ssEnvironment" aria-label="SpoSched接続先">',
@@ -49,11 +50,15 @@ export async function buildStagingSite(destination=path.join(root,'dist')){
   const target=path.join(destination,entry.name);
   if(entry.name==='sposched-review.html'){
    await writeFile(target,buildStagingReviewHtml(await readFile(source,'utf8')));
+  }else if(entry.name==='index.html'){
+   const html=await readFile(source,'utf8');
+   await writeFile(target,requireOnce(html,'<body>','<body data-ss-analysis="staging">','analysis staging gate'));
   }else await copyFile(source,target);
  }
  await writeFile(path.join(destination,'staging-production-disabled.mjs'),
   "// TEST-only replacement: it has no production URL, API calls or write handler.\n"+
   "export function installProductionUI(){return {render(){const p=document.getElementById('productionPanel');if(p)p.hidden=true;},refresh(){}};}\n");
+ await writeFile(path.join(destination,'youtube-ps-prompt.mjs'),'export default '+peakStampPrompt.toString()+'\n');
  await writeFile(path.join(destination,'_headers'),
   '/*\n  X-Robots-Tag: noindex, nofollow\n  X-Content-Type-Options: nosniff\n');
  // Public build identity: proves which exact STAGING commit Cloudflare Pages

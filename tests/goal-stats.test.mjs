@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
  goalSourceKey,readGoalTranscript,createGoalDrafts,saveGoalDrafts,makeManualGoal,
- validateGoal,confirmedGoalExport,matchContext
+ validateGoal,confirmedGoalExport,matchContext,suspectedDuplicateGoalIds
 } from '../goal-stats.mjs';
 const storage=()=>({
  data:new Map(),
@@ -179,4 +179,129 @@ test('uncertain spoken assist and match labels are prefilled, not asserted as co
  assert.equal(goals[0].teamA,'2');
  assert.equal(goals[0].teamB,'3');
  assert.equal(goals[0].status,'draft');
+});
+
+test('match-start commentary without a matchup never becomes the match label',()=>{
+ const utterances=[{kind:'match_start',time_seconds:1,quote:'はい、始まりました',match_label:null,team_a:null,team_b:null}];
+ const context=matchContext(utterances,318);
+ assert.equal(context.label,'');
+ assert.equal(context.teamA,'');
+ assert.equal(context.teamB,'');
+});
+
+test('two differently transcribed goal calls sharing one Gemini reaction become one draft',()=>{
+ const cache=storage(),src={...source('SAME-SCENE.MOV',180000,1789000000),duration:120};
+ cache.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({
+  [goalSourceKey(src)]:{duration_seconds:120,events:[{
+   type:'goal_reaction',confidence:'high',reaction_time_seconds:12,
+   suggested_clip_start_seconds:5,suggested_clip_end_seconds:22
+  }],utterances:[
+   {kind:'goal_call',time_seconds:14.5,quote:'Aさんゴール',scorer:'Aさん'},
+   {kind:'goal_call',time_seconds:17.5,quote:'Bさんゴール',scorer:'Bさん'}
+  ]}
+ }));
+ const goals=createGoalDrafts(src,cache).items;
+ assert.equal(goals.length,1);
+ assert.equal(goals[0].scorer,'Aさん');
+});
+test('nearby calls with separate goal reactions remain distinct goals',()=>{
+ const cache=storage(),src={...source('TWO-SCENES.MOV',180001,1789000001),duration:120};
+ cache.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({
+  [goalSourceKey(src)]:{duration_seconds:120,events:[
+   {type:'goal_reaction',confidence:'high',reaction_time_seconds:10},
+   {type:'goal_reaction',confidence:'high',reaction_time_seconds:15}
+  ],utterances:[
+   {kind:'goal_call',time_seconds:11,quote:'Aさんゴール',scorer:'Aさん'},
+   {kind:'goal_call',time_seconds:16,quote:'Bさんゴール',scorer:'Bさん'}
+  ]}
+ }));
+ assert.equal(createGoalDrafts(src,cache).items.length,2);
+});
+
+test('previously saved unreviewed duplicates are reconciled without deleting a kept clip',()=>{
+ const cache=storage(),src={...source('SAVED-DUPLICATES.MOV',180002,1789000002),duration:120};
+ cache.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({
+  [goalSourceKey(src)]:{duration_seconds:120,events:[
+   {type:'goal_reaction',confidence:'high',reaction_time_seconds:12}
+  ],utterances:[]}
+ }));
+ const common={origin:'audio',goalTimeSeconds:10,goalTimeEdited:false,
+  goalTimeVerified:false,assistStatus:'unknown',status:'draft'};
+ saveGoalDrafts(src,cache,[
+  {...common,id:'audio-145',timeSeconds:14.5,scorer:'Aさん'},
+  {...common,id:'audio-175',timeSeconds:17.5,scorer:'Bさん',videoDecision:'kept'}
+ ]);
+ const goals=createGoalDrafts(src,cache).items;
+ assert.equal(goals.length,1);
+ assert.equal(goals[0].id,'audio-175');
+ assert.equal(goals[0].videoDecision,'kept');
+});
+
+test('overlapping nearby AI clips flag only the unreviewed duplicate',()=>{
+ const a={id:'a',origin:'audio',timeSeconds:14.5,clipStartSeconds:5,clipEndSeconds:22,status:'confirmed',videoDecision:'kept'};
+ const b={id:'b',origin:'audio',timeSeconds:17.5,clipStartSeconds:6,clipEndSeconds:21,status:'draft'};
+ assert.deepEqual([...suspectedDuplicateGoalIds([a,b])],['b']);
+});
+test('distinct scenes and excluded candidates never trigger duplicate warning',()=>{
+ const a={id:'a',origin:'audio',timeSeconds:14.5,clipStartSeconds:0,clipEndSeconds:12,status:'confirmed'};
+ const b={id:'b',origin:'audio',timeSeconds:17.5,clipStartSeconds:15,clipEndSeconds:27,status:'draft'};
+ assert.equal(suspectedDuplicateGoalIds([a,b]).size,0);
+ assert.equal(suspectedDuplicateGoalIds([a,{...b,clipStartSeconds:0,clipEndSeconds:12,status:'excluded'}]).size,0);
+});
+
+test('verified kept goal absorbs a second transcription of the same reaction clip',()=>{
+ const cache=storage(),src={...source('VERIFIED-SCENE.MOV',180004,1789000004),duration:120};
+ cache.setItem('peakstamp_gemini_primary_json_v1',JSON.stringify({
+  [goalSourceKey(src)]:{duration_seconds:120,events:[{
+   type:'goal_reaction',confidence:'high',reaction_time_seconds:12,
+   suggested_clip_start_seconds:5,suggested_clip_end_seconds:22
+  }],utterances:[
+   {kind:'goal_call',time_seconds:14.5,quote:'Aさんゴール',scorer:'Aさん'},
+   {kind:'goal_call',time_seconds:17.5,quote:'Bさんゴール',scorer:'Bさん'}
+  ]}
+ }));
+ saveGoalDrafts(src,cache,[{id:'reviewed',origin:'audio',timeSeconds:14.5,
+  goalTimeSeconds:11,goalTimeVerified:true,clipStartSeconds:5,
+  clipEndSeconds:22,status:'confirmed',videoDecision:'kept',
+  scorer:'公式A',assist:'公式B',assistStatus:'named'}]);
+ const goals=createGoalDrafts(src,cache).items;
+ assert.equal(goals.length,1);
+ assert.equal(goals[0].id,'reviewed');
+ assert.equal(goals[0].scorer,'公式A');
+ assert.equal(goals[0].assist,'公式B');
+});
+
+test('reanalysis adds newly heard match-start matchup without replacing manual choices',()=>{
+ const cache=storage();
+ put(cache,a,[{time_seconds:20,kind:'goal_call',quote:'Aさんゴール',scorer:'Aさん'}]);
+ const item=createGoalDrafts(a,cache).items[0];
+ assert.equal(item.teamA,'');
+ item.teamB='4';item.userEditedGoalFields=['teamB'];
+ saveGoalDrafts(a,cache,[item]);
+ put(cache,a,[
+  {time_seconds:1,kind:'match_start',quote:'第1試合、1対2',match_label:'1対2',team_a:'1',team_b:'2'},
+  {time_seconds:20,kind:'goal_call',quote:'Aさんゴール',scorer:'Aさん'}
+ ]);
+ const result=createGoalDrafts(a,cache).items[0];
+ assert.equal(result.teamA,'1');
+ assert.equal(result.teamB,'4');
+ assert.equal(result.matchLabel,'1対2');
+ result.status='confirmed';saveGoalDrafts(a,cache,[result]);
+ const after=createGoalDrafts(a,cache).items[0];
+ assert.equal(after.status,'confirmed');
+ assert.equal(after.teamB,'4');
+});
+
+test('video-level matchup updates drafts and confirmed goals but preserves per-goal edits',()=>{
+ const cache=storage();put(cache,a,transcript1);
+ const item=createGoalDrafts(a,cache).items[0];
+ item.teamA='9';item.userEditedGoalFields=['teamA'];
+ saveGoalDrafts(a,cache,[item]);
+ cache.setItem('peakstamp_matchup_v1:'+goalSourceKey(a),JSON.stringify({origin:'manual',teamA:'1',teamB:'2'}));
+ const draft=createGoalDrafts(a,cache).items[0];
+ assert.equal(draft.teamA,'9');assert.equal(draft.teamB,'2');
+ draft.status='confirmed';saveGoalDrafts(a,cache,[draft]);
+ cache.setItem('peakstamp_matchup_v1:'+goalSourceKey(a),JSON.stringify({origin:'manual',teamA:'3',teamB:'4'}));
+ const confirmed=createGoalDrafts(a,cache).items[0];
+ assert.equal(confirmed.teamB,'4');assert.equal(confirmed.teamA,'9');assert.equal(confirmed.status,'confirmed');
 });

@@ -109,7 +109,7 @@ export function matchContext(utterances,time){
   .sort((a,b)=>Number(b.time_seconds)-Number(a.time_seconds));
  if(!starts.length)return null;
  const r=starts[0];
- return {label:clip(r.match_label||r.quote),teamA:clip(r.team_a),teamB:clip(r.team_b),
+ return {label:clip(r.match_label),teamA:clip(r.team_a),teamB:clip(r.team_b),
   time:Number(r.time_seconds)};
 }
 /**
@@ -125,6 +125,8 @@ export function prefillDetectedGoalFields(goal,event,utterances=[]){
  };
  const context=matchContext(utterances,event.time_seconds);
  fill('scorer',event.scorer);
+ if(!goal.rawScorer&&clip(event.scorer))goal.rawScorer=clip(event.scorer);
+ if(!goal.rawAssist&&clip(event.assist))goal.rawAssist=clip(event.assist);
  if(!edited.has('assistStatus')&&!edited.has('assist')&&goal.assistStatus!=='none'){
   fill('assist',event.assist);
   if(clip(goal.assist)&&goal.assistStatus!=='named')goal.assistStatus='named';
@@ -136,6 +138,13 @@ export function prefillDetectedGoalFields(goal,event,utterances=[]){
  fill('teamA',event.team_a||context?.teamA);
  fill('teamB',event.team_b||context?.teamB);
  return goal;
+}
+/** Goal calls are primary; find the latest preceding goal reaction within fifteen seconds. */
+export function reactionBeforeGoalCall(reactions,callTime){
+ const t=Number(callTime);
+ if(!Number.isFinite(t))return null;
+ const eligible=(reactions||[]).filter(r=>Number.isFinite(Number(r.time))&&Number(r.time)<=t&&t-Number(r.time)<=15);
+ return eligible.sort((a,b)=>Number(b.time)-Number(a.time))[0]||null;
 }
 export function createGoalDrafts(source,storage){
  const key=goalSourceKey(source);
@@ -157,12 +166,41 @@ export function createGoalDrafts(source,storage){
     goalTimeVerified:x.goalTimeVerified===true};
   });
  const events=transcript?.data?.utterances||[];
+ // Remove previously cached commentary-only match labels, but never touch
+ // an organizer-edited card or a genuine match_label supplied by Gemini.
+ for(const item of items){
+  if(!item.matchLabel||item.userEditedGoalFields?.includes('matchLabel'))continue;
+  const start=(events||[]).filter(e=>e?.kind==='match_start'&&validTime(e.time_seconds)&&
+   Number(e.time_seconds)<=Number(item.timeSeconds))
+   .sort((a,b)=>Number(b.time_seconds)-Number(a.time_seconds))[0];
+  if(start&&clip(item.matchLabel)===clip(start.quote)&&
+     clip(start.match_label)!==clip(start.quote)&&
+     !clip(start.match_label))item.matchLabel='';
+ }
  const reactions=readGeminiGoalReactions(source,storage);
  for(const event of events){
   if(event?.kind!=='goal_call'||!validTime(event.time_seconds))continue;
   const time=Number(event.time_seconds),id=goalCandidateId(time,event.quote||'');
   // Re-analysis may shift timestamp; do not generate duplicate confirmed goals.
-  const already=items.find(r=>r.id===id ||
+  // Two different spoken calls may describe the SAME goal reaction, even when
+  // Gemini transcribes the scorer differently. Only collapse when both calls
+  // point to one explicitly detected reaction; never merge on name alone.
+  const linkedReaction=reactionBeforeGoalCall(reactions,time);
+  const sameReaction=linkedReaction&&items.find(r=>{
+   if(r.origin!=='audio'||r.status==='excluded'||r.goalTimeEdited===true||
+      Math.abs(Number(r.timeSeconds)-time)>15)return false;
+   // An organizer may verify a different playback time. In that case,
+   // compare the original reaction clip rather than the edited timestamp.
+   if(r.goalTimeVerified===true){
+    const start=Number(r.clipStartSeconds),end=Number(r.clipEndSeconds);
+    const rs=Number(linkedReaction.start),re=Number(linkedReaction.end);
+    return [start,end,rs,re].every(Number.isFinite)&&end>start&&re>rs&&
+     Math.max(0,Math.min(end,re)-Math.max(start,rs))/
+      Math.min(end-start,re-rs)>=0.75;
+   }
+   return Math.abs(Number(r.goalTimeSeconds)-(linkedReaction.time-2))<=0.11;
+  });
+  const already=sameReaction||items.find(r=>r.id===id ||
    (r.origin==='manual'?
     time-actualGoalTime(r)>=-2 && time-actualGoalTime(r)<=15:
     r.origin==='gemini'?
@@ -170,6 +208,7 @@ export function createGoalDrafts(source,storage){
      Math.abs(Number(r.timeSeconds)-time)<=6 &&
      (!clip(r.scorer)||!clip(event.scorer)||
       clip(r.scorer).toLowerCase()===clip(event.scorer).toLowerCase()||
+      clip(r.rawScorer).toLowerCase()===clip(event.scorer).toLowerCase()||
       // An organizer corrected this scorer, or already confirmed the goal.
       // Keep that human decision rather than generating another AI goal.
       r.status==='confirmed'||
@@ -183,22 +222,40 @@ export function createGoalDrafts(source,storage){
   }
   const match=matchContext(events,time);
   // Relate voice announcements to the earlier goal reaction, keeping the shot.
-  const linked=reactions.filter(r=>r.time<=time+2&&time-r.time<=15)
-   .sort((a,b)=>Math.abs(time-a.time)-Math.abs(time-b.time))[0];
+  const linked=reactionBeforeGoalCall(reactions,time);
   const fresh=transcript?.scope==='unified';
   const start=linked?.start??(fresh?Math.max(0,time-12):null);
   const end=linked?.end??(fresh?Math.min(Number(source.duration)||time+2,time+2):null);
   items.push({id,origin:'audio',timeSeconds:time,
    ...(start!==null?{clipStartSeconds:roundTime(start)}:{}),
    ...(end!==null?{clipEndSeconds:roundTime(end)}:{}),
-   goalTimeSeconds:estimateGoalTime(time),goalTimeVerified:false,goalTimeEdited:false,
+   goalTimeSeconds:linked?roundTime(Math.max(0,linked.time-2)):estimateGoalTime(time),goalTimeVerified:false,goalTimeEdited:false,
    quote:clip(event.quote,240),
    scorer:clip(event.scorer),assist:clip(event.assist),
+   rawScorer:clip(event.scorer),rawAssist:clip(event.assist),
    assistStatus:clip(event.assist)?'named':(/アシストなし|アシスト無し|no assist/i.test(String(event.quote||''))?'none':'unknown'),
    matchLabel:clip(event.match_label||match?.label),
    teamA:clip(event.team_a||match?.teamA),
    teamB:clip(event.team_b||match?.teamB),
    matchSeq:'',status:'draft',confirmedAt:null,note:''});
+ }
+ // Reconcile previously persisted duplicate AI drafts only when they clearly
+ // share the same detected reaction. Never discard a human-reviewed decision.
+ for(const reaction of reactions){
+  const related=items.filter(x=>x.origin==='audio'&&
+   x.goalTimeEdited!==true&&x.goalTimeVerified!==true&&
+   Math.abs(Number(x.goalTimeSeconds)-(reaction.time-2))<=0.11&&
+   Number(x.timeSeconds)>=reaction.time-2&&
+   Number(x.timeSeconds)<=reaction.time+15);
+  if(related.length<2)continue;
+  const keep=related.find(x=>x.videoDecision==='kept'||x.status==='confirmed'||
+   (x.userEditedGoalFields||[]).length>0)||related[0];
+  for(const duplicate of related){
+   if(duplicate===keep||duplicate.videoDecision||duplicate.status==='confirmed'||
+      (duplicate.userEditedGoalFields||[]).length>0)continue;
+   const index=items.indexOf(duplicate);
+   if(index>=0)items.splice(index,1);
+  }
  }
  // Keep existing commentary and manual goal decisions; never create duplicates.
  for(const event of reactions){
@@ -227,6 +284,57 @@ export function createGoalDrafts(source,storage){
   const edited=new Set(item.userEditedGoalFields||[]);
   for(const [key,value] of Object.entries({matchLabel:context.label,teamA:context.teamA,teamB:context.teamB}))
    if(value&&!item[key]&&!edited.has(key))item[key]=value;
+ }
+ // Propagate video-level matchup (manual or Gemini) to every goal card.
+ const saved=readJson(storage,'peakstamp_matchup_v1:'+key);
+ const manual=saved?.origin==='manual'&&clip(saved.teamA)&&clip(saved.teamB)
+  ?{teamA:clip(saved.teamA),teamB:clip(saved.teamB)}:null;
+ const primary=readJson(storage,GEMINI_RESULT_CACHE_KEY)?.[key];
+ const calls=(Array.isArray(primary?.utterances)?primary.utterances:[])
+  .filter(x=>x?.kind==='match_start').map(x=>{
+   const a=clip(x.team_a),b=clip(x.team_b);
+   if(a&&b)return {teamA:a,teamB:b,time:Number(x.time_seconds)};
+   const m=clip(x.match_label||x.quote).normalize('NFKC').match(/(?:チーム\\s*)?([1-9][0-9]?)\\s*(?:対|vs?\\.?|と)\\s*(?:チーム\\s*)?([1-9][0-9]?)/i);
+   return m?{teamA:m[1],teamB:m[2],time:Number(x.time_seconds)}:null;
+  }).filter(Boolean);
+ // Fall back to the transcript used by the video matchup review when the
+ // primary Gemini cache has no match_start rows (common with older caches).
+ const transcriptCalls=(transcript?.data?.utterances||[])
+  .filter(x=>x?.kind==='match_start').map(x=>{
+   const a=clip(x.team_a),b=clip(x.team_b);
+   if(a&&b)return {teamA:a,teamB:b,time:Number(x.time_seconds)};
+   const m=clip(x.match_label||x.quote).normalize('NFKC')
+    .match(/(?:チーム\\s*)?([1-9][0-9]?)\\s*(?:対|vs?\\.?|と)\\s*(?:チーム\\s*)?([1-9][0-9]?)/i);
+   return m?{teamA:m[1],teamB:m[2],time:Number(x.time_seconds)}:null;
+  }).filter(Boolean);
+ const available=calls.length?calls:transcriptCalls;
+ const opening=available.filter(x=>x.time>=0&&x.time<=30);
+ const candidates=opening.length?opening:available;
+ const unique=[...new Set(candidates.map(x=>x.teamA+'|'+x.teamB))];
+ // A manually corrected goal card can also identify the whole recording
+ // when the old video-level cache was never saved. Only accept one unique pair.
+ const cardPairs=items.filter(x=>x.status!=='excluded').map(x=>{
+  const a=clip(x.teamA),b=clip(x.teamB);
+  if(a&&b)return {teamA:a,teamB:b};
+  const m=clip(x.matchLabel).normalize('NFKC')
+   .match(/([1-9][0-9]?)\\s*(?:対|vs?\\.?)\\s*([1-9][0-9]?)/i);
+  return m?{teamA:m[1],teamB:m[2]}:null;
+ }).filter(Boolean);
+ const distinctCards=[...new Set(cardPairs.map(x=>x.teamA+'|'+x.teamB))];
+ const fromCard=distinctCards.length===1?cardPairs[0]:null;
+ const resolved=manual||(unique.length===1?candidates[0]:null)||fromCard;
+ if(resolved)for(const item of items){
+  // A confirmed goal still needs the video's manually corrected matchup.
+  // Excluded goals remain untouched; individual field edits take precedence.
+  if(item.status==='excluded'||(item.status==='confirmed'&&!manual))continue;
+  const edited=new Set(item.userEditedGoalFields||[]);
+  for(const [field,value] of [['teamA',resolved.teamA],['teamB',resolved.teamB],
+   ['matchLabel',resolved.teamA+' vs '+resolved.teamB]]){
+   // Video registration is authoritative. A blank legacy field is not an
+   // intentional override, even when an old edit flag says it was edited.
+   if((!edited.has(field)||!clip(item[field]))&&(manual||!clip(item[field])))
+    item[field]=String(value).trim().slice(0,60);
+  }
  }
  // The organizer assigns a match number to the VIDEO, once.
  // Match-number edits are reflected across all auto-filled goal drafts.
@@ -292,6 +400,7 @@ export function confirmedGoalExport(sources,storage){
     goalTimeVerified:x.goalTimeVerified===true,
     timingMethod:x.origin==='audio'?(x.goalTimeVerified===true?'video-reviewed':'comment-minus-10s'):x.origin==='gemini'?(x.goalTimeVerified===true?'video-reviewed':'audio-reaction-estimate'):'manual',
     quote:clip(x.quote,240),scorer:clip(x.scorer),
+    ...(x.ssIdentity?{ssIdentity:x.ssIdentity,rawScorer:x.rawScorer??x.scorer,rawAssist:x.rawAssist??x.assist}:{}),
     assistStatus:x.assistStatus,
     assist:x.assistStatus==='named'?clip(x.assist):null,
     matchSeq:clip(String(x.matchSeq||''))?Number(x.matchSeq):null,
@@ -303,4 +412,27 @@ export function confirmedGoalExport(sources,storage){
   exportedAt:new Date().toISOString(),status:'local-confirmed-not-uploaded',
   needsMatchSeq:rows.filter(x=>x.matchSeq===null).length,
   goals:rows};
+}
+
+/**
+ * Flag likely duplicate AI goals for human review; never delete or merge them.
+ * Use same-source overlap plus nearby commentary, not scorer transcription.
+ */
+export function suspectedDuplicateGoalIds(items){
+ const result=new Set(),rows=(items||[]).filter(x=>x&&x.status!=='excluded'&&x.origin!=='manual');
+ for(let i=0;i<rows.length;i++)for(let j=i+1;j<rows.length;j++){
+  const a=rows[i],b=rows[j];
+  if(Math.abs(Number(a.timeSeconds)-Number(b.timeSeconds))>8)continue;
+  const as=Number(a.clipStartSeconds),ae=Number(a.clipEndSeconds);
+  const bs=Number(b.clipStartSeconds),be=Number(b.clipEndSeconds);
+  if(![as,ae,bs,be].every(Number.isFinite)||ae<=as||be<=bs)continue;
+  const overlap=Math.max(0,Math.min(ae,be)-Math.max(as,bs));
+  if(overlap/Math.min(ae-as,be-bs)<0.75)continue;
+  // Prefer preserving the already-confirmed or kept goal.
+  const protect=x=>x.status==='confirmed'||x.videoDecision==='kept'||x.goalTimeVerified===true;
+  if(protect(a)&&!protect(b))result.add(b.id);
+  else if(protect(b)&&!protect(a))result.add(a.id);
+  else if(!protect(a)&&!protect(b))result.add(b.id);
+ }
+ return result;
 }

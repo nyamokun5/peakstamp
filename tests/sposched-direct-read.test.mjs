@@ -61,7 +61,8 @@ test('existing-goal correction requires selecting a real goal ID and explicit co
 test('second confirmed goal stays editable after first sent and official SS refresh',()=>{
  assert.match(html,/id="goalJump"/);
  assert.match(html,/const prepared=prepareGoalRows\(\{goals:source\},snapshot\)/);
- assert.match(html,/rows=preserveReviewRows\(applyManualRowEdits\(prepared,manualGoals,snapshot\)/);
+ assert.match(html,/restoreConfirmedGoalSelections\(localStorage,snapshot,prepared\)/);
+ assert.match(html,/rows=preserveReviewRows\(applyManualRowEdits\(restored,manualGoals,snapshot\)/);
  assert.match(html,/completedKeys:completedKey\?\[completedKey\]:\[\]/);
  assert.match(html,/const completedKeys=completed\.map\(x=>goalKeyOfOperation\(x\.operation\)\)/);
  assert.match(html,/rebuild\(\{preserveEdits:true,completedKeys\}\)/);
@@ -69,7 +70,10 @@ test('second confirmed goal stays editable after first sent and official SS refr
  assert.match(html,/const saved=row\.updateGoalId\|\|updateSelect\.value/);
  assert.match(html,/article\.id='review-goal-'/);
  // Only the row being edited is updated: rerendering goal #2 does not reset all fields.
- assert.match(html,/row\.scorer=scorerSelect\.value;invalidate\('scorer'\)/);
+ assert.match(html,/row\.scorer=scorerSelect\.value;/);
+ assert.match(html,/invalidate\('scorer'\)/);
+ assert.match(html,/if\(g\.manual\)renderGoals\(\)/,
+  'manual-only scorer list may refresh after team changes without discarding the draft');
  assert.match(html,/row\.assist=assistSelect\.value;invalidate\('assist'\)/);
  assert.doesNotMatch(html,/scorerSelect\.addEventListener\('change',[^\n]*rebuild\(/);
 });

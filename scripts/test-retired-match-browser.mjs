@@ -9,7 +9,7 @@ const OLD='99999999-9999-4999-8999-999999999999';
 const P='33333333-3333-4333-8333-333333333331';
 const ids=[1,2,3,4].map(n=>'22222222-2222-4222-8222-22222222222'+n);
 const snapshot=()=>({event_id:E,matches:ids.map((match_id,i)=>({
- match_id,seq:i+1,title:'#'+(i+1),status:i<2?'scheduled':'waiting',
+ match_id,seq:i+1,title:i===2?'3位決定戦':i===3?'決勝':'準決勝',status:i<2?'scheduled':'waiting',
  left_score:0,right_score:0,left_team:i<2?'チーム'+(i*2+1):'',
  right_team:i<2?'チーム'+(i*2+2):'',goals:[]
 })),roster:{チーム1:['山田'],チーム2:['西村'],チーム3:['田中'],チーム4:['橋本']}});
@@ -23,6 +23,8 @@ async function runCase(gateState){
  let matchGets=0,snapshotGets=0,gateReads=0,writes=0;
  await page.route('**/*',async route=>{
   const url=new URL(route.request().url());
+ if(url.host==='shoot-sunday-sync-staging.yomax1979.workers.dev'&&url.pathname==='/staging/alias/list'&&route.request().method()==='GET')
+  return route.fulfill({json:{aliases:[]}});
   if(url.host==='peakstamp.local'){
    const path=url.pathname==='/'?'sposched-review.html':url.pathname.slice(1);
    try{return await route.fulfill({body:await readFile(new URL('../'+path,import.meta.url)),

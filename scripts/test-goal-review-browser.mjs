@@ -19,6 +19,8 @@ const errors=[];const writes=[];
 page.on('pageerror',e=>errors.push(e.message));
 await page.route('**/*',async route=>{
  const u=new URL(route.request().url());
+ if(u.host==='shoot-sunday-sync-staging.yomax1979.workers.dev'&&u.pathname==='/staging/alias/list'&&route.request().method()==='GET')
+  return route.fulfill({json:{aliases:[]}});
  if(u.host==='peakstamp.local'){
   const path=u.pathname==='/'?'sposched-review.html':u.pathname.slice(1);
   try{return await route.fulfill({body:await readFile(new URL('../'+path,import.meta.url)),

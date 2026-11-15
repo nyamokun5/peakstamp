@@ -6,19 +6,19 @@ import {wavSegmentRanges,MAX_GEMINI_DURATION_SECONDS,mergeWavSegmentEvents}
 import {createGeminiFastWaveform} from '../gemini-fast-waveform.mjs';
 import {blankReviewTimeline} from '../gemini-waveform-recovery.mjs';
 
-test('15-minute match is divided into bounded 70-second WAVs with five-second overlap',()=>{
+test('15-minute match is divided into bounded 70-second WAVs with 20-second overlap',()=>{
  const ranges=wavSegmentRanges(15*60);
- assert.equal(ranges.length,14);
+ assert.equal(ranges.length,18);
  assert.deepEqual(ranges[0],{startSeconds:0,endSeconds:70,durationSeconds:70});
  assert.equal(ranges.at(-1).endSeconds,900);
  assert.ok(ranges.every(x=>x.durationSeconds<=70));
  for(let i=1;i<ranges.length;i++)
-  assert.equal(ranges[i-1].endSeconds-ranges[i].startSeconds,5);
+  assert.equal(ranges[i-1].endSeconds-ranges[i].startSeconds,20);
 });
-test('three 15-minute matches can be independently divided into 42 bounded Gemini requests',()=>{
+test('three 15-minute matches can be independently divided into 54 bounded Gemini requests',()=>{
  const perVideo=[900,900,900].map(wavSegmentRanges);
- assert.deepEqual(perVideo.map(x=>x.length),[14,14,14]);
- assert.equal(perVideo.flat().length,42);
+ assert.deepEqual(perVideo.map(x=>x.length),[18,18,18]);
+ assert.equal(perVideo.flat().length,54);
 });
 test('safe limit is 30 minutes PER VIDEO; over limit still fails early',()=>{
  assert.equal(MAX_GEMINI_DURATION_SECONDS,1800);
@@ -46,7 +46,7 @@ test('15-minute segmented Gemini events preserve timestamps after the 10-minute 
  }];
  const merged=mergeWavSegmentEvents(answers,900);
  assert.equal(merged.duration_seconds,900);
- assert.equal(merged.meta.segments,14);
+ assert.equal(merged.meta.segments,18);
  assert.equal(merged.events.length,1);
  const first=merged.events[0];
  assert.ok(first.reaction_time_seconds>600,'must preserve event after 10 minutes');
@@ -56,8 +56,8 @@ test('main app activates current modules and avoids stale Safari caches',()=>{
  const main=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
  const primary=readFileSync(new URL('../gemini-primary.mjs',import.meta.url),'utf8');
- assert.match(main,/app\.mjs\?v=matchexport1/);
- assert.match(app,/gemini-primary\.mjs\?v=recovery2/);
+ assert.match(main,/app\.mjs\?v=ss-registration-link-2216/);
+ assert.match(app,/gemini-primary\.mjs\?v=batch-diagnostic3/);
  assert.match(primary,/gemini-wav-stream\.mjs\?v=unifiedga2/);
  assert.match(primary,/gemini-fast-waveform\.mjs\?v=long30/);
  assert.match(primary,/gemini-waveform-recovery\.mjs\?v=long30/);

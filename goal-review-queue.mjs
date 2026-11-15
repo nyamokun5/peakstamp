@@ -1,5 +1,5 @@
 /** All recognized goal candidates across files in original upload order. */
-import {createGoalDrafts,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=goalprefill1';
+import {createGoalDrafts,goalSourceKey,actualGoalTime} from './goal-stats.mjs?v=matchup-confirmed11';
 export function collectGoalQueue(sources,storage){
  const rows=[];
  for(const [index,source]of (sources||[]).entries()){
@@ -31,6 +31,14 @@ export function goalNeedsVideoReview(item){
 }
 export function nextUnreviewedGoalVideo(rows,currentKey){
  const list=rows||[],position=list.findIndex(row=>row.key===currentKey);
- return list.find((row,index)=>index>position&&goalNeedsVideoReview(row.item))||
-   list.find((row,index)=>index<=position&&goalNeedsVideoReview(row.item))||null;
+ return list.find((row,index)=>index>position&&row.key!==currentKey&&goalNeedsVideoReview(row.item))||
+   list.find((row,index)=>index<position&&row.key!==currentKey&&goalNeedsVideoReview(row.item))||null;
+}
+
+/** Advance strictly in displayed goal order, regardless of cached decisions.
+ * A Keep/Reject tap must never jump over an already reviewed goal. */
+export function nextGoalAfterDecision(rows,currentKey){
+ const list=(rows||[]).filter(row=>row?.item?.status!=='excluded');
+ const index=list.findIndex(row=>row.key===currentKey);
+ return index>=0&&index<list.length-1?list[index+1]:null;
 }

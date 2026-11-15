@@ -55,6 +55,8 @@ test('three clear stages; uploading MOV and switching panels does not reset sour
  data.files.push(movie);
  data.review=true;ids.goalStatsPanel.hidden=false;ids.resultsPanel.hidden=false;
  nav.autoAdvance({busy:false});
+ assert.equal(nav.current(),'analysis','cached goal results must not skip matchup review');
+ assert.equal(nav.setStage('edit'),true);
  assert.equal(nav.current(),'edit');
  assert.equal(document.body.dataset.psStage,'edit');
  assert.equal(tabs[1].disabled,false);
@@ -77,7 +79,8 @@ test('Gemini batch does not switch to editing before analysis finishes',()=>{
  nav.autoAdvance({busy:true});
  assert.equal(nav.current(),'analysis');
  nav.autoAdvance({busy:false});
- assert.equal(nav.current(),'edit');
+ assert.equal(nav.current(),'analysis');
+ assert.equal(nav.setStage('edit'),true);
 });
 test('editing quick-nav jumps straight to goal library and standard highlight without losing editor',()=>{
  const {nav,data,ids,quick}=setup();

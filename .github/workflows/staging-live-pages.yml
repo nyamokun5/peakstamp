@@ -1,0 +1,16 @@
+name: Verify live PeakStamp STAGING Pages
+on:
+  push:
+    branches: [staging]
+permissions:
+  contents: read
+jobs:
+  deployed-staging-readonly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm deployed Pages and Worker using GET/OPTIONS only
+        run: node scripts/check-staging-pages-live.mjs

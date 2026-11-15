@@ -17,8 +17,8 @@ export function quickAIObservation(row){
  const goal=row?.goal||{};
  const heard=value=>typeof value==='string'?value.trim():'';
  const manual=goal.manual===true||goal.origin==='manual';
- const scorerRaw=heard(goal.scorer)||(manual?'未入力':'聞き取れず');
- const spokenAssist=heard(goal.assist);
+ const scorerRaw=heard(goal.rawScorer??goal.scorer)||(manual?'未入力':'聞き取れず');
+ const spokenAssist=heard(goal.rawAssist??goal.assist);
  const assistRaw=goal.assistStatus==='none'
   ?spokenAssist?spokenAssist+(manual?'（入力：アシストなし）':'（AI判定：アシストなし）'):(manual?'なし':'なし（AI判定）')
   :spokenAssist||(

@@ -1,3 +1,4 @@
+import {verifiedAnalysisPerson,fixtureRosterNames} from './sposched-analysis-identity.mjs';
 /** PeakStamp → Shoot Sunday (SpoSched) review-only bridge.
  * Inputs come from explicitly imported event snapshots. NO HTTP endpoints,
  * tokens, writes, or automatic state mutations are assumed here.
@@ -37,6 +38,9 @@ export function normalizeSpoSnapshot(raw){
   // seq is the organizer-assigned video/fixture number; matchId is the
   // official backend UUID, independent from the current team's pairing.
   status:string(m.status||''),
+  // Official winner must be retained for safe corrections to finished games.
+  // An explicit 0-0 penalty/shootout winner is NOT inferred from the score.
+  ...( ['left','right','draw'].includes(m.winner)?{winner:m.winner}:{} ),
   leftTeam:string(m.left_team||''),
   rightTeam:string(m.right_team||opponentFromTitle||''),
   inferredRightTeam:!string(m.right_team)&&Boolean(opponentFromTitle),
@@ -58,14 +62,70 @@ export function normalizeSpoSnapshot(raw){
   }
  }
  const roster=obj.roster&&typeof obj.roster==='object'?obj.roster:{};
+ const rosterSource=string(obj.roster_source);
+ const authoritative=rosterSource==='official-current-event-teams';
+ // Historical goal scorers may have changed teams or left this event.
+ // Show them in registered goal readback, NOT as selectable current players.
+ const rosterNames=Object.values(roster).flatMap(x=>
+  Array.isArray(x)?x.map(string):[]).filter(Boolean);
  const players=[...new Set([
-  ...Object.values(roster).flatMap(x=>Array.isArray(x)?x.map(string):[]),
-  ...matches.flatMap(m=>m.existingGoals.flatMap(g=>[g.scorer,g.assist]))
+  ...rosterNames,
+  ...(authoritative?[]:matches.flatMap(m=>
+   m.existingGoals.flatMap(g=>[g.scorer,g.assist])))
  ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
  const playerTeam=new Map();
- for(const [team,names] of Object.entries(roster))for(const name of Array.isArray(names)?names:[])
-  playerTeam.set(string(name),string(team));
- return {eventId,eventName,matches,players,roster,playerTeam};
+ for(const [team,names] of Object.entries(roster))for(const rawName of Array.isArray(names)?names:[]){
+  const player=string(rawName),teamName=string(team);
+  if(!player)continue;
+  if(authoritative&&playerTeam.has(player)&&
+     normalizeTeam(playerTeam.get(player))!==normalizeTeam(teamName))
+   throw Error('現在のSS名簿で同名選手の所属チームが重複しています。登録を停止してください');
+  playerTeam.set(player,teamName);
+ }
+ // External SS v1.6 provides BOTH an event-scoped player_id and a stable
+ // registered-member user_id. Only consume IDs from the verified CURRENT
+ // event roster; stale/historical rosters must not establish identity.
+ const officialUuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+ const verifiedIds=new Map(),conflictingNames=new Set();
+ if(authoritative&&Array.isArray(obj.roster_players)){
+  for(const p of obj.roster_players){
+   const name=string(p?.name),team=string(p?.team);
+   if(!name||!playerTeam.has(name)||
+      normalizeTeam(playerTeam.get(name))!==normalizeTeam(team))continue;
+   const playerId=officialUuid.test(string(p?.player_id))?string(p.player_id):'';
+   const userId=officialUuid.test(string(p?.user_id))?string(p.user_id):'';
+   const previous=verifiedIds.get(name);
+   // Two different SS identities sharing a display name cannot be safely
+   // reduced to one name-keyed identity. Require manual SS resolution.
+   if(previous&&(previous.player_id!==playerId||previous.user_id!==userId))
+    conflictingNames.add(name);
+   else if(!previous)verifiedIds.set(name,{player_id:playerId,user_id:userId});
+  }
+ }
+ for(const name of conflictingNames)verifiedIds.delete(name);
+ const playerIds=new Map(),memberIds=new Map();
+ for(const [name,ref] of verifiedIds){
+  if(ref.player_id)playerIds.set(name,ref.player_id);
+  if(ref.user_id)memberIds.set(name,ref.user_id);
+ }
+ return {eventId,eventName,environment:input.environment==='PRODUCTION'?'production':input.environment==='TEST'?'staging':(input.environment||'staging'),matchFormat:string(obj.match_format||obj.event?.match_format||input.match_format||''),matches,players,roster,playerTeam,rosterSource,
+  ...(playerIds.size?{playerIds}:{}),
+  ...(memberIds.size?{memberIds}:{})};
+}
+/** Select ONLY players assigned to the official numbered fixture's sides.
+ * Never leak historical, unassigned, or unrelated third-team players into the
+ * new-goal scorer/assist controls. Missing fixture => no selectable players.
+ */
+export function fixturePlayerOptions(snapshot,seq,team=''){
+ const match=snapshot?.matches?.find(m=>m.seq===number(seq));
+ if(!match)return [];
+ const sides=[match.leftTeam,match.rightTeam].map(normalizeTeam).filter(Boolean);
+ const chosen=normalizeTeam(team);
+ if(chosen&&!sides.includes(chosen))return [];
+ return (snapshot.players||[]).filter(player=>{
+  const membership=normalizeTeam(snapshot.playerTeam?.get(player)||'');
+  return Boolean(membership&&sides.includes(membership)&&(!chosen||membership===chosen));
+ });
 }
 export function selectPlayerCandidates(text,snapshot,team='',limit=7){
  // Use the SAME Japanese/romanized roster inference as the compact review.
@@ -310,8 +370,25 @@ export function prepareGoalRows(rawGoals,snapshot){
   const matchGuess=inferMatchFromCommentary(g,snapshot);
   const onlyMatch=snapshot.matches.find(m=>m.seq===matchGuess.seq)||null;
   const teamHint=onlyMatch?onlyMatch.leftTeam:'';
-  const scorerGuess=suggestedPlayer(g.scorer,snapshot,teamHint);
-  const assistGuess=suggestedPlayer(g.assist,snapshot,'');
+  const transferred=field=>{
+   const person=verifiedAnalysisPerson(g,snapshot,onlyMatch?.seq,field);
+   if(person)return {name:person.name,confidence:'high',candidates:[],source:'analysis-identity'};
+   // Before the knockout slot has an official match UUID, retain a verified
+   // roster display name as an UNCONFIRMED draft. The review must not claim
+   // registration identity or send it until the official fixture is refreshed.
+   const pending=onlyMatch&&!onlyMatch.matchId&&onlyMatch.status==='waiting'&&
+    g?.ssIdentity?.environment===(snapshot.environment||'staging')&&g.ssIdentity.eventId===snapshot.eventId&&
+    g.ssIdentity.seq===onlyMatch.seq;
+   const allowed=pending?fixtureRosterNames(snapshot,onlyMatch.seq,g):[];
+   const tentative=[g?.[field],g?.ssIdentity?.[field]?.name]
+    .find(name=>allowed.includes(name)&&
+     g.ssIdentity?.[field]?.name===name&&
+     snapshot.memberIds?.get(name)===g.ssIdentity[field]?.memberId&&
+     snapshot.playerIds?.get(name)===g.ssIdentity[field]?.playerId)||'';
+   return {name:tentative,confidence:'none',candidates:[],source:'pending-fixture-roster'};
+  };
+  const scorerGuess=g.ssIdentity?transferred('scorer'):suggestedPlayer(g.scorer,snapshot,teamHint);
+  const assistGuess=g.ssIdentity?transferred('assist'):suggestedPlayer(g.assist,snapshot,'');
   const scorerTeam=scorerGuess.name?snapshot.playerTeam.get(scorerGuess.name)||'':'';
   const sides=onlyMatch?[nameForTeam(onlyMatch.leftTeam),nameForTeam(onlyMatch.rightTeam)]:[];
   const prefilledTeam=scorerTeam&&sides.includes(nameForTeam(scorerTeam))?
@@ -325,6 +402,9 @@ export function prepareGoalRows(rawGoals,snapshot){
    assistMode:g.assistStatus==='none'?'none':
     g.assistStatus==='named'?'named':'unknown',
    scorerHints,assistHints,team:prefilledTeam,confirmed:false,include:true,
+   ...(g.ssIdentity?{quickReviewedFields:{
+    scorer:Boolean(verifiedAnalysisPerson(g,snapshot,onlyMatch?.seq,'scorer')?.manual),
+    assist:Boolean(verifiedAnalysisPerson(g,snapshot,onlyMatch?.seq,'assist')?.manual)}}:{}),
    guest:false,scoreConfirmed:false,duplicateApproved:false,updateGoalId:''};
  });
 }
@@ -361,6 +441,22 @@ export function preserveReviewRows(nextRows,priorRows,{
   const match=snapshot?.matches?.find(m=>m.seq===Number(row.seq));
   row.updateGoalId=match?.existingGoals?.some(g=>g.id===old.updateGoalId)
    ?old.updateGoalId:'';
+  // Preserve work-in-progress edits, NEVER restore a stale player from an
+  // earlier team assignment when the same event is refreshed.
+  if(row.goal?.manual&&snapshot?.rosterSource==='official-current-event-teams'){
+   const allowed=fixturePlayerOptions(snapshot,row.seq);
+   const inSide=t=>match&&[match.leftTeam,match.rightTeam]
+    .some(x=>normalizeTeam(x)===normalizeTeam(t));
+   if(row.scorer&&!allowed.includes(row.scorer)){row.scorer='';row.team='';}
+   if(row.team&&!inSide(row.team))row.team='';
+   if(row.scorer&&row.team&&
+      normalizeTeam(snapshot.playerTeam.get(row.scorer))!==normalizeTeam(row.team)){
+    row.scorer='';row.assist='';row.team='';
+   }
+   if(row.assist&&(!row.team||
+      !fixturePlayerOptions(snapshot,row.seq,row.team).includes(row.assist)))
+    row.assist='';
+  }
   return row;
  });
 }
@@ -369,6 +465,8 @@ export function validateGoalRow(row,snapshot){
  if(!row.confirmed)return '選手・試合の確認が必要です';
  const match=snapshot.matches.find(m=>m.seq===number(row.seq));
  if(!match)return '試合番号を選択してください';
+ if(!match.leftTeam||!match.rightTeam)
+  return '試合 #'+match.seq+' はSS側の対戦チームが未確定です。ゴール一覧へ戻り、一括登録で先の試合から確定してください';
  if(!row.scorer||(!row.guest&&!snapshot.players.includes(row.scorer)))
   return row.guest?'外部選手の得点者名を入力してください':'得点者を選択してください';
  if(row.guest&&snapshot.players.includes(row.scorer))
@@ -380,9 +478,18 @@ export function validateGoalRow(row,snapshot){
  if(!row.team&&!actualTeam)return '得点チームを選択してください';
  const team=row.team||actualTeam;
  if(![normalizeTeam(match.leftTeam),normalizeTeam(match.rightTeam)].includes(normalizeTeam(team)))
-  return '得点チームがこの試合の対戦チームと異なります';
+  return '得点チーム「'+team+'」は試合 #'+match.seq+'（'+match.leftTeam+' vs '+match.rightTeam+'）と異なります。試合と得点チームを確認してください';
  if(row.assistMode==='named'&&row.scorer===row.assist)
   return '得点者とアシストが同一です';
+ if(row.goal?.manual&&snapshot.rosterSource==='official-current-event-teams'){
+  const members=fixturePlayerOptions(snapshot,row.seq);
+  if(!members.includes(row.scorer))return '得点者が現在の試合チームに所属していません';
+  if(normalizeTeam(snapshot.playerTeam.get(row.scorer))!==normalizeTeam(team))
+   return '得点者と現在のSS得点チームが一致しません';
+  if(row.assistMode==='named'&&
+     !fixturePlayerOptions(snapshot,row.seq,team).includes(row.assist))
+   return 'アシスト者が現在の得点チームに所属していません';
+ }
  return null;
 }
 /** Goals already registered IN Shoot Sunday for the selected official match.
@@ -410,13 +517,48 @@ export function matchingExistingGoals(row,snapshot){
 export function findPotentialDuplicate(row,snapshot){
  return matchingExistingGoals(row,snapshot).length>0;
 }
+// Validate the four-team bracket only after the organizer has entered all
+// four results. SS's waiting fixture sides are not an early source of truth.
+export function validateFourTeamBracket(snapshot,scoreRows){
+ if(snapshot?.matchFormat!=='4teams_1pitch')return null;
+ const active=scoreRows.filter(r=>r.include);
+ if(active.length!==4)return null;
+ const bySeq=new Map(active.map(r=>[Number(r.seq),r]));
+ if([1,2,3,4].some(n=>!bySeq.has(n)||!bySeq.get(n).confirmed))return null;
+ const semis=[1,2].map(n=>{
+  const m=snapshot.matches.find(x=>x.seq===n),r=bySeq.get(n);
+  if(!m?.leftTeam||!m?.rightTeam)return null;
+  const l=Number(r.leftScore),right=Number(r.rightScore);
+  if(!Number.isInteger(l)||!Number.isInteger(right)||l<0||right<0)return null;
+  const win=l>right?'left':l<right?'right':r.winner;
+  if(!['left','right'].includes(win))return null;
+  return {winner:win==='left'?m.leftTeam:m.rightTeam,
+   loser:win==='left'?m.rightTeam:m.leftTeam};
+ });
+ if(semis.some(x=>!x))return null;
+ const norm=x=>normalizeTeam(x);
+ for(const [seq,expected] of [[3,semis.map(x=>x.loser)],[4,semis.map(x=>x.winner)]]){
+  const row=bySeq.get(seq);
+  const selected=[row.leftTeam,row.rightTeam].filter(Boolean);
+  // Score rows may omit the organizer's matchup. Do not substitute waiting
+  // fixture sides and silently declare the user's matchup verified.
+  if(selected.length!==2)return '試合 #'+seq+' の対戦カードが未確定です。登録前に確認してください';
+  if(selected.map(norm).sort().join('|')!==expected.map(norm).sort().join('|'))
+   return '試合 #'+seq+' の対戦カードが準決勝の結果と一致しません。入力：'+
+    selected.join(' vs ')+'／結果から導かれる対戦：'+expected.join(' vs ');
+ }
+ return null;
+}
 export function buildReviewPayload(snapshot,rows,scoreRows=[]){
  const items=rows.filter(row=>row.include!==false);
  if(!items.length&&!scoreRows.some(row=>row.include))
   throw Error('追加するゴールはありません。既にShoot Sundayに登録済みなら、再登録は不要です。');
  const missing=items.map((row,i)=>({i,problem:validateGoalRow(row,snapshot)}))
   .filter(x=>x.problem);
- if(missing.length)throw Error((missing[0].i+1)+'件目：'+missing[0].problem);
+ if(missing.length){
+  const invalid=items[missing[0].i],rowNumber=rows.indexOf(invalid)+1;
+  throw Object.assign(Error(rowNumber+'件目：'+missing[0].problem),{rowNumber});
+ }
  const duplicates=items.filter(row=>!row.updateGoalId&&findPotentialDuplicate(row,snapshot)&&row.duplicateApproved!==true);
  if(duplicates.length)throw Error('Shoot Sundayに同じ得点者・アシストの登録済みゴールが'+duplicates.length+'件あります。「登録済みなので送らない」か「別ゴールとして追加」を選んでください。');
  const operationGoals=items.map(row=>{
@@ -462,6 +604,8 @@ export function buildReviewPayload(snapshot,rows,scoreRows=[]){
    goalTimeSeconds:row.goal.goalTimeSeconds,quote:row.goal.quote
   }};
  });
+ const bracketIssue=validateFourTeamBracket(snapshot,scoreRows);
+ if(bracketIssue)throw Error(bracketIssue);
  const operationMatches=[];
  for(const item of scoreRows){
   if(!item.include)continue;

@@ -30,7 +30,7 @@ test('do not lose meaningful football words or edited/kept goal scenes on rescan
 });
 test('server AI instructions exclude non-informative shouts, but retain independent goal calls',()=>{
  const p=prompt(120);
- assert.match(p,/DO NOT create highlight events from isolated/);
+ assert.match(p,/Do not make a highlight solely from isolated/);
  assert.match(p,/「あー」「うわー」/);
  assert.match(p,/goal_call/);
  assert.match(p,/scorer/);

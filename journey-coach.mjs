@@ -54,6 +54,7 @@ export function initJourneyCoach({
   if(event.key==='Escape'&&!root.hidden){event.preventDefault?.();close();}
  });
  const reviewGoals=()=>{actions.goGoals?.();showGoalIntro();};
+ const reviewMatchups=()=>actions.reviewMatchups?.();
  const goHighlights=()=>actions.goHighlights?.();
  function showGoalIntro(){return false;}
  function analysisFinished({success=true,error='',failures=0}={}){

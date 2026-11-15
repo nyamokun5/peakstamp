@@ -33,6 +33,8 @@ export function buildAnalysisDiagnostic(source,geminiResult,goalReview){
    durationSeconds:Number(source?.duration||geminiResult?.duration_seconds||0)},
   analysisEngine:source?.analysisEngine||'unknown',
   gemini:{stored:!!geminiResult,segments:Number(geminiResult?.meta?.segments||0),
+   analysisMeta:{model:geminiResult?.meta?.model||null,promptRevision:geminiResult?.meta?.promptRevision||null,
+    cacheStatus:geminiResult?.meta?.cacheStatus||null},
    rawEventCount:events.length,byType,events,
    unifiedGoalCallsEnabled:geminiResult?.meta?.unifiedGoalCalls===true,
    rawUtteranceCount:unifiedUtterances.length,utterances:unifiedUtterances},
@@ -44,4 +46,24 @@ export function buildAnalysisDiagnostic(source,geminiResult,goalReview){
    manualCount:goalItems.filter(x=>x.origin==='manual').length,
    note:'Unified explicit goal calls and Gemini goal_reaction scenes both enter the priority review as unconfirmed goals.'}
  },null,2);
+}
+
+/** One report for every imported video, including missing analysis. */
+export function buildBatchAnalysisDiagnostic(sources,getResult,getGoalReview,getMatchup=()=>null){
+ const videos=(sources||[]).map((source,index)=>{
+  const result=getResult(source);
+  const report=JSON.parse(buildAnalysisDiagnostic(source,result,getGoalReview(source)));
+  const announcements=report.gemini.utterances.filter(x=>x.kind==='match_start');
+  return {videoNumber:index+1,source:report.source,
+   analyzed:report.gemini.stored,analysisMeta:report.gemini.analysisMeta,
+   displayedMatchup:getMatchup(source),
+   segmentCount:report.gemini.segments,
+   announcements:announcements.map(x=>({timeSeconds:x.time_seconds,quote:x.quote,
+    matchLabel:x.match_label,teamA:x.team_a||null,teamB:x.team_b||null,confidence:x.confidence})),
+   openingAnnouncements:announcements.filter(x=>Number(x.time_seconds)<=30).length,
+   utteranceCount:report.gemini.rawUtteranceCount,
+   goalCallCount:report.goalReview.explicitGoalCallCount};
+ });
+ return JSON.stringify({kind:'peakstamp-batch-analysis-diagnostic',version:1,
+  videoCount:videos.length,videos},null,2);
 }
