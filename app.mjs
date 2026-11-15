@@ -1,3 +1,4 @@
+import {initYouTubeMirror} from './youtube-mirror-ui.mjs?v=mirror1';
 import { confirmedCard, showMatchReview } from './match-review.mjs';
 import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=5';
 import {initAnalysisNames} from './sposched-analysis-names.mjs?v=official-guest1';
@@ -33,6 +34,7 @@ import {assignMatchNumber,setMatchNumber,sourcePartLabel,joinPreviousMatch,sourc
 const $ = id => document.getElementById(id);
 const youtubeMode=new URLSearchParams(location.search).has('youtube');
 let youtubeOrganizer=null;
+let youtubeMirror=null;
 // Keep one video decoder across scene cards, independent of Gemini/candidate data.
 const sceneReplayMedia=createSceneReplayMedia(()=>document.createElement('video'));
 // Session preview volume persists while moving between scene cards.
@@ -277,7 +279,7 @@ function syncSources({skipGoalReviewRefresh=false}={}) {
   renderSourceList();
   workflow.autoAdvance({busy:state.geminiProcessing||state.working||state.exporting||Boolean(document.getElementById('matchupReviewNext')&&!document.getElementById('matchupReviewNext').hidden)});
   guide.update({hasVideo:state.sources.length>0,hasResults});
-  youtubeOrganizer?.save();youtubeOrganizer?.refresh();
+  youtubeOrganizer?.save();youtubeOrganizer?.refresh();youtubeMirror?.refresh();
 }
 function renderSourceList() {
   const sources = state.sources;
@@ -1640,7 +1642,7 @@ function refreshComment() {
   }));
   summary.hidden = selected.length === 0;
   updateMontageEditor(state);
-  youtubeOrganizer?.save();youtubeOrganizer?.refresh();
+  youtubeOrganizer?.save();youtubeOrganizer?.refresh();youtubeMirror?.refresh();
 }
 function drawResults() {
   closeInlinePreview();
@@ -1883,6 +1885,7 @@ initMontageEditor(state,{
  onComplete:()=>coaching.exportFinished(),
  onFailure:message=>coaching.exportFailed(message)
 });
+youtubeMirror=initYouTubeMirror(state,{getPlan:()=>buildMultiClipPlan(state.sources,currentClipOptions())});
 initWhisperExperiment(state);
 initAIReview(state);
 initVideoExplore(state);
