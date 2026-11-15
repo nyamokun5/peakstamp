@@ -1,4 +1,4 @@
-import {verifiedAnalysisPerson,fixtureRosterNames} from './sposched-analysis-identity.mjs';
+import {verifiedAnalysisPerson,fixtureRosterNames,officialAnalysisPerson} from './sposched-analysis-identity.mjs?v=official-guest1';
 /** PeakStamp → Shoot Sunday (SpoSched) review-only bridge.
  * Inputs come from explicitly imported event snapshots. NO HTTP endpoints,
  * tokens, writes, or automatic state mutations are assumed here.
@@ -94,23 +94,26 @@ export function normalizeSpoSnapshot(raw){
       normalizeTeam(playerTeam.get(name))!==normalizeTeam(team))continue;
    const playerId=officialUuid.test(string(p?.player_id))?string(p.player_id):'';
    const userId=officialUuid.test(string(p?.user_id))?string(p.user_id):'';
+   const type=['member','guest','child'].includes(p?.type)?p.type:'';
    const previous=verifiedIds.get(name);
    // Two different SS identities sharing a display name cannot be safely
    // reduced to one name-keyed identity. Require manual SS resolution.
-   if(previous&&(previous.player_id!==playerId||previous.user_id!==userId))
+   if(previous&&(previous.player_id!==playerId||previous.user_id!==userId||previous.type!==type))
     conflictingNames.add(name);
-   else if(!previous)verifiedIds.set(name,{player_id:playerId,user_id:userId});
+   else if(!previous)verifiedIds.set(name,{player_id:playerId,user_id:userId,type});
   }
  }
  for(const name of conflictingNames)verifiedIds.delete(name);
- const playerIds=new Map(),memberIds=new Map();
+ const playerIds=new Map(),memberIds=new Map(),playerTypes=new Map();
  for(const [name,ref] of verifiedIds){
   if(ref.player_id)playerIds.set(name,ref.player_id);
   if(ref.user_id)memberIds.set(name,ref.user_id);
+  if(ref.type)playerTypes.set(name,ref.type);
  }
  return {eventId,eventName,environment:input.environment==='PRODUCTION'?'production':input.environment==='TEST'?'staging':(input.environment||'staging'),matchFormat:string(obj.match_format||obj.event?.match_format||input.match_format||''),matches,players,roster,playerTeam,rosterSource,
   ...(playerIds.size?{playerIds}:{}),
-  ...(memberIds.size?{memberIds}:{})};
+  ...(memberIds.size?{memberIds}:{}),
+  ...(playerTypes.size?{playerTypes}:{})};
 }
 /** Select ONLY players assigned to the official numbered fixture's sides.
  * Never leak historical, unassigned, or unrelated third-team players into the
@@ -380,11 +383,12 @@ export function prepareGoalRows(rawGoals,snapshot){
     g?.ssIdentity?.environment===(snapshot.environment||'staging')&&g.ssIdentity.eventId===snapshot.eventId&&
     g.ssIdentity.seq===onlyMatch.seq;
    const allowed=pending?fixtureRosterNames(snapshot,onlyMatch.seq,g):[];
-   const tentative=[g?.[field],g?.ssIdentity?.[field]?.name]
-    .find(name=>allowed.includes(name)&&
-     g.ssIdentity?.[field]?.name===name&&
-     snapshot.memberIds?.get(name)===g.ssIdentity[field]?.memberId&&
-     snapshot.playerIds?.get(name)===g.ssIdentity[field]?.playerId)||'';
+   const tentative=[g?.[field],g?.ssIdentity?.[field]?.name].find(name=>{
+    const official=officialAnalysisPerson(snapshot,name),saved=g.ssIdentity?.[field];
+    return allowed.includes(name)&&saved?.name===name&&official&&
+     official.memberId===(saved.memberId??null)&&official.playerId===saved.playerId&&
+     (official.type==='guest'?saved.type==='guest':saved.type!=='guest');
+   })||'';
    return {name:tentative,confidence:'none',candidates:[],source:'pending-fixture-roster'};
   };
   const scorerGuess=g.ssIdentity?transferred('scorer'):suggestedPlayer(g.scorer,snapshot,teamHint);

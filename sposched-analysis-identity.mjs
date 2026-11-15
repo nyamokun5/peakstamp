@@ -1,6 +1,21 @@
 // Read-only identity resolution. No score/alias writes, network or credentials.
 import {matchOfficialAlias,matchEventPerson} from './sposched-alias-auto-match.mjs';
 const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+// A current-event guest has an official event-scoped player ID but need not
+// have a registered member ID. Never infer guest status from a display name.
+export function officialAnalysisPerson(snapshot,name){
+ const playerId=snapshot?.playerIds?.get(name),memberId=snapshot?.memberIds?.get(name);
+ const team=snapshot?.playerTeam?.get(name),type=snapshot?.playerTypes?.get(name);
+ if(!snapshot?.players?.includes(name)||!team||!uuid.test(playerId||''))return null;
+ if(type==='guest'){
+  if(snapshot.rosterSource!=='official-current-event-teams'||!uuid.test(snapshot.eventId||'')||
+     [...snapshot.playerIds.values()].filter(id=>id===playerId).length!==1)return null;
+  return {name,memberId:uuid.test(memberId||'')?memberId:null,playerId,team,type:'guest'};
+ }
+ if(!uuid.test(memberId||''))return null;
+ // Keep the existing member shape and require both UUIDs as before.
+ return {name,memberId,playerId,team};
+}
 // Commentary team labels must agree with the selected numbered fixture.
 export function analysisFixtureAgrees(goal,match){
  if(!match)return false;
@@ -78,8 +93,7 @@ export function fixturePeople(snapshot,seq,goal=null){
  if(!match)return [];
  const teams=selectedFixtureTeams(goal,snapshot,seq);
  if(teams.length!==2)return [];
- return (snapshot.players||[]).filter(name=>uuid.test(snapshot.memberIds?.get(name)||'')&&
-  uuid.test(snapshot.playerIds?.get(name)||'')&&
+ return (snapshot.players||[]).filter(name=>officialAnalysisPerson(snapshot,name)&&
   teams.includes(snapshot.playerTeam?.get(name)));
 }
 export function resolveAnalysisGoal(item,context){
@@ -112,8 +126,7 @@ export function resolveAnalysisGoal(item,context){
   if(field==='assist'&&(!identity.scorer||name===identity.scorer.name||
      snapshot.playerTeam.get(name)!==identity.scorer.team))continue;
   result[field]=name;
-  identity[field]={name,memberId:snapshot.memberIds.get(name),playerId:snapshot.playerIds.get(name),
-   team:snapshot.playerTeam.get(name),manual};
+  identity[field]={...officialAnalysisPerson(snapshot,name),manual};
  }
  result.ssIdentity=identity;
  const complete=identity.scorer&&(item.assistStatus==='none'||item.assistStatus==='named'&&identity.assist);
@@ -128,6 +141,7 @@ export function resolveAnalysisGoal(item,context){
 // Revalidate exported identities against a freshly loaded official event.
 export function verifiedAnalysisPerson(goal,snapshot,seq,field){
  const identity=goal?.ssIdentity,p=identity?.[field];
+ const official=p?officialAnalysisPerson(snapshot,p.name):null;
  const match=snapshot?.matches?.find(m=>Number(m.seq)===Number(seq));
  // Waiting knockout slots are identified by event + numbered fixture.
  // They may not have a match UUID until the first-round results are written.
@@ -140,7 +154,8 @@ export function verifiedAnalysisPerson(goal,snapshot,seq,field){
     (waiting&&identity.matchId&&match?.matchId&&identity.matchId!==match.matchId)||
     identity.seq!==Number(seq)||!p||
     p.name!==goal[field]||!fixturePeople(snapshot,seq,goal).includes(p.name)||
-    snapshot.memberIds.get(p.name)!==p.memberId||snapshot.playerIds.get(p.name)!==p.playerId||
-    snapshot.playerTeam.get(p.name)!==p.team)return null;
+    !official||official.memberId!==(p.memberId??null)||official.playerId!==p.playerId||
+    official.team!==p.team||
+    (official.type==='guest'?p.type!=='guest':p.type==='guest'))return null;
  return p;
 }
