@@ -3,7 +3,8 @@ import {prepareIndependentWorkerBatch} from './sposched-independent-worker-batch
 // Production-only UI adapter. TEST button paths and storage are untouched.
 import {prepareProductionBatch,validateProductionReleaseEvidence,validateIndependentProductionReleaseEvidence,productionBatchStorageKey}
  from './sposched-production-release.mjs?v=production-bridge1';
-import {verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
+import {verifyCompletedWorkerSnapshot,prepareWorkerTournament} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
+import {buildProductionSecondRoundAppend} from './sposched-production-continuation.mjs';
 
 export const SS_NO_FIXTURES_MESSAGE="SS側で試合が作成されていません。SS側の「スコア入力」から「試合作成」ボタンを押してください。";
 
@@ -153,11 +154,10 @@ export function installProductionUI({current,read,normalize,onComplete}){
    status(stateLabel+'：'+result.completed+'/'+result.total+'件'+
     (result.status==='blocked'?'。送信済みの可能性があります。SSの試合・ゴールを照合してください。試合の削除・作り直しや再登録は行わないでください。':''));
    if(result.status==='awaiting_second_round'){
-    // Never start a new job or replay semifinal writes to continue a staged job.
-    // Continuation remains disabled until the production goal planner is integrated.
+    // The continuation button is available only for the exact persisted job.
     $('productionStart').disabled=true;
     $('productionDecision').hidden=true;
-    status('準決勝2試合は登録済みです。後半2試合の本番登録は準備中です。再登録しないでください。');
+    status('準決勝2試合は登録済みです。後半2試合は正式な試合IDを確認して登録してください。');
    }
    if(result.status==='running'&&result.execution_active!==true)
     status('処理の実行を確認できません：'+result.completed+'/'+result.total+'件。状態確認では処理を再開しません。再登録せず、SSの試合・ゴールと保存済みジョブを照合してください。');
@@ -219,6 +219,56 @@ export function installProductionUI({current,read,normalize,onComplete}){
    await refresh();
   }catch(e){status('再開を確認できません：'+e.message+'。再送せず登録の進捗を確認してください。');}
   finally{busy=false;$('productionResume').disabled=false;}
+ });
+ async function prepareContinuation(){
+  const x=active(),job=lastJob;
+  if(!x||job?.status!=='awaiting_second_round')throw Error('準決勝完了ジョブを確認してください');
+  const eventId=x.snapshot.eventId,requestId=localStorage.getItem(key(eventId));
+  if(requestId!==job.request_id)throw Error('保存済みジョブIDが異なります');
+  const [release,official,raw,confirmed]=await Promise.all([
+   read('/production/release-state?event_id='+encodeURIComponent(eventId)),
+   read('/production/inspect?event_id='+encodeURIComponent(eventId)),
+   read('/snapshot?event_id='+encodeURIComponent(eventId)),
+   post('/production/batch/inspect',{event_id:eventId,request_id:requestId})
+  ]);
+  if(active()?.snapshot.eventId!==eventId||localStorage.getItem(key(eventId))!==requestId)
+   throw Error('確認中にイベントが変更されました');
+  if(release.environment!=='PRODUCTION'||release.release_ready!==true||
+     release.target_event_id!==eventId||release.scope!=='current-target'||
+     official.environment!=='PRODUCTION'||official.event_id!==eventId||
+     official.mode!=='read-only'||official.team_pinned!==true)
+   throw Error('本番ターゲットの公式照合に失敗しました');
+  const snapshot=normalize(raw);
+  if(snapshot.eventId!==eventId||snapshot.matches?.length!==4||
+     !Array.isArray(official.matches)||official.matches.length!==4)
+   throw Error('本番4試合の最新データを取得できません');
+  for(const m of snapshot.matches){
+   const remote=official.matches.filter(r=>Number(r.seq)===Number(m.seq));
+   if(remote.length!==1||remote[0].match_id?.toLowerCase()!==m.matchId?.toLowerCase()||
+      remote[0].status!==m.status)
+    throw Error('本番公式試合と画面の試合情報が一致しません');
+  }
+  const projected={...snapshot,matches:snapshot.matches.map(m=>
+   [1,2].includes(Number(m.seq))?{...m,status:'scheduled'}:m)};
+  const rows=x.rows.filter(r=>[3,4].includes(Number(r.seq)));
+  const decisions=x.decisions.filter((_,i)=>[3,4].includes(Number(x.rows[i]?.seq)));
+  const plan=prepareWorkerTournament({snapshot:projected,rows,decisions,requestId});
+  const operations=plan.operations.filter(op=>op.seq>=3);
+  return buildProductionSecondRoundAppend({snapshot,workerJob:confirmed,operations});
+ }
+ $('productionAppend').addEventListener('click',async()=>{
+  if(busy||polling)return;
+  busy=true;$('productionAppend').disabled=true;
+  try{
+   const prepared=await prepareContinuation();
+   const again=await prepareContinuation();
+   if(JSON.stringify(prepared)!==JSON.stringify(again))
+    throw Error('後半登録内容が変わりました。再確認してください');
+   // Never retry on an ambiguous transport result; inspect the persisted job.
+   await post('/production/batch/append-second-round',prepared);
+   await refresh();
+  }catch(e){status('後半登録を確認できません：'+e.message+'。再送せず進捗を確認してください。');}
+  finally{busy=false;$('productionAppend').disabled=false;}
  });
  $('productionRefresh').addEventListener('click',refresh);
  $('productionDecisionSend').addEventListener('click',async()=>{
