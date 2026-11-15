@@ -33,6 +33,8 @@ export function buildProductionSecondRoundAppend({snapshot,workerJob,operations}
    fail('準決勝の完了状態または試合IDが一致しません');
  }
  for(const seq of [3,4]){
+  if(matches.find(m=>Number(m.seq)===seq)?.status!=='scheduled')
+   fail('後半の試合が未確定、または既に終了しています');
   const recorded=workerJob.fixture_ids?.[seq];
   if(recorded&&canonical(recorded)!==official.get(seq))
    fail('後半の試合IDがジョブと一致しません');
