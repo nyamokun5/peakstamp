@@ -271,6 +271,13 @@ export function installProductionUI({current,read,normalize,onComplete}){
   const decisions=x.decisions.filter((_,i)=>[3,4].includes(Number(x.rows[i]?.seq)));
   const plan=prepareWorkerTournament({snapshot:projected,rows,decisions,requestId});
   const operations=plan.operations.filter(op=>op.seq>=3);
+  // A previous inspection must not be silently replaced by a different job.
+  if(confirmed.event_id!==job.event_id||confirmed.request_id!==job.request_id||
+     confirmed.layout_mode!==job.layout_mode||confirmed.status!==job.status||
+     confirmed.cursor!==job.cursor||confirmed.total!==job.total||
+     confirmed.completed!==job.completed||
+     JSON.stringify(confirmed.fixture_ids)!==JSON.stringify(job.fixture_ids))
+   throw Error('準決勝ジョブが前回の確認から変更されました。進捗を再取得してください');
   return buildProductionSecondRoundAppend({snapshot,workerJob:confirmed,operations});
  }
  $('productionAppend').addEventListener('click',async()=>{
