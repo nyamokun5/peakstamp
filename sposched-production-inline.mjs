@@ -1,7 +1,7 @@
 // In-place production registration. Reuses production gates and canonical
 // planners; no TEST transport, confirmation strings or journals are used.
 import {confirmedGoalExport,createGoalDrafts} from './goal-stats.mjs';
-import {prepareGoalRows} from './sposched-review-core.mjs';
+import {prepareGoalRows} from './sposched-review-core.mjs?v=official-guest1';
 import {projectFourMatchTournament} from './sposched-inline-tournament.mjs';
 import {quickGoalDecisions} from './sposched-quick-review.mjs';
 import {prepareProductionBatch,validateProductionReleaseEvidence,

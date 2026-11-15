@@ -1,6 +1,6 @@
 import { confirmedCard, showMatchReview } from './match-review.mjs';
 import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=5';
-import {initAnalysisNames} from './sposched-analysis-names.mjs?v=ss-decision1';
+import {initAnalysisNames} from './sposched-analysis-names.mjs?v=official-guest1';
 import { detectHighlights, formatTime, makeComment } from './detector.mjs?v=peak52';
 import { initWhisperExperiment, refreshWhisperTargets } from './whisper-experiment.mjs?v=whisper21';
 import { initAIReview, refreshAIReview } from './ai-review.mjs?v=shot-probe9';
@@ -8,7 +8,7 @@ import { initVideoExplore, refreshVideoExplore } from './video-explore.mjs?v=5';
 import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot.mjs?v=5';
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=batch-diagnostic3';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
-import { initGoalStatsReview } from './goal-stats-ui.mjs?v=ss-roster-readonly-2156';
+import { initGoalStatsReview } from './goal-stats-ui.mjs?v=official-guest1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=source-matchup5';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
@@ -2327,7 +2327,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
 });
 
 }else{
- const {installProductionInline}=await import('./sposched-production-inline.mjs?v=visible-feedback1');
+ const {installProductionInline}=await import('./sposched-production-inline.mjs?v=official-guest1');
  installProductionInline({state,ssNames,goalReview});
 }
 

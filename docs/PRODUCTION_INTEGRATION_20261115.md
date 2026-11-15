@@ -69,3 +69,11 @@ The production goal-review action and the goal-completion dialog now both run re
 The TEST inline handlers stay in their TEST-only branch; production transports require production confirmation strings, matching selected event/context and production response identity. Bracket recreation remains TEST-only. Both environments reject credential-bearing redirects. The production-only coordinator is excluded from the TEST build.
 
 Validation: 913 unit tests passed before the final transport redirect setting; the new real-DOM browser regression covers one-click start-to-append-to-completion and an uncertain append with no replay, using the real analysis transport against mocked responses. Production and TEST analysis browsers and the legacy inline decision browser also passed. CI reruns the required full suite for the release SHA. No real SS write is used as a test. Rollback is a revert to pre-change main `0ca0e7828359e58db1db389943bd12a6a1d5ab03`.
+
+## Official event-roster guests
+
+An official SS guest may have a valid event-scoped player_id without a registered-member user_id. Analysis previously required both IDs for every player, so a locally confirmed guest goal lost its scorer during registration preparation. Preserve the explicit roster player type and allow a guest only when the current official event roster supplies a unique player UUID and matching team. The display-name suffix does not authorize anything. Registered members retain the previous two-ID requirement and identity shape.
+
+Guest identities remain bound to environment/event/fixture sequence, team, type and event player UUID. When later match UUIDs appear, fresh official opponents and identities must still agree. Changed/reused/missing IDs or changed type/team invalidate the identity. Official-roster guests are distinct from unregistered free-text guest entry and never become shared member aliases. The UI marks an otherwise locally confirmed goal as roster-unverified when its current identity is invalid.
+
+Validation includes a fourth-goal guest on Team 4 through the real in-page UI/production transport with mocked HTTP, semifinal and later-round registration, no member alias writes, 920 unit tests, and the existing production analysis browser. No real SS goal/result writes are used as tests. Rollback baseline: main 091ab3ecb0907bedad4fbd08d8b0bdda7d3c2bdd.

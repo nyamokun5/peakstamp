@@ -1,6 +1,6 @@
 // Rebind confirmed identities only after matching the active generation to ALL
 // official fixtures. Recreating a fixture never authorizes a changed player.
-import {resolveAnalysisGoal,verifiedAnalysisPerson} from './sposched-analysis-identity.mjs';
+import {resolveAnalysisGoal,verifiedAnalysisPerson,officialAnalysisPerson} from './sposched-analysis-identity.mjs?v=official-guest1';
 import {prepareGoalRows} from './sposched-review-core.mjs';
 import {buildInlineSecondRoundPlan} from './sposched-inline-plan.mjs';
 export function prepareInlineContinuation({snapshot,goals,workerJob}){
@@ -33,9 +33,10 @@ export function prepareInlineContinuation({snapshot,goals,workerJob}){
   const fields=['scorer',...(g.assistStatus==='named'?['assist']:[])];
   for(const field of fields){
    const person=old[field],name=g[field];
-   if(!person||person.name!==name||!person.memberId||!person.playerId||
-      snapshot.memberIds?.get(name)!==person.memberId||snapshot.playerIds?.get(name)!==person.playerId||
-      snapshot.playerTeam?.get(name)!==person.team)
+   const official=officialAnalysisPerson(snapshot,name);
+   if(!person||person.name!==name||!official||
+      official.memberId!==(person.memberId??null)||official.playerId!==person.playerId||
+      official.team!==person.team||(official.type==='guest'?person.type!=='guest':person.type==='guest'))
     throw Error('後半ゴールの選手・所属が変わっています。名簿を確認してください');
   }
   // Pin the already-confirmed exact player; never guess again from aliases.

@@ -38,6 +38,8 @@ export async function onConfirmedGoalPlayerSelection({
  }));
  const person=members.find(member=>member.name===officialName);
  if(!person)return {saved:false,reason:'得点チームの公式名簿にありません'};
+ if(snapshot?.playerTypes?.get(officialName)==='guest')
+  return {saved:false,reason:'ゲスト選手の呼び名は会員の別名として登録しません'};
  const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
  if(!uuid.test(person.user_id||''))
   return {saved:false,reason:'SSの登録メンバーIDが確認できません'};

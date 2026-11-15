@@ -1,7 +1,7 @@
 import { confirmedCard, applyCard, inheritVideoMatchupConfirmation } from './match-review.mjs';
-import {fixtureRosterNames} from './sposched-analysis-identity.mjs?v=ss-roster-readonly-2156';
+import {fixtureRosterNames} from './sposched-analysis-identity.mjs?v=official-guest1';
 import {phoneticCandidates} from './sposched-alias-auto-match.mjs';
-import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs?v=ss-roster-readonly-2156';
+import {resolveAnalysisGoal,fixturePeople,verifiedAnalysisPerson} from './sposched-analysis-identity.mjs?v=official-guest1';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
 /**
  * Unified, goal-first video review. All source files appear in one ordered
@@ -393,7 +393,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const existing=(state.ssNameContext?.aliases||[]).filter(a=>normalizeName(a.alias)===normalizeName(spokenName));
    const registered=existing.some(a=>a.member_id===memberId);
    const conflict=existing.length>0&&!registered;
-   if(officialName&&spokenName&&normalizeName(spokenName)!==normalizeName(officialName)&&memberId){
+   if(officialName&&spokenName&&normalizeName(spokenName)!==normalizeName(officialName)&&memberId&&
+      state.ssNameContext?.snapshot?.playerTypes?.get(officialName)!=='guest'){
     if(registered){
      box.append(make('span','fine-print','✓ この呼び名は登録済み'));
      return;
@@ -524,7 +525,10 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   optional.append(optionalBody);
   scoreDetails.append(fields,timing,optional);
   const actions=make('div','goal-review-actions');
-  const confirm=make('button','goal-review-confirm',item.status==='confirmed'?'確定済み':'ゴール確定');
+  const rosterPending=state.ssNameEnabled===true&&state.ssNameContext?.snapshot&&
+   (!verifiedAnalysisPerson(item,state.ssNameContext.snapshot,item.matchSeq,'scorer')||
+    item.assistStatus==='named'&&!verifiedAnalysisPerson(item,state.ssNameContext.snapshot,item.matchSeq,'assist'));
+  const confirm=make('button','goal-review-confirm',item.status==='confirmed'?(rosterPending?'名簿未照合':'確定済み'):'ゴール確定');
   confirm.type='button';confirm.disabled=item.status==='confirmed'||disabled;
   confirm.addEventListener('click',()=>{
    const error=validateGoal(item);
@@ -626,17 +630,15 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    const changed=new Map();
    for(const {source,item} of entries){
     if(item.status!=='draft'||item.videoDecision!=='kept'||
-       item.ssIdentity?.environment!=='staging'||
+       item.ssIdentity?.environment!==(state.ssNameEnvironment||snapshot.environment||'staging')||
        item.ssIdentity?.eventId!==snapshot.eventId||
        !item.ssIdentity?.scorer||
        (item.assistStatus==='named'&&!item.ssIdentity?.assist)||
        !['none','named'].includes(item.assistStatus)||
        validateGoal(item)||item.goalTimeVerified===false)continue;
     // The official scorer/assist must still be on the event roster.
-    const people=[item.ssIdentity.scorer,...(item.assistStatus==='named'?[item.ssIdentity.assist]:[])];
-    if(!people.every(p=>p?.name&&snapshot.memberIds?.get(p.name)===p.memberId&&
-      snapshot.playerIds?.get(p.name)===p.playerId&&
-      snapshot.playerTeam?.get(p.name)))continue;
+    if(!verifiedAnalysisPerson(item,snapshot,item.matchSeq,'scorer')||
+       item.assistStatus==='named'&&!verifiedAnalysisPerson(item,snapshot,item.matchSeq,'assist'))continue;
     item.status='confirmed';item.ssAutoConfirmed=true;
     item.confirmedAt=item.confirmedAt||new Date().toISOString();
     if(!changed.has(source))changed.set(source,goalData(source).items);

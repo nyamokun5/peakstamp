@@ -1,4 +1,4 @@
-import {normalizeSpoSnapshot} from './sposched-review-core.mjs';
+import {normalizeSpoSnapshot} from './sposched-review-core.mjs?v=official-guest1';
 import {normalizeAliasList} from './sposched-alias-admin.mjs';
 import {restoreBridgeSession,rememberBridgeSession,clearBridgeSession} from './sposched-bridge-session.mjs';
 export const ANALYSIS_EVENT_KEY='peakstamp_ss_analysis_event_staging_v1';
