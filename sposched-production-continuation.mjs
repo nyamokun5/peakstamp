@@ -11,6 +11,8 @@ export function buildProductionSecondRoundAppend({snapshot,workerJob,operations}
     workerJob?.environment!=='PRODUCTION'||
     workerJob?.layout_mode!=='four-knockout-staged-v1'||
     workerJob?.status!=='awaiting_second_round'||
+    workerJob?.inspection_only!==true||workerJob?.execution_active!==false||
+    workerJob?.inspection_contract!=='event-inspect-v1'||
     workerJob?.phase!=='preparing'||
     workerJob?.cursor!==workerJob?.total||
     workerJob?.completed!==workerJob?.total)
