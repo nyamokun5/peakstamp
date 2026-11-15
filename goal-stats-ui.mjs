@@ -1,4 +1,4 @@
-import { confirmedCard, applyCard } from './match-review.mjs';
+import { confirmedCard, applyCard, inheritVideoMatchupConfirmation } from './match-review.mjs';
 import {fixtureRosterNames} from './sposched-analysis-identity.mjs?v=ss-roster-readonly-2156';
 import {phoneticCandidates} from './sposched-alias-auto-match.mjs';
 import {resolveAnalysisGoal,fixturePeople} from './sposched-analysis-identity.mjs?v=ss-roster-readonly-2156';
@@ -60,7 +60,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   const data=createGoalDrafts(s,cache());
   if(state.ssNameEnabled){
    // Matchup comes from video registration via createGoalDrafts, never SS fixtures.
-   const items=data.items.map(item=>resolveAnalysisGoal(item,state.ssNameContext));
+   const items=data.items.map(item=>resolveAnalysisGoal(
+    inheritVideoMatchupConfirmation(item,s,cache()),state.ssNameContext));
    if(JSON.stringify(items)!==JSON.stringify(data.items))saveGoalDrafts(s,cache(),items);
    data.items=items;
   }
@@ -248,6 +249,11 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    return;
   }
   const {source,item}=entry,disabled=item.status==='excluded';
+  const ssSnapshot=state.ssNameContext?.snapshot;
+  const ssFixture=ssSnapshot?.matches?.find(m=>Number(m.seq)===Number(item.matchSeq));
+  const needsPairConfirmation=state.ssNameEnabled&&ssSnapshot?.rosterSource==='official-current-event-teams'&&
+   ssFixture&&!ssFixture.leftTeam&&!ssFixture.rightTeam&&item.teamA&&item.teamB&&
+   item.matchupConfirmed!==true&&item.userConfirmedMatchup!==true;
   const head=make('div','goal-editor-title');
   head.append(make('strong','',sourceDisplayName(source)+' · ゴール '+fmt(actualGoalTime(item))));
   const detail=make('small','',item.origin==='manual'?'手動追加':
@@ -361,22 +367,12 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
    if(!state.ssNameEnabled){inputRow(fields,label,item[field],v=>edit(entry,field,v),{placeholder:'選手名'});return;}
    const box=make('label','goal-review-field'),select=make('select','');
    box.append(make('span','',label));select.setAttribute('aria-label',label);
-   select.append(new Option('選手を選択',''));
+   select.append(new Option(needsPairConfirmation?'先に対戦カードを確認':'選手を選択',''));
+   select.disabled=Boolean(needsPairConfirmation);
    const snapshot=state.ssNameContext?.snapshot;
    // Keep selection within the confirmed fixture; an unrelated team's player
    // must not become a valid scorer merely by being in the event roster.
    let names=fixtureRosterNames(snapshot,item.matchSeq,item);
-   if(!names.length){
-    const rosterCount=snapshot?.players?.length||0;
-    const teams=[...new Set(snapshot?.playerTeam?.values?.()||[])].join(', ')||'なし';
-    const fixture=snapshot?.matches?.find(m=>Number(m.seq)===Number(item.matchSeq));
-    const diagnostic='名簿 '+rosterCount+'人 / 方式 '+(snapshot?.rosterSource||'未取得')+
-     ' / チーム '+teams+' / 第'+(item.matchSeq||'?')+'試合 '+
-     (fixture?((fixture.leftTeam||'未定')+' vs '+(fixture.rightTeam||'未定')):'なし')+
-     ' / 動画 '+(item.teamA||'?')+' vs '+(item.teamB||'?')+
-     ' / 確認 '+(item.matchupConfirmed===true?'済':'未');
-    box.append(make('span','goal-review-hint',diagnostic));
-   }
    if(field==='assist')names=names.filter(name=>name!==item.scorer);
    const suggestions=phoneticCandidates(field==='scorer'?item.rawScorer:item.rawAssist,
     state.ssNameContext?.aliases||[],snapshot,item.matchSeq);
@@ -457,7 +453,8 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
   };
   if(state.ssNameEnabled&&!item.ssIdentity?.scorer){
    const snapshot=state.ssNameContext?.snapshot;
-   const message=!snapshot?'SS未接続：最初の動画登録画面でSSイベントに接続してください。':
+   const message=needsPairConfirmation?'上の「対戦カードを確認」を押すと、両チームの選手を選べます。':
+    !snapshot?'SS未接続：最初の動画登録画面でSSイベントに接続してください。':
     !fixtureRosterNames(snapshot,item.matchSeq,item).length?'SS名簿に該当する試合・選手がありません。SSイベントと試合番号を確認してください。':
     !item.rawScorer?'音声から得点者名を検出できませんでした。':
     '「'+String(item.rawScorer).slice(0,50)+'」をSSの正式名・別名辞書と照合できませんでした。';
@@ -469,7 +466,9 @@ export function initGoalStatsReview(state,{onUpdate=()=>{},onSourceReady=()=>{},
     ' / SSチーム ['+teams.join(', ')+'] / 動画 '+(item.teamA||'?')+' vs '+(item.teamB||'?')+
     ' / 確認 '+(item.matchupConfirmed===true?'済':'未');
    fields.append(make('p','fine-print',message));
-   fields.append(make('p','fine-print',diagnostics));
+   const diagnosticDetails=make('details','goal-roster-diagnostics');
+   diagnosticDetails.append(make('summary','','名簿の詳細'),make('p','fine-print',diagnostics));
+   fields.append(diagnosticDetails);
   }
   if(state.ssNameEnabled){
    const decision=(field,label)=>{

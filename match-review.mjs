@@ -11,8 +11,28 @@ export function confirmedCard(source, storage) {
 export function applyCard(item, card) {
   if (!card) return item;
   return {...item, matchSeq:String(card.seq), teamA:card.a, teamB:card.b,
+    matchupConfirmed:true, ssIdentity:null,
     matchLabel:card.a+' 対 '+card.b, sourceMatchSeqAutofill:false,
     userEditedGoalFields:[...new Set([...(item.userEditedGoalFields || []),'teamA','teamB','matchSeq','matchLabel'])]};
+}
+// Reuse a human-confirmed VIDEO pairing for roster selection in waiting
+// placement slots. This does not supply or authorize an official match ID.
+export function inheritVideoMatchupConfirmation(item, source, storage) {
+  if(Number(item.matchSeq)!==source.matchNumber)return item;
+  let pair=confirmedCard(source,storage);
+  if(!pair){
+    try{
+      const saved=JSON.parse(storage?.getItem('peakstamp_matchup_v1:'+goalSourceKey(source))||'null');
+      if(saved?.origin==='manual')pair={a:saved.teamA,b:saved.teamB};
+    }catch{}
+  }
+  const canonical=v=>String(v||'').normalize('NFKC').toLowerCase().replace(/\s/g,'')
+    .replace(/^チーム/,'team').replace(/^(?:team)?(\d{1,2})$/,'team$1');
+  const expected=pair?[pair.a,pair.b].map(canonical):[];
+  const actual=[item.teamA,item.teamB].map(canonical);
+  if(expected.length!==2||expected.some(x=>!x)||expected[0]===expected[1]||
+     actual.some(x=>!x)||actual.slice().sort().join('|')!==expected.slice().sort().join('|'))return item;
+  return item.matchupConfirmed===true?item:{...item,matchupConfirmed:true,ssIdentity:null};
 }
 function cleanTeam(value) {
   const text=String(value ?? '').normalize('NFKC').trim();
