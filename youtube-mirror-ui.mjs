@@ -1,5 +1,6 @@
-import {mirrorClips,publishMirror} from './youtube-mirror.mjs';
-import {youtubeApi,youtubeEnvironment} from './youtube-api.mjs';
+import {mirrorClips} from './youtube-mirror.mjs';
+import {inlineShareUrl} from './youtube-inline-share.mjs?v=inline1';
+import {youtubeEnvironment} from './youtube-api.mjs';
 import {goalSourceKey} from './goal-stats.mjs';
 import {sourceDisplayName} from './match-label.mjs';
 export function initYouTubeMirror(state,{getPlan,document:doc=globalThis.document,storage=localStorage}={}){
@@ -30,11 +31,11 @@ export function initYouTubeMirror(state,{getPlan,document:doc=globalThis.documen
  button.onclick=async()=>{
   if(busy||state.working||state.exporting||state.geminiProcessing)return;
   try{if(!aligned.checked)throw Error('元動画と同じ内容・開始位置であることを確認してください。');
-   const clips=mirrorClips(state.sources,getPlan(),record.urls),access=doc.getElementById('geminiMainAccess').value.trim();
+   const clips=mirrorClips(state.sources,getPlan(),record.urls);
    busy=true;refresh();button.textContent='作成・結果を確認中…';status.textContent='同じ切り取り範囲で作成しています…';
-   const job=await publishMirror({clips,access,record,save,endpoint:youtubeApi('share')});
+   const href=inlineShareUrl(clips,location.href);
    if(JSON.stringify(mirrorClips(state.sources,getPlan(),record.urls))!==JSON.stringify(clips)){status.textContent='範囲またはURLが変更されました。最新の範囲で作成してください。';return;}
-   open.href=new URL('./youtube-watch.html?id='+job.id,location.href).href;open.hidden=copy.hidden=false;status.textContent='YouTubeハイライトを作成しました。再解析は行っていません。';
+   open.href=href;open.hidden=copy.hidden=false;status.textContent='YouTubeハイライトの共有リンクを作成しました。端末内で作成し、サーバーへの保存・再送・再解析は行っていません。';
   }catch(e){status.textContent=e.message;button.textContent='結果を確認・YouTubeハイライトを作成';}
   finally{busy=false;refresh();if(open.hidden&&status.textContent.includes('再送'))button.textContent='結果を確認';else if(!open.hidden)button.textContent='YouTubeハイライトを確認';}
  };

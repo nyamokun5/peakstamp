@@ -1,3 +1,4 @@
+import {inlineShareClips} from './youtube-inline-share.mjs?v=inline1';
 import {youtubeApi} from './youtube-api.mjs';
 import {forMember} from './youtube-session.mjs';
 const showMemberFilter=false;
@@ -35,9 +36,12 @@ function renderList(){
  });
 }
 async function init(){
+ let result;const embedded=inlineShareClips(location.hash);
+ if(embedded)result={clips:embedded};else{
  if(!/^[0-9a-f]{64}$/.test(id||''))throw Error('共有リンクが正しくありません。');
- const r=await fetch(youtubeApi('share')+'?id='+id);const result=await r.json();
+ const r=await fetch(youtubeApi('share')+'?id='+id);result=await r.json();
  if(!r.ok)throw Error(result.error);
+ }
  clips=params.get('goals')==='1'?result.clips.filter(c=>c.label==='⚽ ゴール'&&c.scorer):result.clips;
  queue=clips;
  if(!queue?.length)throw Error('公開された場面がありません。');
