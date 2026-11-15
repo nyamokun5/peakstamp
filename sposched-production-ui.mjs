@@ -248,9 +248,12 @@ export function installProductionUI({current,read,normalize,onComplete}){
      localStorage.getItem(key(eventId))!==requestId)
    throw Error('確認中にイベントが変更されました');
   if(release.environment!=='PRODUCTION'||release.release_ready!==true||
-     release.target_event_id!==eventId||release.scope!=='current-target'||
-     official.environment!=='PRODUCTION'||official.event_id!==eventId||
-     official.mode!=='read-only'||official.team_pinned!==true)
+     release.target_event_id?.toLowerCase()!==eventId.toLowerCase()||
+     release.event_id?.toLowerCase()!==eventId.toLowerCase()||
+     release.scope!=='current-target'||
+     official.environment!=='PRODUCTION'||official.event_id?.toLowerCase()!==eventId.toLowerCase()||
+     official.mode!=='read-only'||official.team_pinned!==true||
+     official.write_allowed!==false||official.release_approved!==false)
    throw Error('本番ターゲットの公式照合に失敗しました');
   const snapshot=normalize(raw);
   if(snapshot.eventId!==eventId||snapshot.matches?.length!==4||
