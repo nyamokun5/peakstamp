@@ -65,6 +65,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
  function render(){
   revision++;lastJob=null;
   $('productionResume').hidden=true;
+  $('productionAppend').hidden=true;
   const x=active();
   $('productionPanel').hidden=!x;
   $('autoRegisterHeading').hidden=Boolean(x);
@@ -139,7 +140,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
   const id=x.snapshot.eventId,startedRevision=revision,requestId=localStorage.getItem(key(id));
   if(!requestId)return;
   polling=true;$('productionRefresh').disabled=true;
-  lastJob=null;$('productionResume').hidden=true;
+  lastJob=null;$('productionResume').hidden=true;$('productionAppend').hidden=true;
   try{
    const result=await post('/production/batch/inspect',{event_id:id,request_id:requestId});
    if(revision!==startedRevision||!active()||active().snapshot.eventId!==id)return;
@@ -157,7 +158,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
     // The continuation button is available only for the exact persisted job.
     $('productionStart').disabled=true;
     $('productionDecision').hidden=true;
-    status('準決勝2試合は登録済みです。後半2試合は正式な試合IDを確認して登録してください。');
+    $('productionAppend').hidden=false;
+    status('準決勝2試合は登録済みです。後半2試合の内容を確認して登録してください。');
    }
    if(result.status==='running'&&result.execution_active!==true)
     status('処理の実行を確認できません：'+result.completed+'/'+result.total+'件。状態確認では処理を再開しません。再登録せず、SSの試合・ゴールと保存済みジョブを照合してください。');
