@@ -108,11 +108,11 @@ try{
  assert.equal(await page.locator('#productionStart').isDisabled(),false,
   'current target is standing-authorized after fresh official preflight');
  assert.equal(await page.locator('#productionPlan').isVisible(),true);
- assert.match(await page.locator('#productionPlan').innerText(),/ゴール\d+件、4試合の結果/);
+ assert.match(await page.locator('#productionPlan').innerText(),/ゴール\d+件、2試合の結果/);
  assert.equal(await page.locator('#productionAudit').getAttribute('open'),null,
   'technical event and fixture IDs remain collapsed by default');
  assert.match(await page.locator('#productionCheck').innerText(),/① 登録内容を確認/);
- assert.match(await page.locator('#productionStart').innerText(),/② 4試合を本番登録/);
+ assert.match(await page.locator('#productionStart').innerText(),/② 準決勝2試合を本番登録/);
  assert.ok(checks>=2);
  assert.equal(productionWrites,0);
  assert.equal(otherReads,0);
