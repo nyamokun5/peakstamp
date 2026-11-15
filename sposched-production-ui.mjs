@@ -165,7 +165,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
     // The continuation button is available only for the exact persisted job.
     $('productionStart').disabled=true;
     $('productionDecision').hidden=true;
-    $('productionAppend').hidden=false;
+    $('productionAppend').hidden=result.execution_active!==false||result.inspection_only!==true;
     status('準決勝2試合は登録済みです。後半2試合の内容を確認して登録してください。');
    }
    if(result.status==='running'&&result.execution_active!==true)
@@ -232,7 +232,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
  async function prepareContinuation(){
   const x=active(),job=lastJob;
   if(!x||job?.status!=='awaiting_second_round')throw Error('準決勝完了ジョブを確認してください');
-  const eventId=x.snapshot.eventId,requestId=localStorage.getItem(key(eventId));
+  const eventId=x.snapshot.eventId,startedRevision=revision,requestId=localStorage.getItem(key(eventId));
   if(requestId!==job.request_id)throw Error('保存済みジョブIDが異なります');
   const [release,official,raw,confirmed]=await Promise.all([
    read('/production/release-state?event_id='+encodeURIComponent(eventId)),
@@ -240,7 +240,8 @@ export function installProductionUI({current,read,normalize,onComplete}){
    read('/snapshot?event_id='+encodeURIComponent(eventId)),
    post('/production/batch/inspect',{event_id:eventId,request_id:requestId})
   ]);
-  if(active()?.snapshot.eventId!==eventId||localStorage.getItem(key(eventId))!==requestId)
+  if(revision!==startedRevision||active()?.snapshot.eventId!==eventId||
+     localStorage.getItem(key(eventId))!==requestId)
    throw Error('確認中にイベントが変更されました');
   if(release.environment!=='PRODUCTION'||release.release_ready!==true||
      release.target_event_id!==eventId||release.scope!=='current-target'||
