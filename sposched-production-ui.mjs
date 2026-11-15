@@ -267,18 +267,24 @@ export function installProductionUI({current,read,normalize,onComplete}){
   return buildProductionSecondRoundAppend({snapshot,workerJob:confirmed,operations});
  }
  $('productionAppend').addEventListener('click',async()=>{
-  if(busy||polling)return;
+  if(busy||polling||$('productionAppend').disabled)return;
   busy=true;$('productionAppend').disabled=true;
+  // A send attempt must not be repeated from the same screen if its receipt is uncertain.
+  let sendAttempted=false;
   try{
    const prepared=await prepareContinuation();
    const again=await prepareContinuation();
    if(JSON.stringify(prepared)!==JSON.stringify(again))
     throw Error('後半登録内容が変わりました。再確認してください');
    // Never retry on an ambiguous transport result; inspect the persisted job.
+   sendAttempted=true;
    await post('/production/batch/append-second-round',prepared);
    await refresh();
   }catch(e){status('後半登録を確認できません：'+e.message+'。再送せず進捗を確認してください。');}
-  finally{busy=false;$('productionAppend').disabled=false;}
+  finally{busy=false;
+   if(sendAttempted)$('productionAppend').hidden=true;
+   else $('productionAppend').disabled=false;
+  }
  });
  $('productionRefresh').addEventListener('click',refresh);
  $('productionDecisionSend').addEventListener('click',async()=>{
