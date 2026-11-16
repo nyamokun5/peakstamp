@@ -1,8 +1,8 @@
-import {saveHighlightHistory,restoreHighlightHistory} from './highlight-history.mjs?v=history1';
+import {saveHighlightHistory,restoreHighlightHistory} from './highlight-history.mjs?v=focus1';
 import {confirmedCard} from './match-review.mjs';
 import {videoMatchup} from './video-matchup.mjs';
 import {GOAL_STORE_PREFIX,goalSourceKey,createGoalDrafts,saveGoalDrafts} from './goal-stats.mjs';
-import {geminiEventsToCandidates} from './gemini-candidates.mjs';
+import {geminiEventsToCandidates} from './gemini-candidates.mjs?v=focus1';
 import {getCandidateEnd} from './editing-rules.mjs';
 import {matchName} from './youtube-session.mjs';
 export function hydrateYouTubeSource(saved,index,storage){

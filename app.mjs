@@ -1,4 +1,5 @@
-import {saveHighlightHistory,restoreHighlightHistory,hydrateHighlightHistory} from './highlight-history.mjs?v=history1';
+import {primaryHighlight,sceneInReviewTab} from './highlight-priority.mjs';
+import {saveHighlightHistory,restoreHighlightHistory,hydrateHighlightHistory} from './highlight-history.mjs?v=focus1';
 import {initYouTubeMirror} from './youtube-mirror-ui.mjs?v=short1';
 import { confirmedCard, showMatchReview } from './match-review.mjs';
 import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=5';
@@ -14,7 +15,7 @@ import { initGoalStatsReview } from './goal-stats-ui.mjs?v=youtube-unified1';
 import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
 import {createGoalDrafts} from './goal-stats.mjs?v=source-matchup5';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
-import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=matchui1';
+import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=focus1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
 import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=history1';
 import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=history1';
@@ -22,7 +23,7 @@ import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
 import { attachScenePinchEditor } from './scene-gesture.mjs?v=compact49';
 import { lineShareUrl, normalizeVisibleLineUrl } from './line-share.mjs?v=line17';
-import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds, reviewUndoClearance } from './review-flow.mjs?v=history1';
+import { DEFAULT_PLAY_LABEL, PLAY_LABELS, nextUndecided, judgeScene, restoreJudgment, replayBounds, reviewUndoClearance } from './review-flow.mjs?v=focus1';
 import { createSceneReplayMedia } from './scene-replay-media.mjs?v=firsttap1';
 import { createScenePreviewAudio } from './scene-preview-audio.mjs?v=1';
 import { toggleScenePreviewPlayback, seekScenePreview } from './scene-preview-playback.mjs?v=autoplay51';
@@ -794,14 +795,14 @@ function nextSceneAfter(current,{wasUnjudged=false}={}) {
   const nextCard=revisiting&&at>=0?visible[at+1]:null;
   const source=nextCard?state.sources.find(src=>src.id===nextCard.dataset.sourceId):null;
   const item=source?.candidates.find(c=>c.id===nextCard.dataset.sceneId);
-  const next=revisiting?(item?{source,item}:null):nextUndecided(state.sources,current);
+  const next=revisiting?(item?{source,item}:null):nextUndecided(state.sources,current,reviewTab);
   wasUnjudged=wasUnjudged||revisiting;
   drawResults();
   if (!next) {
     const kept=state.sources.some(source=>(source.candidates||[]).some(item=>item.enabled===true));
     $('reviewProgress').textContent=kept
-      ?'すべての候補を確認しました。ハイライト動画の作成へ進みます。'
-      :'すべての候補を確認しました。動画を作成するにはシーンをキープしてください。';
+      ?'表示中の候補を確認しました。ハイライト動画の作成へ進みます。'
+      :'表示中の候補を確認しました。動画を作成するにはシーンをキープしてください。';
     // An initial final decision, OR re-judging the final previously reviewed
     // highlight, must offer Review all / Export. Editing an earlier kept
     // highlight alone must not interrupt the user before they reach the end.
@@ -916,7 +917,7 @@ function row(item, index, youtube=null) {
   const play = make('button','play-btn','▶ リプレイ');
   play.type = 'button';
   play.title = '切り取り範囲をもう一度再生';
-  const changed=youtube?.save || refreshComment;
+  const changed=()=>{item.highlightUserEdited=true;(youtube?.save || refreshComment)();};
   let replayVideo=null;
   let youtubeFrame=null;
   let youtubePlayer=null;
@@ -1206,7 +1207,7 @@ function row(item, index, youtube=null) {
         item.zoom=next.zoom;item.zoomX=next.zoomX;item.zoomY=next.zoomY;
         if(normalizeSceneZoom(item.zoom)>1.02){markZoomTipSeen();tip.hidden=true;}
       },
-      commit:()=>refreshComment(),
+      commit:()=>changed(),
       readout:zoomValue
     });
     inline.hidden=false;
@@ -1677,9 +1678,7 @@ function drawResults() {
     });
     // Keep and Reject both remove a scene from the undecided queue.
     // Kept scenes remain available in the dedicated Keep tab.
-    const visible=source.candidates.filter(candidate=>reviewTab==='reviewed'
-      ? true : reviewTab==='kept'?candidate.enabled===true
-      : candidate.enabled!==true && candidate.rejected!==true);
+    const visible=source.candidates.filter(candidate=>sceneInReviewTab(candidate,reviewTab));
     if (visible.length === 0) { pos += source.candidates.length; continue; }
     headTitle.querySelector('small').textContent=visible.length+'件を表示';
     heading.append(headTitle,copy);
@@ -1688,20 +1687,21 @@ function drawResults() {
   }
   $('highlightList').replaceChildren(...elements);
   const keptCount=state.candidates.filter(x=>x.enabled).length;
-  const remainingCount=state.candidates.filter(x=>x.enabled!==true && x.rejected!==true).length;
+  const remainingCount=state.candidates.filter(x=>sceneInReviewTab(x)).length;
   $('tabAllCount').textContent=String(remainingCount);
+  $('tabOtherCount').textContent=String(state.candidates.filter(x=>sceneInReviewTab(x,'other')).length);
   $('tabKeptCount').textContent=String(keptCount);
   $('tabReviewedCount').textContent=String(state.candidates.length);
   $('reviewEmpty').hidden=reviewTab!=='kept' || keptCount>0;
   if(reviewTab==='all' && remainingCount===0 && state.candidates.length>0){
-    $('reviewProgress').textContent='すべて確認しました。キープ済みタブで選んだシーンを確認できます。';
+    $('reviewProgress').textContent='優先候補を確認しました。キープ済みや「その他の候補」も確認できます。';
   }
   document.querySelectorAll('[data-review-tab]').forEach(button=>{
     const selected=button.dataset.reviewTab===reviewTab;
     button.classList.toggle('active',selected);
     button.setAttribute('aria-pressed',String(selected));
   });
-  $('resultCount').textContent = String(state.candidates.length);
+  $('resultCount').textContent = String(state.candidates.filter(primaryHighlight).length);
   $('emptyResults').hidden = state.candidates.length > 0 || state.candidates.some(x=>x.rejected===true);
   $('waveEnd').textContent = formatTime(state.duration);
   $('waveCanvas').hidden=!state.bins;
@@ -1768,7 +1768,7 @@ window.addEventListener('montage-settings-changed', () => {
 });
 document.querySelectorAll('[data-review-tab]').forEach(button=>{
   button.addEventListener('click',()=>{
-    reviewTab=['all','kept','reviewed'].includes(button.dataset.reviewTab)
+    reviewTab=['all','kept','reviewed','other'].includes(button.dataset.reviewTab)
       ?button.dataset.reviewTab:'all';
     if(state.bins||youtubeMode||state.sources.some(s=>s.highlightHistoryLoaded))drawResults();
   });
@@ -2379,7 +2379,7 @@ const settingsNavigation=initSettingsNavigation({
 
 
 if(youtubeMode){
- import('./youtube-organizer.mjs?v=short1').then(({mountOrganizer})=>{youtubeOrganizer=mountOrganizer({state,syncSources,ssNames,analysisCompleted,workflow});}).catch(error=>{
+ import('./youtube-organizer.mjs?v=focus1').then(({mountOrganizer})=>{youtubeOrganizer=mountOrganizer({state,syncSources,ssNames,analysisCompleted,workflow});}).catch(error=>{
   const notice=document.createElement('p');
   notice.textContent='YouTube画面を開けませんでした。'+error.message;
   document.body.prepend(notice);
