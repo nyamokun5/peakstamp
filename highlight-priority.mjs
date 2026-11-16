@@ -12,14 +12,28 @@ export function primaryHighlight(item){
  if(item.enabled===true||editedHighlight(item))return true;
  // Manual/offline scenes are outside the AI-reaction filter.
  if(item.origin!=='gemini'&&!item.geminiType)return true;
- // Use heard words, never the generated title, reason or AI type alone.
- const quote=String(item.geminiQuote||'').normalize('NFKC').toLowerCase()
-  .replace(/[\u30a1-\u30f6]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
- return /ないしゅ[ーう]|ないすしゅ[ーう]と|ないすき(?:ーぱー|ー)|ないすせ[ーえ]ぶ|惜し[いー]|おし[いー]|\bnice\s+(?:shot|save)\b|\b(?:near[ -]miss|so close)\b/u.test(quote);
+ return highlightCueLabels(item).length>0;
 }
 export function sceneInReviewTab(item,tab='all'){
  if(tab==='kept')return item.enabled===true;
  if(tab==='reviewed')return true;
  const undecided=item.enabled!==true&&item.rejected!==true;
  return undecided&&(tab==='other'?!primaryHighlight(item):primaryHighlight(item));
+}
+
+const cuePatterns=[
+ ['ナイシュー',/ないしゅ[ーう]|ないすしゅ[ーう]と|\bnice\s+shot\b/u],
+ ['ナイスキー',/ないすき(?:ーぱー|ー)|ないすせ[ーえ]ぶ|\bnice\s+save\b/u],
+ ['惜しい',/惜し[いー]|おし[いー]|\b(?:near[ -]miss|so close)\b/u]
+];
+export function highlightCueLabels(item){
+ const quote=String(item?.geminiQuote||'').normalize('NFKC').toLowerCase()
+  .replace(/[\u30a1-\u30f6]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+ return cuePatterns.filter(([,pattern])=>pattern.test(quote)).map(([label])=>label);
+}
+export function highlightKindLabel(item){
+ if(item?.goalRecordId||item?.goalVideoOwned||item?.goal)return 'ゴール';
+ if(item?.geminiType==='goal_reaction')return 'ゴール候補';
+ const labels=highlightCueLabels(item);
+ return labels.length?labels.join(' / '):String(item?.geminiQuote||'').trim()?'その他':'判定情報なし';
 }
