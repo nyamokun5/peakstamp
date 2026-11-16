@@ -1935,7 +1935,11 @@ const goalReview=initGoalStatsReview(state,{
     }
   }
 });
-const ssNames=initAnalysisNames(state,{onChange:()=>goalReview.refresh()});
+const ssNames=initAnalysisNames(state,{onChange:()=>{
+ goalReview.refresh();
+ const notice=$('ssExternalScoreNotice');
+ if(notice)notice.hidden=state.ssNameContext?.snapshot?.officialFormat!=='1team';
+}});
 const analysisTestMode=document.body.dataset.ssAnalysis==='staging';
 if($('ssProductionLink'))$('ssProductionLink').hidden=true;
 const inlineSection=$('ssInlinePreview')?.closest('section');
