@@ -20,10 +20,11 @@ export async function onRequestPost({request,env}){
  for(const c of clips){
   if(!c||!validId(c.video)||!Number.isFinite(c.start)||!Number.isFinite(c.end)||c.start<0||c.end-c.start<0.29||
    !['match','label','scorer','assist'].every(k=>typeof c[k]==='string'&&c[k].length<=512))return reply({error:'公開データの形式が正しくありません。'},400);
-  clean.push({video:c.video,match:c.match,start:c.start,end:c.end,label:c.label,scorer:c.scorer,assist:c.assist});
+  if(c.participants!==undefined&&(!Array.isArray(c.participants)||c.participants.length>100||c.participants.some(x=>typeof x!=='string'||!x||x.length>512)))return reply({error:'選手情報を確認してください。'},400);
+  clean.push({video:c.video,match:c.match,start:c.start,end:c.end,label:c.label,scorer:c.scorer,assist:c.assist,...(c.participants?{participants:[...new Set(c.participants)]}:{})});
  }
  const id=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(secret))),x=>x.toString(16).padStart(2,'0')).join('');
- const check=await fetch('https://peakstamp-gemini-api.vercel.app/api/gemini-audio',{method:'POST',headers:{'Content-Type':'application/json','X-PeakStamp-Access':request.headers.get('X-PeakStamp-Access')||''},body:'{"probe":true}'});
+ const check=await fetch('https://peakstamp-gemini-api.vercel.app/api/share-access',{method:'POST',headers:{'Content-Type':'application/json','X-PeakStamp-Access':request.headers.get('X-PeakStamp-Access')||''},body:'{"probe":true}'});
  if(!check.ok||(await check.json()).ready!==true)return reply({error:'PSアクセスコードを確認してください。'},403);
  await env.HIGHLIGHTS.put(id,JSON.stringify({version:1,clips:clean}));
  return reply({id});

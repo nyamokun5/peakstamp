@@ -168,3 +168,27 @@ Validation: 951 unit tests, real app Keep/Reject → reload/reimport browser, an
 mirror → actual watch-page labels/person-filter/replay browser, all with no paid
 analysis or SS/KV write requests. Rollback baseline main369813de71f9be2f6fb82b5b6b63b3690ef5e092;
 leave saved history in place when reverting.
+
+## Short links by default
+
+Local mirrors and URL-mode exports now publish only the existing short
+`youtube-watch.html?id=…` links. The inline fragment reader is kept solely for
+old links; normal sharing never silently falls back to a long URL. Publication
+uses the same access code as analysis (editable in-place if it is missing),
+per-payload journals, successful-link reuse and read-only inspection after an
+unknown response. Explicit pre-write failures clear the unexecuted journal so
+users may correct the error; an unknown put never does. Changed metadata hides
+stale shared links. Merged participant names remain part of readback comparison.
+
+Share access is checked by `/api/share-access`, using the existing server secret
+with constant-time comparison and no Google/model dependency. The production
+client requires Worker `short-share-v2` before its first write, so deploying the
+frontend first fails safely until the companion Worker is ready. TEST continues
+to use its separate storage. No new secrets or namespaces are required.
+
+Validation: 954 unit tests plus mobile browser cases for short-only output,
+code entry, known pre-write failure, lost-response/readback with one POST,
+changed-range links, names and participant jumps. The API module cold-start test
+covers the access checker. No production write or paid analysis tests.
+Rollback baseline main5e7207f and Vercel dpl_9rBLByxjhRPmg7uArMgCLLsef4kt;
+retain all published shares and pending journals on rollback.

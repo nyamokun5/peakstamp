@@ -1,3 +1,4 @@
+import {publishMirror} from './youtube-mirror.mjs?v=short1';
 import {createGeminiProgressUI} from './gemini-progress-ui.mjs';
 import {youtubeApi,youtubeWorker,youtubeTestMode,youtubeEnvironment} from './youtube-api.mjs';
 import {registrationEvents,resolveRegistrationMatch} from './youtube-video-registration.mjs?v=event-match3';
@@ -47,7 +48,8 @@ export function mountOrganizer({state,syncSources,ssNames,analysisCompleted,work
   get('geminiMainFileHelp').textContent=state.sources.length?'解析済みの動画は保存した結果を再利用します。':'公開YouTube URLを登録してください。';
   get('montagePanel').hidden=!selected(state.sources).length;
   originalInputs.replaceChildren(...state.sources.map(s=>{const label=el('label',matchName(s)+'：MP4用の元動画（任意） '),file=el('input');file.type='file';file.accept='video/*,.mov,.mp4';file.onchange=async()=>{const chosen=file.files[0];if(!chosen)return;const v=document.createElement('video'),url=URL.createObjectURL(chosen);try{v.preload='metadata';await new Promise((resolve,reject)=>{const t=setTimeout(()=>reject(Error('元動画の読み込みがタイムアウトしました。')),20000);v.onloadedmetadata=()=>{clearTimeout(t);resolve()};v.onerror=()=>{clearTimeout(t);reject(Error('元動画を読み込めません。'))};v.src=url});if(Math.abs(v.duration-s.duration)>2)throw Error('YouTubeと同じ長さ・開始位置の元動画を指定してください。');originals.set(s.id,chosen);if(s.mediaObjectUrl)URL.revokeObjectURL(s.mediaObjectUrl);s.mediaFile=chosen;s.mediaObjectUrl=URL.createObjectURL(chosen);syncSources();status('元動画を選択しました。上の共通ボタンからMP4を書き出せます。');}catch(e){status(e.message)}finally{v.removeAttribute('src');v.load();URL.revokeObjectURL(url)}};label.append(file);if(s.mediaFile)label.append(el('small',s.mediaFile.name+' を選択済み'));return label}));
-  if(project.published){result.replaceChildren();const a=el('a','共有ページを開く');a.href=project.published;a.target='_blank';a.rel='noopener';result.append(a,button('URLをコピー',async()=>{await navigator.clipboard.writeText(a.href);status('コピーしました。')}))}
+  result.replaceChildren();
+  if(project.published&&project.publishedPayload===JSON.stringify(selected(state.sources))){const a=el('a','共有ページを開く');a.href=project.published;a.target='_blank';a.rel='noopener';result.append(a,button('短いリンクをコピー',async()=>{await navigator.clipboard.writeText(a.href);status('コピーしました。')}))}
  }
  async function run(task){if(busy)return;busy=true;state.geminiProcessing=true;controller=new AbortController();refresh();
   try{await task()}catch(e){status(e.name==='AbortError'?'解析を中止しました。保存済みの結果は再利用できます。':e.message)}
@@ -100,10 +102,9 @@ export function mountOrganizer({state,syncSources,ssNames,analysisCompleted,work
  async function publishHighlights(){
   const clips=selected(project.sources);
   if(!clips.length)throw Error('まず場面をキープしてください。');
-  const r=await fetch(youtubeApi('share'),{method:'POST',headers:{'Content-Type':'application/json','X-Edit-Key':project.editKey,'X-PeakStamp-Access':$('access').value},body:JSON.stringify({clips})});
-  const body=await r.json();
-  if(!r.ok)throw Error(body.error||'発行失敗');
-  project.published=new URL('./youtube-watch.html?id='+body.id,location.href).href;
+  project.shareJobs=project.shareJobs||{};
+  const job=await publishMirror({clips,access:$('access').value.trim(),record:{jobs:project.shareJobs},save,endpoint:youtubeApi('share'),requireContract:!youtubeTestMode});
+  project.published=new URL('./youtube-watch.html?id='+job.id,location.href).href;project.publishedPayload=JSON.stringify(clips);
   save();status('共有リンクを発行しました。');
   return project.published;
  }
@@ -181,7 +182,7 @@ export function mountOrganizer({state,syncSources,ssNames,analysisCompleted,work
   })}finally{registerButton.disabled=false;registerButton.textContent='試合動画・共有リンクをSSに登録';}
  }
 
- $('actions').append(button('全試合の共有リンクを発行・更新',()=>run(publishHighlights)),
+ $('actions').append(button('全試合の短い共有リンクを発行',()=>run(publishHighlights)),
   registerButton,summary,
   button('HS用JSON',()=>run(async()=>{
   const clips=selected(project.sources),sources=[];
