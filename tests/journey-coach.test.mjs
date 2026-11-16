@@ -132,7 +132,7 @@ test('highlight completion is offered again only after re-judging the last fully
  assert.match(app,/nextSceneAfter\(item,\{wasUnjudged:!previous\.enabled&&!previous\.rejected\}\)/);
  // Without this fix, the 'すべて' tab silently switched to '未判断',
  // making it impossible to reach the final already-reviewed candidate.
- assert.match(app,/\['all','kept','reviewed'\]\.includes\(button\.dataset\.reviewTab\)/);
+ assert.match(app,/\['all','kept','reviewed','other'\]\.includes\(button\.dataset\.reviewTab\)/);
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.match(html,/id="tabReviewed"/);
 });

@@ -291,7 +291,7 @@
     <section class="panel results-panel" id="resultsPanel" hidden>
       <div class="panel-label"><span class="number">03</span><h2>ハイライト</h2></div>
       <div id="standardReviewArea">
-      <div class="result-summary"><strong id="resultCount">0</strong><span>件の見どころ候補を検出しました</span></div>
+      <div class="result-summary"><strong id="resultCount">0</strong><span>件の優先候補があります</span></div>
 
       <p id="multiWaveNotice" class="fine-print" hidden>波形は全動画をつなげた表示です。オレンジ線は各動画の検出位置を示します。</p>
       <div class="waveform-wrap"><p id="analysisCoverage" role="status"></p>
@@ -310,8 +310,10 @@
       <div class="review-tabs" role="group" aria-label="シーンの表示切り替え">
         <button id="tabAll" type="button" class="review-tab active" data-review-tab="all" aria-pressed="true">未判断 <span id="tabAllCount">0</span></button>
         <button id="tabKept" type="button" class="review-tab" data-review-tab="kept" aria-pressed="false">キープ済み <span id="tabKeptCount">0</span></button>
+        <button id="tabOther" type="button" class="review-tab" data-review-tab="other" aria-pressed="false">その他の候補 <span id="tabOtherCount">0</span></button>
         <button id="tabReviewed" type="button" class="review-tab" data-review-tab="reviewed" aria-pressed="false">すべて <span id="tabReviewedCount">0</span></button>
       </div>
+      <p class="fine-print">未判断にはゴールと「ナイシュー・ナイスキー・惜しい」系を優先表示します。他の反応は「その他の候補」、判定済みを含む全候補は「すべて」で確認できます。編集済みの場面は残ります。</p>
       <p id="reviewProgress" class="review-progress" role="status" aria-live="polite"></p>
       <p id="reviewEmpty" class="empty-results" hidden>キープしたシーンはまだありません。「未判断」タブから選んでください。</p>
       <div id="highlightList" class="highlight-list"></div>
@@ -604,7 +606,7 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=controls0"></script>
+  <script type="module" src="app.mjs?v=focus1"></script>
 <dialog id="matchReview" aria-labelledby="matchReviewTitle" style="max-width:94vw;color:inherit;background:#112c3b;border:1px solid #59828a;border-radius:14px"><form><h2 id="matchReviewTitle">試合を確認</h2><fieldset style="border:0;padding:0"></fieldset><output role="status"></output><button class="main-button" type="submit">確定して次へ</button></form></dialog>
 <style>#matchReview strong{display:block;margin-top:.8em}#matchReview input{width:40%;padding:.65em}#matchReview button{margin-top:1em}#matchReview::backdrop{background:#071321cc}</style></body>
 </html>

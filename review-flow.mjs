@@ -1,3 +1,4 @@
+import {sceneInReviewTab} from './highlight-priority.mjs';
 /** Pure controls for reviewing audio-detected scenes in source-file order. */
 export const DEFAULT_PLAY_LABEL = 'ナイスプレイ！';
 export const PLAY_LABELS = Object.freeze([
@@ -19,17 +20,17 @@ export function orderedScenes(sources) {
 
 export function visibleScenes(sources, tab = 'all') {
   return orderedScenes(sources).filter(({ item }) =>
-    tab === 'kept' ? item.enabled === true : undecided(item));
+    sceneInReviewTab(item,tab));
 }
 
 /** Go forward to the next untouched candidate, wrapping back if needed. */
-export function nextUndecided(sources, current) {
+export function nextUndecided(sources, current, tab='all') {
   const scenes = orderedScenes(sources);
   const at = scenes.findIndex(x => x.item === current);
   if (!scenes.length) return null;
   for (let i = 1; i < scenes.length; i++) {
     const candidate = scenes[(at + i + scenes.length) % scenes.length];
-    if (undecided(candidate.item)) return candidate;
+    if (sceneInReviewTab(candidate.item,tab)) return candidate;
   }
   return null;
 }

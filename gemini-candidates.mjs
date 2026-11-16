@@ -80,6 +80,7 @@ export function geminiEventsToCandidates(events,sourceId,duration,prior=[]){
      ...(old?.goalRecordId?{goalRecordId:old.goalRecordId}:{}),
      ...(old?.goalVideoOwned===true?{goalVideoOwned:true}:{}),
      ...(old?.goalPriorHighlight?{goalPriorHighlight:{...old.goalPriorHighlight}}:{}),
+     highlightUserEdited:old?.highlightUserEdited===true,
      zoom:old?.zoom??1,zoomX:old?.zoomX??.5,zoomY:old?.zoomY??.5
    };
  });
