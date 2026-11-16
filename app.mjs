@@ -1,4 +1,4 @@
-import {primaryHighlight,sceneInReviewTab} from './highlight-priority.mjs';
+import {primaryHighlight,sceneInReviewTab,highlightKindLabel} from './highlight-priority.mjs?v=labels1';
 import {saveHighlightHistory,restoreHighlightHistory,hydrateHighlightHistory} from './highlight-history.mjs?v=focus1';
 import {initYouTubeMirror} from './youtube-mirror-ui.mjs?v=short1';
 import { confirmedCard, showMatchReview } from './match-review.mjs';
@@ -1608,7 +1608,9 @@ function row(item, index, youtube=null) {
   reject.addEventListener('click',()=>youtube?youtube.decide(item,'rejected'):decideReview(source,item,'rejected'));
   actions.append(play,keep,reject);
   if(!youtube)timeRow.append(remove);
-  wrap.append(fields,actions);
+  const kindLabel=make('small','highlight-kind-label',highlightKindLabel(item));
+  kindLabel.setAttribute('aria-label','シーン分類：'+kindLabel.textContent);
+  wrap.append(fields,kindLabel,actions);
   const nearbyGoals=youtube?[]:goalReview?.nearby(source,item.peakSeconds,item.time,
     getCandidateEnd(source,item,currentClipOptions()))||[];
   if(nearbyGoals.length){
@@ -1643,9 +1645,11 @@ function refreshComment() {
   const summary = $('selectedSummary');
   summary.replaceChildren(...selected.map((item,i)=>{
     const src = state.sources.find(s => s.id === item.sourceId);
-    return make('span','selected-chip', String(i+1) + '. ' +
+    const chip=make('span','selected-chip', String(i+1) + '. ' +
       (isMulti ? sourceDisplayName(src) + ' · ' : '') +
       formatTime(item.time));
+    chip.append(make('small','highlight-kind-label',highlightKindLabel(item)));
+    return chip;
   }));
   summary.hidden = selected.length === 0;
   updateMontageEditor(state);

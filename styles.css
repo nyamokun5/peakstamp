@@ -1838,3 +1838,7 @@ body{background:#0b1828}
 .yt-goal-dialog{width:min(90vw,24rem);max-height:85dvh;overflow:auto;margin:auto;border:1px solid #466577;border-radius:16px;background:#12273a;color:white;padding:1rem}
 .yt-goal-dialog h2{margin:0}
 .yt-goal-dialog::backdrop{background:#041120bf}
+
+/* Classification stays outside the picture, including in the kept summary. */
+.highlight-kind-label{display:block;font-size:11px;line-height:1.5;color:#bad9d7;font-weight:500}
+.selected-chip{flex-direction:column;gap:2px}

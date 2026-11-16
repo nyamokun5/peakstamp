@@ -31,3 +31,14 @@ test('local history reload keeps spoken evidence and unmatched edited scenes wit
  const rescanned=restoreHighlightHistory(source,[ai('ナイスシュート',{id:'new',peakSeconds:20.5})],storage);
  assert.ok(rescanned.some(c=>c.id==='edited'&&c.highlightUserEdited));
 });
+
+test('small labels describe heard cues independently of kept/edited priority and never guess missing evidence',async()=>{
+ const {highlightKindLabel}=await import('../highlight-priority.mjs');
+ assert.equal(highlightKindLabel(ai('ナイシュー！惜しい！')),'ナイシュー / 惜しい');
+ assert.equal(highlightKindLabel(ai('ナイスセーブ')),'ナイスキー');
+ assert.equal(highlightKindLabel(ai('nice shot')),'ナイシュー');
+ assert.equal(highlightKindLabel(ai('うまい',{enabled:true})),'その他');
+ assert.equal(highlightKindLabel(ai('',{enabled:true,geminiType:'shot_reaction',title:'惜しい！'})),'判定情報なし');
+ assert.equal(highlightKindLabel(ai('',{geminiType:'goal_reaction'})),'ゴール候補');
+ assert.equal(highlightKindLabel(ai('',{goalRecordId:'goal1'})),'ゴール');
+});

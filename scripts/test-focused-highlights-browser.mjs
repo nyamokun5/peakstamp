@@ -24,9 +24,14 @@ try{
   },youtube);
   const ids=()=>page.locator('#highlightList .highlight-entry').evaluateAll(es=>es.map(e=>e.dataset.sceneId));
   assert.deepEqual(await ids(),['shot','edited','goal']);assert.equal(await page.locator('#tabAllCount').textContent(),'3');assert.equal(await page.locator('#tabOtherCount').textContent(),'2');assert.equal(await page.locator('#resultCount').textContent(),'4');
+  assert.equal(await page.locator('#selectedSummary .highlight-kind-label').textContent(),'その他');
+  assert.equal(await page.locator('[data-scene-id=shot] .highlight-kind-label').textContent(),'ナイシュー');
   await page.locator('#tabOther').click();assert.deepEqual(await ids(),['low','title-only']);
+  assert.equal(await page.locator('[data-scene-id=title-only] .highlight-kind-label').textContent(),'判定情報なし');
   await page.locator('#tabReviewed').click();assert.equal((await ids()).length,6);
   await page.locator('#tabKept').click();assert.deepEqual(await ids(),['kept']);
+  assert.equal(await page.locator('#highlightList .highlight-kind-label').textContent(),'その他');
+  if(process.env.HIGHLIGHT_LABEL_SCREENSHOT&&!youtube){await page.locator('#selectedSummary').scrollIntoViewIfNeeded();await page.screenshot({path:process.env.HIGHLIGHT_LABEL_SCREENSHOT});}
   await page.locator('#tabAll').click();assert.deepEqual(await ids(),['shot','edited','goal']);
   assert.equal(await page.evaluate(()=>window.__focus.state.sources[0].candidates.length),6,'filter never deletes low candidates');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(errors,[]);
