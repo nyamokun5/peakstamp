@@ -13,7 +13,7 @@ test('both APIs cold-start as explicit ESM without Node syntax detection or requ
   // calls for the shared .mjs prompts (ERR_REQUIRE_ESM in its runtime shim).
   writeFileSync(join(root,'package.json'),JSON.stringify({type:'commonjs'}));
   mkdirSync(join(root,'api'));
-  for(const file of ['api/package.json','api/gemini-audio.js','api/gemini-youtube.js',
+  for(const file of ['api/package.json','api/gemini-audio.js','api/gemini-youtube.js','api/share-access.js',
    'youtube-ps-prompt.mjs','gemini-wav-chunks.mjs'])
    copyFileSync(new URL('../'+file,import.meta.url),join(root,file));
   writeFileSync(join(root,'smoke.mjs'),`
@@ -34,6 +34,9 @@ test('both APIs cold-start as explicit ESM without Node syntax detection or requ
     assert.equal((await invoke(handler,'OPTIONS')).code,204);
    }
    process.env.GEMINI_API_KEY='synthetic-server-key';process.env.PEAKSTAMP_ACCESS_CODE='synthetic-access';
+   const share=(await import('./api/share-access.js')).default;
+   assert.equal((await invoke(share)).body.service,'peakstamp-share-access');
+   assert.equal((await invoke(share,'POST',{probe:true})).code,401);
    const denied=await invoke(youtube,'POST',{videoId:'-sEOeqqTyuw',mode:'duration'});
    assert.equal(denied.code,401);assert.equal(providerCalls,0);
    console.log('Explicit API module scope: cold starts and read-only health passed');

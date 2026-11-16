@@ -23,3 +23,13 @@ test('unknown not-found result stays unknown and later clicks do not write',asyn
  const options={clips,record,save(){},access:'',endpoint:'https://mock/share',fetchImpl:async(u,o)=>{assert.equal(o.method,undefined);gets++;return new Response('',{status:404})}};
  await assert.rejects(publishMirror(options),/再送しません/);await assert.rejects(publishMirror(options),/再送しません/);assert.equal(gets,2);assert.equal(record.jobs[signature].status,'pending');
 });
+test('short-share readiness failure occurs before the pending journal and write; explicit pre-write errors allow correction',async()=>{
+ const clips=[{video:'-sEOeqqTyuw',match:'x',start:1,end:2,label:'x',scorer:'',assist:''}],record={jobs:{}};let writes=0;
+ await assert.rejects(publishMirror({clips,record,save(){},access:'mock',endpoint:'https://mock/share',requireContract:true,fetchImpl:async()=>Response.json({contract:'old'})}),/保存は開始/);assert.deepEqual(record.jobs,{});
+ const opts={clips,record,save(){},access:'mock',endpoint:'https://mock/share',fetchImpl:async()=>{writes++;return Response.json({error:'保存前の接続失敗',write_state:'not_started'},{status:503})}};
+ await assert.rejects(publishMirror(opts),/保存前/);assert.deepEqual(record.jobs,{});assert.equal(writes,1);
+});
+test('pending readback requires merged participants to match and never writes on mismatch',async()=>{
+ const clips=[{video:'-sEOeqqTyuw',match:'x',start:1,end:2,label:'x',scorer:'西村・山田',assist:'',participants:['西村','山田']}],signature=await mirrorDigest(JSON.stringify(clips)),record={jobs:{[signature]:{id:'a'.repeat(64),status:'pending'}}};
+ await assert.rejects(publishMirror({clips,record,save(){},access:'',endpoint:'https://mock/share',fetchImpl:async(u,o)=>{assert.equal(o.method,undefined);return Response.json({clips:clips.map(({participants,...rest})=>rest)})}}),/再送しません/);assert.equal(record.jobs[signature].status,'pending');
+});

@@ -1,5 +1,5 @@
 import {saveHighlightHistory,restoreHighlightHistory,hydrateHighlightHistory} from './highlight-history.mjs?v=history1';
-import {initYouTubeMirror} from './youtube-mirror-ui.mjs?v=history1';
+import {initYouTubeMirror} from './youtube-mirror-ui.mjs?v=short1';
 import { confirmedCard, showMatchReview } from './match-review.mjs';
 import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=5';
 import {initAnalysisNames} from './sposched-analysis-names.mjs?v=official-guest1';
@@ -2376,7 +2376,7 @@ const settingsNavigation=initSettingsNavigation({
 
 
 if(youtubeMode){
- import('./youtube-organizer.mjs?v=history1').then(({mountOrganizer})=>{youtubeOrganizer=mountOrganizer({state,syncSources,ssNames,analysisCompleted,workflow});}).catch(error=>{
+ import('./youtube-organizer.mjs?v=short1').then(({mountOrganizer})=>{youtubeOrganizer=mountOrganizer({state,syncSources,ssNames,analysisCompleted,workflow});}).catch(error=>{
   const notice=document.createElement('p');
   notice.textContent='YouTube画面を開けませんでした。'+error.message;
   document.body.prepend(notice);
