@@ -49,6 +49,7 @@ jobs:
           node scripts/test-youtube-mirror-browser.mjs
           node scripts/test-youtube-shared-browser.mjs
           node scripts/test-shared-youtube-goal-browser.mjs
+          node scripts/test-youtube-watch-controls-browser.mjs
           node scripts/test-inline-decision-browser.mjs
           node scripts/test-minimal-ui-browser.mjs
           node scripts/test-manual-direct-browser.mjs

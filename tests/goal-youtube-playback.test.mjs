@@ -29,6 +29,9 @@ test('YouTube uses the shared media clock/seek/pause/mute contract only after an
  assert.equal(f.frames.length,0);assert.equal(f.apiCalls(),0);assert.equal(f.video.duration,120);assert.equal(f.video.readyState,0);
  f.adapter.open({sourceKey:'yt1',at:25,autoplay:true});await Promise.resolve();
  assert.equal(f.frames.length,1);assert.match(f.frames[0].src,/youtube\.com\/embed\/abcdefghijk/);
+ const params=new URL(f.frames[0].src).searchParams;
+ assert.equal(params.get('controls'),'0');assert.equal(params.get('playsinline'),'1');
+ assert.equal(params.get('fs'),'0');assert.equal(params.get('disablekb'),'1');
  assert.match(f.frames[0].src,/start=25/);f.ready();
  assert.equal(f.video.currentTime,25);assert.equal(f.video.readyState,4);assert.equal(f.video.duration,240);assert.equal(f.video.paused,false);
  f.video.currentTime=29.5;assert.equal(f.video.currentTime,29.5);

@@ -10,6 +10,9 @@ const label=clipDisplayLabel;
 function statusClip(){
  const c=queue[index];$('status').textContent=(index+1)+' / '+queue.length+'　'+c.match+'　'+label(c);
 }
+function playbackButton(){
+ $('play').textContent=player.getPlayerState()===1?'⏸ 一時停止':active?'▶ 続きから再生':'▶ 全'+queue.length+'場面を連続再生';
+}
 function jump(next){
  index=next;active=true;seeking=true;const c=queue[index];statusClip();
  if(player.getVideoData()?.video_id===c.video){
@@ -54,17 +57,22 @@ async function init(){
  }
  const c=queue[0];$('screen').hidden=false;
  window.onYouTubeIframeAPIReady=()=>{
-  player=new YT.Player('screen',{videoId:c.video,playerVars:{playsinline:0,controls:1,fs:1,start:Math.floor(c.start),origin:location.origin},events:{
-   onReady:()=>{ready=true;$('play').hidden=false;$('play').textContent='▶ 全画面で'+queue.length+'場面を連続再生';$('status').textContent='全'+queue.length+'場面'},
+  player=new YT.Player('screen',{videoId:c.video,playerVars:{playsinline:1,controls:0,fs:0,disablekb:1,start:Math.floor(c.start),origin:location.origin},events:{
+   onReady:()=>{ready=true;$('play').hidden=false;playbackButton();$('status').textContent='全'+queue.length+'場面'},
    onStateChange:e=>{
     if(e.data===1&&!active){jump(0);return}
     if(e.data===0&&active&&!seeking)advance();
+    else playbackButton();
    },
-   onAutoplayBlocked:()=>{$('status').textContent='動画内の▶を押すと続きから再生します。'},
+   onAutoplayBlocked:()=>{$('status').textContent='動画の下の再生ボタンを押してください。';playbackButton();},
    onError:()=>{active=false;$('status').textContent='この動画を再生できません。試合一覧から別の場面を選べます。'}
   }});
  };
- $('play').onclick=()=>jump(0);
+ $('play').onclick=()=>{
+  if(player.getPlayerState()===1)player.pauseVideo();
+  else if(active)player.playVideo();
+  else jump(0);
+ };
  const script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';
  script.onerror=()=>{$('status').textContent='YouTubeに接続できません。再読み込みしてください。'};
  document.head.append(script);
