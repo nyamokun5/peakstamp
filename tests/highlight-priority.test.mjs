@@ -11,7 +11,7 @@ test('spoken shot, save and near-miss equivalents qualify; generic praise and ge
  assert.equal(primaryHighlight(ai('',{geminiType:'save_reaction',title:'ナイスキーパー'})),false);
 });
 test('goals, kept, edited and manual scenes are protected; rejecting does not upgrade a low candidate',()=>{
- for(const extra of [{geminiType:'goal_reaction'},{goalRecordId:'goal1'},{goalVideoOwned:true},{enabled:true},{highlightUserEdited:true},{manualEnd:30},{zoom:2},{origin:'manual',geminiType:undefined}])assert.equal(primaryHighlight(ai('うまい',extra)),true);
+ for(const extra of [{geminiType:'goal_reaction'},{goalRecordId:'goal1'},{goalVideoOwned:true},{enabled:true},{highlightUserEdited:true},{time:12},{manualEnd:30},{zoom:2},{origin:'manual',geminiType:undefined}])assert.equal(primaryHighlight(ai('うまい',extra)),true);
  assert.equal(primaryHighlight(ai('うまい',{rejected:true})),false);
 });
 test('primary/other queues, counts and next scene agree, while all and kept preserve access',()=>{

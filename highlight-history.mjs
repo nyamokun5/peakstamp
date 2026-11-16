@@ -1,10 +1,11 @@
 import {goalSourceKey} from './goal-stats.mjs';
+import {editedHighlight} from './highlight-priority.mjs';
 const prefix='peakstamp_highlight_history_v1:';
 const fields=['id','origin','peakSeconds','time','manualEnd','enabled','rejected','title','zoom','zoomX','zoomY','geminiType','geminiQuote','geminiReason','highlightUserEdited','geminiConfidence','score','db'];
 function read(source,storage){try{const x=JSON.parse(storage.getItem(prefix+goalSourceKey(source))||'null');return x?.version===1&&Array.isArray(x.items)?x:null}catch{return null}}
 const ordinary=c=>c&&!c.goalRecordId&&!c.goalVideoOwned;
 const valid=c=>typeof c?.id==='string'&&Number.isFinite(c.peakSeconds)&&c.peakSeconds>=0&&Number.isFinite(c.time)&&c.time>=0&&(c.manualEnd==null||Number.isFinite(c.manualEnd)&&c.manualEnd>c.time);
-const reviewed=c=>c.enabled===true||c.rejected===true||c.highlightUserEdited===true||Number.isFinite(c.manualEnd)||Number(c.zoom)>1.02;
+const reviewed=c=>c.enabled===true||c.rejected===true||editedHighlight(c);
 export function saveHighlightHistory(source,storage){
  const key=goalSourceKey(source);if(!key||!source.candidates?.length)return;
  const items=source.candidates.filter(ordinary).filter(valid).map(c=>Object.fromEntries(fields.filter(k=>c[k]!==undefined).map(k=>[k,c[k]])));
