@@ -1034,10 +1034,9 @@ function row(item, index, youtube=null) {
       const frame=document.createElement('iframe');
       youtubeFrame=frame;
       const params=new URLSearchParams({start:Math.floor(item.time),autoplay:1,
-        playsinline:1,enablejsapi:1,origin:location.origin});
+        playsinline:1,controls:0,fs:0,disablekb:1,enablejsapi:1,origin:location.origin});
       frame.title=item.title || 'シーンを再生';
-      frame.allow='autoplay; fullscreen';
-      frame.allowFullscreen=true;
+      frame.allow='autoplay';
       frame.style.cssText='display:block;width:100%;height:auto;aspect-ratio:16/9;border:0';
       frame.src='https://www.youtube.com/embed/'+source.id+'?'+params;
       replayStatus=make('p','inline-caption','');

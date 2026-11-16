@@ -86,9 +86,9 @@ export function createGoalYouTubePlayback({video,viewer,notify=()=>{},beforePlay
   if(!viewport)throw Error('ゴールの再生画面を準備できません。');
   frame=document.createElement('iframe');
   const iframe=frame;
-  iframe.title='ゴールシーンのYouTube再生';iframe.allow='autoplay; fullscreen';iframe.allowFullscreen=true;
+  iframe.title='ゴールシーンのYouTube再生';iframe.allow='autoplay';
   iframe.style.cssText='display:block;width:100%;aspect-ratio:16/9;border:0';
-  const params=new URLSearchParams({start:String(Math.floor(target)),autoplay:'1',playsinline:'1',controls:'1',fs:'1',enablejsapi:'1'});
+  const params=new URLSearchParams({start:String(Math.floor(target)),autoplay:'1',playsinline:'1',controls:'0',fs:'0',disablekb:'1',enablejsapi:'1'});
   if(origin)params.set('origin',origin);
   iframe.src='https://www.youtube.com/embed/'+source.youtubeId+'?'+params;
   viewport.prepend(iframe);notify('YouTubeを準備しています…');
@@ -118,7 +118,7 @@ export function createGoalYouTubePlayback({video,viewer,notify=()=>{},beforePlay
      else if(event.data===0||event.data===2){paused=true;emit('pause');}
      emit('timeupdate');
     },
-    onAutoplayBlocked:()=>{if(token===serial)notify('YouTube動画内の▶を押すと再生できます。');},
+    onAutoplayBlocked:()=>{if(token===serial)notify('動画の下の「再生」または「リプレイ」を押してください。');},
     onError:()=>{if(token===serial){paused=true;notify('YouTube動画を再生できません。公開・埋め込み設定を確認してください。');}}
    }});
   }).catch(error=>{
