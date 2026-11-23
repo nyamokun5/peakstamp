@@ -49,8 +49,17 @@ try {
   await page.waitForFunction(()=>window.fixture);
   const accept=page.getByRole('button',{name:'採用',exact:true});
   assert.equal(await accept.isVisible(),false);
-  await page.locator('#fileInput').setInputFiles({name:fixtureName,mimeType:'video/'+extension,buffer:fixture});
-  await page.locator('#loadPreview').click();
+  const upload=(name)=>({name,mimeType:'video/'+extension,buffer:fixture});
+  const firstVideo='01-'+fixtureName;
+  const secondVideo='02-'+fixtureName;
+  await page.locator('#fileInput').setInputFiles([upload(firstVideo),upload(secondVideo)]);
+  const timestampButtons=page.getByRole('button',{name:'タイムスタンプをつける',exact:true});
+  assert.equal(await timestampButtons.count(),2);
+  assert.ok((await timestampButtons.nth(1).boundingBox()).height>=44);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  assert.equal(await page.locator('#preview').getAttribute('src'),null);
+  await timestampButtons.nth(1).tap();
+  assert.equal(await page.locator('#timestampVideoName').textContent(),secondVideo);
   await page.waitForFunction(()=>!document.querySelector('#acceptHighlight').disabled||
     document.querySelector('#preview').error);
   assert.ok(await accept.isEnabled(),'fixture video must finish loading');
@@ -60,7 +69,7 @@ try {
     video.currentTime=at;
     if(video.seeking)await new Promise(resolve=>video.addEventListener('seeked',resolve,{once:true}));
   },seconds);
-  const clips=()=>page.evaluate(()=>window.fixture.state.sources[0].candidates);
+  const clips=()=>page.evaluate(()=>window.fixture.state.sources[1].candidates);
   await seek(12);
   await page.locator('#preview').evaluate(video=>video.play());
   await accept.tap();
@@ -115,7 +124,7 @@ try {
   await page.evaluate(async duration=>{
     const {state,commitGeminiResults}=window.fixture;
     await commitGeminiResults({
-      source:state.sources[0],audio:{durationSeconds:duration},
+      source:state.sources[1],audio:{durationSeconds:duration},
       decoded:{duration,bins:[{time:0,rms:0}]},
       parsed:{events:[{timeSeconds:12,type:'shot_reaction',quote:'ナイシュー'}]},batch:true
     });
@@ -123,6 +132,15 @@ try {
   const afterAnalysis=await clips();
   assert.equal(afterAnalysis.filter(item=>item.origin==='gemini').length,1);
   assert.deepEqual(new Set(afterAnalysis.filter(item=>item.origin==='manual').map(item=>item.id)),new Set(added.map(item=>item.id)));
+  assert.deepEqual(await page.evaluate(()=>window.fixture.state.sources.map(s=>[s.file.name,s.candidates.length])),
+    [[firstVideo,0],[secondVideo,5]]);
+  await page.locator('[data-journey-step="0"]').click();
+  await timestampButtons.first().tap();
+  assert.equal(await page.locator('#timestampVideoName').textContent(),firstVideo);
+  await page.waitForFunction(()=>!document.querySelector('#acceptHighlight').disabled);
+  await accept.tap();
+  assert.deepEqual(await page.evaluate(()=>window.fixture.state.sources.map(s=>[s.file.name,s.candidates.length])),
+    [[firstVideo,1],[secondVideo,5]]);
   assert.deepEqual(errors,[]);
   console.log('PASS one-tap highlight: mobile target, live playback, bounds, duplicate taps, editor and Gemini coexistence');
 } finally {

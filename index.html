@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091728" />
   <meta name="description" content="試合動画の盛り上がりを音から検出し、ハイライト動画を端末内で作成します。" />
   <title>PeakStamp | Audio Highlights</title>
-  <link rel="stylesheet" href="styles.css?v=one-tap1" />
+  <link rel="stylesheet" href="styles.css?v=per-video-timestamps1" />
   <link rel="stylesheet" href="minimal-ui.css?v=youtube-unified1" />
 </head>
 <body>
@@ -69,11 +69,12 @@
       <p id="fileImportHelp" class="file-import-help" hidden>「ファイル選択」には写真を探す・選ぶ時間や、iCloudからの取得・iOS側の変換があればその時間も含まれます。iCloud取得だけを個別に計測することはできません。</p>
       <div class="source-board" id="sourceBoard" hidden>
         <div class="source-board-header"><strong>試合番号を確認 · <span id="sourceCount">0</span>本</strong><button id="sortFilesByName" class="source-sort-btn" type="button">ファイル名順に並べ直す</button></div>
+        <h3 class="timestamp-heading">タイムスタンプを自分でつける</h3>
         <div id="sourceList" class="source-list"></div>
         <p class="fine-print">途中で撮影が途切れた場合は、続きの動画を追加して「前の動画と同じ試合」を押してください。同じ試合のゴールをまとめて扱い、動画ごとの時刻は保持します。</p>
       </div>
       <div id="videoWrapper" hidden>
-        <button id="loadPreview" class="preview-load-button" type="button">▶ 先頭動画をプレビュー（必要な場合のみ）</button>
+        <h3 id="timestampVideoName" class="timestamp-heading" tabindex="-1"></h3>
         <video id="preview" controls playsinline preload="none" hidden></video>
         <button id="acceptHighlight" class="preview-load-button" type="button" hidden disabled>採用</button>
         <output id="acceptHighlightStatus" class="fine-print" role="status"></output>
@@ -608,7 +609,7 @@
       <iframe id="settingsOverlayFrame" title="詳細設定" loading="eager"></iframe>
     </div>
   </div>
-  <script type="module" src="app.mjs?v=one-tap1"></script>
+  <script type="module" src="app.mjs?v=per-video-timestamps1"></script>
 <dialog id="matchReview" aria-labelledby="matchReviewTitle" style="max-width:94vw;color:inherit;background:#112c3b;border:1px solid #59828a;border-radius:14px"><form><h2 id="matchReviewTitle">試合を確認</h2><fieldset style="border:0;padding:0"></fieldset><output role="status"></output><button class="main-button" type="submit">確定して次へ</button></form></dialog>
 <style>#matchReview strong{display:block;margin-top:.8em}#matchReview input{width:40%;padding:.65em}#matchReview button{margin-top:1em}#matchReview::backdrop{background:#071321cc}</style></body>
 </html>

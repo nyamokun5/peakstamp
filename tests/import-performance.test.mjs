@@ -7,13 +7,13 @@ const app=readFileSync(new URL('../app.mjs',import.meta.url),'utf8');
 
 test('local video is not eagerly opened for original preview when files are selected',()=>{
   assert.match(html,/id="preview"[^>]*preload="none"[^>]*hidden/);
-  assert.match(html,/id="loadPreview"/);
+  assert.match(html,/id="videoWrapper" hidden/);
   const rendering=app.split('function renderSourceList() {')[1].split('function chooseFiles(')[0];
   assert.ok(rendering);
-  assert.doesNotMatch(rendering,/preview\.src\s*=\s*first\.objectUrl/);
+  assert.doesNotMatch(rendering,/preview\.src\s*=(?!=)/);
   assert.match(rendering,/if \(preview\.hasAttribute\('src'\)\)/);
-  assert.match(app,/\$\('loadPreview'\)\.addEventListener\('click'/);
-  assert.match(app,/preview\.src = first\.objectUrl/);
+  assert.match(app,/timestamp\.addEventListener\('click', \(\) => openTimestampPreview\(source\)\)/);
+  assert.match(app,/preview\.src = source\.objectUrl/);
 });
 
 test('import timings separate native picker from app list paint with honest caveat',()=>{
