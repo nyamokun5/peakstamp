@@ -25,6 +25,9 @@ h1{font-size:clamp(33px,7vw,48px);line-height:1.3;letter-spacing:-.05em;margin:1
 .file-import-timing{color:var(--mint);font-size:12px;line-height:1.6;margin:10px 0 3px;overflow-wrap:anywhere}
 .file-import-help{color:#91aebb;font-size:10px;line-height:1.6;margin:0 0 10px}
 .preview-load-button{display:block;width:100%;margin-top:12px;padding:12px 10px;background:#193d51;color:var(--mint);border:1px solid #477b83;border-radius:10px;font-size:12px;font-weight:700}
+#acceptHighlight{min-height:44px;font-size:16px;touch-action:manipulation}
+#acceptHighlightStatus{display:block;margin-top:4px}
+#acceptHighlightStatus:empty{margin-top:0}
 .file-logo{flex:none;border-radius:9px;width:42px;height:42px;display:grid;place-items:center;background:#285569;color:var(--mint)}
 .file-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}.file-info strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-info span{font-size:11px;color:var(--muted)}
 .plain-link{color:var(--mint);background:none;border:0;font-size:12px}

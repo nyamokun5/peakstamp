@@ -1,3 +1,4 @@
+import {hasHighlightResults} from './highlight-history.mjs?v=one-tap1';
 import {sourceDisplayName} from './match-label.mjs?v=match1';
 import { INTRO_SECONDS } from './exporter.mjs?v=youtube-unified1';
 import { getCandidateEnd, dissolveOverlap, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
@@ -17,10 +18,9 @@ export function buildMultiClipPlan(sources, options = {}) {
   const plan=[];
   for(const source of sources||[]){
     if(!source?.file || !Number.isFinite(source.duration)||source.duration<=0)continue;
+    const hasResults = hasHighlightResults(source);
     const selected=(source.candidates||[]).filter(c=>c.enabled===true &&
-      // Regular analysis is required for ordinary candidates. The goal editor
-      // can accept a video straight from its own verified transcript/player.
-      (Boolean(source.bins)||Boolean(source.highlightHistoryLoaded)||Boolean(source.youtubeId&&source.analyzed)||Boolean(c.goalRecordId)));
+      (hasResults||Boolean(c.goalRecordId)));
     const spans = mergeAdaptive(selected.map(candidate => ({
       start: Math.max(0, Math.min(source.duration, Number(candidate.time) || 0)),
       end: getCandidateEnd(source, candidate, cfg),

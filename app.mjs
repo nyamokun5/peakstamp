@@ -1,5 +1,5 @@
 import {primaryHighlight,sceneInReviewTab,highlightKindLabel} from './highlight-priority.mjs?v=labels1';
-import {saveHighlightHistory,restoreHighlightHistory,hydrateHighlightHistory} from './highlight-history.mjs?v=focus1';
+import {saveHighlightHistory,restoreHighlightHistory,hydrateHighlightHistory,hasHighlightResults} from './highlight-history.mjs?v=one-tap1';
 import {initYouTubeMirror} from './youtube-mirror-ui.mjs?v=short1';
 import { confirmedCard, showMatchReview } from './match-review.mjs';
 import {videoMatchup,saveVideoMatchup} from './video-matchup.mjs?v=5';
@@ -12,13 +12,13 @@ import { initCloudAudioPilot, refreshCloudAudioPilot } from './cloud-audio-pilot
 import { initGeminiPrimary, refreshGeminiPrimary } from './gemini-primary.mjs?v=youtube-unified1';
 import { initGeminiCalloutPilot } from './gemini-callout-pilot.mjs?v=callout38';
 import { initGoalStatsReview } from './goal-stats-ui.mjs?v=youtube-unified1';
-import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=goaltrim1';
+import { keepGoalClip, rejectGoalClip, syncGoalClipDecisions } from './goal-video-clip.mjs?v=one-tap1';
 import {createGoalDrafts} from './goal-stats.mjs?v=source-matchup5';
 import {saveCurrentGoalProject} from './goal-project.mjs?v=project1';
 import { geminiEventsToCandidates } from './gemini-candidates.mjs?v=focus1';
 import { createAudioBinCollector } from './audio-features.mjs?v=audio12';
-import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=history1';
-import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=history1';
+import { initMontageEditor, updateMontageEditor } from './montage-ui.mjs?v=one-tap1';
+import { buildMultiClipPlan, sourceTimestampComments } from './multi-plan.mjs?v=one-tap1';
 import { createEditTransfer } from './edit-transfer.mjs';
 import { getCandidateEnd, clipMarkerPositions, formatTimelineTime, timelineTimeAt, clampTimelineEdge, normalizeSceneZoom, normalizeSceneFocus } from './editing-rules.mjs?v=peak52';
 import { attachScenePinchEditor } from './scene-gesture.mjs?v=compact49';
@@ -253,7 +253,7 @@ function syncSources({skipGoalReviewRefresh=false}={}) {
     // Accepted goal videos are eligible for export even before the normal
     // audio-waveform scan and must count with other kept clips.
     candidates.push(...(source.candidates||[]).filter(item=>
-      Boolean(source.bins)||Boolean(source.highlightHistoryLoaded)||Boolean(source.youtubeId&&source.analyzed)||Boolean(item.goalRecordId)));
+      hasHighlightResults(source)||Boolean(item.goalRecordId)));
     offset += Number(source.duration)||0;
   }
   state.duration = offset;
@@ -271,7 +271,7 @@ function syncSources({skipGoalReviewRefresh=false}={}) {
   if (lastRejected && !state.candidates.includes(lastRejected.item)) clearUndoReview();
   // Goal scene review has its own priority section above Step 03.
   // Do not show an empty regular results panel for goal-only projects.
-  const hasResults=Boolean(state.bins)||state.sources.some(s=>s.highlightHistoryLoaded||s.youtubeId&&s.analyzed);
+  const hasResults=state.sources.some(hasHighlightResults);
   $('resultsPanel').hidden = !hasResults;
   $('standardReviewArea').hidden = !hasResults;
   $('multiWaveNotice').hidden = state.sources.length <= 1;
@@ -325,6 +325,7 @@ function renderSourceList() {
     $('fileImportTiming').hidden = true;
     $('fileImportHelp').hidden = true;
   }
+  updateAcceptHighlight();
   const list = $('sourceList');
   list.replaceChildren(...sources.map((source, i) => {
     const card = make('div','source-item');
@@ -559,6 +560,45 @@ $('loadPreview').addEventListener('click', () => {
   preview.hidden = false;
   $('loadPreview').hidden = true;
   preview.load();
+  updateAcceptHighlight();
+});
+const acceptHighlight = $('acceptHighlight');
+const preview = $('preview');
+let acceptFeedbackTimer;
+function canAcceptHighlight() {
+  return !preview.hidden && !preview.error && preview.readyState >= HTMLMediaElement.HAVE_METADATA &&
+    Number.isFinite(preview.duration) && preview.duration > 0 && Number.isFinite(preview.currentTime);
+}
+function updateAcceptHighlight() {
+  acceptHighlight.hidden = preview.hidden;
+  acceptHighlight.disabled = !canAcceptHighlight();
+  if (preview.hidden) $('acceptHighlightStatus').textContent = '';
+}
+for (const event of ['loadedmetadata','durationchange','emptied','error']) {
+  preview.addEventListener(event, updateAcceptHighlight);
+}
+acceptHighlight.addEventListener('click', () => {
+  const source = state.sources.find(item => item.id === preview.dataset.sourceId);
+  if (!canAcceptHighlight() || !source || preview.currentSrc !== source.objectUrl) return;
+  source.duration = preview.duration;
+  const peakSeconds = Math.max(0, Math.min(source.duration, preview.currentTime));
+  source.candidates.push({
+    id: 'manual-' + crypto.randomUUID(),
+    sourceId: source.id,
+    origin: 'manual',
+    peakSeconds,
+    time: Math.max(0, peakSeconds - 10),
+    manualEnd: Math.min(source.duration, peakSeconds + 5),
+    title: '手動採用',
+    enabled: true,
+    rejected: false
+  });
+  reviewTab = 'kept';
+  syncSources();
+  const feedback = $('acceptHighlightStatus');
+  feedback.textContent = '採用しました';
+  clearTimeout(acceptFeedbackTimer);
+  acceptFeedbackTimer = setTimeout(() => { feedback.textContent = ''; }, 1800);
 });
 $('changeFile').addEventListener('click', () => { appendOnPick = false; $('fileInput').click(); });
 $('addFiles').addEventListener('click', () => { appendOnPick = true; $('fileInput').click(); });
@@ -649,13 +689,11 @@ async function commitGeminiResults({source,parsed,audio,decoded,batch=false}) {
   const conversion=geminiEventsToCandidates(parsed.events,source.id,duration,previous);
   // Honor already reviewed offline scenes, while avoiding near-duplicate footage.
   const preserved=previous.filter(item=>
-    (item.enabled===true||item.rejected===true) &&
+    item.origin!=='manual' && (item.enabled===true||item.rejected===true) &&
     !conversion.items.some(candidate=>Math.abs(candidate.peakSeconds-item.peakSeconds)<=4));
   source.duration=duration;
   source.bins=decoded.bins;
-  source.candidates=[...conversion.items,...preserved]
-    .sort((a,b)=>a.peakSeconds-b.peakSeconds);
-  source.candidates=restoreHighlightHistory(source,source.candidates,window.localStorage);
+  source.candidates=restoreHighlightHistory(source,[...conversion.items,...preserved],window.localStorage);
   source.analysisEngine='gemini';
   source.error='';
   await ssNames.refresh();
@@ -689,11 +727,11 @@ $('analyzeButton').addEventListener('click', async () => {
         abort();
         source.duration = result.duration;
         source.bins = result.bins;
-        source.candidates = detectHighlights(source.bins, {
+        const detected = detectHighlights(source.bins, {
           sensitivity: state.sensitivity, leadSeconds: state.leadSeconds,
           maxResults: state.maxResults, binSeconds: STEP,
         }).map(item => ({ ...item, sourceId: source.id }));
-        source.candidates=restoreHighlightHistory(source,source.candidates,window.localStorage);
+        source.candidates=restoreHighlightHistory(source,detected,window.localStorage);
         source.error = '';
         syncSources();
       } catch (e) {
@@ -730,7 +768,7 @@ function rebuild() {
   for (const source of state.sources) {
     if (!source.bins || source.analysisEngine==='gemini') continue;
     const earlier=new Map(source.candidates.map(c=>[c.id,c]));
-    source.candidates = detectHighlights(source.bins, {
+    const detected = detectHighlights(source.bins, {
       sensitivity: state.sensitivity, leadSeconds: state.leadSeconds,
       maxResults: state.maxResults, binSeconds: STEP
     }).map(item => {
@@ -742,7 +780,7 @@ function rebuild() {
         zoom: normalizeSceneZoom(old?.zoom),
         zoomX: normalizeSceneFocus(old?.zoomX),zoomY: normalizeSceneFocus(old?.zoomY) };
     });
-    source.candidates=restoreHighlightHistory(source,source.candidates,window.localStorage);
+    source.candidates=restoreHighlightHistory(source,detected,window.localStorage);
   }
   syncSources();
 }
@@ -806,7 +844,7 @@ function nextSceneAfter(current,{wasUnjudged=false}={}) {
     // An initial final decision, OR re-judging the final previously reviewed
     // highlight, must offer Review all / Export. Editing an earlier kept
     // highlight alone must not interrupt the user before they reach the end.
-    const ordinary=state.sources.filter(src=>src.bins||src.highlightHistoryLoaded||src.youtubeId&&src.analyzed)
+    const ordinary=state.sources.filter(hasHighlightResults)
       .flatMap(src=>src.candidates||[])
       .filter(c=>!c.goalRecordId&&!c.goalVideoOwned);
     if(wasUnjudged||ordinary.at(-1)===current){
@@ -1284,6 +1322,7 @@ function row(item, index, youtube=null) {
   const score = make('span','score',item.origin==='gemini'
     ? 'Gemini · '+formatTime(item.peakSeconds)
       +(item.geminiQuote?' · 「'+item.geminiQuote.slice(0,24)+(item.geminiQuote.length>24?'…':'')+'」':'')
+    : item.origin==='manual' ? '採用時刻 · '+formatTimelineTime(item.peakSeconds)
     : 'ピーク ' + Math.round(item.peakSeconds) + '秒 / ' + item.db + 'dBFS');
   score.title=item.origin==='gemini'?String(item.geminiQuote||item.geminiReason||''):'';
   const titleGroup=make('div','play-label-group');
@@ -1589,6 +1628,7 @@ function row(item, index, youtube=null) {
   remove.addEventListener('click', () => {
     if (activeInlineClose === close) closeInlinePreview();
     source.candidates = source.candidates.filter(x => x !== item);
+    if (!source.candidates.length) saveHighlightHistory(source,window.localStorage,{allowEmpty:true});
     syncSources();
   });
   const missedGoal=make('button','missed-goal-add','＋ このシーンをゴールとして追加');
@@ -1660,7 +1700,7 @@ function drawResults() {
   const elements = [];
   let pos = 0;
   for (const source of state.sources) {
-    if (!source.bins && !source.highlightHistoryLoaded && !(source.youtubeId&&source.analyzed)) continue;
+    if (!hasHighlightResults(source)) continue;
     const heading = make('div','source-scenes-header');
     const headTitle=make('div','source-scenes-name');
     const matchCard=confirmedCard(source,window.localStorage);
@@ -1768,13 +1808,13 @@ $('waveCanvas').addEventListener('click', e => {
   target?.querySelector('.play-btn')?.click();
 });
 window.addEventListener('montage-settings-changed', () => {
-  if (state.bins||youtubeMode||state.sources.some(s=>s.highlightHistoryLoaded)) drawResults();
+  if (youtubeMode||state.sources.some(hasHighlightResults)) drawResults();
 });
 document.querySelectorAll('[data-review-tab]').forEach(button=>{
   button.addEventListener('click',()=>{
     reviewTab=['all','kept','reviewed','other'].includes(button.dataset.reviewTab)
       ?button.dataset.reviewTab:'all';
-    if(state.bins||youtubeMode||state.sources.some(s=>s.highlightHistoryLoaded))drawResults();
+    if(youtubeMode||state.sources.some(hasHighlightResults))drawResults();
   });
 });
 $('copyButton').addEventListener('click', async () => {
@@ -2358,7 +2398,7 @@ $('ssInlinePreview')?.addEventListener('click',async()=>{
 const calloutPilot=initGeminiCalloutPilot(state,{refreshGeminiPrimary,
   onResultsChange:()=>{
     goalReview.refresh();
-    if(state.bins||youtubeMode||state.sources.some(s=>s.highlightHistoryLoaded))drawResults();
+    if(youtubeMode||state.sources.some(hasHighlightResults))drawResults();
     else{
       $('resultsPanel').hidden=true;
       $('standardReviewArea').hidden=true;
