@@ -6,13 +6,20 @@ import {join} from 'node:path';
 
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const folder=await mkdtemp(join(tmpdir(),'peakstamp-one-tap-'));
-const fixturePath=join(folder,'phone.mp4');
+// The Playwright Chromium bundled on Linux has no H.264 decoder.
+const checkExport=Boolean(process.env.MEDIABUNNY_MODULE);
+const extension=checkExport?'mp4':'webm';
+const fixtureName='phone.'+extension;
+const fixturePath=join(folder,fixtureName);
+const codecs=checkExport
+  ? ['-c:v','libx264','-c:a','aac','-movflags','+faststart']
+  : ['-c:v','libvpx-vp9','-c:a','libopus'];
 let fixture;
 try {
   execFileSync('ffmpeg',[
-  '-v','error','-f','lavfi','-i','color=c=blue:s=160x90:r=10:d=24',
-  '-f','lavfi','-i','sine=frequency=440:duration=24','-c:v','libx264','-pix_fmt','yuv420p',
-  '-c:a','aac','-movflags','+faststart',fixturePath
+    '-v','error','-f','lavfi','-i','color=c=blue:s=160x90:r=10:d=24',
+    '-f','lavfi','-i','sine=frequency=440:duration=24','-pix_fmt','yuv420p',
+    ...codecs,fixturePath
   ]);
   fixture=await readFile(fixturePath);
 } finally {
@@ -42,9 +49,11 @@ try {
   await page.waitForFunction(()=>window.fixture);
   const accept=page.getByRole('button',{name:'採用',exact:true});
   assert.equal(await accept.isVisible(),false);
-  await page.locator('#fileInput').setInputFiles({name:'phone.mp4',mimeType:'video/mp4',buffer:fixture});
+  await page.locator('#fileInput').setInputFiles({name:fixtureName,mimeType:'video/'+extension,buffer:fixture});
   await page.locator('#loadPreview').click();
-  await page.waitForFunction(()=>!document.querySelector('#acceptHighlight').disabled);
+  await page.waitForFunction(()=>!document.querySelector('#acceptHighlight').disabled||
+    document.querySelector('#preview').error);
+  assert.ok(await accept.isEnabled(),'fixture video must finish loading');
   assert.ok((await accept.boundingBox()).height>=44);
 
   const seek=seconds=>page.locator('#preview').evaluate(async(video,at)=>{
@@ -90,7 +99,7 @@ try {
   assert.ok(await page.evaluate(()=>window.fixture.buildMultiClipPlan(window.fixture.state.sources).length));
   await page.locator('[data-journey-step="2"]').click();
   assert.ok(await page.locator('#montageExport').isEnabled());
-  if(process.env.MEDIABUNNY_MODULE){
+  if(checkExport){
     await page.locator('[name=exportQuality][value=compact]').check();
     await page.locator('#montageExport').click();
     await page.waitForFunction(()=>!document.querySelector('#montageDownload').hidden||
