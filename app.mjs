@@ -296,32 +296,19 @@ function renderSourceList() {
   $('fileSize').textContent = megabytes.toFixed(1) + ' MB 合計';
   $('analyzeButton').disabled = !sources.length || state.working || state.exporting || state.geminiProcessing;
   const preview = $('preview');
-  const previewButton = $('loadPreview');
-  const first = sources[0];
-  if (first) {
-    if (preview.dataset.sourceId !== first.id) {
-      preview.pause();
-      // Release an old source, but never open/read the NEW video until requested.
-      if (preview.hasAttribute('src')) {
-        preview.removeAttribute('src');
-        preview.load();
-      }
-      delete preview.dataset.sourceId;
-      preview.preload = 'none';
-      preview.hidden = true;
-      previewButton.hidden = false;
-    }
-    $('videoWrapper').hidden = false;
-  } else {
+  const selected = sources.find(source => source.id === preview.dataset.sourceId && source.objectUrl === preview.src);
+  if (!selected) {
     preview.pause();
     if (preview.hasAttribute('src')) {
       preview.removeAttribute('src');
       preview.load();
     }
     delete preview.dataset.sourceId;
+    preview.preload = 'none';
     preview.hidden = true;
-    previewButton.hidden = true;
-    $('videoWrapper').hidden = true;
+  }
+  $('videoWrapper').hidden = !selected;
+  if (!sources.length) {
     $('fileImportTiming').hidden = true;
     $('fileImportHelp').hidden = true;
   }
@@ -440,6 +427,13 @@ function renderSourceList() {
     });
     controls.append(del);
     card.append(controls);
+    if (source.objectUrl) {
+      const timestamp = make('button','source-timestamp preview-load-button','タイムスタンプをつける');
+      timestamp.type = 'button';
+      timestamp.setAttribute('aria-controls','videoWrapper');
+      timestamp.addEventListener('click', () => openTimestampPreview(source));
+      card.append(timestamp);
+    }
     return card;
   }));
 }
@@ -550,23 +544,28 @@ $('fileInput').addEventListener('change', e => {
   e.target.value = '';
   appendOnPick = false;
 });
-$('loadPreview').addEventListener('click', () => {
-  const first = state.sources[0];
-  if (!first) return;
-  const preview = $('preview');
-  preview.dataset.sourceId = first.id;
-  preview.preload = 'metadata';
-  preview.src = first.objectUrl;
-  preview.hidden = false;
-  $('loadPreview').hidden = true;
-  preview.load();
-  updateAcceptHighlight();
-});
+function openTimestampPreview(source) {
+  const heading = $('timestampVideoName');
+  heading.textContent = source.file.name;
+  $('videoWrapper').hidden = false;
+  if (preview.dataset.sourceId !== source.id || preview.error) {
+    preview.pause();
+    preview.dataset.sourceId = source.id;
+    preview.preload = 'metadata';
+    preview.src = source.objectUrl;
+    preview.hidden = false;
+    $('acceptHighlightStatus').textContent = '';
+    preview.load();
+    updateAcceptHighlight();
+  }
+  heading.focus({preventScroll:true});
+  heading.scrollIntoView({block:'start'});
+}
 const acceptHighlight = $('acceptHighlight');
 const preview = $('preview');
 let acceptFeedbackTimer;
 function canAcceptHighlight() {
-  return !preview.hidden && !preview.error && preview.readyState >= HTMLMediaElement.HAVE_METADATA &&
+  return !preview.hidden && !preview.error && preview.currentSrc === preview.src && preview.readyState >= HTMLMediaElement.HAVE_METADATA &&
     Number.isFinite(preview.duration) && preview.duration > 0 && Number.isFinite(preview.currentTime);
 }
 function updateAcceptHighlight() {
