@@ -12,7 +12,7 @@ function matchGoalCandidate(source,goal){
    goal.origin==='audio'?Math.abs(Number(c.peakSeconds)-Number(goal.timeSeconds)):Infinity);
  return (source.candidates||[]).find(c=>c.goalRecordId===goal.id)||
   source.candidates.filter(c=>
-    !c.goalRecordId&&
+    !c.goalRecordId&&c.origin!=='manual'&&
     (Math.abs(Number(c.peakSeconds)-goalTime)<=6||
     (goal.origin==='audio'&&Math.abs(Number(c.peakSeconds)-Number(goal.timeSeconds))<=4)))
    .sort((a,b)=>proximity(a)-proximity(b))[0]||null;
