@@ -93,7 +93,7 @@ const workflow=initWorkflowSteps({
  }
 });
 function reviewMatches(done) {
-  showMatchReview(state.sources, window.localStorage, () => { syncSources(); done(); });
+  showMatchReview(state.sources, window.localStorage, () => { syncSources(); done(); }, state.ssNameContext?.snapshot);
 }
 function analysisCompleted(result) {
   if (!result.success || !state.sources.length) return coaching.analysisFinished(result);

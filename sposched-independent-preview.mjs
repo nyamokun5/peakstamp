@@ -1,3 +1,5 @@
+import {placementPairingIssue,isSixTeamPlacement} from './sposched-fixture-layout.mjs';
+import {analysisFixtureAgrees} from './sposched-analysis-identity.mjs';
 // Pure, read-only planner for independent official fixtures. Never authorizes a write.
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const clean=v=>typeof v==='string'?v.trim():'';
@@ -8,6 +10,8 @@ export function previewIndependentFixtures({snapshot,rows,decisions}){
   fail('正式な独立試合イベントが必要です');
  if(!Array.isArray(rows)||!Array.isArray(decisions)||rows.length!==decisions.length)
   fail('ゴールの確認結果が不完全です');
+ const pairingIssue=placementPairingIssue(snapshot);
+ if(pairingIssue)fail(pairingIssue);
  const ordered=[...matches].sort((a,b)=>a.seq-b.seq),seen=new Set();
  for(let i=0;i<ordered.length;i++){
   const m=ordered[i],id=clean(m.matchId).toLowerCase();
@@ -20,6 +24,8 @@ export function previewIndependentFixtures({snapshot,rows,decisions}){
   const r=rows[i],d=decisions[i];if(!r?.include)continue;
   const fixture=ordered.find(m=>m.seq===Number(r.seq));
   if(!fixture)fail('ゴール'+(i+1)+'：公式試合番号が未確認です');
+  if(isSixTeamPlacement(snapshot)&&!analysisFixtureAgrees(r.goal||{},fixture))
+   fail('動画とSSの対戦カードが異なります。'+fixture.title+'を確認してください。');
   if(r.fixtureIdentityChanged)
    fail('ゴール'+(i+1)+'：試合が再作成されています。ゴール一覧で新しい試合番号・IDを確認し直してください（送信なし）');
   if(d?.state!=='ready')

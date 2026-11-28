@@ -1,3 +1,4 @@
+import {usesIndependentFixtures} from './sposched-fixture-layout.mjs';
 // Thin PRODUCTION adapter for the already-tested four-match TEST planner.
 // Zero browser/HTTP writes here. Production execution requires a separate
 // official live-target Worker approval, independent reads and reviewed send.
@@ -54,7 +55,7 @@ export function validateIndependentProductionReleaseEvidence(snapshot,inspect,re
  if(release.independent_fixture_contract!=='independent-fixtures-v1'||
     release.independent_batch_writes!==true||
     release.batch_start_path!=='/production/batch/start'||
-    !['1team','2teams_1pitch','3teams_1pitch'].includes(snapshot.officialFormat)||
+    !usesIndependentFixtures(snapshot)||
     !UUID.test(inspect.team_id||''))
   fail('本番Workerの独立試合対応・公式形式を確認できません');
  const plan=prepareIndependentWorkerBatch({snapshot,rows:[],decisions:[],

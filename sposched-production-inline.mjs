@@ -1,3 +1,7 @@
+import {confirmedCard} from './match-review.mjs';
+import {videoMatchup} from './video-matchup.mjs';
+import {analysisFixtureAgrees} from './sposched-analysis-identity.mjs';
+import {isSixTeamPlacement,usesIndependentFixtures,placementPairingIssue} from './sposched-fixture-layout.mjs';
 // In-place production registration. Reuses production gates and canonical
 // planners; no TEST transport, confirmation strings or journals are used.
 import {confirmedGoalExport,createGoalDrafts} from './goal-stats.mjs';
@@ -12,7 +16,7 @@ import {buildProductionSecondRoundAppend} from './sposched-production-continuati
 import {verifyCompletedIndependentSnapshot} from './sposched-independent-completion.mjs';
 
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
-const independent=s=>['1team','2teams_1pitch','3teams_1pitch'].includes(s?.officialFormat);
+const independent=s=>usesIndependentFixtures(s);
 const fail=message=>{throw Error(message)};
 const personIdentity=p=>p?{name:p.name,memberId:p.memberId,playerId:p.playerId,team:p.team}:null;
 const semanticGoals=goals=>JSON.stringify((goals?.goals||[]).map(g=>({id:g.id,source:g.source,
@@ -42,10 +46,26 @@ function releaseIdentity(snapshot,official,release){
  }
  return {team:official.team_id,fixtures:snapshot.matches.map(m=>({seq:m.seq,id:m.matchId,status:m.status,leftTeam:m.leftTeam,rightTeam:m.rightTeam}))};
 }
+export function checkPlacementVideos(snapshot,sources,storage){
+ if(!isSixTeamPlacement(snapshot))return;
+ const issue=placementPairingIssue(snapshot);
+ if(issue)fail(issue);
+ for(const source of sources){
+  const fixture=snapshot.matches.find(m=>m.seq===Number(source.matchNumber));
+  if(!fixture)fail('順位決定戦の動画に第1〜3試合の番号を設定してください。');
+  const card=confirmedCard(source,storage);
+  const pair=card?{teamA:card.a,teamB:card.b}:videoMatchup(source,storage);
+  if(!pair.teamA||!pair.teamB)fail(fixture.title+'の動画の対戦チームを入力してください。');
+  if(!analysisFixtureAgrees(pair,fixture))fail(fixture.title+'の動画とSSの対戦カードが異なります。両方を確認してください。');
+ }
+ if(snapshot.matches.some(m=>!sources.some(source=>Number(source.matchNumber)===m.seq)))
+  fail('順位決定戦3試合の動画と試合番号を確認してください。');
+}
+
 export function createProductionInlineController({getSnapshot,getGoals,refreshContext,readOfficial,
  inspectBatch,startBatch,appendSecondRound,decideBatch,storage,
  wait=ms=>new Promise(resolve=>setTimeout(resolve,ms)),maxChecks=120,
- onStatus=()=>{},onDecision=()=>{},onComplete=()=>{},randomUUID=()=>crypto.randomUUID()}){
+ checkVideos=()=>{},onStatus=()=>{},onDecision=()=>{},onComplete=()=>{},randomUUID=()=>crypto.randomUUID()}){
  let busy=false,pendingDecision=null;
  const key=productionBatchStorageKey;
  const inputKey=id=>key(id)+':inline-inputs';
@@ -68,7 +88,9 @@ export function createProductionInlineController({getSnapshot,getGoals,refreshCo
   return rows;
  }
  function startPlan(e,requestId){
-  const {snapshot,official,release}=e,rows=rowsFor(snapshot);
+  const {snapshot,official,release}=e;
+  checkVideos(snapshot);
+  const rows=rowsFor(snapshot);
   const validate=independent(snapshot)?validateIndependentProductionReleaseEvidence:validateProductionReleaseEvidence;
   validate(snapshot,official,release);
   const staged=!independent(snapshot)&&snapshot.matches.some(m=>[3,4].includes(m.seq)&&m.status==='waiting');
@@ -229,6 +251,7 @@ export function installProductionInline({state,ssNames,goalReview,document=globa
  };
  const controller=createProductionInlineController({
   getSnapshot:()=>state.ssNameContext?.snapshot,
+  checkVideos:snapshot=>checkPlacementVideos(snapshot,state.sources,storage),
   getGoals:()=>confirmedGoalExport(state.sources,storage),
   refreshContext:async id=>{
    await ssNames.refresh();goalReview.refresh();

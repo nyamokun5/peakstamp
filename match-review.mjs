@@ -1,3 +1,5 @@
+import {isSixTeamPlacement} from './sposched-fixture-layout.mjs';
+import {videoMatchup} from './video-matchup.mjs';
 import { matchStorageKey } from './match-label.mjs';
 import { createGoalDrafts, saveGoalDrafts, goalSourceKey, GOAL_STORE_PREFIX } from './goal-stats.mjs?v=matchrecover2';
 
@@ -63,7 +65,7 @@ function candidateTeams(source, storage) {
     return [[a || pair[0] || '', b || pair[1] || '']];
   });
 }
-export function showMatchReview(sources, storage, done) {
+export function showMatchReview(sources, storage, done, snapshot) {
   const dialog = document.getElementById('matchReview');
   const rows = dialog.querySelector('fieldset');
   rows.replaceChildren();
@@ -74,10 +76,17 @@ export function showMatchReview(sources, storage, done) {
   }
   const entries = [];
   for (const [seq, group] of grouped) {
-    const candidates = group.flatMap(src=>candidateTeams(src,storage));
+    const placement=isSixTeamPlacement(snapshot);
+    const candidates = group.flatMap(src=>{
+      if(!placement)return candidateTeams(src,storage);
+      const saved=confirmedCard(src,storage);
+      if(saved)return [[saved.a,saved.b]];
+      const pair=videoMatchup(src,storage);
+      return [[pair.teamA,pair.teamB]];
+    });
     const line = document.createElement('div');
     const title = document.createElement('strong');
-    title.textContent = '第'+seq+'試合'; line.append(title);
+    title.textContent = (placement&&snapshot.matches.find(m=>m.seq===seq)?.title)||'第'+seq+'試合'; line.append(title);
     const inputs = ['チームA','チームB'].map((name,i)=>{
       const values = new Set(candidates.map(pair=>pair[i]).filter(Boolean));
       const input = document.createElement('input');

@@ -1,3 +1,4 @@
+import {usesIndependentFixtures} from './sposched-fixture-layout.mjs';
 import {verifyCompletedIndependentSnapshot} from './sposched-independent-completion.mjs';
 import {prepareIndependentWorkerBatch} from './sposched-independent-worker-batch.mjs';
 // Production-only UI adapter. TEST button paths and storage are untouched.
@@ -44,7 +45,7 @@ export function installProductionUI({current,read,normalize,onComplete}){
  async function inspect(){
   const x=active();if(!x)throw Error('本番イベントを選択してください');
   const id=x.snapshot.eventId,startedRevision=revision;
-  const independentFormat=['1team','2teams_1pitch','3teams_1pitch'].includes(x.snapshot.officialFormat);
+  const independentFormat=usesIndependentFixtures(x.snapshot);
   const [release,official,latestRaw]=await Promise.all([
    read('/production/release-state?event_id='+encodeURIComponent(id)),
    read('/production/inspect?event_id='+encodeURIComponent(id)),

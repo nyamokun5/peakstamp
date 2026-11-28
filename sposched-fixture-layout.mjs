@@ -12,6 +12,36 @@ const hasFinal=title=>/(?:決勝|\bfinal\b)/i.test(text(title))&&!/(?:準決勝|
 const hasSemi=title=>/(?:準決勝|semi[\s-]*final)/i.test(text(title));
 const hasDecider=title=>hasFinal(title)||hasSemi(title)||/(?:順位決定|play[\s-]*off)/i.test(text(title));
 
+// Match the three numbered SS ranking fixtures. Other six-team schedules
+// can contain parallel games or qualifiers and must not use this batch.
+export function isSixTeamPlacement(snapshot){
+ const matches=snapshot?.matches;
+ const ranks=['5-6','3-4','1-2'];
+ return Array.isArray(matches)&&matches.length===3&&ranks.every((rank,i)=>
+  matches.some(m=>m.seq===i+1&&text(m.title).replace(/^#\d+\s*/, '')
+   .replace(/\s/g,'').replace(/[–－〜~]/g,'-')===rank+'位決定戦'));
+}
+
+export function usesIndependentFixtures(snapshot){
+ return isSixTeamPlacement(snapshot)||
+  ['1team','2teams_1pitch','3teams_1pitch'].includes(snapshot?.officialFormat);
+}
+
+export function placementPairingIssue(snapshot){
+ if(!isSixTeamPlacement(snapshot))return '';
+ const teams=new Set();
+ for(const m of snapshot.matches){
+  if(!m.leftTeam||!m.rightTeam||m.status==='waiting')
+   return 'SSのスコア入力で「'+m.title+'」の対戦チームを設定し、再読み込みしてください。';
+  for(const side of [m.leftTeam,m.rightTeam]){
+   const team=text(side).toLowerCase().replace(/\s/g,'').replace(/^(?:team|チーム)(\d+)$/,'$1');
+   if(teams.has(team))return 'SSの順位決定戦で同じチームが重複しています。3試合の対戦カードを確認してください。';
+   teams.add(team);
+  }
+ }
+ return '';
+}
+
 export function describeOfficialFixtures(snapshot){
  const matches=Array.isArray(snapshot?.matches)?snapshot.matches:[];
  const ordered=[...matches].sort((a,b)=>a.seq-b.seq);
