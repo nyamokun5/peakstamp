@@ -494,7 +494,7 @@ import {quickGoalDecisions,prepareQuickGoalBatch,editQuickGoalField,quickAIObser
 import {validateResetGoalRebinding} from './sposched-reset-fixture-review.mjs?v=reset-bulk1';
 import {finishAction,assertFinished,unfinishedGoalCount} from './sposched-finish.mjs?v=finish2';
 import {analyzeAutoFixture,assertFourMatchBracket,unassignedGoalDecisions} from './sposched-auto-tournament.mjs?v=auto2';
-import {describeOfficialFixtures,drawOptionForFixture,fixtureSummaryLabel} from './sposched-fixture-layout.mjs';
+import {usesIndependentFixtures,isSixTeamPlacement,describeOfficialFixtures,drawOptionForFixture,fixtureSummaryLabel} from './sposched-fixture-layout.mjs';
 import {resolveAutoGoalRead} from './sposched-auto-goal-read.mjs?v=parallel1';
 import {prepareWorkerTournament,workerBatchStorageKey,hasRecreatedBracket,workerBatchRecreatePendingKey,verifyCompletedWorkerSnapshot} from './sposched-worker-batch.mjs?v=worker-helper-wait-side1';
 import {prepareWorkerIndependent,verifyIndependentWorkerCompletion,assertIndependentWorkerHealth,assertRetiredIndependentWorkerHealth,isRetiredIndependentJob,hasDifferentIndependentGeneration,describeCompletedWorkerMismatch,assertRetiredWorkerReconnectable} from './sposched-worker-independent.mjs';
@@ -2255,7 +2255,7 @@ function normalizeSpoSnapshot(data){
 }
 function isIndependentTest(){
  return $('ssEnvironment').value==='staging'&&loadedFromStagingDirect&&
- ['1team','2teams_1pitch','3teams_1pitch'].includes(snapshot?.officialFormat);
+ usesIndependentFixtures(snapshot);
 }
 function renderIndependentTestSummary(root){
  const marker=localStorage.getItem(workerBatchStorageKey(snapshot.eventId));
@@ -3873,9 +3873,9 @@ $('ssLoadSnapshot').addEventListener('click',async()=>{
   snapshot=normalizeSpoSnapshot(data);
   const officialFormat=String(data?.event?.match_format||data?.match_format||'');
   const knownFormats={'1team':'1チーム形式','2teams_1pitch':'2チーム形式','3teams_1pitch':'3チーム形式','4teams_1pitch':'4チーム形式'};
-  const formatLabel=knownFormats[officialFormat]||'形式未確認';
+  const formatLabel=isSixTeamPlacement(snapshot)?'6チーム順位決定戦':knownFormats[officialFormat]||'形式未確認';
   const count=snapshot.matches.length;
-  const independentMode=['1team','2teams_1pitch','3teams_1pitch'].includes(officialFormat);
+  const independentMode=usesIndependentFixtures(snapshot);
   // Reuse the four-fixture review UI. Only its format-specific explanation changes.
   $('quickProductionHelp').textContent=independentMode
    ?'AI候補と公式試合の対応を確認してください。得点者・アシスト者・対象試合を修正できます。登録可否は下の登録セクションで確認してください。本番は対応済みWorkerと現在のターゲットイベントの確認が必要です。'
